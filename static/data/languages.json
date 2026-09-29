@@ -1,0 +1,128 @@
+{
+ "common": [
+  {
+   "name": "English",
+   "native": "English",
+   "code": "en"
+  }
+ ],
+ "indian": [
+  {
+   "name": "Hindi",
+   "native": "हिन्दी",
+   "code": "hi"
+  },
+  {
+   "name": "Urdu",
+   "native": "اردو",
+   "code": "ur"
+  },
+  {
+   "name": "Bengali",
+   "native": "বাংলা",
+   "code": "bn"
+  },
+  {
+   "name": "Marathi",
+   "native": "मराठी",
+   "code": "mr"
+  },
+  {
+   "name": "Telugu",
+   "native": "తెలుగు",
+   "code": "te"
+  },
+  {
+   "name": "Tamil",
+   "native": "தமிழ்",
+   "code": "ta"
+  },
+  {
+   "name": "Gujarati",
+   "native": "ગુજરાતી",
+   "code": "gu"
+  },
+  {
+   "name": "Kannada",
+   "native": "ಕನ್ನಡ",
+   "code": "kn"
+  },
+  {
+   "name": "Odia",
+   "native": "ଓଡ଼ିଆ",
+   "code": "or"
+  },
+  {
+   "name": "Malayalam",
+   "native": "മലയാളം",
+   "code": "ml"
+  },
+  {
+   "name": "Punjabi",
+   "native": "ਪੰਜਾਬੀ",
+   "code": "pa"
+  },
+  {
+   "name": "Assamese",
+   "native": "অসমীয়া",
+   "code": "as"
+  }
+ ],
+ "subcontinent": [
+  {
+   "name": "Pashto",
+   "native": "پښتو",
+   "code": "ps"
+  },
+  {
+   "name": "Sindhi",
+   "native": "سنڌي",
+   "code": "sd"
+  },
+  {
+   "name": "Saraiki",
+   "native": "سرائیکی",
+   "code": "skr"
+  },
+  {
+   "name": "Nepali",
+   "native": "नेपाली",
+   "code": "ne"
+  },
+  {
+   "name": "Burmese",
+   "native": "မြန်မာ",
+   "code": "my"
+  },
+  {
+   "name": "Sinhala",
+   "native": "සිංහල",
+   "code": "si"
+  },
+  {
+   "name": "Dari",
+   "native": "دری",
+   "code": "prs"
+  },
+  {
+   "name": "Balochi",
+   "native": "بلوچی",
+   "code": "bal"
+  },
+  {
+   "name": "Dzongkha",
+   "native": "རྫོང་ཁ",
+   "code": "dz"
+  },
+  {
+   "name": "Dhivehi",
+   "native": "ދިވެހި",
+   "code": "dv"
+  }
+ ],
+ "labels": {
+  "common": "Common to everyone",
+  "indian": "Indian languages",
+  "subcontinent": "Other Indian Sub-continent languages"
+ }
+}

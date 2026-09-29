@@ -1,0 +1,1470 @@
+{
+  "space": {
+    "name": "Earth",
+    "id": "O"
+  },
+  "source": "O राम - World Data.xlsx (X-World sheet)",
+  "continent_count": 7,
+  "country_count": 229,
+  "city_count": 16214,
+  "continents": [
+    {
+      "code": "AS",
+      "id": "O_AS",
+      "name": "Asia",
+      "lat": 34.0,
+      "lng": 100.6,
+      "declared_country_count": 51,
+      "declared_city_count": 5550,
+      "countries": [
+        {
+          "code": "AFG",
+          "id": "O_AS_AFG",
+          "name": "Afghanistan",
+          "city_count": 19
+        },
+        {
+          "code": "ARM",
+          "id": "O_AS_ARM",
+          "name": "Armenia",
+          "city_count": 49
+        },
+        {
+          "code": "AZE",
+          "id": "O_AS_AZE",
+          "name": "Azerbaijan",
+          "city_count": 9
+        },
+        {
+          "code": "BHR",
+          "id": "O_AS_BHR",
+          "name": "Bahrain",
+          "city_count": 18
+        },
+        {
+          "code": "BGD",
+          "id": "O_AS_BGD",
+          "name": "Bangladesh",
+          "city_count": 15
+        },
+        {
+          "code": "BTN",
+          "id": "O_AS_BTN",
+          "name": "Bhutan",
+          "city_count": 17
+        },
+        {
+          "code": "BRN",
+          "id": "O_AS_BRN",
+          "name": "Brunei",
+          "city_count": 8
+        },
+        {
+          "code": "KHM",
+          "id": "O_AS_KHM",
+          "name": "Cambodia",
+          "city_count": 27
+        },
+        {
+          "code": "CHN",
+          "id": "O_AS_CHN",
+          "name": "China",
+          "city_count": 663
+        },
+        {
+          "code": "CYP",
+          "id": "O_AS_CYP",
+          "name": "Cyprus",
+          "city_count": 147
+        },
+        {
+          "code": "GEO",
+          "id": "O_AS_GEO",
+          "name": "Georgia",
+          "city_count": 55
+        },
+        {
+          "code": "IND",
+          "id": "O_AS_IND",
+          "name": "India",
+          "city_count": 36
+        },
+        {
+          "code": "IDN",
+          "id": "O_AS_IDN",
+          "name": "Indonesia",
+          "city_count": 103
+        },
+        {
+          "code": "IRN",
+          "id": "O_AS_IRN",
+          "name": "Iran",
+          "city_count": 274
+        },
+        {
+          "code": "IRQ",
+          "id": "O_AS_IRQ",
+          "name": "Iraq",
+          "city_count": 46
+        },
+        {
+          "code": "ISR",
+          "id": "O_AS_ISR",
+          "name": "Israel",
+          "city_count": 75
+        },
+        {
+          "code": "JPN",
+          "id": "O_AS_JPN",
+          "name": "Japan",
+          "city_count": 810
+        },
+        {
+          "code": "JOR",
+          "id": "O_AS_JOR",
+          "name": "Jordan",
+          "city_count": 42
+        },
+        {
+          "code": "KAZ",
+          "id": "O_AS_KAZ",
+          "name": "Kazakhstan",
+          "city_count": 32
+        },
+        {
+          "code": "KWT",
+          "id": "O_AS_KWT",
+          "name": "Kuwait",
+          "city_count": 9
+        },
+        {
+          "code": "KGZ",
+          "id": "O_AS_KGZ",
+          "name": "Kyrgyzstan",
+          "city_count": 52
+        },
+        {
+          "code": "LAO",
+          "id": "O_AS_LAO",
+          "name": "Laos",
+          "city_count": 17
+        },
+        {
+          "code": "LBN",
+          "id": "O_AS_LBN",
+          "name": "Lebanon",
+          "city_count": 38
+        },
+        {
+          "code": "MYS",
+          "id": "O_AS_MYS",
+          "name": "Malaysia",
+          "city_count": 12
+        },
+        {
+          "code": "MDV",
+          "id": "O_AS_MDV",
+          "name": "Maldives",
+          "city_count": 30
+        },
+        {
+          "code": "MNG",
+          "id": "O_AS_MNG",
+          "name": "Mongolia",
+          "city_count": 31
+        },
+        {
+          "code": "MMR",
+          "id": "O_AS_MMR",
+          "name": "Myanmar",
+          "city_count": 12
+        },
+        {
+          "code": "NPL",
+          "id": "O_AS_NPL",
+          "name": "Nepal",
+          "city_count": 218
+        },
+        {
+          "code": "PRK",
+          "id": "O_AS_PRK",
+          "name": "North Korea",
+          "city_count": 27
+        },
+        {
+          "code": "OMN",
+          "id": "O_AS_OMN",
+          "name": "Oman",
+          "city_count": 43
+        },
+        {
+          "code": "PAK",
+          "id": "O_AS_PAK",
+          "name": "Pakistan",
+          "city_count": 32
+        },
+        {
+          "code": "BAL",
+          "id": "O_AS_BAL",
+          "name": "Balochistan",
+          "city_count": 17,
+          "data_quality_flag": "Province of Pakistan, not a separate country — appears as its own row in the source sheet."
+        },
+        {
+          "code": "PSE",
+          "id": "O_AS_PSE",
+          "name": "Palestine",
+          "city_count": 37
+        },
+        {
+          "code": "PHL",
+          "id": "O_AS_PHL",
+          "name": "Philippines",
+          "city_count": 142
+        },
+        {
+          "code": "QAT",
+          "id": "O_AS_QAT",
+          "name": "Qatar",
+          "city_count": 150
+        },
+        {
+          "code": "RUS",
+          "id": "O_AS_RUS",
+          "name": "Russia",
+          "city_count": 1084
+        },
+        {
+          "code": "SAU",
+          "id": "O_AS_SAU",
+          "name": "Saudi Arabia",
+          "city_count": 20
+        },
+        {
+          "code": "SGP",
+          "id": "O_AS_SGP",
+          "name": "Singapore",
+          "city_count": 36
+        },
+        {
+          "code": "KOR",
+          "id": "O_AS_KOR",
+          "name": "South Korea",
+          "city_count": 85
+        },
+        {
+          "code": "LKA",
+          "id": "O_AS_LKA",
+          "name": "Sri Lanka",
+          "city_count": 61
+        },
+        {
+          "code": "SYR",
+          "id": "O_AS_SYR",
+          "name": "Syria",
+          "city_count": 62
+        },
+        {
+          "code": "TWN",
+          "id": "O_AS_TWN",
+          "name": "Taiwan",
+          "city_count": 23
+        },
+        {
+          "code": "TJK",
+          "id": "O_AS_TJK",
+          "name": "Tajikistan",
+          "city_count": 37
+        },
+        {
+          "code": "THA",
+          "id": "O_AS_THA",
+          "name": "Thailand",
+          "city_count": 32
+        },
+        {
+          "code": "TLS",
+          "id": "O_AS_TLS",
+          "name": "Timor-Leste",
+          "city_count": 14
+        },
+        {
+          "code": "TUR",
+          "id": "O_AS_TUR",
+          "name": "Turkey",
+          "city_count": 581
+        },
+        {
+          "code": "TKM",
+          "id": "O_AS_TKM",
+          "name": "Turkmenistan",
+          "city_count": 32
+        },
+        {
+          "code": "ARE",
+          "id": "O_AS_ARE",
+          "name": "United Arab Emirates",
+          "city_count": 7
+        },
+        {
+          "code": "UZB",
+          "id": "O_AS_UZB",
+          "name": "Uzbekistan",
+          "city_count": 66
+        },
+        {
+          "code": "VNM",
+          "id": "O_AS_VNM",
+          "name": "Vietnam",
+          "city_count": 59
+        },
+        {
+          "code": "YEM",
+          "id": "O_AS_YEM",
+          "name": "Yemen",
+          "city_count": 39
+        },
+        {
+          "code": "BLC",
+          "id": "O_AS_BLC",
+          "name": "Balochistan",
+          "city_count": 0
+        }
+      ]
+    },
+    {
+      "code": "AF",
+      "id": "O_AF",
+      "name": "Africa",
+      "lat": 8.7,
+      "lng": 34.5,
+      "declared_country_count": 54,
+      "declared_city_count": 2704,
+      "countries": [
+        {
+          "code": "DZA",
+          "id": "O_AF_DZA",
+          "name": "Algeria",
+          "city_count": 38
+        },
+        {
+          "code": "AGO",
+          "id": "O_AF_AGO",
+          "name": "Angola",
+          "city_count": 186
+        },
+        {
+          "code": "BEN",
+          "id": "O_AF_BEN",
+          "name": "Benin",
+          "city_count": 42
+        },
+        {
+          "code": "BWA",
+          "id": "O_AF_BWA",
+          "name": "Botswana",
+          "city_count": 82
+        },
+        {
+          "code": "BFA",
+          "id": "O_AF_BFA",
+          "name": "Burkina Faso",
+          "city_count": 65
+        },
+        {
+          "code": "BDI",
+          "id": "O_AF_BDI",
+          "name": "Burundi",
+          "city_count": 32
+        },
+        {
+          "code": "CPV",
+          "id": "O_AF_CPV",
+          "name": "Cabo Verde",
+          "city_count": 24
+        },
+        {
+          "code": "CMR",
+          "id": "O_AF_CMR",
+          "name": "Cameroon",
+          "city_count": 70
+        },
+        {
+          "code": "CAF",
+          "id": "O_AF_CAF",
+          "name": "Central African Republic",
+          "city_count": 42
+        },
+        {
+          "code": "TCD",
+          "id": "O_AF_TCD",
+          "name": "Chad",
+          "city_count": 50
+        },
+        {
+          "code": "COM",
+          "id": "O_AF_COM",
+          "name": "Comoros",
+          "city_count": 50
+        },
+        {
+          "code": "COD",
+          "id": "O_AF_COD",
+          "name": "Democratic Republic of Congo",
+          "city_count": 192
+        },
+        {
+          "code": "COG",
+          "id": "O_AF_COG",
+          "name": "Republic of Congo",
+          "city_count": 40
+        },
+        {
+          "code": "CIV",
+          "id": "O_AF_CIV",
+          "name": "Cote d'Ivoire (Ivory Coast)",
+          "city_count": 42
+        },
+        {
+          "code": "DJI",
+          "id": "O_AF_DJI",
+          "name": "Djibouti",
+          "city_count": 11
+        },
+        {
+          "code": "EGY",
+          "id": "O_AF_EGY",
+          "name": "Egypt",
+          "city_count": 199
+        },
+        {
+          "code": "GNQ",
+          "id": "O_AF_GNQ",
+          "name": "Equatorial Guinea",
+          "city_count": 30
+        },
+        {
+          "code": "ERI",
+          "id": "O_AF_ERI",
+          "name": "Eritrea",
+          "city_count": 20
+        },
+        {
+          "code": "ETH",
+          "id": "O_AF_ETH",
+          "name": "Ethiopia",
+          "city_count": 135
+        },
+        {
+          "code": "GAB",
+          "id": "O_AF_GAB",
+          "name": "Gabon",
+          "city_count": 51
+        },
+        {
+          "code": "GMB",
+          "id": "O_AF_GMB",
+          "name": "Gambia",
+          "city_count": 21
+        },
+        {
+          "code": "GHA",
+          "id": "O_AF_GHA",
+          "name": "Ghana",
+          "city_count": 81
+        },
+        {
+          "code": "GIN",
+          "id": "O_AF_GIN",
+          "name": "Guinea",
+          "city_count": 10
+        },
+        {
+          "code": "GNB",
+          "id": "O_AF_GNB",
+          "name": "Guinea-Bissau",
+          "city_count": 15
+        },
+        {
+          "code": "KEN",
+          "id": "O_AF_KEN",
+          "name": "Kenya",
+          "city_count": 65
+        },
+        {
+          "code": "LSO",
+          "id": "O_AF_LSO",
+          "name": "Lesotho",
+          "city_count": 13
+        },
+        {
+          "code": "LBR",
+          "id": "O_AF_LBR",
+          "name": "Liberia",
+          "city_count": 31
+        },
+        {
+          "code": "LBY",
+          "id": "O_AF_LBY",
+          "name": "Libya",
+          "city_count": 97
+        },
+        {
+          "code": "MDG",
+          "id": "O_AF_MDG",
+          "name": "Madagascar",
+          "city_count": 104
+        },
+        {
+          "code": "MWI",
+          "id": "O_AF_MWI",
+          "name": "Malawi",
+          "city_count": 70
+        },
+        {
+          "code": "MLI",
+          "id": "O_AF_MLI",
+          "name": "Mali",
+          "city_count": 28
+        },
+        {
+          "code": "MRT",
+          "id": "O_AF_MRT",
+          "name": "Mauritania",
+          "city_count": 35
+        },
+        {
+          "code": "MUS",
+          "id": "O_AF_MUS",
+          "name": "Mauritius",
+          "city_count": 5
+        },
+        {
+          "code": "MAR",
+          "id": "O_AF_MAR",
+          "name": "Morocco",
+          "city_count": 55
+        },
+        {
+          "code": "MOZ",
+          "id": "O_AF_MOZ",
+          "name": "Mozambique",
+          "city_count": 34
+        },
+        {
+          "code": "NAM",
+          "id": "O_AF_NAM",
+          "name": "Nambia",
+          "city_count": 13
+        },
+        {
+          "code": "NER",
+          "id": "O_AF_NER",
+          "name": "Niger",
+          "city_count": 32
+        },
+        {
+          "code": "NGA",
+          "id": "O_AF_NGA",
+          "name": "Nigeria",
+          "city_count": 67
+        },
+        {
+          "code": "RWA",
+          "id": "O_AF_RWA",
+          "name": "Rwanda",
+          "city_count": 13
+        },
+        {
+          "code": "STP",
+          "id": "O_AF_STP",
+          "name": "Sao Tome and Principe",
+          "city_count": 11
+        },
+        {
+          "code": "SEN",
+          "id": "O_AF_SEN",
+          "name": "Senegal",
+          "city_count": 47
+        },
+        {
+          "code": "SYC",
+          "id": "O_AF_SYC",
+          "name": "Seychelles",
+          "city_count": 5
+        },
+        {
+          "code": "SLE",
+          "id": "O_AF_SLE",
+          "name": "Sierra Leone",
+          "city_count": 44
+        },
+        {
+          "code": "SOM",
+          "id": "O_AF_SOM",
+          "name": "Somalia",
+          "city_count": 135
+        },
+        {
+          "code": "ZAF",
+          "id": "O_AF_ZAF",
+          "name": "South Africa",
+          "city_count": 52
+        },
+        {
+          "code": "SSD",
+          "id": "O_AF_SSD",
+          "name": "South Sudan",
+          "city_count": 29
+        },
+        {
+          "code": "SDN",
+          "id": "O_AF_SDN",
+          "name": "Sudan",
+          "city_count": 26
+        },
+        {
+          "code": "SWZ",
+          "id": "O_AF_SWZ",
+          "name": "Swaziland",
+          "city_count": 28
+        },
+        {
+          "code": "TZA",
+          "id": "O_AF_TZA",
+          "name": "Tanzania",
+          "city_count": 31
+        },
+        {
+          "code": "TGO",
+          "id": "O_AF_TGO",
+          "name": "Togo",
+          "city_count": 21
+        },
+        {
+          "code": "TUN",
+          "id": "O_AF_TUN",
+          "name": "Tunisia",
+          "city_count": 24
+        },
+        {
+          "code": "UGA",
+          "id": "O_AF_UGA",
+          "name": "Uganda",
+          "city_count": 25
+        },
+        {
+          "code": "ZMB",
+          "id": "O_AF_ZMB",
+          "name": "Zambia",
+          "city_count": 10
+        },
+        {
+          "code": "ZWE",
+          "id": "O_AF_ZWE",
+          "name": "Zimbawe",
+          "city_count": 26
+        }
+      ]
+    },
+    {
+      "code": "EU",
+      "id": "O_EU",
+      "name": "Europe",
+      "lat": 54.5,
+      "lng": 15.2,
+      "declared_country_count": 46,
+      "declared_city_count": 4241,
+      "countries": [
+        {
+          "code": "ALB",
+          "id": "O_EU_ALB",
+          "name": "Albania",
+          "city_count": 74
+        },
+        {
+          "code": "AND",
+          "id": "O_EU_AND",
+          "name": "Andorra",
+          "city_count": 10
+        },
+        {
+          "code": "AUT",
+          "id": "O_EU_AUT",
+          "name": "Austria",
+          "city_count": 76
+        },
+        {
+          "code": "AZE",
+          "id": "O_EU_AZE",
+          "name": "Azerbaijan",
+          "city_count": 64
+        },
+        {
+          "code": "BLR",
+          "id": "O_EU_BLR",
+          "name": "Belarus",
+          "city_count": 112
+        },
+        {
+          "code": "BEL",
+          "id": "O_EU_BEL",
+          "name": "Belgium",
+          "city_count": 133
+        },
+        {
+          "code": "BIH",
+          "id": "O_EU_BIH",
+          "name": "Bosnia and Herzegovina",
+          "city_count": 47
+        },
+        {
+          "code": "BGR",
+          "id": "O_EU_BGR",
+          "name": "Bulgaria",
+          "city_count": 257
+        },
+        {
+          "code": "HRV",
+          "id": "O_EU_HRV",
+          "name": "Croatia",
+          "city_count": 128
+        },
+        {
+          "code": "CYP",
+          "id": "O_EU_CYP",
+          "name": "Cyprus",
+          "city_count": 6
+        },
+        {
+          "code": "CZE",
+          "id": "O_EU_CZE",
+          "name": "Czech Republic",
+          "city_count": 26
+        },
+        {
+          "code": "DNK",
+          "id": "O_EU_DNK",
+          "name": "Denmark",
+          "city_count": 44
+        },
+        {
+          "code": "EST",
+          "id": "O_EU_EST",
+          "name": "Estonia",
+          "city_count": 47
+        },
+        {
+          "code": "FIN",
+          "id": "O_EU_FIN",
+          "name": "Finland",
+          "city_count": 110
+        },
+        {
+          "code": "FRA",
+          "id": "O_EU_FRA",
+          "name": "France",
+          "city_count": 436
+        },
+        {
+          "code": "DEU",
+          "id": "O_EU_DEU",
+          "name": "Germany",
+          "city_count": 16
+        },
+        {
+          "code": "GRC",
+          "id": "O_EU_GRC",
+          "name": "Greece",
+          "city_count": 144
+        },
+        {
+          "code": "HUN",
+          "id": "O_EU_HUN",
+          "name": "Hungary",
+          "city_count": 35
+        },
+        {
+          "code": "ISL",
+          "id": "O_EU_ISL",
+          "name": "Iceland",
+          "city_count": 32
+        },
+        {
+          "code": "IRL",
+          "id": "O_EU_IRL",
+          "name": "Ireland",
+          "city_count": 11
+        },
+        {
+          "code": "ITA",
+          "id": "O_EU_ITA",
+          "name": "Italy",
+          "city_count": 149
+        },
+        {
+          "code": "XKX",
+          "id": "O_EU_XKX",
+          "name": "Kosovo",
+          "city_count": 37
+        },
+        {
+          "code": "LVA",
+          "id": "O_EU_LVA",
+          "name": "Latvia",
+          "city_count": 76
+        },
+        {
+          "code": "LIE",
+          "id": "O_EU_LIE",
+          "name": "Liechtenstein",
+          "city_count": 11
+        },
+        {
+          "code": "LTU",
+          "id": "O_EU_LTU",
+          "name": "Lithuania",
+          "city_count": 103
+        },
+        {
+          "code": "LUX",
+          "id": "O_EU_LUX",
+          "name": "Luxembourg",
+          "city_count": 12
+        },
+        {
+          "code": "MKD",
+          "id": "O_EU_MKD",
+          "name": "Macedonia",
+          "city_count": 5
+        },
+        {
+          "code": "MLT",
+          "id": "O_EU_MLT",
+          "name": "Malta",
+          "city_count": 11
+        },
+        {
+          "code": "MDA",
+          "id": "O_EU_MDA",
+          "name": "Moldova",
+          "city_count": 66
+        },
+        {
+          "code": "MCO",
+          "id": "O_EU_MCO",
+          "name": "Monaco",
+          "city_count": 10
+        },
+        {
+          "code": "MNE",
+          "id": "O_EU_MNE",
+          "name": "Montenegro",
+          "city_count": 78
+        },
+        {
+          "code": "NLD",
+          "id": "O_EU_NLD",
+          "name": "Netherlands",
+          "city_count": 387
+        },
+        {
+          "code": "NOR",
+          "id": "O_EU_NOR",
+          "name": "Norway",
+          "city_count": 100
+        },
+        {
+          "code": "POL",
+          "id": "O_EU_POL",
+          "name": "Poland",
+          "city_count": 90
+        },
+        {
+          "code": "PRT",
+          "id": "O_EU_PRT",
+          "name": "Portugal",
+          "city_count": 149
+        },
+        {
+          "code": "ROU",
+          "id": "O_EU_ROU",
+          "name": "Romania",
+          "city_count": 20
+        },
+        {
+          "code": "SMR",
+          "id": "O_EU_SMR",
+          "name": "San Marino",
+          "city_count": 9
+        },
+        {
+          "code": "SRB",
+          "id": "O_EU_SRB",
+          "name": "Serbia",
+          "city_count": 76
+        },
+        {
+          "code": "SVK",
+          "id": "O_EU_SVK",
+          "name": "Slovakia",
+          "city_count": 52
+        },
+        {
+          "code": "SVN",
+          "id": "O_EU_SVN",
+          "name": "Slovenia",
+          "city_count": 16
+        },
+        {
+          "code": "ESP",
+          "id": "O_EU_ESP",
+          "name": "Spain",
+          "city_count": 62
+        },
+        {
+          "code": "SWE",
+          "id": "O_EU_SWE",
+          "name": "Sweden",
+          "city_count": 134
+        },
+        {
+          "code": "CHE",
+          "id": "O_EU_CHE",
+          "name": "Switzerland",
+          "city_count": 248
+        },
+        {
+          "code": "UKR",
+          "id": "O_EU_UKR",
+          "name": "Ukraine",
+          "city_count": 462
+        },
+        {
+          "code": "GBR",
+          "id": "O_EU_GBR",
+          "name": "United Kingdom",
+          "city_count": 69
+        },
+        {
+          "code": "VAT",
+          "id": "O_EU_VAT",
+          "name": "Vatican City",
+          "city_count": 1
+        }
+      ]
+    },
+    {
+      "code": "NA",
+      "id": "O_NA",
+      "name": "North America",
+      "lat": 45.0,
+      "lng": -100.0,
+      "declared_country_count": 39,
+      "declared_city_count": 1495,
+      "countries": [
+        {
+          "code": "ATG",
+          "id": "O_NA_ATG",
+          "name": "Antigua and Barbuda",
+          "city_count": 20
+        },
+        {
+          "code": "ABW",
+          "id": "O_NA_ABW",
+          "name": "Aruba",
+          "city_count": 63
+        },
+        {
+          "code": "BHS",
+          "id": "O_NA_BHS",
+          "name": "Bahamas",
+          "city_count": 26
+        },
+        {
+          "code": "BRB",
+          "id": "O_NA_BRB",
+          "name": "Barbados",
+          "city_count": 11
+        },
+        {
+          "code": "BLZ",
+          "id": "O_NA_BLZ",
+          "name": "Belize",
+          "city_count": 6
+        },
+        {
+          "code": "BMU",
+          "id": "O_NA_BMU",
+          "name": "Bermuda",
+          "city_count": 11
+        },
+        {
+          "code": "BES",
+          "id": "O_NA_BES",
+          "name": "Bonaire",
+          "city_count": 2
+        },
+        {
+          "code": "VGB",
+          "id": "O_NA_VGB",
+          "name": "British Virgin Islands",
+          "city_count": 6
+        },
+        {
+          "code": "CAN",
+          "id": "O_NA_CAN",
+          "name": "Canada",
+          "city_count": 14
+        },
+        {
+          "code": "CRI",
+          "id": "O_NA_CRI",
+          "name": "Costa Rica",
+          "city_count": 81
+        },
+        {
+          "code": "CUB",
+          "id": "O_NA_CUB",
+          "name": "Cuba",
+          "city_count": 60
+        },
+        {
+          "code": "CYM",
+          "id": "O_NA_CYM",
+          "name": "Cayman Islands",
+          "city_count": 5
+        },
+        {
+          "code": "CUW",
+          "id": "O_NA_CUW",
+          "name": "Curacao",
+          "city_count": 8
+        },
+        {
+          "code": "DMA",
+          "id": "O_NA_DMA",
+          "name": "Dominica",
+          "city_count": 71
+        },
+        {
+          "code": "DOM",
+          "id": "O_NA_DOM",
+          "name": "Dominican Republic",
+          "city_count": 10
+        },
+        {
+          "code": "SLV",
+          "id": "O_NA_SLV",
+          "name": "El Salvador",
+          "city_count": 38
+        },
+        {
+          "code": "GRD",
+          "id": "O_NA_GRD",
+          "name": "Grenada",
+          "city_count": 70
+        },
+        {
+          "code": "GTM",
+          "id": "O_NA_GTM",
+          "name": "Guatemala",
+          "city_count": 101
+        },
+        {
+          "code": "HTI",
+          "id": "O_NA_HTI",
+          "name": "Haiti",
+          "city_count": 136
+        },
+        {
+          "code": "HND",
+          "id": "O_NA_HND",
+          "name": "Honduras",
+          "city_count": 38
+        },
+        {
+          "code": "JAM",
+          "id": "O_NA_JAM",
+          "name": "Jamaica",
+          "city_count": 2
+        },
+        {
+          "code": "MEX",
+          "id": "O_NA_MEX",
+          "name": "Mexico",
+          "city_count": 118
+        },
+        {
+          "code": "MTQ",
+          "id": "O_NA_MTQ",
+          "name": "Martinique",
+          "city_count": 10
+        },
+        {
+          "code": "MSR",
+          "id": "O_NA_MSR",
+          "name": "Montserrat",
+          "city_count": 5
+        },
+        {
+          "code": "NIC",
+          "id": "O_NA_NIC",
+          "name": "Nicaragua",
+          "city_count": 17
+        },
+        {
+          "code": "PAN",
+          "id": "O_NA_PAN",
+          "name": "Panama",
+          "city_count": 20
+        },
+        {
+          "code": "PRI",
+          "id": "O_NA_PRI",
+          "name": "Puerto Rico",
+          "city_count": 78
+        },
+        {
+          "code": "KNA",
+          "id": "O_NA_KNA",
+          "name": "Saint kitts and Nevis",
+          "city_count": 14
+        },
+        {
+          "code": "LCA",
+          "id": "O_NA_LCA",
+          "name": "Saint Lucia",
+          "city_count": 21
+        },
+        {
+          "code": "VCT",
+          "id": "O_NA_VCT",
+          "name": "Saint Vincent and the Grenadines",
+          "city_count": 98
+        },
+        {
+          "code": "BES",
+          "id": "O_NA_BES-2",
+          "name": "Bonaire, Saba",
+          "city_count": 10,
+          "data_quality_flag": "Source sheet has more than one row resolving to BES in this continent (likely a duplicate/overlapping entry)."
+        },
+        {
+          "code": "BLM",
+          "id": "O_NA_BLM",
+          "name": "Saint Barthelemy",
+          "city_count": 1
+        },
+        {
+          "code": "MAF",
+          "id": "O_NA_MAF",
+          "name": "Saint Martin",
+          "city_count": 1
+        },
+        {
+          "code": "SPM",
+          "id": "O_NA_SPM",
+          "name": "Saint Pierre and Miquelon",
+          "city_count": 2
+        },
+        {
+          "code": "SXM",
+          "id": "O_NA_SXM",
+          "name": "Sint Maarten",
+          "city_count": 2
+        },
+        {
+          "code": "TTO",
+          "id": "O_NA_TTO",
+          "name": "Trinidad and Tobago",
+          "city_count": 10
+        },
+        {
+          "code": "TCA",
+          "id": "O_NA_TCA",
+          "name": "Turks and Caicos Islands",
+          "city_count": 2
+        },
+        {
+          "code": "USA",
+          "id": "O_NA_USA",
+          "name": "United States of America",
+          "city_count": 304
+        },
+        {
+          "code": "VIR",
+          "id": "O_NA_VIR",
+          "name": "US Virgin Islands",
+          "city_count": 3
+        }
+      ]
+    },
+    {
+      "code": "SA",
+      "id": "O_SA",
+      "name": "South America",
+      "lat": -15.0,
+      "lng": -60.0,
+      "declared_country_count": 14,
+      "declared_city_count": 1902,
+      "countries": [
+        {
+          "code": "ARG",
+          "id": "O_SA_ARG",
+          "name": "Argentina",
+          "city_count": 21
+        },
+        {
+          "code": "BOL",
+          "id": "O_SA_BOL",
+          "name": "Bolivia",
+          "city_count": 53
+        },
+        {
+          "code": "BRA",
+          "id": "O_SA_BRA",
+          "name": "Brazil",
+          "city_count": 26
+        },
+        {
+          "code": "CHL",
+          "id": "O_SA_CHL",
+          "name": "Chile",
+          "city_count": 239
+        },
+        {
+          "code": "COL",
+          "id": "O_SA_COL",
+          "name": "Colombia",
+          "city_count": 1116
+        },
+        {
+          "code": "ECU",
+          "id": "O_SA_ECU",
+          "name": "Ecuador",
+          "city_count": 30
+        },
+        {
+          "code": "FLK",
+          "id": "O_SA_FLK",
+          "name": "Falkland Islands",
+          "city_count": 3
+        },
+        {
+          "code": "GUF",
+          "id": "O_SA_GUF",
+          "name": "French Guiana",
+          "city_count": 16
+        },
+        {
+          "code": "GUY",
+          "id": "O_SA_GUY",
+          "name": "Guyana",
+          "city_count": 8
+        },
+        {
+          "code": "PRY",
+          "id": "O_SA_PRY",
+          "name": "Paraguay",
+          "city_count": 32
+        },
+        {
+          "code": "PER",
+          "id": "O_SA_PER",
+          "name": "Peru",
+          "city_count": 53
+        },
+        {
+          "code": "SUR",
+          "id": "O_SA_SUR",
+          "name": "Suriname",
+          "city_count": 42
+        },
+        {
+          "code": "URY",
+          "id": "O_SA_URY",
+          "name": "Uruguay",
+          "city_count": 72
+        },
+        {
+          "code": "VEN",
+          "id": "O_SA_VEN",
+          "name": "Venezuela",
+          "city_count": 191
+        }
+      ]
+    },
+    {
+      "code": "OC",
+      "id": "O_OC",
+      "name": "Australia & Oceania",
+      "lat": -25.0,
+      "lng": 135.0,
+      "declared_country_count": 25,
+      "declared_city_count": 322,
+      "countries": [
+        {
+          "code": "AUS",
+          "id": "O_OC_AUS",
+          "name": "Australia ",
+          "city_count": 50
+        },
+        {
+          "code": "ASM",
+          "id": "O_OC_ASM",
+          "name": "American Samoa",
+          "city_count": 10
+        },
+        {
+          "code": "COK",
+          "id": "O_OC_COK",
+          "name": "Cook Islands",
+          "city_count": 5
+        },
+        {
+          "code": "FJI",
+          "id": "O_OC_FJI",
+          "name": "Fiji",
+          "city_count": 6
+        },
+        {
+          "code": "PYF",
+          "id": "O_OC_PYF",
+          "name": "French Polynesia",
+          "city_count": 10
+        },
+        {
+          "code": "GUM",
+          "id": "O_OC_GUM",
+          "name": "Guam",
+          "city_count": 19
+        },
+        {
+          "code": "KIR",
+          "id": "O_OC_KIR",
+          "name": "Kiribati",
+          "city_count": 23
+        },
+        {
+          "code": "MHL",
+          "id": "O_OC_MHL",
+          "name": "Marshall Islands",
+          "city_count": 5
+        },
+        {
+          "code": "FSM",
+          "id": "O_OC_FSM",
+          "name": "Micronesia",
+          "city_count": 9
+        },
+        {
+          "code": "NRU",
+          "id": "O_OC_NRU",
+          "name": "Nauru",
+          "city_count": 6
+        },
+        {
+          "code": "NZL",
+          "id": "O_OC_NZL",
+          "name": "New Zealand",
+          "city_count": 15
+        },
+        {
+          "code": "NCL",
+          "id": "O_OC_NCL",
+          "name": "New Caledonia",
+          "city_count": 10
+        },
+        {
+          "code": "NIU",
+          "id": "O_OC_NIU",
+          "name": "Niue",
+          "city_count": 10
+        },
+        {
+          "code": "NFK",
+          "id": "O_OC_NFK",
+          "name": "Norfolk Island",
+          "city_count": 9
+        },
+        {
+          "code": "MNP",
+          "id": "O_OC_MNP",
+          "name": "Northern Mariana Islands",
+          "city_count": 5
+        },
+        {
+          "code": "PLW",
+          "id": "O_OC_PLW",
+          "name": "Palau",
+          "city_count": 22
+        },
+        {
+          "code": "PNG",
+          "id": "O_OC_PNG",
+          "name": "Papua New Guinea",
+          "city_count": 31
+        },
+        {
+          "code": "PCN",
+          "id": "O_OC_PCN",
+          "name": "Pitcairn Islands",
+          "city_count": 1
+        },
+        {
+          "code": "WSM",
+          "id": "O_OC_WSM",
+          "name": "Samoa",
+          "city_count": 10
+        },
+        {
+          "code": "SLB",
+          "id": "O_OC_SLB",
+          "name": "Solomon Islands",
+          "city_count": 8
+        },
+        {
+          "code": "TON",
+          "id": "O_OC_TON",
+          "name": "Tonga",
+          "city_count": 7
+        },
+        {
+          "code": "TUV",
+          "id": "O_OC_TUV",
+          "name": "Tuvalu",
+          "city_count": 17
+        },
+        {
+          "code": "TKL",
+          "id": "O_OC_TKL",
+          "name": "Tokelau",
+          "city_count": 4
+        },
+        {
+          "code": "VUT",
+          "id": "O_OC_VUT",
+          "name": "Vanuatu",
+          "city_count": 20
+        },
+        {
+          "code": "WLF",
+          "id": "O_OC_WLF",
+          "name": "Wallis and Futuna",
+          "city_count": 10
+        }
+      ]
+    },
+    {
+      "code": "AN",
+      "id": "O_AN",
+      "name": "Antarctica",
+      "lat": -82.0,
+      "lng": 0.0,
+      "declared_country_count": 0,
+      "declared_city_count": 0,
+      "countries": []
+    }
+  ]
+}

@@ -1,0 +1,182 @@
+{
+ "zones": [
+  {
+   "id": "IND/CS",
+   "name": "Central State",
+   "states": [
+    {
+     "id": "CS.AN",
+     "name": "Andaman and Nicobar Islands"
+    },
+    {
+     "id": "CS.AR",
+     "name": "Arunachal Pradesh"
+    },
+    {
+     "id": "CS.AS",
+     "name": "Assam"
+    },
+    {
+     "id": "CS.CH",
+     "name": "Chandigarh"
+    },
+    {
+     "id": "CS.DD",
+     "name": "Daman and Diu"
+    },
+    {
+     "id": "CS.DL",
+     "name": "Delhi"
+    },
+    {
+     "id": "CS.DN",
+     "name": "Dadra and Nagar Haveli"
+    },
+    {
+     "id": "CS.JK",
+     "name": "Jammu and Kashmir"
+    },
+    {
+     "id": "CS.LA",
+     "name": "Ladakh"
+    },
+    {
+     "id": "CS.LD",
+     "name": "Lakshadweep"
+    },
+    {
+     "id": "CS.ME",
+     "name": "Meghalaya"
+    },
+    {
+     "id": "CS.MI",
+     "name": "Mizoram"
+    },
+    {
+     "id": "CS.MN",
+     "name": "Manipur"
+    },
+    {
+     "id": "CS.NL",
+     "name": "Nagaland"
+    },
+    {
+     "id": "CS.PY",
+     "name": "Puducherry"
+    },
+    {
+     "id": "CS.SK",
+     "name": "Sikkim"
+    },
+    {
+     "id": "CS.TR",
+     "name": "Tripura"
+    }
+   ]
+  },
+  {
+   "id": "IND/NS",
+   "name": "North India State",
+   "states": [
+    {
+     "id": "NS.HP",
+     "name": "Himachal Pradesh"
+    },
+    {
+     "id": "NS.HR",
+     "name": "Haryana"
+    },
+    {
+     "id": "NS.PB",
+     "name": "Punjab"
+    },
+    {
+     "id": "NS.RJ",
+     "name": "Rajasthan"
+    },
+    {
+     "id": "NS.UP",
+     "name": "Uttar Pradesh"
+    },
+    {
+     "id": "NS.UT",
+     "name": "Uttarakhand"
+    }
+   ]
+  },
+  {
+   "id": "IND/WS",
+   "name": "West India State",
+   "states": [
+    {
+     "id": "WS.CT",
+     "name": "Chhattisgarh"
+    },
+    {
+     "id": "WS.GA",
+     "name": "Goa"
+    },
+    {
+     "id": "WS.GJ",
+     "name": "Gujarat"
+    },
+    {
+     "id": "WS.MH",
+     "name": "Maharashtra"
+    },
+    {
+     "id": "WS.MP",
+     "name": "Madhya Pradesh"
+    }
+   ]
+  },
+  {
+   "id": "IND/SS",
+   "name": "South India State",
+   "states": [
+    {
+     "id": "SS.AP",
+     "name": "Andhra Pradesh"
+    },
+    {
+     "id": "SS.KA",
+     "name": "Karnataka"
+    },
+    {
+     "id": "SS.KL",
+     "name": "Kerala"
+    },
+    {
+     "id": "SS.TN",
+     "name": "Tamil Nadu"
+    },
+    {
+     "id": "SS.TS",
+     "name": "Telangana"
+    }
+   ]
+  },
+  {
+   "id": "IND/ES",
+   "name": "East India",
+   "states": [
+    {
+     "id": "ES.BH",
+     "name": "Bihar"
+    },
+    {
+     "id": "ES.JH",
+     "name": "Jharkhand"
+    },
+    {
+     "id": "ES.OR",
+     "name": "Odisha"
+    },
+    {
+     "id": "ES.WB",
+     "name": "West Bengal"
+    }
+   ]
+  }
+ ]
+}

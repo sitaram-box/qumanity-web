@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qumanity — {{ name }}'s Kundali</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body>
+  <header class="qm-header">
+    <a href="{{ url_for('index') }}" style="display:contents">
+      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+    </a>
+    <div class="qm-header-text">
+      <h1>{{ name }}'s Private Account</h1>
+      <p>Your Vedic birth chart, saved from registration.</p>
+    </div>
+  </header>
+
+  <main class="qm-register-main">
+    <section class="qm-screen is-active">
+      <div class="kundali-container">
+        <h2>Your Vedic Birth Chart</h2>
+
+        <div class="chart-summary">
+          <p><strong>Sun Sign:</strong> <span id="k-sun-sign"></span> (<span id="k-sun-element"></span>)</p>
+          <p><strong>Moon Sign:</strong> <span id="k-moon-sign"></span> (<span id="k-moon-nakshatra"></span>)</p>
+          <p><strong>Ascendant:</strong> <span id="k-ascendant"></span></p>
+        </div>
+
+        <h3>Planetary Positions</h3>
+        <div class="planetary-positions">
+          <ul id="k-planetary-list"></ul>
+        </div>
+
+        <h3>Kundali Summary</h3>
+        <div class="kundali-summary">
+          <p id="k-summary-text"></p>
+        </div>
+
+        <p class="qm-kundali-note" id="k-precision-note"></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="qm-footer">
+    <p><a href="{{ url_for('elements_dashboard') }}" style="color:inherit">See the Elemental Dashboard →</a></p>
+  </footer>
+
+  <script>
+    window.QM_USER_ID = {{ user_id }};
+  </script>
+  <script src="{{ url_for('static', filename='js/kundali-view.js') }}"></script>
+  {% include '_poems_marquee.html' %}
+</body>
+</html>

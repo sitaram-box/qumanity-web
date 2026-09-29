@@ -1,0 +1,517 @@
+:root {
+  --qm-saffron: #FF9933;
+  --qm-green: #138808;
+  --qm-navy: #0A1929;
+  --qm-gold: #FFD700;
+  --qm-white: #FFFFFF;
+  --qm-bg: #050b14;
+  --qm-panel-bg: #0e1b2c;
+  --qm-text-dim: #9fb0c3;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--qm-bg);
+  color: var(--qm-white);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  height: 100%;
+}
+
+.qm-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(255, 215, 0, 0.15);
+}
+
+.qm-header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.qm-header-actions a.qm-btn { text-decoration: none; display: inline-block; }
+
+.qm-logo { height: 60px; width: 60px; flex: 0 0 auto; filter: drop-shadow(0 4px 14px rgba(255, 153, 51, 0.3)); }
+
+.qm-header-text h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  letter-spacing: 0.04em;
+  background: linear-gradient(90deg, var(--qm-saffron), var(--qm-gold));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.qm-header-text p {
+  margin: 2px 0 0;
+  font-size: 0.85rem;
+  color: var(--qm-text-dim);
+}
+
+.qm-main {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 0;
+  height: calc(100vh - 160px);
+  min-height: 480px;
+}
+
+.qm-earth-stage {
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 40%, #0c1f33 0%, var(--qm-bg) 70%);
+}
+
+.qm-earth-stage canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+}
+.qm-earth-stage canvas:active { cursor: grabbing; }
+
+.qm-zoom-slot {
+  position: absolute;
+  inset: 0;
+}
+.qm-zoom-slot[hidden] { display: none; }
+.qm-zoom-slot .leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: var(--qm-bg);
+}
+#qm-country-india-map {
+  width: 100%;
+  height: 100%;
+}
+
+.qm-zoom-nav {
+  position: absolute;
+  z-index: 9;
+  left: 16px;
+  top: 82px; /* clears the Leaflet zoom control in the continent/country maps below it */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.qm-zoom-thumb[hidden] { display: none; }
+.qm-zoom-thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  background: rgba(10, 25, 41, 0.85);
+  color: var(--qm-white);
+  font-size: 1.1rem;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+.qm-zoom-thumb span {
+  font-size: 0.6rem;
+  color: var(--qm-text-dim);
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qm-zoom-thumb:hover { background: rgba(255, 153, 51, 0.2); }
+
+.qm-panel-placeholder {
+  font-size: 0.85rem;
+  color: var(--qm-text-dim);
+  font-style: italic;
+}
+
+.qm-dropdown-row[hidden] { display: none; }
+.qm-dropdown-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 215, 0, 0.15);
+}
+.qm-dropdown-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--qm-text-dim);
+}
+.qm-dropdown-field select {
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--qm-white);
+}
+.qm-dropdown-field select:disabled { opacity: 0.5; cursor: not-allowed; }
+.qm-dropdown-field select:focus { outline: none; border-color: var(--qm-saffron); }
+
+/* Searchable dropdown (static/js/searchable_select.js) — wraps a real
+   <select> (kept hidden as the form-state holder) with search/clear/
+   keyboard-nav UI for long lists (countries, tehsils, ...). */
+.qm-ss { position: relative; }
+.qm-ss-display {
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 8px 56px 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--qm-white);
+  cursor: pointer;
+  position: relative;
+}
+.qm-ss-display::after {
+  content: "▾";
+  position: absolute;
+  right: 30px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--qm-text-dim);
+  font-size: 0.65rem;
+  pointer-events: none;
+}
+.qm-ss-display-label.qm-ss-placeholder { color: var(--qm-text-dim); }
+.qm-ss.is-disabled .qm-ss-display { opacity: 0.5; cursor: not-allowed; }
+.qm-ss-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--qm-text-dim);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 4px;
+  display: none;
+}
+.qm-ss-clear.visible { display: block; }
+.qm-ss-clear:hover { color: #ff6b6b; }
+
+.qm-ss-panel[class~="show"] { display: block; }
+.qm-ss-panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--qm-panel-bg);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 8px;
+}
+.qm-ss-search {
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.82rem;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--qm-white);
+  margin-bottom: 6px;
+}
+.qm-ss-search:focus { outline: none; border-color: var(--qm-saffron); }
+.qm-ss-options { max-height: 240px; overflow-y: auto; }
+.qm-ss-option {
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  color: var(--qm-white);
+  cursor: pointer;
+}
+.qm-ss-option:hover, .qm-ss-option.highlighted { background: rgba(255, 153, 51, 0.2); }
+.qm-ss-option.selected { background: var(--qm-saffron); color: var(--qm-navy); font-weight: 600; }
+.qm-ss-results-count {
+  margin-top: 6px;
+  font-size: 0.65rem;
+  color: var(--qm-text-dim);
+  text-align: right;
+}
+
+.qm-earth-controls {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 5;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.qm-breadcrumb {
+  position: absolute;
+  top: 64px;
+  left: 16px;
+  z-index: 5;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(10, 25, 41, 0.75);
+  border: 1px solid rgba(255, 215, 0, 0.25);
+  font-size: 0.78rem;
+  color: var(--qm-text-dim);
+  backdrop-filter: blur(4px);
+}
+
+.qm-btn {
+  font-family: inherit;
+  font-size: 0.8rem;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  background: rgba(10, 25, 41, 0.75);
+  color: var(--qm-white);
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.qm-btn:hover { background: rgba(255, 153, 51, 0.2); transform: translateY(-1px); }
+
+.qm-btn-primary {
+  background: linear-gradient(90deg, var(--qm-saffron), var(--qm-gold));
+  color: var(--qm-navy);
+  border: none;
+  font-weight: 600;
+}
+.qm-btn-primary:hover { filter: brightness(1.08); }
+
+.qm-explore-btn {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  padding: 12px 28px;
+  font-size: 0.9rem;
+}
+
+.qm-tooltip {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(10, 25, 41, 0.92);
+  border: 1px solid rgba(255, 215, 0, 0.35);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.qm-gate-message {
+  position: absolute;
+  z-index: 8;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--qm-panel-bg);
+  border: 1px solid rgba(255, 153, 51, 0.5);
+  border-radius: 12px;
+  padding: 24px 28px;
+  text-align: center;
+  max-width: 320px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+}
+.qm-gate-message p { margin: 0 0 16px; font-size: 0.95rem; }
+
+.qm-country-picker {
+  position: absolute;
+  z-index: 7;
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  background: var(--qm-panel-bg);
+  border: 1px solid rgba(255, 215, 0, 0.35);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+}
+.qm-country-picker[hidden] { display: none; }
+
+.qm-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.qm-picker-eyebrow {
+  margin: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--qm-text-dim);
+}
+.qm-picker-header h3 {
+  margin: 2px 0 0;
+  font-size: 1.05rem;
+  color: var(--qm-gold);
+}
+.qm-picker-close {
+  background: none;
+  border: none;
+  color: var(--qm-text-dim);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.qm-picker-close:hover { color: var(--qm-white); }
+
+.qm-picker-search {
+  font-family: inherit;
+  font-size: 0.82rem;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.04);
+  color: var(--qm-white);
+  margin-bottom: 10px;
+}
+.qm-picker-search:focus {
+  outline: none;
+  border-color: var(--qm-saffron);
+}
+
+.qm-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.qm-picker-item {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--qm-white);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+.qm-picker-item:hover { background: rgba(255, 215, 0, 0.1); }
+.qm-picker-item.qm-picker-item--india {
+  color: var(--qm-saffron);
+  font-weight: 600;
+}
+.qm-picker-item-badge {
+  font-size: 0.65rem;
+  color: var(--qm-text-dim);
+}
+
+.qm-picker-empty {
+  font-size: 0.78rem;
+  color: var(--qm-text-dim);
+  text-align: center;
+  margin-top: 12px;
+}
+
+.qm-timeline-panel {
+  background: var(--qm-panel-bg);
+  border-left: 1px solid rgba(255, 215, 0, 0.15);
+  padding: 20px;
+  overflow-y: auto;
+}
+.qm-timeline-panel h2 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  color: var(--qm-gold);
+}
+.qm-timeline-sub {
+  margin: 0 0 16px;
+  font-size: 0.78rem;
+  color: var(--qm-text-dim);
+}
+
+.qm-panel-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.qm-panel-tab {
+  flex: 1;
+  font-family: inherit;
+  font-size: 0.76rem;
+  padding: 8px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 215, 0, 0.25);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--qm-text-dim);
+  cursor: pointer;
+}
+.qm-panel-tab.is-active {
+  background: rgba(255, 153, 51, 0.15);
+  color: var(--qm-white);
+  border-color: var(--qm-saffron);
+}
+.qm-panel-view[hidden] { display: none; }
+.qm-panel-subhead {
+  margin: 18px 0 4px;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--qm-text-dim);
+}
+
+.qm-stat-list { margin: 0; }
+.qm-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px dashed rgba(255,255,255,0.08);
+}
+.qm-stat dt { font-size: 0.78rem; color: var(--qm-text-dim); margin: 0; }
+.qm-stat dd { font-size: 1rem; font-weight: 600; margin: 0; color: var(--qm-white); }
+
+.qm-timeline-note {
+  margin-top: 18px;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--qm-text-dim);
+}
+
+.qm-footer {
+  padding: 12px 24px;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--qm-text-dim);
+  border-top: 1px solid rgba(255, 215, 0, 0.1);
+}
+
+@media (max-width: 820px) {
+  .qm-main { grid-template-columns: 1fr; height: auto; }
+  .qm-earth-stage { height: 60vh; }
+  .qm-timeline-panel { border-left: none; border-top: 1px solid rgba(255,215,0,0.15); }
+  .qm-country-picker { left: 12px; right: 12px; top: 12px; bottom: 12px; width: auto; }
+}

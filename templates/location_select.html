@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qumanity — Location Selection Tool</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/india_map.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body>
+  <header class="qm-header">
+    <a href="{{ url_for('index') }}" style="display:contents">
+      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+    </a>
+    <div class="qm-header-text">
+      <h1>Location Selection Tool</h1>
+      <p>Standalone demo of the step-by-step wizard (Zone → State → District → Tehsil → Village) — also embedded in Registration.</p>
+    </div>
+  </header>
+
+  <main class="qm-register-main" style="max-width: 900px;">
+    <div id="wizard-container"></div>
+    <div id="demo-result" class="qm-summary-list" style="margin-top:20px;"></div>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{{ url_for('static', filename='js/india_map.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/location_select.js') }}"></script>
+  <script>
+    var resultEl = document.getElementById("demo-result");
+
+    Promise.all([
+      fetch("/api/india-states").then(function (r) { return r.json(); }),
+      fetch("/api/india-districts").then(function (r) { return r.json(); }),
+    ]).then(function (results) {
+      var wizard = QMLocationWizard.create(document.getElementById("wizard-container"), {
+        zonesData: results[0],
+        districtsData: results[1],
+        fetchVillages: function (tehsilId) {
+          return fetch("/api/india-villages/" + encodeURIComponent(tehsilId)).then(function (r) { return r.json(); });
+        },
+        onCancel: function () { wizard.reset(); },
+        onConfirm: function (sel) {
+          resultEl.innerHTML =
+            "<div><dt>Zone</dt><dd>" + sel.zone.name + "</dd></div>" +
+            "<div><dt>State</dt><dd>" + sel.state.name + "</dd></div>" +
+            "<div><dt>District</dt><dd>" + sel.district.name + "</dd></div>" +
+            "<div><dt>Tehsil</dt><dd>" + sel.tehsil.name + "</dd></div>" +
+            "<div><dt>Village</dt><dd>" + sel.village.name + "</dd></div>" +
+            "<div><dt>Location path</dt><dd><code>" + sel.path + "</code></dd></div>";
+        },
+      });
+    });
+  </script>
+  {% include '_poems_marquee.html' %}
+</body>
+</html>

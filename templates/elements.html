@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qumanity — Elemental Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/elements.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body>
+  <header class="qm-header">
+    <a href="{{ url_for('index') }}" style="display:contents">
+      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+    </a>
+    <div class="qm-header-text">
+      <h1>Elemental Dashboard</h1>
+      <p>Fire / Earth / Air / Water distribution across Qumanity's registered users, by location level.</p>
+    </div>
+  </header>
+
+  <main class="qm-elements-main">
+    <div class="elemental-dashboard">
+      <div class="location-selector">
+        <label for="location-level">Level</label>
+        <select id="location-level">
+          <option value="earth">Earth</option>
+          <option value="continent">Continent</option>
+          <option value="country">Country</option>
+          <option value="zone">Zone (India)</option>
+          <option value="state">State (India)</option>
+          <option value="district">District (India)</option>
+          <option value="tehsil">Tehsil (India)</option>
+          <option value="village">Village (India)</option>
+        </select>
+      </div>
+
+      <div id="dashboard-empty" class="qm-picker-empty" hidden>No registrations at this level yet.</div>
+      <div id="dashboard-cards" class="dashboard-cards"></div>
+    </div>
+
+    <div class="lunar-panel" id="lunar-panel">
+      <h2>Lunar Timeline</h2>
+      <p id="lunar-current" class="qm-timeline-sub"></p>
+      <ul id="lunar-upcoming" class="lunar-events"></ul>
+    </div>
+  </main>
+
+  <footer class="qm-footer">
+    <p>Location-level elemental counts use each user's tropical sun-sign element (see zodiac_core.py). Space is always 0 — it represents the database itself, not a personal trait.</p>
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/elements-dashboard.js') }}"></script>
+  {% include '_poems_marquee.html' %}
+</body>
+</html>

@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qumanity — Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body>
+  <header class="qm-header">
+    <a href="{{ url_for('index') }}" style="display:contents">
+      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+    </a>
+    <div class="qm-header-text">
+      <h1 data-i18n="dashboard">Dashboard</h1>
+      <p>{{ profile.name }}</p>
+    </div>
+    <nav class="qm-header-actions">
+      <div class="dq-pop" id="ui-lang-wrap">
+        <button type="button" class="dq-dot dq-dot-lang" id="ui-lang-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Language" title="Change language"></button>
+        <ul class="dq-menu" id="ui-lang-menu" role="listbox" hidden></ul>
+      </div>
+      <a class="qm-btn qm-btn-ghost" href="{{ url_for('logout') }}" data-i18n="logout">Logout</a>
+      <button type="button" class="dq-dot dq-dot-icon" id="notif-btn" aria-label="Notifications" title="New messages and requests">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 00-6 6v3.5L4 16h16l-2-3.5V9a6 6 0 00-6-6z"/><path d="M9.5 19a2.5 2.5 0 005 0"/></svg>
+        <span class="dq-badge" id="notif-badge" hidden>0</span>
+      </button>
+      <button type="button" class="dq-dot dq-dot-icon" id="timebox-btn" aria-label="Time, weather and Vedic calendar" title="Time · weather · Vedic calendar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      </button>
+    </nav>
+  </header>
+
+  <main class="qm-dashboard-main">
+    <div class="qm-dash-tabs">
+      <button class="qm-dash-tab" data-tab="global" type="button" data-i18n="tab_global">Global</button>
+      <button class="qm-dash-tab" data-tab="public" type="button" data-i18n="tab_public">Public</button>
+      <button class="qm-dash-tab" data-tab="personal" type="button" data-i18n="tab_personal">Personal</button>
+      <button class="qm-dash-tab is-active" data-tab="private" type="button" data-i18n="tab_private">Private</button>
+    </div>
+
+    <section class="qm-dash-panel is-active" id="qm-dash-private">
+      <div class="pv-hero">
+        <div class="pv-avatar" aria-hidden="true">{{ profile.name[:1] }}</div>
+        <div class="pv-hero-main">
+          <h2 class="pv-name">{{ profile.name }}</h2>
+          <div class="pv-chips">
+            <span class="pv-chip">{{ profile.gender | capitalize }}</span>
+            <span class="pv-chip">{{ profile.age_years }} · {{ profile.age_category }}</span>
+            <span class="pv-chip pv-chip-zodiac">✨ {{ profile.sun_sign }} · {{ profile.sun_element }}</span>
+            <span class="pv-chip pv-chip-lang">🗣️ {{ profile.mother_tongue }}</span>
+          </div>
+        </div>
+        <div class="pv-hero-actions">
+          <button class="qm-btn qm-btn-primary" id="kundali-btn" type="button">🪐 <span data-i18n="kundali">Kundali</span></button>
+          <button class="qm-btn qm-btn-ghost" id="edit-profile-btn" type="button">✏️ <span data-i18n="edit_profile">Edit Profile</span></button>
+        </div>
+      </div>
+
+      <div class="pv-grid">
+        <article class="pv-card">
+          <h3><span class="pv-ico">🆔</span> <span data-i18n="identity">Identity</span></h3>
+          <div class="pv-field"><label data-i18n="private_id">Private ID (9 digits)</label>
+            <div class="pv-secret"><code id="private-code">•••••••••</code><button type="button" class="sg-btn" id="private-code-btn">Show</button></div>
+            <small class="pv-hint pv-hintline">Keep it private — it is your sign-in ID.</small></div>
+          <div class="pv-field"><label data-i18n="account_id">Account ID</label><code>{{ profile.account_id }}</code></div>
+          <div class="pv-field"><label>🔎 Public search ID <small class="pv-hint">safe to share</small></label><code id="pv-search-code">…</code>
+            <small class="pv-hintline">Others can find you with this 12-digit ID.</small></div>
+          <button type="button" class="sg-btn" id="account-history-btn" style="margin-top:6px;">Past Account IDs →</button>
+          <div id="account-history-box" hidden></div>
+        </article>
+
+        <article class="pv-card">
+          <h3><span class="pv-ico">📍</span> <span data-i18n="locations">Locations</span></h3>
+          <div class="pv-field"><label>🌍 <span data-i18n="birth">Birth</span></label><span>{{ profile.birth_location }}</span></div>
+          <div class="pv-field"><label>🏠 <span data-i18n="present">Present</span></label><span>{{ profile.present_location }}</span></div>
+        </article>
+
+        <article class="pv-card">
+          <h3><span class="pv-ico">✨</span> <span data-i18n="zodiac">Zodiac</span></h3>
+          <div class="pv-mini">
+            <div><label data-i18n="sun">Sun</label><b>{{ profile.sun_sign }}</b><small>{{ profile.sun_element }}</small></div>
+            <div><label data-i18n="moon">Moon</label><b>{{ profile.moon_sign }}</b><small>{{ profile.moon_nakshatra }}</small></div>
+            <div><label data-i18n="ascendant">Ascendant</label><b>{{ profile.ascendant_sign }}</b><small>&nbsp;</small></div>
+          </div>
+        </article>
+
+        <article class="pv-card">
+          <h3><span class="pv-ico">📞</span> <span data-i18n="contact">Contact</span></h3>
+          <div class="pv-field"><label>📧 <span data-i18n="email">Email</span></label><span>{{ profile.email or "—" }}</span></div>
+          <div class="pv-field"><label>📱 <span data-i18n="phone">Phone</span></label><span>{{ profile.phone or "—" }}</span></div>
+        </article>
+
+        <article class="pv-card pv-card-wide">
+          <h3><span class="pv-ico">🌐</span> <span data-i18n="languages">Languages</span> <small class="pv-hint" data-i18n="lang_hint">up to 3 · switch from the top bar</small></h3>
+          <div class="pv-langs">
+            <div class="pv-lang"><label data-i18n="mother_tongue">Mother tongue</label><b>{{ profile.mother_tongue }}</b><small data-i18n="locked">locked</small></div>
+            <div class="pv-lang"><label data-i18n="second_lang">Second language</label><b>English</b><small data-i18n="locked">locked</small></div>
+            <div class="pv-lang pv-lang-edit">
+              <label for="daily-lang" data-i18n="daily_lang">Daily-use language (optional)</label>
+              <div class="pv-lang-row">
+                <select id="daily-lang">
+                  <option value="">— none —</option>
+                  {% for l in all_languages %}{% if l.name != 'English' and l.name != profile.mother_tongue %}
+                  <option value="{{ l.name }}" {{ 'selected' if l.name == profile.daily_language }}>{{ l.name }}{% if l.native != l.name %} — {{ l.native }}{% endif %}</option>
+                  {% endif %}{% endfor %}
+                </select>
+                <button type="button" class="qm-btn qm-btn-ghost" id="daily-lang-save" data-i18n="save">Save</button>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="pv-card">
+          <h3><span class="pv-ico">🔥</span> <span data-i18n="elemental">Elemental Balance</span></h3>
+          <div class="elemental-balance">
+            {% for bar in profile.element_bars %}
+            <div class="el-row">
+              <span class="el-label">{{ bar.name }}</span>
+              <div class="el-track"><div class="el-fill {{ bar.css_class }}" style="width: {{ bar.width_pct }}%">{{ bar.count }}</div></div>
+            </div>
+            {% endfor %}
+            {% if profile.elemental_balance %}<p class="el-dominant"><span data-i18n="dominant">Dominant</span>: <strong>{{ profile.elemental_balance.dominant_element }}</strong></p>{% endif %}
+          </div>
+        </article>
+
+        <article class="pv-card" id="qm-wallet-card">
+          <h3><span class="pv-ico">💰</span> <span data-i18n="wallet">Qoins Wallet</span></h3>
+          <p class="qm-wallet-balance"><span id="qm-wallet-balance">0</span> Qoins</p>
+          <p class="qm-dash-empty" id="qm-wallet-locked-note" hidden>Some Qoins are locked until you cast your first election vote.</p>
+          <button class="qm-btn qm-btn-ghost" id="qm-wallet-donate-btn" type="button" data-i18n="donate">Donate →</button>
+          <button class="qm-btn qm-btn-ghost" id="qm-wallet-history-btn" type="button">📊 Weekly history</button>
+          <ul class="qm-wallet-tx-list" id="qm-wallet-tx-list"></ul>
+          <p class="qm-dash-empty" id="qm-wallet-tx-empty" hidden>No transactions yet.</p>
+          <div id="qm-wallet-history-box" hidden></div>
+        </article>
+
+        <article class="pv-card" id="qm-karma-card">
+          <h3><span class="pv-ico">🪷</span> Your Karma <small class="pv-hint">a Social Credit score — never money, separate from Qoins</small></h3>
+          <p class="qm-wallet-balance"><span id="qm-karma-total">0</span> Karma</p>
+          <p class="qm-dash-empty">Commercial: <span id="qm-karma-commercial">0</span> · Non-commercial: <span id="qm-karma-noncommercial">0</span></p>
+          <button class="qm-btn qm-btn-ghost" id="qm-karma-history-btn" type="button">📜 History</button>
+          <ul class="qm-wallet-tx-list" id="qm-karma-history-list" hidden></ul>
+          <p class="qm-dash-empty" id="qm-karma-history-empty" hidden>No karma entries yet.</p>
+        </article>
+
+        <article class="pv-card pv-card-wide" id="election-history-card">
+          <h3><span class="pv-ico">🗳️</span> Election history <small class="pv-hint">private &amp; optional — only you see this</small></h3>
+          <div class="eh-grid">
+            <div>
+              <h4>National Election</h4>
+              <div class="eh-row" id="eh-loksabha"></div>
+            </div>
+            <div>
+              <h4>State Election</h4>
+              <div class="eh-row" id="eh-vidhansabha"></div>
+            </div>
+          </div>
+          <button type="button" class="qm-btn qm-btn-ghost" id="eh-save-btn">Save</button>
+          <p class="qm-timeline-note" id="eh-saved" hidden>Saved.</p>
+          <h4 style="margin-top:16px;">Q-Punch (village council) — your real ballots</h4>
+          <ul class="eh-qpunch" id="eh-qpunch"></ul>
+          <p class="qm-dash-empty" id="eh-qpunch-empty" hidden>You haven't voted in a Q-Punch election yet.</p>
+        </article>
+
+        <article class="pv-card" id="removed-card" hidden>
+          <h3><span class="pv-ico">🗂️</span> Removed posts <small class="pv-hint">saved here, only you can see them</small></h3>
+          <ul class="bd-removed" id="removed-list"></ul>
+        </article>
+
+        <article class="pv-card">
+          <h3><span class="pv-ico">🕘</span> <span data-i18n="activities">Recent Activities</span></h3>
+          <p class="qm-dash-empty">No activity yet — activity logging isn't built yet.</p>
+        </article>
+      </div>
+    </section>
+
+    {% macro stat_block(prefix) %}
+    <div id="{{ prefix }}-content" class="qm-stats-panel">
+      <div class="qm-stats-location-header">
+        <h2 id="{{ prefix }}-heading">Statistics</h2>
+      </div>
+      <p class="qm-dash-empty" id="{{ prefix }}-empty-note" hidden>No one has registered here yet.</p>
+
+      <div class="qm-stats-section qm-stats-section--big">
+        <div class="qm-stats-section-title">👥 Total Humans</div>
+        <div class="qm-stat-big-number" id="{{ prefix }}-total">0</div>
+        <div class="qm-stat-big-label">Registered Users</div>
+      </div>
+
+      <div class="qm-stats-section qm-stats-section--big">
+        <div class="qm-stats-section-title">💰 Wallet</div>
+        <div class="qm-stat-big-number" id="{{ prefix }}-wallet">0 Qoins</div>
+        <div class="qm-stat-big-label">Total Circulation</div>
+      </div>
+
+      <div class="qm-stats-section">
+        <div class="qm-stats-section-title">⚧️ Gender Distribution</div>
+        <div id="{{ prefix }}-gender-list"></div>
+      </div>
+
+      <div class="qm-stats-section">
+        <div class="qm-stats-section-title">📅 Age Distribution</div>
+        <div id="{{ prefix }}-age-list"></div>
+      </div>
+
+      <div class="qm-stats-section">
+        <div class="qm-stats-section-title">🔥 Element Distribution</div>
+        <div id="{{ prefix }}-element-list"></div>
+      </div>
+
+      <div class="qm-stats-section">
+        <div class="qm-stats-section-title">♈ Zodiac Sign Distribution</div>
+        <div id="{{ prefix }}-sign-list"></div>
+      </div>
+
+      <div class="qm-stats-section">
+        <div class="qm-stats-section-title">📢 Announcements</div>
+        <p class="qm-dash-empty">Not built yet — this will show pinned Collective Board posts once that ships.</p>
+      </div>
+    </div>
+    {% endmacro %}
+
+    {% macro board(prefix, level) %}
+    <section class="bd" id="{{ prefix }}-board" data-level="{{ level }}">
+      <header class="bd-head">
+        <button type="button" class="bd-groups" title="Village groups and places"><span aria-hidden="true">☰</span> <span>Groups</span></button>
+        <div class="bd-headtext"><b class="bd-title">Collective Board</b><small class="bd-sub">Loading…</small></div>
+        <button type="button" class="bd-qp" title="Quantum Punch council of this group">⚖️ <span>Q-Punch</span></button>
+      </header>
+      <div class="bd-feed" aria-live="polite"></div>
+      <div class="bd-foot"><button type="button" class="bd-toggle" title="Switch between live voting and frozen posts">❄️ <span>Frozen posts</span></button></div>
+      <form class="bd-compose" hidden>
+        <textarea rows="2" maxlength="1000" placeholder="Post to your village — it is voted on for 7 days…" required></textarea>
+        <button type="submit" class="qm-btn qm-btn-primary">Post</button>
+      </form>
+      <p class="bd-note" hidden></p>
+    </section>
+    {% endmacro %}
+
+    <section class="qm-dash-panel qm-dash-3col" id="qm-dash-global" hidden>
+      <div class="qm-panel-tabs qm-location-tabs-row" id="global-root-tabs">
+        <button class="qm-panel-tab is-active" data-root="earth" type="button">🌍 Earth</button>
+        <button class="qm-panel-tab" data-root="continent" type="button">🌎 {{ profile.present_location_struct.continent.name or "Continent" }}</button>
+        <button class="qm-panel-tab" data-root="country" type="button">🌏 {{ profile.present_location_struct.country.name or "Country" }}</button>
+      </div>
+      <div class="dr-backdrop" hidden></div>
+      <div class="qm-explorer-col dr">
+        <div class="dr-head"><b>Groups</b><button type="button" class="dr-close" aria-label="Close">×</button></div>
+        <h4 class="dr-h4" id="global-places-h">Continents</h4>
+        <ul class="qm-explorer-tree" id="global-explorer-tree"></ul>
+      </div>
+      <div class="qm-center-col">
+        {{ board('bd-global', 'earth') }}
+
+        <div class="qm-dash-card" id="qm-perception-country-card" hidden>
+          <h2>🧭 Country Perception</h2>
+          <p class="qm-dash-empty">Pro/Anti sentiment on this country — not your own birth country. Voting is open October 1 – December 31; results shown here are last year's frozen tally.</p>
+          <p><strong id="qm-perception-country-name">—</strong> · results for <span id="qm-perception-country-year">—</span></p>
+          <div class="qm-perception-bars">
+            <div class="qm-perception-bar-row"><span>👍 Pro</span><div class="qm-perception-bar-track"><div class="qm-perception-bar-fill qm-perception-pro" id="qm-perception-country-pro-bar"></div></div><span id="qm-perception-country-pro-count">0</span></div>
+            <div class="qm-perception-bar-row"><span>👎 Anti</span><div class="qm-perception-bar-track"><div class="qm-perception-bar-fill qm-perception-anti" id="qm-perception-country-anti-bar"></div></div><span id="qm-perception-country-anti-count">0</span></div>
+          </div>
+          <div id="qm-perception-country-vote-block">
+            <button type="button" class="qm-btn qm-btn-ghost" data-vote="pro" id="qm-perception-country-vote-pro">👍 Vote Pro</button>
+            <button type="button" class="qm-btn qm-btn-ghost" data-vote="anti" id="qm-perception-country-vote-anti">👎 Vote Anti</button>
+          </div>
+          <p class="qm-dash-empty" id="qm-perception-country-note"></p>
+        </div>
+      </div>
+      <div class="qm-stats-col">{{ stat_block("qm-dg-stats") }}</div>
+    </section>
+
+    <section class="qm-dash-panel {{ 'qm-dash-3col' if profile.present_location_struct.zone }}" id="qm-dash-public" hidden>
+      {% set p = profile.present_location_struct %}
+      {% if p.zone %}
+      <div class="qm-panel-tabs qm-location-tabs-row" id="public-root-tabs">
+        <button class="qm-panel-tab is-active" data-root="zone" type="button">🗺️ {{ p.zone.name }}</button>
+        <button class="qm-panel-tab" data-root="state" type="button">🏛️ {{ p.state.name }}</button>
+        <button class="qm-panel-tab" data-root="district" type="button" {{ "disabled" if not p.district }}>🏙️ {{ p.district.name if p.district else "District" }}</button>
+        <button class="qm-panel-tab" data-root="tehsil" type="button" {{ "disabled" if not p.tehsil }}>🏘️ {{ p.tehsil.name if p.tehsil else "Tehsil" }}</button>
+        <button class="qm-panel-tab" data-root="village" type="button" {{ "disabled" if not p.village }}>🌳 {{ p.village.name if p.village else "Village" }}</button>
+      </div>
+      <div class="dr-backdrop" hidden></div>
+      <div class="qm-explorer-col dr">
+        <div class="dr-head"><b>Groups</b><button type="button" class="dr-close" aria-label="Close">×</button></div>
+        <section class="dr-section" id="subgroups-box" hidden>
+          <h4>🏘️ Village groups <small>societies · RWAs</small></h4>
+          <ul class="sg-list" id="subgroups-list"></ul>
+          <p class="qm-dash-empty" id="subgroups-empty" hidden>The council hasn't created any groups in your village yet.</p>
+          <form class="sg-create" id="subgroup-create" hidden>
+            <input type="text" id="subgroup-name" maxlength="60" placeholder="New group, e.g. Green Park Society" required />
+            <input type="text" id="subgroup-admin-label" maxlength="80" placeholder="Managed by, e.g. RWA Committee or Panchayat" />
+            <button type="submit" class="qm-btn qm-btn-primary">Create</button>
+          </form>
+        </section>
+        <h4 class="dr-h4" id="public-places-h">Places</h4>
+        <ul class="qm-explorer-tree" id="public-explorer-tree"></ul>
+      </div>
+
+      <div class="qm-center-col">
+        {{ board('bd-public', 'zone') }}
+
+        <div class="qm-dash-card" id="qm-perception-zone-card" hidden>
+          <h2>🧭 Zone Perception</h2>
+          <p class="qm-dash-empty">Pro/Anti sentiment on this zone — not your own birth zone. Voting is open October 1 – December 31; results shown here are last year's frozen tally.</p>
+          <p><strong id="qm-perception-zone-name">—</strong> · results for <span id="qm-perception-zone-year">—</span></p>
+          <div class="qm-perception-bars">
+            <div class="qm-perception-bar-row"><span>👍 Pro</span><div class="qm-perception-bar-track"><div class="qm-perception-bar-fill qm-perception-pro" id="qm-perception-zone-pro-bar"></div></div><span id="qm-perception-zone-pro-count">0</span></div>
+            <div class="qm-perception-bar-row"><span>👎 Anti</span><div class="qm-perception-bar-track"><div class="qm-perception-bar-fill qm-perception-anti" id="qm-perception-zone-anti-bar"></div></div><span id="qm-perception-zone-anti-count">0</span></div>
+          </div>
+          <div id="qm-perception-zone-vote-block">
+            <button type="button" class="qm-btn qm-btn-ghost" data-vote="pro" id="qm-perception-zone-vote-pro">👍 Vote Pro</button>
+            <button type="button" class="qm-btn qm-btn-ghost" data-vote="anti" id="qm-perception-zone-vote-anti">👎 Vote Anti</button>
+          </div>
+          <p class="qm-dash-empty" id="qm-perception-zone-note"></p>
+        </div>
+
+        <div class="qm-dash-card" id="qm-elections-card" hidden>
+          <h2>Village Council Elections</h2>
+          <p><strong id="qm-election-sign">—</strong> cycle · <span id="qm-election-phase">—</span></p>
+          <p class="qm-dash-empty" id="qm-election-window"></p>
+
+          <div id="qm-election-nominate-block" hidden>
+            <h3 class="qm-panel-subhead">Stand for election</h3>
+            <form id="qm-election-nominate-form" class="qm-form">
+              <label class="qm-field"><span>Why do you want to stand?</span><textarea id="qm-election-reason" rows="2" required></textarea></label>
+              <label class="qm-field"><span>Why should members vote for you?</span><textarea id="qm-election-why-vote" rows="2" required></textarea></label>
+              <label class="qm-field"><span>What changes will you bring?</span><textarea id="qm-election-changes" rows="2" required></textarea></label>
+              <label class="qm-field"><span>Past work (optional)</span><textarea id="qm-election-past-work" rows="2"></textarea></label>
+              <button type="submit" class="qm-btn qm-btn-primary">Submit nomination →</button>
+            </form>
+          </div>
+          <p class="qm-dash-empty" id="qm-election-nominate-note" hidden></p>
+
+          <h3 class="qm-panel-subhead">Candidates</h3>
+          <div id="qm-election-candidates"></div>
+          <p class="qm-dash-empty" id="qm-election-candidates-empty" hidden>No approved candidates yet.</p>
+
+          <h3 class="qm-panel-subhead">Village Council</h3>
+          <ul class="qm-council-roster" id="qm-election-council"></ul>
+          <p class="qm-dash-empty" id="qm-election-council-empty" hidden>No council seats elected yet.</p>
+        </div>
+      </div>
+
+      <div class="qm-stats-col">{{ stat_block("qm-dp-stats") }}</div>
+      {% else %}
+      <p class="qm-dash-empty">No Public Timeline yet — location data for your present country is still being compiled.</p>
+      {% endif %}
+    </section>
+
+    <script>
+      var QM_PRESENT_LOCATION = {{ profile.present_location_struct | tojson }};
+      var QM_PILOT_VILLAGE_ID = "CS.DL.3.4.1A";
+    </script>
+
+    <section class="qm-dash-panel" id="qm-dash-personal" hidden>
+      <div class="pt-layout">
+        <div class="pt-main">
+          <div class="qm-dash-tabs" id="personal-top-tabs">
+            <button class="qm-ptab is-active" data-ptab="private" type="button">🔒 Self</button>
+            <button class="qm-ptab" data-ptab="family" type="button">🏠 Family Groups</button>
+            <button class="qm-ptab" data-ptab="friends" type="button">👥 Friend Groups</button>
+            <button class="qm-ptab" data-ptab="business" type="button">💼 Business Groups</button>
+            <button class="qm-ptab" data-ptab="custom" type="button">➕ Create New Group</button>
+          </div>
+
+          <div class="pt-panel" id="pt-private-panel">
+            <p class="qm-dash-empty">One-to-one chats with people who accepted your message request.</p>
+            <ul class="pt-chatlist" id="pt-chat-list"></ul>
+            <p class="qm-dash-empty" id="pt-chat-empty" hidden>No private chats yet — find someone below and send a message.</p>
+          </div>
+
+          <div class="pt-panel" id="pt-family-panel" hidden>
+            <p class="qm-dash-empty">Paternal and Maternal are set up for you — add more, or add members to any of them.</p>
+            <ul class="pt-grouplist" id="pt-family-list"></ul>
+            <form class="pt-new-group-inline" data-category="family"><input type="text" maxlength="60" placeholder="New family group, e.g. Cousins" required /><button type="submit" class="qm-btn qm-btn-ghost">+ New</button></form>
+          </div>
+
+          <div class="pt-panel" id="pt-friends-panel" hidden>
+            <ul class="pt-grouplist" id="pt-friends-list"></ul>
+            <form class="pt-new-group-inline" data-category="friends"><input type="text" maxlength="60" placeholder="New friend group, e.g. College Friends" required /><button type="submit" class="qm-btn qm-btn-ghost">+ New</button></form>
+          </div>
+
+          <div class="pt-panel" id="pt-business-panel" hidden>
+            <p class="qm-dash-empty">Vendors, service providers and colleagues — every business chat you've started.</p>
+            <ul class="pt-grouplist" id="pt-business-list"></ul>
+            <form class="pt-new-group-inline" data-category="business"><input type="text" maxlength="60" placeholder="New business, e.g. corner shop or a vendor" required /><button type="submit" class="qm-btn qm-btn-ghost">+ New</button></form>
+          </div>
+
+          <div class="pt-panel" id="pt-custom-panel" hidden>
+            <p class="qm-dash-empty">Any new group you create, outside Family/Friends/Business. You can move one into those categories later.</p>
+            <ul class="pt-grouplist" id="pt-custom-list"></ul>
+            <form class="pt-new-group-inline" data-category="custom"><input type="text" maxlength="60" placeholder="Name your new group" required /><button type="submit" class="qm-btn qm-btn-ghost">+ Create</button></form>
+          </div>
+        </div>
+
+        <aside class="pt-side">
+          <div class="qm-dash-card">
+            <h2>🔎 Find &amp; connect</h2>
+            <p class="qm-dash-empty">Search a 12-digit search ID or an Account ID.</p>
+            <div class="pt-search-row">
+              <input type="text" class="qm-explorer-search" id="pt-search-input" placeholder="e.g. 123456789012" />
+              <button type="button" class="qm-btn qm-btn-ghost" id="pt-search-btn">Search</button>
+            </div>
+            <div id="pt-search-result"></div>
+          </div>
+
+          <div class="qm-dash-card">
+            <h2>📥 Requests</h2>
+            <ul class="pt-inbox" id="pt-inbox-list"></ul>
+            <p class="qm-dash-empty" id="pt-inbox-empty" hidden>No pending requests.</p>
+          </div>
+        </aside>
+      </div>
+
+      <div class="dq-modal" id="pt-chat-modal" hidden role="dialog" aria-modal="true">
+        <div class="dq-modal-box dq-modal-wide">
+          <button type="button" class="dq-modal-back" data-close aria-label="Back to Personal timeline" title="Back">← Back</button>
+          <section class="bd" id="pt-private-chat"></section>
+        </div>
+      </div>
+      <div class="dq-modal" id="pt-group-modal" hidden role="dialog" aria-modal="true">
+        <div class="dq-modal-box dq-modal-wide">
+          <button type="button" class="dq-modal-back" data-close aria-label="Back to Personal timeline" title="Back">← Back</button>
+          <section class="bd" id="pt-group-chat"></section>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="qm-gate-message qm-edit-modal" id="edit-profile-modal" hidden>
+    <h3>Edit Profile</h3>
+    <form id="edit-profile-form" class="qm-form">
+      <label class="qm-field"><span>Name</span><input type="text" id="edit-name" value="{{ profile.name }}" /></label>
+      <label class="qm-field"><span>Email</span><input type="email" id="edit-email" value="{{ profile.email or '' }}" /></label>
+      <label class="qm-field"><span>Phone</span><input type="text" id="edit-phone" placeholder="+91-XXXXXXXXXX" /></label>
+      <label class="qm-field"><span>Reason for change</span><input type="text" id="edit-reason" required /></label>
+      <p class="qm-timeline-note">Changes will be sent for approval. Approval requires committee review.</p>
+      <div class="qm-summary-actions">
+        <button type="button" class="qm-btn qm-btn-ghost" id="edit-profile-cancel">Cancel</button>
+        <button type="submit" class="qm-btn qm-btn-primary">Submit for Approval →</button>
+      </div>
+      <p class="qm-summary-error" id="edit-profile-error" hidden></p>
+      <p class="qm-timeline-note" id="edit-profile-success" hidden>Request queued for review.</p>
+    </form>
+  </div>
+
+  <div class="qm-gate-message qm-edit-modal" id="wallet-donate-modal" hidden>
+    <h3>Donate ₹ and Earn Qoins</h3>
+    <p class="qm-timeline-note">Simulated for this prototype — no real payment is processed. 1 Qoin = ₹1. Your own share is credited but locked until you cast your first election vote; the location shares (Earth → your Village) and any referrer's share are credited immediately.</p>
+    <form id="wallet-donate-form" class="qm-form">
+      <label class="qm-field"><span>Amount (₹1–₹200)</span><input type="number" id="donate-amount" min="1" max="200" required /></label>
+      <label class="qm-field"><span>Referrer's Private ID (optional)</span><input type="text" id="donate-referrer" /></label>
+      <div class="qm-summary-actions">
+        <button type="button" class="qm-btn qm-btn-ghost" id="wallet-donate-cancel">Cancel</button>
+        <button type="submit" class="qm-btn qm-btn-primary">Donate →</button>
+      </div>
+      <p class="qm-summary-error" id="wallet-donate-error" hidden></p>
+      <p class="qm-timeline-note" id="wallet-donate-success" hidden></p>
+    </form>
+  </div>
+
+  <div class="dq-modal" id="kundali-modal" hidden role="dialog" aria-modal="true" aria-labelledby="kundali-title">
+    <div class="dq-modal-box dq-modal-wide">
+      <button type="button" class="dq-modal-close" data-close aria-label="Close">×</button>
+      <h3 id="kundali-title">🪐 <span data-i18n="kundali_title">Your Vedic Birth Chart (Kundali)</span></h3>
+      <div class="kd-body">
+        <div class="kd-chart" id="kundali-chart"></div>
+        <div class="kd-tablewrap">
+          <table class="kd-table">
+            <thead><tr><th data-i18n="planet">Planet</th><th data-i18n="sign">Sign</th><th data-i18n="degree">Degree</th><th data-i18n="nakshatra">Nakshatra</th><th>Pada</th><th data-i18n="lord">Lord</th></tr></thead>
+            <tbody id="kundali-rows"></tbody>
+          </table>
+        </div>
+      </div>
+      <p class="qm-timeline-note">{{ profile.kundali_summary }}</p>
+    </div>
+  </div>
+
+  <div class="dq-modal" id="qp-modal" hidden role="dialog" aria-modal="true" aria-labelledby="qp-title">
+    <div class="dq-modal-box">
+      <button type="button" class="dq-modal-close" data-close aria-label="Close">×</button>
+      <h3 id="qp-title">⚖️ Quantum Punch Council</h3>
+      <div id="qp-body"></div>
+    </div>
+  </div>
+
+  <div class="dq-modal" id="timebox-modal" hidden role="dialog" aria-modal="true" aria-labelledby="timebox-title">
+    <div class="dq-modal-box">
+      <button type="button" class="dq-modal-close" data-close aria-label="Close">×</button>
+      <h3 id="timebox-title">🕐 Time-box</h3>
+      <div id="timebox-body"><p class="qm-dash-empty">Loading…</p></div>
+    </div>
+  </div>
+
+  <script>
+    var QM_KUNDALI = {{ profile.kundali_view | tojson }};
+    var QM_LANGS = {{ profile.languages | tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/dash_extras.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/board.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/social.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/mobile_keyboard.js') }}"></script>
+  {% include '_poems_marquee.html' %}
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "qumanity-global-timeline",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "app.py"
+      ],
+      "port": 5050,
+      "autoPort": true,
+      "env": {
+        "QM_ADMIN_PRIVATE_IDS": "014918240",
+        "QM_TEST_PIN": "12345"
+      }
+    }
+  ]
+}

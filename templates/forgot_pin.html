@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qumanity — Forgot PIN</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body>
+  <header class="qm-header">
+    <a href="{{ url_for('index') }}" style="display:contents">
+      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+    </a>
+    <div class="qm-header-text">
+      <h1>Forgot your PIN?</h1>
+      <p>We'll send a one-time code to the phone or email on your account.</p>
+    </div>
+  </header>
+
+  <main class="qm-register-main">
+    <section class="qm-screen is-active">
+      <form id="step1" class="qm-form">
+        <label class="qm-field">
+          <span>🔢 Your 9-digit Private ID</span>
+          <input type="text" id="fp-private-id" required inputmode="numeric" pattern="[0-9]{9}" maxlength="9" placeholder="e.g. 014918240" />
+        </label>
+        <label class="qm-field">
+          <span>Send the code by</span>
+          <select id="fp-channel">
+            <option value="phone">📱 SMS to my phone</option>
+            <option value="email">📧 Email</option>
+          </select>
+        </label>
+        <button type="submit" class="qm-btn qm-btn-primary qm-form-submit">Send code →</button>
+      </form>
+
+      <form id="step2" class="qm-form" hidden>
+        <p class="qm-timeline-note" id="fp-sent-note"></p>
+        <label class="qm-field">
+          <span>🔐 6-digit code</span>
+          <input type="text" id="fp-otp" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="••••••" />
+        </label>
+        <label class="qm-field">
+          <span>🔑 New 5-digit PIN</span>
+          <input type="password" id="fp-new-pin" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="•••••" />
+        </label>
+        <button type="submit" class="qm-btn qm-btn-primary qm-form-submit">Reset PIN →</button>
+      </form>
+
+      <p class="qm-summary-error" id="fp-error" hidden></p>
+      <p class="qm-timeline-note" id="fp-success" hidden>✅ Your PIN has been reset. <a href="/login">Sign in</a></p>
+      <p class="qm-timeline-note">Lost your Private ID too? <a href="/recover-id">Recover it here</a>.</p>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+      var step1 = document.getElementById("step1"), step2 = document.getElementById("step2");
+      var errorEl = document.getElementById("fp-error"), successEl = document.getElementById("fp-success");
+      var privateId = "";
+
+      step1.addEventListener("submit", function (e) {
+        e.preventDefault();
+        errorEl.hidden = true;
+        privateId = document.getElementById("fp-private-id").value.trim();
+        fetch("/api/auth/forgot-pin/request", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ private_id: privateId, channel: document.getElementById("fp-channel").value }),
+        })
+          .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
+          .then(function (res) {
+            if (!res.ok) throw new Error(res.b.error || "Could not send a code");
+            document.getElementById("fp-sent-note").textContent = "A code was sent to " + res.b.masked_target + ".";
+            if (res.b.dev_code) document.getElementById("fp-sent-note").textContent += " (dev mode — code: " + res.b.dev_code + ")";
+            step1.hidden = true; step2.hidden = false;
+          })
+          .catch(function (err) { errorEl.textContent = err.message; errorEl.hidden = false; });
+      });
+
+      step2.addEventListener("submit", function (e) {
+        e.preventDefault();
+        errorEl.hidden = true;
+        fetch("/api/auth/forgot-pin/verify", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ private_id: privateId, otp: document.getElementById("fp-otp").value.trim(), new_pin: document.getElementById("fp-new-pin").value.trim() }),
+        })
+          .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
+          .then(function (res) {
+            if (!res.ok) throw new Error(res.b.error || "Could not reset your PIN");
+            step2.hidden = true; successEl.hidden = false;
+          })
+          .catch(function (err) { errorEl.textContent = err.message; errorEl.hidden = false; });
+      });
+    })();
+  </script>
+  {% include '_poems_marquee.html' %}
+</body>
+</html>
