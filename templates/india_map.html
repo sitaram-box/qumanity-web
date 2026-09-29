@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qumanity — India Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/india_map.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body>
+  <header class="qm-header">
+    <a href="{{ url_for('index') }}" style="display:contents">
+      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+    </a>
+    <div class="qm-header-text">
+      <h1>India Map — Public Location Selection Tool</h1>
+      <p>Standalone demo of the Zone/State map component (also embedded in Registration).</p>
+    </div>
+  </header>
+
+  <main class="qm-register-main" style="max-width: 900px;">
+    <div class="qm-india-map-wrap">
+      <div id="india-leaflet-map"></div>
+    </div>
+
+    <div id="demo-result" class="qm-summary-list" style="margin-top:20px;"></div>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{{ url_for('static', filename='js/india_map.js') }}"></script>
+  <script>
+    var resultEl = document.getElementById("demo-result");
+    var map = QMIndiaMap.create(document.getElementById("india-leaflet-map"), {
+      onStateConfirm: function (props) {
+        resultEl.innerHTML =
+          "<div><dt>Selected state</dt><dd>" + props.name + "</dd></div>" +
+          "<div><dt>State id</dt><dd>" + props.qm_state_id + "</dd></div>" +
+          "<div><dt>Zone</dt><dd>" + props.qm_zone_name + " (" + props.qm_zone_id + ")</dd></div>";
+      },
+    });
+    map.ready.then(function () {
+      fetch("/static/data/india_states.json").then(function (r) { return r.json(); }).then(function (d) {
+        map.renderLegend(d.zones.map(function (z) { return { name: z.name, color: z.color }; }));
+      });
+    });
+  </script>
+  {% include '_poems_marquee.html' %}
+</body>
+</html>

@@ -1,0 +1,6 @@
+Flask>=3.0
+openpyxl>=3.1
+pycountry>=24.0
+pyswisseph>=2.10
+APScheduler>=3.11
+timezonefinder>=6.5

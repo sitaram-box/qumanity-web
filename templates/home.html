@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qumanity — Quantum + Humanity</title>
+  <meta name="description" content="Qumanity — quantum plus humanity: a nested, transparent ledger of Space, Time and Consciousness. Verified identity, zodiac-rotating governance and an ethical Qoin economy, live across 10 countries of the Indian Sub-continent." />
+  <meta name="theme-color" content="#050b14" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/india_map.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body class="hm">
+  <a class="hm-skip" href="#main">Skip to content</a>
+
+  <!-- ============ Navigation ============ -->
+  <header class="hm-nav" id="hm-nav">
+    <div class="hm-nav-inner">
+      <a class="hm-brand" href="{{ url_for('index') }}" aria-label="Qumanity home">
+        <img src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="" />
+        <span>Qumanity</span>
+      </a>
+      <nav class="hm-links" id="hm-links" aria-label="Primary">
+        <a href="#vision">Vision</a>
+        <a href="#how">How it works</a>
+        <a href="#identity">Identity</a>
+        <a href="#governance">Governance</a>
+        <a href="#qoins">Qoins</a>
+        <a href="#roadmap">Roadmap</a>
+        <a href="{{ url_for('about') }}">About</a>
+      </nav>
+      <div class="hm-nav-cta">
+        <a class="hm-btn hm-btn-ghost" href="{{ url_for('login') }}">Login</a>
+        <a class="hm-btn hm-btn-primary" href="{{ url_for('register') }}">Register</a>
+        <button class="hm-burger" id="hm-burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="hm-links"><span></span><span></span><span></span></button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <!-- ============ HERO ============ -->
+    <section class="hm-hero">
+      <div class="hm-aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="hm-hero-grid">
+        <div class="hm-hero-copy">
+          <p class="hm-chip"><span class="hm-chip-dot"></span> Quantum&nbsp;+&nbsp;Humanity</p>
+          <h1>The operating system for a <em>conscious</em> civilization.</h1>
+          <p class="hm-lead">
+            Qumanity is a nested, transparent ledger of <b>Space</b>, <b>Time</b> and <b>Consciousness</b> — where every
+            place has an address, every moment a rhythm, and every act of service a permanent record. Governance that
+            rotates with the cosmos. An economy that rewards contribution. A village that speaks to the planet.
+          </p>
+          <div class="hm-cta-row">
+            <a class="hm-btn hm-btn-primary hm-btn-lg" href="{{ url_for('register') }}">Create your Qumanity account <span aria-hidden="true">→</span></a>
+            <a class="hm-btn hm-btn-ghost hm-btn-lg" href="#live">See it live</a>
+          </div>
+          <ul class="hm-trust">
+            <li><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/></svg>Non-profit stewarded</li>
+            <li><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Open &amp; auditable</li>
+            <li><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>Voluntary by design</li>
+          </ul>
+        </div>
+
+        <!-- Live globe: the Indian Sub-continent as one region (see earth.js / subcontinent.js) -->
+        <div class="hm-globe-wrap">
+          <div class="hm-globe-glow" aria-hidden="true"></div>
+          <div class="hm-globe-card">
+            <div class="qm-earth-stage hm-stage" id="qm-zoom-stage">
+              <div class="qm-zoom-slot" id="qm-earth-slot">
+                <canvas id="earth-canvas" aria-label="Interactive globe of the Indian Sub-continent"></canvas>
+                <div class="qm-earth-controls"><button id="reset-view-btn" class="qm-btn qm-btn-ghost">Reset view</button></div>
+                <div id="qm-breadcrumb" class="qm-breadcrumb">Indian Sub-continent</div>
+                <div id="qm-tooltip" class="qm-tooltip" hidden></div>
+              </div>
+              <div class="qm-zoom-slot" id="qm-country-slot" hidden>
+                <div id="qm-country-india-map"></div>
+              </div>
+              <div class="qm-zoom-nav">
+                <button class="qm-zoom-thumb" id="qm-earth-thumb" type="button" title="Return to the Sub-continent map" hidden>🌏<span>Sub-continent</span></button>
+              </div>
+            </div>
+            <div class="hm-float hm-float-a"><b>10</b><span>countries</span></div>
+            <div class="hm-float hm-float-b"><b>700,000+</b><span>villages mapped</span></div>
+            <div class="hm-float hm-float-c"><b><i class="hm-live-dot"></i> Live</b><span>drag to rotate</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hm-marquee" aria-label="Ways to contribute">
+        <div class="hm-marquee-track">
+          <span>🌱 Plant a tree</span><span>📚 Teach an hour</span><span>👵 Care for an elder</span><span>💧 Restore water</span>
+          <span>🌾 Farm regeneratively</span><span>🎭 Preserve a tradition</span><span>🤝 Mediate a dispute</span><span>🏛️ Serve on a council</span>
+          <span aria-hidden="true">🌱 Plant a tree</span><span aria-hidden="true">📚 Teach an hour</span><span aria-hidden="true">👵 Care for an elder</span><span aria-hidden="true">💧 Restore water</span>
+          <span aria-hidden="true">🌾 Farm regeneratively</span><span aria-hidden="true">🎭 Preserve a tradition</span><span aria-hidden="true">🤝 Mediate a dispute</span><span aria-hidden="true">🏛️ Serve on a council</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ LIVE STATS ============ -->
+    <section class="hm-section hm-live" id="live">
+      <div class="hm-wrap hm-live-grid">
+        <div class="hm-live-copy">
+          <p class="hm-kicker">Live from Qumanity</p>
+          <h2>Who is here, right now.</h2>
+          <p class="hm-sub">
+            The Public Timeline is open across the Indian Sub-continent. Pick a country to see its registered humans by
+            gender, age, element and zodiac sign.
+          </p>
+          <p class="hm-fine">Live from Qumanity’s own data — not population or census figures.</p>
+          <div class="hm-countrylist" aria-hidden="true">
+            <span>India</span><span>Nepal</span><span>Bhutan</span><span>Bangladesh</span><span>Myanmar</span>
+            <span>Sri Lanka</span><span>Pakistan</span><span>Balochistan</span><span>Afghanistan</span><span>Maldives</span>
+          </div>
+        </div>
+
+        <div class="hm-panel hm-glass" id="global-timeline-panel">
+          <div class="hm-tabs" role="tablist">
+            <button class="hm-tab is-active" id="qm-tab-sub" type="button" role="tab">🌏 Sub-continent</button>
+            <button class="hm-tab" id="qm-tab-country" type="button" role="tab">🏳️ Country</button>
+          </div>
+          <label class="hm-select">
+            <span>Country</span>
+            <select id="qm-dd-country"><option value="">Select a country…</option></select>
+          </label>
+
+          <div id="qm-sub-view" class="hm-view">
+            <div class="hm-bignum"><b id="qm-sub-total">0</b><span>registered humans — born in the Sub-continent</span></div>
+            <div class="hm-statgrid">
+              <section><h4>Gender</h4><div id="qm-sub-gender-list" class="hm-bars"></div></section>
+              <section><h4>Age</h4><div id="qm-sub-age-list" class="hm-bars"></div></section>
+              <section><h4>Elements</h4><div id="qm-sub-element-list" class="hm-bars"></div></section>
+              <section><h4>Zodiac signs</h4><div id="qm-sub-sign-list" class="hm-bars hm-bars-2col"></div></section>
+            </div>
+            <p class="hm-fine" id="qm-sub-empty-note" hidden>No one has registered from here yet.</p>
+          </div>
+
+          <div id="qm-country-stats-view" class="hm-view" hidden>
+            <p class="hm-fine" id="qm-country-placeholder">Please pick a country from the list above.</p>
+            <div id="qm-country-content" hidden>
+              <h3 class="hm-viewtitle" id="qm-country-stats-name">Country</h3>
+              <div class="hm-bignum"><b id="qm-cs-total">0</b><span>registered humans — born in this country</span></div>
+              <div class="hm-statgrid">
+                <section><h4>Gender</h4><div id="qm-country-gender-list" class="hm-bars"></div></section>
+                <section><h4>Age</h4><div id="qm-country-age-list" class="hm-bars"></div></section>
+                <section><h4>Elements</h4><div id="qm-country-element-list" class="hm-bars"></div></section>
+                <section><h4>Zodiac signs</h4><div id="qm-country-sign-list" class="hm-bars hm-bars-2col"></div></section>
+              </div>
+              <p class="hm-fine" id="qm-country-empty-note" hidden>No one has registered from here yet.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ NUMBERS ============ -->
+    <section class="hm-numbers" aria-label="Qumanity in numbers">
+      <div class="hm-wrap">
+        <div class="hm-num"><b data-count="10">10</b><span>countries on the Public Timeline</span></div>
+        <div class="hm-num"><b data-count="700000" data-suffix="+">700,000+</b><span>villages in nested containers</span></div>
+        <div class="hm-num"><b data-count="4">4</b><span>Timelines of life</span></div>
+        <div class="hm-num"><b data-count="24">24</b><span>leaders per village, per year</span></div>
+        <div class="hm-num"><b data-count="3">3</b><span>ledgers: Space · Time · Consciousness</span></div>
+      </div>
+    </section>
+
+    <!-- ============ VISION: PROBLEM → SHIFT ============ -->
+    <section class="hm-section" id="vision">
+      <div class="hm-wrap">
+        <header class="hm-head">
+          <p class="hm-kicker">The vision</p>
+          <h2>Not a crisis of leaders. A failure of architecture.</h2>
+          <p class="hm-sub">Climate collapse, inequality, democratic erosion and misaligned AI are symptoms of one obsolete operating system. Qumanity redesigns the system itself — three flaws, three answers.</p>
+        </header>
+        <div class="hm-shift">
+          <article class="hm-glass hm-spot">
+            <span class="hm-badge hm-badge-bad">The old system</span>
+            <h3>Fragmentation</h3>
+            <p>Authority is siloed while climate, finance and the biosphere are globally linked.</p>
+            <div class="hm-arrow" aria-hidden="true">↓</div>
+            <span class="hm-badge hm-badge-good">Qumanity</span>
+            <h3 class="hm-good">One nested, connected ledger</h3>
+            <p>Village to planet on one unbroken chain — local autonomy inside global coherence.</p>
+          </article>
+          <article class="hm-glass hm-spot">
+            <span class="hm-badge hm-badge-bad">The old system</span>
+            <h3>Extraction</h3>
+            <p>Success is short-term throughput, so depletion is rewarded faster than renewal.</p>
+            <div class="hm-arrow" aria-hidden="true">↓</div>
+            <span class="hm-badge hm-badge-good">Qumanity</span>
+            <h3 class="hm-good">Value from verified contribution</h3>
+            <p>Qoins reward teaching, care, restoration and service — never speculation.</p>
+          </article>
+          <article class="hm-glass hm-spot">
+            <span class="hm-badge hm-badge-bad">The old system</span>
+            <h3>Opacity</h3>
+            <p>Decisions are made without verifiable feedback; corruption outruns correction.</p>
+            <div class="hm-arrow" aria-hidden="true">↓</div>
+            <span class="hm-badge hm-badge-good">Qumanity</span>
+            <h3 class="hm-good">Transparent by design</h3>
+            <p>Every vote, fund and decision is recorded, traceable and open to audit.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ HOW IT WORKS: TRIUNE ============ -->
+    <section class="hm-section hm-alt" id="how">
+      <div class="hm-wrap">
+        <header class="hm-head">
+          <p class="hm-kicker">How it works</p>
+          <h2>Three ledgers. One living system.</h2>
+          <p class="hm-sub">Reality is spatially nested, temporally cyclical and consciously intentional. Qumanity models all three — and binds them together.</p>
+        </header>
+
+        <div class="hm-triune" data-tabs>
+          <div class="hm-tablist" role="tablist" aria-label="The three ledgers">
+            <button class="hm-tabbtn is-active" role="tab" data-tab="space" aria-selected="true"><i style="--c:#2fd4a3"></i><b>Space</b><span>the “where”</span></button>
+            <button class="hm-tabbtn" role="tab" data-tab="time" aria-selected="false"><i style="--c:#ff9933"></i><b>Time</b><span>the “when”</span></button>
+            <button class="hm-tabbtn" role="tab" data-tab="mind" aria-selected="false"><i style="--c:#8b7bff"></i><b>Consciousness</b><span>the “why”</span></button>
+          </div>
+
+          <div class="hm-tabpanels">
+            <div class="hm-tabpanel is-active" data-panel="space" role="tabpanel">
+              <div class="hm-tp-text">
+                <h3>Nested containers, from Earth to you</h3>
+                <p>Every action happens inside a defined container — and each belongs to a larger one. A village’s entry automatically belongs to every container above it, so nothing hides in the gaps.</p>
+                <ul class="hm-checks">
+                  <li>Location is the primary index — codes embed their parents</li>
+                  <li>Authority flows up, accountability flows down</li>
+                  <li>Each container controls the records made in its jurisdiction</li>
+                </ul>
+              </div>
+              <div class="hm-tp-visual">
+                <div class="hm-nest" aria-label="Earth, continent, country, state, district, village, you">
+                  <div><em>Earth</em>
+                    <div><em>Continent</em>
+                      <div><em>Country</em>
+                        <div><em>State</em>
+                          <div><em>District</em>
+                            <div><em>Village</em>
+                              <div class="hm-nest-core"><em>You</em></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="hm-tabpanel" data-panel="time" role="tabpanel" hidden>
+              <div class="hm-tp-text">
+                <h3>Time that follows the cosmos, not the campaign</h3>
+                <p>Actions are stamped inside cycles — elements, zodiac months, lunar fortnights, days — so the system recognises patterns and aligns governance with natural rhythm.</p>
+                <ul class="hm-checks">
+                  <li>Leadership renews every month with the Sun’s transit</li>
+                  <li>No stagnation, no permanent capture of power</li>
+                  <li>Planning respects agricultural and ecological seasons</li>
+                </ul>
+              </div>
+              <div class="hm-tp-visual">
+                <div class="hm-rhythm">
+                  <div class="hm-ring hm-ring-1"><span>Elements</span></div>
+                  <div class="hm-ring hm-ring-2"><span>Zodiac</span></div>
+                  <div class="hm-ring hm-ring-3"><span>Lunar</span></div>
+                  <div class="hm-ring hm-ring-4"><span>Day</span></div>
+                  <div class="hm-ring-core">Now</div>
+                </div>
+              </div>
+            </div>
+            <div class="hm-tabpanel" data-panel="mind" role="tabpanel" hidden>
+              <div class="hm-tp-text">
+                <h3>Intent → Action → Outcome</h3>
+                <p>Ordinary records say what was done. Qumanity records the declared intent, the verified action and the measured outcome — turning ethical impact from a story into auditable data.</p>
+                <ul class="hm-checks">
+                  <li>Karma as computational accountability, not mystical judgment</li>
+                  <li>Success judged by impact, not money spent</li>
+                  <li>Privacy protected — public actions are transparent, private lives are not</li>
+                </ul>
+              </div>
+              <div class="hm-tp-visual">
+                <div class="hm-flow">
+                  <div class="hm-flow-step"><b>Intent</b><span>Restore the village pond</span></div>
+                  <div class="hm-flow-link" aria-hidden="true"></div>
+                  <div class="hm-flow-step"><b>Action</b><span>Excavation verified by witnesses</span></div>
+                  <div class="hm-flow-link" aria-hidden="true"></div>
+                  <div class="hm-flow-step"><b>Outcome</b><span>Groundwater &amp; yield measured</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ IDENTITY & TIMELINES ============ -->
+    <section class="hm-section" id="identity">
+      <div class="hm-wrap">
+        <header class="hm-head">
+          <p class="hm-kicker">Identity &amp; timelines</p>
+          <h2>One person. Two anchors. Four timelines.</h2>
+          <p class="hm-sub">Your Qumanity account is your permanent address in the ledger — anchored where you were born, and where you live now.</p>
+        </header>
+
+        <div class="hm-id-grid">
+          <article class="hm-glass hm-spot hm-idcard">
+            <span class="hm-badge hm-badge-saffron">Private key</span>
+            <h3>User-ID <small>from your birth</small></h3>
+            <p>Generated from your birth location and never changed. Your soul-print — and the ID you log in with.</p>
+            <div class="hm-idchip"><span>X7K</span>-<span>RM</span>-<span>GMA2</span>-<span>ZFL</span>-<span>CS.DL.1.1.10</span></div>
+          </article>
+          <article class="hm-glass hm-spot hm-idcard">
+            <span class="hm-badge hm-badge-gold">Public key</span>
+            <h3>Account-ID <small>from where you live</small></h3>
+            <p>Generated from your present location. It moves when you move, so civic life happens where you actually live.</p>
+            <div class="hm-idchip"><span>5JT</span>-<span>RM</span>-<span>GMA2</span>-<span>ZFL</span>-<span>CS.DL.5.4.1E</span></div>
+          </article>
+        </div>
+        <p class="hm-idnote">Born anywhere on Earth? Choose any birth country. Your present location is in the Sub-continent, where the Public Timeline runs.</p>
+
+        <div class="hm-timelines" data-tabs>
+          <div class="hm-tablist hm-tablist-row" role="tablist" aria-label="The four timelines">
+            <button class="hm-tabbtn is-active" role="tab" data-tab="y1" aria-selected="true"><i style="--c:#a79fff"></i><b>Private</b><span>Y1</span></button>
+            <button class="hm-tabbtn" role="tab" data-tab="y2" aria-selected="false"><i style="--c:#5ec8ff"></i><b>Personal</b><span>Y2</span></button>
+            <button class="hm-tabbtn" role="tab" data-tab="y3" aria-selected="false"><i style="--c:#ff9933"></i><b>Public</b><span>Y3</span></button>
+            <button class="hm-tabbtn" role="tab" data-tab="y4" aria-selected="false"><i style="--c:#58d36e"></i><b>Global</b><span>Y4</span></button>
+          </div>
+          <div class="hm-tabpanels hm-tabpanels-flat">
+            <div class="hm-tabpanel is-active" data-panel="y1" role="tabpanel"><h3>Private <small>visible only to you</small></h3><p>Your inner world: reflections, health, life events, private notes and unshared drafts — an encrypted “digital conscience archive”. Every global idea begins as a private thought.</p></div>
+            <div class="hm-tabpanel" data-panel="y2" role="tabpanel" hidden><h3>Personal <small>family &amp; trusted circle</small></h3><p>Family tree, friends, study groups and collaborators — permission-based, by mutual authorisation. An incubator where ideas mature before they go public.</p></div>
+            <div class="hm-tabpanel" data-panel="y3" role="tabpanel" hidden><h3>Public <small>your local community</small></h3><p>The civic layer — a digital sabha under the neem tree. It follows where you live: village, tehsil, district, state. Announcements, feedback, service records and elections.</p></div>
+            <div class="hm-tabpanel" data-panel="y4" role="tabpanel" hidden><h3>Global <small>a planetary audience</small></h3><p>Knowledge and contribution at planetary scale. Only ideas already validated by communities can rise here — always traceable to their local origin.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ GOVERNANCE ============ -->
+    <section class="hm-section hm-alt hm-gov" id="governance">
+      <div class="hm-wrap hm-gov-grid">
+        <div class="hm-wheelbox">
+          <div class="hm-wheel-wrap">
+            <svg id="hm-wheel" class="hm-wheel" viewBox="-160 -160 320 320" role="img" aria-label="Zodiac wheel of monthly leadership"></svg>
+            <div class="hm-wheel-center" id="hm-wheel-center">
+              <small>This month</small>
+              <b id="hm-wheel-sign">—</b>
+              <span id="hm-wheel-meta">—</span>
+            </div>
+          </div>
+          <div class="hm-legend">
+            <span><i style="--c:#ff6b4a"></i>Fire</span><span><i style="--c:#58d36e"></i>Earth</span>
+            <span><i style="--c:#cfd8e6"></i>Air</span><span><i style="--c:#4aa8ff"></i>Water</span>
+          </div>
+        </div>
+
+        <div class="hm-gov-copy">
+          <p class="hm-kicker">Quantum Punch governance</p>
+          <h2>Leadership that rotates with the Sun.</h2>
+          <p class="hm-sub">Each month, as the Sun enters a new sign, a village elects one man and one woman of that sign — twelve pairs, <b>24 leaders every year</b>, balanced across Fire, Earth, Air and Water. No dynasties. No campaign money. Only service.</p>
+          <div class="hm-roles">
+            <span>King <em>Nayak</em></span><span>Queen <em>Nayika</em></span><span>Technology Head</span><span>Welfare Officer</span><span>Spiritual Mentor</span>
+          </div>
+          <ol class="hm-ladder" aria-label="Council levels">
+            <li><b>QPV</b><span>Village</span><em>24</em></li>
+            <li><b>QPT</b><span>Tehsil</span><em>8</em></li>
+            <li><b>QPD</b><span>District</span><em>8</em></li>
+            <li><b>QPS</b><span>State</span><em>8</em></li>
+            <li><b>QPZ</b><span>Zone</span><em>8</em></li>
+            <li><b>QPN</b><span>Nation</span><em>8</em></li>
+          </ol>
+          <p class="hm-fine">Live pilot: one Delhi village runs the full cycle — a 7-day nomination window, then 14 days of voting.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ QOINS ============ -->
+    <section class="hm-section" id="qoins">
+      <div class="hm-wrap">
+        <header class="hm-head">
+          <p class="hm-kicker">The Qoin economy</p>
+          <h2>Goodness, made measurable.</h2>
+          <p class="hm-sub">Qoins are ledger-tagged units of <b>verified contribution</b> — not a speculative coin. They can’t be traded on open markets or lent at interest; they are earned, received and spent within Qumanity.</p>
+        </header>
+        <ol class="hm-loop">
+          <li class="hm-glass hm-spot"><span class="hm-loop-n">1</span><h3>Action</h3><p>Teach, plant, care, restore, mediate, create.</p></li>
+          <li class="hm-glass hm-spot"><span class="hm-loop-n">2</span><h3>Verification</h3><p>Witnesses, sensors and AI confirm the impact.</p></li>
+          <li class="hm-glass hm-spot"><span class="hm-loop-n">3</span><h3>Issuance</h3><p>An open algorithm credits Qoins by impact and effort.</p></li>
+          <li class="hm-glass hm-spot"><span class="hm-loop-n">4</span><h3>Utility</h3><p>Redeem for education, health, legal aid and commons.</p></li>
+        </ol>
+        <div class="hm-money">
+          <div><b>Commercial</b><span>100% to the seller</span></div>
+          <div><b>Donation</b><span>50% back to you as Ethical Qoins · 50% shared across village → nation</span></div>
+          <div><b>Contribution</b><span>Newly issued for verified civic work</span></div>
+          <div><b>Subscription</b><span>100% to the kiosk that serves you</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SERVICES ============ -->
+    <section class="hm-section hm-alt" id="services">
+      <div class="hm-wrap">
+        <header class="hm-head">
+          <p class="hm-kicker">Everyday life</p>
+          <h2>Everything a community needs, on one ledger.</h2>
+          <p class="hm-sub">Nothing has to be re-verified and nothing can quietly vanish. <a href="{{ url_for('about') }}#services">See every module →</a></p>
+        </header>
+        <div class="hm-services">
+          <article class="hm-glass hm-spot"><svg viewBox="0 0 24 24"><path d="M12 3v18M5 21h14M6 7h12"/><path d="M6 7l-3 7a3 3 0 006 0L6 7zM18 7l-3 7a3 3 0 006 0l-3-7z"/></svg><h3>Justice</h3><p>Fast, restorative, transparent — with clear appeal paths.</p></article>
+          <article class="hm-glass hm-spot"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 012-2h13v15H6a2 2 0 00-2 2V5z"/><path d="M4 20a2 2 0 002 1h13"/></svg><h3>Education</h3><p>A Digital Gurukul that follows learners through migration.</p></article>
+          <article class="hm-glass hm-spot"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg><h3>Health</h3><p>People, animals and environment in one care ecosystem.</p></article>
+          <article class="hm-glass hm-spot"><svg viewBox="0 0 24 24"><path d="M12 21V9"/><path d="M12 13c-4 0-6-2-6-6 4 0 6 2 6 6zM12 11c0-4 2-6 6-6 0 4-2 6-6 6z"/></svg><h3>Agriculture</h3><p>Full price for farmers, traceable produce for buyers.</p></article>
+          <article class="hm-glass hm-spot"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg><h3>Earth balance</h3><p>Rivers, forests and soil get a visible, accountable voice.</p></article>
+          <article class="hm-glass hm-spot"><svg viewBox="0 0 24 24"><path d="M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3z"/></svg><h3>Culture</h3><p>Songs, crafts and dialects preserved as living memory.</p></article>
+          <article class="hm-glass hm-spot"><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><h3>Transparency</h3><p>Village fund dashboards and citizen audit portals.</p></article>
+          <article class="hm-glass hm-spot"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/></svg><h3>Resilience</h3><p>Early warning, layered response and open relief funds.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TRUST ============ -->
+    <section class="hm-section" id="trust">
+      <div class="hm-wrap">
+        <header class="hm-head">
+          <p class="hm-kicker">Built on trust</p>
+          <h2>Safeguards are the architecture, not an afterthought.</h2>
+        </header>
+        <div class="hm-trustgrid">
+          <article><svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M9 8V6a3 3 0 016 0v2"/></svg><h3>AI is advisory only</h3><p>S(AI) reads the ledgers and advises. Binding decisions stay with human councils, on open, auditable algorithms.</p></article>
+          <article><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/></svg><h3>Privacy by design</h3><p>You own your data. Private timelines are encrypted; sharing is by revocable consent. Public posts show only village-level location.</p></article>
+          <article><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg><h3>Voluntary &amp; incremental</h3><p>Adoption is opt-in, with a long coexistence period alongside existing systems. Trust is earned, never decreed.</p></article>
+          <article><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg><h3>Culturally configurable</h3><p>A coordination protocol, not a cultural template. Communities define what counts as value and keep their customs.</p></article>
+          <article><svg viewBox="0 0 24 24"><path d="M2 9a15 15 0 0120 0M5 13a10 10 0 0114 0M9 17a5 5 0 016 0"/><circle cx="12" cy="20" r="1"/></svg><h3>Built for the last village</h3><p>Solar-powered, offline-capable kiosks — no smartphone, constant internet or literacy required.</p></article>
+          <article><svg viewBox="0 0 24 24"><path d="M8 8l-5 4 5 4M16 8l5 4-5 4M14 5l-4 14"/></svg><h3>Open &amp; non-proprietary</h3><p>Stewarded by a non-profit foundation. No shareholders, no data monetisation, no owner.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ROADMAP + TODAY ============ -->
+    <section class="hm-section hm-alt" id="roadmap">
+      <div class="hm-wrap">
+        <header class="hm-head">
+          <p class="hm-kicker">Roadmap</p>
+          <h2>India-first. Sub-continent now. Planetary next.</h2>
+          <p class="hm-sub">With more than 620,000 villages and existing digital public infrastructure, India is the ultimate stress-test. If it works there, it can work anywhere.</p>
+        </header>
+        <ol class="hm-road">
+          <li class="is-now"><span class="hm-road-tag">You are here</span><b>Phase 1</b><h3>Foundation</h3><p>Architecture, interdisciplinary team, partnerships — and a working prototype of identity, timelines, wallets and pilot elections.</p></li>
+          <li><b>Phase 2</b><h3>Prototype district</h3><p>A full-stack deployment across about 1,000 villages: kiosks, onboarding, the ledgers, Qoins and councils.</p></li>
+          <li><b>Phase 3</b><h3>State scale</h3><p>50–100 million people: scaling laws, interoperability and cross-jurisdiction flows.</p></li>
+          <li><b>Phase 4</b><h3>Planetary framework</h3><p>Modular adoption for other nations — voluntary, sovereign, culturally adapted.</p></li>
+        </ol>
+
+        <div class="hm-today hm-glass">
+          <div>
+            <h3><i class="hm-dot hm-dot-live"></i> You can do this today</h3>
+            <ul class="hm-checks">
+              <li>Register with a permanent User-ID and a location-based Account-ID</li>
+              <li>Get your Sun sign, element and full kundali from your birth details</li>
+              <li>Explore villages across 10 countries on the Public Timeline</li>
+              <li>Hold a Qoin wallet and take part in the pilot village elections</li>
+            </ul>
+          </div>
+          <div>
+            <h3><i class="hm-dot hm-dot-next"></i> Coming next</h3>
+            <ul class="hm-checks hm-checks-next">
+              <li>Personal Timeline &amp; Message Box</li>
+              <li>Collective Board: live posts and voting</li>
+              <li>Contribution Qoins and Q-Pay</li>
+              <li>Councils beyond the pilot village</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ STEWARDSHIP ============ -->
+    <section class="hm-section hm-steward">
+      <div class="hm-wrap">
+        <blockquote>
+          “Qumanity is not a product. It is a promise — that technology can serve humanity, not exploit it.”
+        </blockquote>
+        <p class="hm-steward-by">Stewarded by the <b>SITA Foundation</b> · Spiritual technology for planetary healing</p>
+      </div>
+    </section>
+
+    <!-- ============ FINAL CTA ============ -->
+    <section class="hm-final">
+      <div class="hm-aurora hm-aurora-soft" aria-hidden="true"><i></i><i></i></div>
+      <div class="hm-wrap">
+        <h2>We are not building an app.<br />We are building an epoch.</h2>
+        <p>Thinkers, engineers, farmers, teachers, dreamers — there is a place for you here.</p>
+        <div class="hm-cta-row hm-cta-center">
+          <a class="hm-btn hm-btn-primary hm-btn-lg" href="{{ url_for('register') }}">Create your account <span aria-hidden="true">→</span></a>
+          <a class="hm-btn hm-btn-ghost hm-btn-lg" href="{{ url_for('about') }}">Read the full story</a>
+        </div>
+        <p class="hm-vasu">वसुधैव कुटुम्बकम् — the world is one family</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="hm-footer">
+    <div class="hm-wrap hm-foot-grid">
+      <div>
+        <a class="hm-brand" href="{{ url_for('index') }}"><img src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="" /><span>Qumanity</span></a>
+        <p>Quantum + Humanity. A nested, transparent ledger of Space, Time and Consciousness — for humanity, harmony &amp; peace.</p>
+      </div>
+      <div><h4>Explore</h4><a href="#vision">Vision</a><a href="#how">How it works</a><a href="#governance">Governance</a><a href="#qoins">Qoins</a><a href="#roadmap">Roadmap</a></div>
+      <div><h4>Account</h4><a href="{{ url_for('register') }}">Register</a><a href="{{ url_for('login') }}">Login</a><a href="{{ url_for('elements_dashboard') }}">Elements</a></div>
+      <div><h4>Learn more</h4><a href="{{ url_for('about') }}">About Qumanity</a><a href="{{ url_for('about') }}#faq">Questions &amp; answers</a><a href="{{ url_for('about') }}#people">SITA Foundation</a></div>
+    </div>
+    <div class="hm-wrap hm-foot-base">
+      <span>© Qumanity · a SITA Foundation initiative</span>
+      <span>A working prototype — the full design is described in the About section.</span>
+    </div>
+  </footer>
+
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/earcut@2.2.4/dist/earcut.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{{ url_for('static', filename='js/subcontinent.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/earth-globe.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/india_map.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/earth.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/home.js') }}"></script>
+  {% include '_poems_marquee.html' %}
+</body>
+</html>

@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qumanity — Register</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/india_map.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body>
+  <header class="qm-header">
+    <a href="{{ url_for('index') }}" style="display:contents">
+      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+    </a>
+    <div class="qm-header-text">
+      <h1>Register</h1>
+      <p>Membership is open to everyone on Earth. A present location in the Indian Sub-continent additionally unlocks a Public Account.</p>
+    </div>
+  </header>
+
+  <nav class="qm-steps" id="qm-steps">
+    <div class="qm-step is-active" data-step="private">
+      <span class="qm-step-index">1</span><span class="qm-step-label">Private Account</span>
+    </div>
+    <div class="qm-step" data-step="global">
+      <span class="qm-step-index">2</span><span class="qm-step-label">Global Account</span>
+    </div>
+    <div class="qm-step" data-step="public">
+      <span class="qm-step-index">3</span><span class="qm-step-label">Public Account</span>
+    </div>
+    <div class="qm-step" data-step="review">
+      <span class="qm-step-index">4</span><span class="qm-step-label">Review &amp; Submit</span>
+    </div>
+  </nav>
+
+  <main class="qm-register-main">
+
+    <!-- Step 1: Private Account -->
+    <section class="qm-screen is-active" id="screen-private">
+      <div class="qm-intro-card">
+        <h2 style="margin:0 0 6px;">Welcome to Qumanity! 🚀</h2>
+        <p>Create your private account to begin your journey. Your Private ID will be your permanent identity on Qumanity.</p>
+      </div>
+
+      <form id="private-form" class="qm-form">
+        <div class="qm-private-columns">
+          <div class="qm-private-col">
+            <h3 class="qm-form-section-title">✏️ Personal Details</h3>
+            <div class="qm-row2">
+              <label class="qm-field"><span>👤 First Name</span><input type="text" id="field-first-name" required minlength="2" autocomplete="given-name" placeholder="e.g. Rohit" /></label>
+              <label class="qm-field"><span>👤 Last Name</span><input type="text" id="field-last-name" required minlength="2" autocomplete="family-name" placeholder="e.g. Mudgal" /></label>
+            </div>
+
+            <div class="qm-field">
+              <span>⚧️ Gender</span>
+              <div class="qm-gender-group" id="gender-group">
+                <button type="button" class="qm-gender-btn" data-gender="male">👨<span>Male</span></button>
+                <button type="button" class="qm-gender-btn" data-gender="female">👩<span>Female</span></button>
+                <button type="button" class="qm-gender-btn" data-gender="both">⚧️<span>Third gender</span></button>
+              </div>
+              <input type="hidden" id="field-gender" required />
+            </div>
+
+            <div class="qm-row2 qm-row-dobtob">
+              <div class="qm-field qm-dob-field">
+                <span>📅 Date of Birth</span>
+                <div class="qm-dob-row">
+                  <select id="field-dob-day" aria-label="Day"><option value="">Day</option></select>
+                  <select id="field-dob-month" aria-label="Month"><option value="">Month</option></select>
+                  <select id="field-dob-year" aria-label="Year"><option value="">Year</option></select>
+                  <button type="button" class="qm-dob-calendar-btn" id="field-dob-calendar-btn" title="Pick from calendar" aria-label="Pick date from calendar">📅</button>
+                  <input type="date" id="field-dob-native" class="qm-dob-native" tabindex="-1" aria-hidden="true" />
+                </div>
+                <input type="hidden" id="field-dob" required />
+              </div>
+
+              <div class="qm-field qm-tob-field" id="tob-field">
+                <span>🕒 Time of Birth</span>
+                <div class="qm-tob-row">
+                  <input type="text" id="field-tob-display" readonly placeholder="Select time — hour, minute, AM/PM" autocomplete="off" aria-label="Time of birth" />
+                  <button type="button" class="qm-dob-calendar-btn" id="field-tob-btn" title="Pick time on a clock" aria-label="Pick time on a clock">🕒</button>
+                </div>
+                <input type="hidden" id="field-tob" />
+              </div>
+            </div>
+
+            <label class="qm-field"><span>🌐 Mother Tongue</span>
+              <select id="field-language" aria-label="Mother tongue">
+                <option value="">Select your mother tongue…</option>
+                {% for group in ["common", "indian", "subcontinent"] %}
+                <optgroup label="{{ languages.labels[group] }}">
+                  {% for l in languages[group] %}<option value="{{ l.name }}">{{ l.name }}{% if l.native != l.name %} — {{ l.native }}{% endif %}</option>{% endfor %}
+                </optgroup>
+                {% endfor %}
+              </select>
+            </label>
+          </div>
+
+          <div class="qm-private-col">
+            <h3 class="qm-form-section-title">🔐 Security</h3>
+            <div class="qm-row2">
+              <label class="qm-field"><span>📧 Email (recommended)</span><input type="email" id="field-email" autocomplete="email" placeholder="e.g. rohit@qumanity.in" /></label>
+              <label class="qm-field"><span>📱 Phone (recommended)</span><input type="text" id="field-phone" autocomplete="tel" placeholder="e.g. +91-9876543210" /></label>
+            </div>
+            <div class="qm-row2">
+              <label class="qm-field"><span>🔑 Choose a 5-digit PIN</span><input type="password" id="field-password" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="new-password" placeholder="•••••" /></label>
+              <label class="qm-field"><span>✅ Confirm PIN</span><input type="password" id="field-password-confirm" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="new-password" placeholder="•••••" /></label>
+            </div>
+            <p class="qm-timeline-note">⚠️ You sign in with your 9-digit Private ID (shown after registration) and this PIN. We cannot recover a lost PIN.</p>
+            {% if test_pin %}
+            <button type="button" class="qm-btn qm-btn-ghost qm-test-pw" id="use-test-password" data-pw="{{ test_pin }}">🔑 Use test PIN</button>
+            {% endif %}
+          </div>
+
+          <aside class="qm-why-note">
+            <p><strong>📋 Why this matters</strong></p>
+            <ul>
+              <li>Your Private ID is generated from your birth details and location</li>
+              <li>Your zodiac and element come from your birth date and time</li>
+              <li>The Private ID can't be changed — it's your permanent identity</li>
+            </ul>
+          </aside>
+        </div>
+
+        <div class="qm-donate-panel">
+          <label class="qm-donate-toggle">
+            <input type="checkbox" id="donate-toggle" />
+            <span class="qm-donate-switch" aria-hidden="true"></span>
+            <span>💰 Support Qumanity with a donation <em>(optional)</em></span>
+          </label>
+          <div class="qm-donate-why">
+            <p>A donation isn't required — a free account works exactly the same. If you do donate:</p>
+            <ul>
+              <li>most of it supports the volunteer who referred you, or comes back to your own wallet</li>
+              <li>a share reaches every level from your Village up to Earth</li>
+              <li>a share always comes back to you as Qoins in your own wallet</li>
+            </ul>
+          </div>
+          <div class="qm-donate-body" hidden>
+            <div class="qm-donate-amounts" id="donate-amounts">
+              <button type="button" data-amt="1">1</button><button type="button" data-amt="2">2</button>
+              <button type="button" data-amt="5">5</button><button type="button" data-amt="10">10</button>
+              <button type="button" data-amt="20">20</button><button type="button" data-amt="50">50</button>
+              <button type="button" data-amt="100">100</button><button type="button" data-amt="200">200</button>
+            </div>
+            <label class="qm-field"><span>Or enter any amount (max 200)</span><input type="number" id="donate-custom" min="0" max="200" placeholder="e.g. 36" /></label>
+            <label class="qm-field"><span>Referral code (optional)</span><input type="text" id="donate-referral-code" placeholder="e.g. REF-7K2QDX" style="text-transform:uppercase" /></label>
+            <div id="donate-referrer-confirm" hidden>
+              <p class="qm-timeline-note">This donation is paid in person to the volunteer above. They confirm receipt with their own PIN:</p>
+              <label class="qm-field"><span>Volunteer's 5-digit PIN</span><input type="password" id="donate-referrer-pin" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="•••••" /></label>
+            </div>
+            <div class="qm-donate-preview" id="donate-preview"></div>
+          </div>
+        </div>
+
+        <p class="qm-summary-error" id="private-form-error" hidden></p>
+        <button type="submit" class="qm-btn qm-btn-primary qm-form-submit">Next →</button>
+      </form>
+    </section>
+
+    <!-- Step 2: Global Account -->
+    <section class="qm-screen" id="screen-global">
+      <h2>Global Account</h2>
+      <p class="qm-timeline-sub">
+        Choose where you were <strong>born</strong> (anywhere on Earth) and where you <strong>live now</strong>
+        (one of the 10 countries of the Indian Sub-continent — that is where Qumanity's Public timeline operates).
+      </p>
+
+      <div class="qm-target-toggle">
+        <button type="button" class="qm-target-pill is-active" id="target-birth-btn">Setting: Birth Location</button>
+        <button type="button" class="qm-target-pill" id="target-present-btn">Setting: Present Location</button>
+      </div>
+
+      <div class="qm-global-layout">
+        <div class="qm-global-map-col">
+          <div class="qm-earth-stage qm-earth-stage--compact" id="global-zoom-stage">
+            <canvas id="global-earth-canvas"></canvas>
+            <div class="qm-earth-controls">
+              <button id="global-reset-view-btn" class="qm-btn qm-btn-ghost">Reset view</button>
+            </div>
+            <div id="global-breadcrumb" class="qm-breadcrumb">Indian Sub-continent</div>
+            <div id="global-tooltip" class="qm-tooltip" hidden></div>
+          </div>
+
+          <div class="qm-subcontinent-chips" id="global-country-chips" aria-label="Indian Sub-continent countries"></div>
+
+          <dl class="qm-summary-list">
+            <div><dt>Birth Location</dt><dd id="selected-birth-location">—</dd></div>
+            <div><dt>Present Location</dt><dd id="selected-present-location">—</dd></div>
+          </dl>
+        </div>
+
+        <div class="qm-global-dropdown-col">
+          <div class="qm-dropdown-row">
+            <h3 class="qm-panel-subhead">Birth Location</h3>
+            <label class="qm-dropdown-field"><span>Continent</span>
+              <select id="birth-continent-select"><option value="">Select a continent…</option></select>
+            </label>
+            <label class="qm-dropdown-field"><span>Country</span>
+              <select id="birth-country-select" disabled><option value="">Select a country…</option></select>
+            </label>
+          </div>
+          <div class="qm-dropdown-row">
+            <h3 class="qm-panel-subhead">Present Location</h3>
+            <label class="qm-dropdown-field"><span>Continent</span>
+              <select id="present-continent-select"><option value="">Select a continent…</option></select>
+            </label>
+            <label class="qm-dropdown-field"><span>Country</span>
+              <select id="present-country-select" disabled><option value="">Select a country…</option></select>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="qm-public-account-cta" id="public-account-cta" hidden>
+        <button type="button" class="qm-btn qm-btn-primary" id="public-account-btn">Public Account Registration for the Indian Sub-continent →</button>
+      </div>
+
+      <p class="qm-summary-error" id="global-form-error" hidden></p>
+      <div class="qm-summary-actions">
+        <button type="button" class="qm-btn qm-btn-ghost" id="global-back-btn">← Back</button>
+        <button type="button" class="qm-btn qm-btn-primary" id="global-next-btn">Next →</button>
+      </div>
+    </section>
+
+    <!-- Step 3: Public Account (conditional — present location must be India) -->
+    <section class="qm-screen" id="screen-public">
+      <h2>Public Account Registration — Indian Sub-continent</h2>
+      <p class="qm-timeline-sub">
+        Your Public Account lets you access the Public Timeline of the Indian Sub-continent (India, Nepal, Bhutan,
+        Bangladesh, Myanmar, Sri Lanka, Pakistan, Balochistan and Afghanistan) — village, tehsil, district,
+        state, and zone-level collective consciousness pages.
+      </p>
+
+      <div class="qm-global-layout">
+        <div class="qm-global-map-col">
+          <div class="qm-india-map-wrap" id="public-india-map-wrap">
+            <div id="public-india-map"></div>
+          </div>
+          <div class="qm-earth-stage qm-earth-stage--compact" id="public-subcontinent-stage" hidden>
+            <canvas id="public-subcontinent-canvas"></canvas>
+            <div id="public-subcontinent-breadcrumb" class="qm-breadcrumb">Indian Sub-continent</div>
+          </div>
+          <dl class="qm-summary-list">
+            <div id="public-birth-summary-row" hidden><dt>Birth Zone / State</dt><dd id="selected-birth-zone-state">—</dd></div>
+            <div><dt>Present Zone / State</dt><dd id="selected-present-zone-state">—</dd></div>
+          </dl>
+        </div>
+
+        <div class="qm-global-dropdown-col">
+          <div class="qm-panel-tabs">
+            <button type="button" class="qm-panel-tab is-active" id="public-tab-birth">Birth Location</button>
+            <button type="button" class="qm-panel-tab" id="public-tab-present">Present Location</button>
+          </div>
+
+          <div class="qm-panel-view" id="public-panel-birth">
+            <div class="qm-dropdown-row" id="public-birth-dropdowns" hidden>
+              <h3 class="qm-panel-subhead" id="public-birth-heading">Birth Location</h3>
+              <label class="qm-dropdown-field"><span>Zone</span>
+                <select id="birth-zone-select"><option value="">Select a zone…</option></select>
+              </label>
+              <label class="qm-dropdown-field"><span>State</span>
+                <select id="birth-state-select" disabled><option value="">Select a state…</option></select>
+              </label>
+              <label class="qm-dropdown-field"><span>District</span>
+                <select id="birth-district-select" disabled><option value="">Select a district…</option></select>
+              </label>
+              <label class="qm-dropdown-field"><span>Tehsil</span>
+                <select id="birth-tehsil-select" disabled><option value="">Select a tehsil…</option></select>
+              </label>
+              <label class="qm-dropdown-field"><span>Village</span>
+                <select id="birth-village-select" disabled><option value="">Select a village…</option></select>
+              </label>
+            </div>
+            <p class="qm-panel-placeholder" id="public-birth-not-applicable" hidden>
+              Birth location is outside the Indian Sub-continent — no zone/state breakdown for it.
+            </p>
+          </div>
+
+          <div class="qm-panel-view" id="public-panel-present" hidden>
+            <div class="qm-dropdown-row">
+              <h3 class="qm-panel-subhead" id="public-present-heading">Present Location</h3>
+              <label class="qm-dropdown-field"><span>Zone</span>
+                <select id="present-zone-select"><option value="">Select a zone…</option></select>
+              </label>
+              <label class="qm-dropdown-field"><span>State</span>
+                <select id="present-state-select" disabled><option value="">Select a state…</option></select>
+              </label>
+              <label class="qm-dropdown-field"><span>District</span>
+                <select id="present-district-select" disabled><option value="">Select a district…</option></select>
+              </label>
+              <label class="qm-dropdown-field"><span>Tehsil</span>
+                <select id="present-tehsil-select" disabled><option value="">Select a tehsil…</option></select>
+              </label>
+              <label class="qm-dropdown-field"><span>Village</span>
+                <select id="present-village-select" disabled><option value="">Select a village…</option></select>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="qm-summary-error" id="public-form-error" hidden></p>
+      <div class="qm-summary-actions">
+        <button type="button" class="qm-btn qm-btn-ghost" id="public-back-btn">← Back</button>
+        <button type="button" class="qm-btn qm-btn-primary" id="public-next-btn">Next →</button>
+      </div>
+    </section>
+
+    <!-- Step 4: Review & Submit -->
+    <section class="qm-screen" id="screen-review">
+      <h2>Review &amp; Submit</h2>
+
+      <div class="qm-review-card" style="margin-bottom:16px;">
+        <h3 class="qm-panel-subhead">✏️ Personal Details</h3>
+        <dl class="qm-summary-list" id="review-personal-list"></dl>
+      </div>
+
+      <div class="qm-review-card" style="margin-bottom:16px;">
+        <h3 class="qm-panel-subhead">🌐 Global Account</h3>
+        <dl class="qm-summary-list" id="review-global-list"></dl>
+      </div>
+
+      <div class="qm-review-card" style="margin-bottom:16px;">
+        <h3 class="qm-panel-subhead">🗺️ Public Account (Indian Sub-continent)</h3>
+        <dl class="qm-summary-list" id="review-public-list"></dl>
+      </div>
+
+      <p class="qm-summary-error" id="review-error" hidden></p>
+
+      <div class="qm-summary-actions" id="review-submit-actions">
+        <button type="button" class="qm-btn qm-btn-ghost" id="review-back-btn">← Back</button>
+        <button type="button" class="qm-btn qm-btn-primary" id="review-submit-btn">Submit →</button>
+      </div>
+
+      <div class="chart-summary" id="review-result" hidden style="margin-top:20px;">
+        <h3 class="qm-panel-subhead">✅ Registration complete</h3>
+        <p><strong>Your 9-digit Private ID:</strong></p>
+        <p class="qm-idbox"><code id="review-private-id"></code></p>
+        <p><strong>Account ID:</strong> <code id="review-account-id"></code></p>
+        <p class="qm-kundali-note">⚠️ Save this ID now. You need it together with your 5-digit PIN to sign in, and Qumanity cannot recover it.</p>
+        <div class="qm-summary-actions">
+          <button type="button" class="qm-btn qm-btn-ghost" id="review-copy-private-btn">📋 Copy Private ID</button>
+          <button type="button" class="qm-btn qm-btn-ghost" id="review-copy-account-btn">📋 Copy Account ID</button>
+        </div>
+        <div class="qm-summary-actions" style="margin-top:14px;">
+          <button type="button" class="qm-btn qm-btn-primary" id="review-go-dashboard-btn">✅ I have saved my Private ID → Dashboard</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <div id="reg-modal" class="qm-gate-message" hidden>
+    <p id="reg-modal-text"></p>
+    <button class="qm-btn qm-btn-ghost" id="reg-modal-dismiss">Close</button>
+  </div>
+
+  <footer class="qm-footer">
+    <p>Registration is open worldwide. A present location in the Indian Sub-continent additionally unlocks a Public Account.</p>
+  </footer>
+
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/earcut@2.2.4/dist/earcut.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{{ url_for('static', filename='js/subcontinent.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/earth-globe.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/india_map.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/searchable_select.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/time_picker.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/register.js') }}"></script>
+  {% include '_poems_marquee.html' %}
+</body>
+</html>

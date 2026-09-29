@@ -1,0 +1,146 @@
+/* Poems marquee — a fixed bar along the bottom of every page (see poems.js). */
+:root { --pm-h: 72px; }
+
+.pm-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
+  height: var(--pm-h);
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 14px;
+  background: rgba(5, 11, 20, 0.94);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid rgba(255, 210, 74, 0.28);
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.45);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.pm-bar[hidden] { display: none; }
+body.pm-on { padding-bottom: var(--pm-h); }
+
+.pm-chip {
+  flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;
+  padding: 4px 16px 5px; border-radius: 14px; min-width: 112px;
+  background: linear-gradient(135deg, rgba(255, 138, 31, 0.28), rgba(255, 210, 74, 0.16));
+  border: 1px solid rgba(255, 210, 74, 0.55);
+}
+.pm-name {
+  font: 700 1.4rem/1.1 "Noto Sans Devanagari", "Kohinoor Devanagari", "Devanagari Sangam MN", "Mangal", sans-serif;
+  color: #ffd24a; letter-spacing: 0.01em; text-shadow: 0 0 18px rgba(255, 153, 51, 0.5);
+}
+.pm-marker { margin-top: 2px; font: 600 0.74rem "Inter", system-ui, sans-serif; color: #f4d9a4; white-space: nowrap; }
+
+.pm-view {
+  position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; height: 100%;
+  display: flex; align-items: center;
+  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+}
+.pm-track { position: relative; display: inline-flex; align-items: center; white-space: nowrap; will-change: transform; }
+.pm-seg {
+  flex: 0 0 auto; display: inline-flex; align-items: center; padding-right: 3.5rem;
+  color: #fff1d0; font-size: 1.4rem; letter-spacing: 0.01em; line-height: 1.5;
+  font-family: "Inter", system-ui, sans-serif;
+}
+.pm-seg[lang="hi"] {
+  font-family: "Noto Sans Devanagari", "Kohinoor Devanagari", "Devanagari Sangam MN", "Mangal", sans-serif;
+  font-size: 1.55rem; line-height: 1.6;
+}
+.pm-seg .pm-sep { color: #ff9933; padding: 0 0.9em; }
+/* poem number shown where each poem begins, so the join between two poems is obvious */
+.pm-seg .pm-mk {
+  margin-right: 1.1rem; padding: 2px 14px; border-radius: 999px; font-size: 0.82em; font-weight: 700; color: #1a1205;
+  background: linear-gradient(120deg, #ff8a1f, #ffd24a);
+}
+
+.pm-ctl { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
+
+.pm-pop { position: relative; margin-left: 6px; }
+.pm-dot {
+  width: 28px; height: 28px; padding: 0; display: grid; place-items: center; border-radius: 50%; cursor: pointer;
+  border: 1.5px solid #ffd24a; background: rgba(255, 210, 74, 0.14); color: #ffd24a;
+  font: 700 0.68rem "Inter", system-ui, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+  transition: background 0.15s, transform 0.15s;
+}
+.pm-dot:hover, .pm-dot[aria-expanded="true"] { background: rgba(255, 210, 74, 0.32); transform: scale(1.08); }
+.pm-dot-menu svg { width: 15px; height: 15px; fill: currentColor; }
+@keyframes pm-glow { 0% { box-shadow: 0 0 0 0 rgba(255, 210, 74, 0.6); } 100% { box-shadow: 0 0 0 14px rgba(255, 210, 74, 0); } }
+
+.pm-menu {
+  position: absolute; right: 0; bottom: calc(100% + 10px); min-width: 150px; margin: 0; padding: 4px; list-style: none;
+  background: #0b1626; border: 1px solid rgba(255, 210, 74, 0.5); border-radius: 12px;
+  box-shadow: 0 -14px 36px rgba(0, 0, 0, 0.6);
+}
+.pm-menu[hidden] { display: none; }
+.pm-menu button, .pm-combo-list button {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 7px 8px;
+  border: 0; border-radius: 7px; background: transparent; color: #f4ead0; cursor: pointer; text-align: left;
+  font: 500 0.82rem "Inter", system-ui, sans-serif;
+}
+.pm-menu button[lang="hi"], .pm-combo-list button[lang="hi"] { font-family: "Noto Sans Devanagari", "Kohinoor Devanagari", "Devanagari Sangam MN", "Inter", sans-serif; font-size: 0.88rem; }
+.pm-menu button:hover:not(:disabled), .pm-combo-list button:hover:not(:disabled) { background: rgba(255, 153, 51, 0.16); }
+.pm-menu button.is-active, .pm-combo-list button.is-active { background: linear-gradient(120deg, #ff8a1f, #ffd24a); color: #1a1205; font-weight: 700; }
+.pm-menu button .pm-tick, .pm-combo-list button .pm-tick { display: none; font-weight: 800; }
+.pm-menu button.is-active .pm-tick, .pm-combo-list button.is-active .pm-tick { display: inline; }
+.pm-bar :focus-visible { outline: 2px solid #ffd24a; outline-offset: 2px; }
+
+/* Play/Pause: right next to the chip, full marquee height. Hovering (not clicking) pops up
+   Previous/Next above it (2026-09-28). */
+.pm-playwrap { position: relative; align-self: stretch; flex: 0 0 auto; }
+.pm-playbtn {
+  height: 100%; width: 44px; padding: 0; display: grid; place-items: center; border: 0; cursor: pointer;
+  background: transparent; color: #ffd24a; transition: color 0.15s;
+}
+.pm-playbtn:hover { color: #ffe07a; }
+.pm-playbtn svg { width: 22px; height: 22px; fill: currentColor; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pm-ico-play { display: none; }
+.pm-paused .pm-ico-play { display: block; }
+.pm-paused .pm-ico-pause { display: none; }
+
+.pm-hoverpop {
+  position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%); z-index: 5;
+  display: flex; gap: 4px; padding: 4px; margin: 0;
+  background: #0b1626; border: 1px solid rgba(255, 210, 74, 0.5); border-radius: 999px;
+  box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.55);
+}
+.pm-hoverpop[hidden] { display: none; }
+.pm-arrow {
+  width: 32px; height: 32px; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 0; cursor: pointer;
+  background: rgba(255, 255, 255, 0.06); color: #e8eef7; transition: background 0.15s;
+}
+.pm-arrow:hover { background: rgba(255, 153, 51, 0.24); color: #ffd24a; }
+.pm-arrow svg { width: 16px; height: 16px; fill: currentColor; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Menu icon -> a small panel: only Speed and Language, as accordion sections that reveal their
+   options when tapped; picking a value closes the whole panel. Kept compact (2026-09-28). */
+.pm-combo { min-width: 168px; max-height: 70vh; overflow-y: auto; padding: 4px; }
+
+.pm-accordion-head {
+  display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 8px 8px;
+  border: 0; border-radius: 8px; background: transparent; color: #f4ead0; cursor: pointer; text-align: left;
+  font: 600 0.84rem "Inter", system-ui, sans-serif;
+}
+.pm-accordion-head:hover { background: rgba(255, 153, 51, 0.12); }
+.pm-accordion-head[aria-expanded="true"] { background: rgba(255, 153, 51, 0.16); }
+.pm-accordion-right { display: flex; align-items: center; gap: 5px; color: #9fb0c3; font: 500 0.76rem "Inter", system-ui, sans-serif; }
+.pm-accordion-val { font-variant-numeric: tabular-nums; }
+.pm-chevron { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.15s; }
+.pm-accordion-head[aria-expanded="true"] .pm-chevron { transform: rotate(180deg); }
+.pm-accordion-body[hidden] { display: none; }
+.pm-combo-list { margin: 0 0 2px; padding: 0 0 4px; list-style: none; }
+
+@media (max-width: 700px) {
+  :root { --pm-h: 66px; }
+  .pm-bar { gap: 8px; padding: 0 8px; }
+  .pm-chip { min-width: 0; padding: 4px 10px; border-radius: 12px; }
+  .pm-name { font-size: 1.15rem; }
+  .pm-marker { font-size: 0.66rem; }
+  .pm-seg { font-size: 1.2rem; }
+  .pm-seg[lang="hi"] { font-size: 1.3rem; }
+}
+@media (max-width: 520px) {
+  .pm-bar { gap: 6px; }
+  .pm-marker { display: none; }
+  .pm-chip { padding: 6px 9px; }
+  .pm-ctl { gap: 2px; }
+}
+@media print { .pm-bar { display: none; } body.pm-on { padding-bottom: 0; } }
+.pm-menu button:disabled, .pm-combo-list button:disabled { opacity: 0.5; cursor: default; }
+.pm-menu button small, .pm-combo-list button small { font-size: 0.7rem; color: #9fb0c3; font-weight: 500; }

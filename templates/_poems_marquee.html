@@ -1,0 +1,56 @@
+<link rel="stylesheet" href="{{ url_for('static', filename='css/poems.css') }}" />
+<div class="pm-bar" id="pm-bar" role="region" aria-label="Poems marquee" hidden>
+  <div class="pm-chip" title="Vinay Patrika">
+    <span class="pm-name" lang="hi">सीताराम</span>
+    <span class="pm-marker" id="pm-marker">पद</span>
+  </div>
+
+  <!-- Play/Pause sits right next to the chip, full marquee height. Hovering it (not clicking) pops
+       up Previous/Next above it; clicking the button itself toggles play/pause — 2026-09-28. -->
+  <div class="pm-playwrap" id="pm-playwrap">
+    <button type="button" class="pm-playbtn" id="pm-play" aria-label="Play" title="Play">
+      <svg class="pm-ico-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
+      <svg class="pm-ico-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5l12 7-12 7z"/></svg>
+    </button>
+    <div class="pm-hoverpop" id="pm-hoverpop" hidden>
+      <button type="button" class="pm-arrow" id="pm-prev" aria-label="Previous poem" title="Previous Poem">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6v12M16 6l-9 6 9 6z"/></svg>
+      </button>
+      <button type="button" class="pm-arrow" id="pm-next" aria-label="Next poem" title="Next Poem">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6v12M8 6l9 6-9 6z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="pm-view" id="pm-view">
+    <div class="pm-track" id="pm-track"></div>
+  </div>
+
+  <div class="pm-ctl">
+    <!-- Only Speed and Language live here now. Picking a value closes the whole menu; open it
+         again to change something else — 2026-09-28. -->
+    <div class="pm-pop" id="pm-menuwrap">
+      <button type="button" class="pm-dot pm-dot-menu" id="pm-menubtn" aria-haspopup="true" aria-expanded="false" aria-label="Marquee settings" title="Speed and language">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
+      </button>
+      <div class="pm-menu pm-combo" id="pm-combomenu" hidden>
+        <button type="button" class="pm-accordion-head" id="pm-speedhead" aria-expanded="false" aria-controls="pm-speedmenu">
+          <span>Speed</span>
+          <span class="pm-accordion-right"><span class="pm-accordion-val" id="pm-speedval">1.0×</span>
+            <svg class="pm-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </span>
+        </button>
+        <ul class="pm-combo-list pm-accordion-body" id="pm-speedmenu" role="listbox" aria-label="Playback speed" hidden></ul>
+
+        <button type="button" class="pm-accordion-head" id="pm-langhead" aria-expanded="false" aria-controls="pm-langmenu">
+          <span>Language</span>
+          <span class="pm-accordion-right"><span class="pm-accordion-val" id="pm-langval">हिन्दी</span>
+            <svg class="pm-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </span>
+        </button>
+        <ul class="pm-combo-list pm-accordion-body" id="pm-langmenu" role="listbox" aria-label="Poem language" hidden></ul>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='js/poems.js') }}" defer></script>

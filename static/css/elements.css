@@ -1,0 +1,83 @@
+.qm-elements-main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+  display: grid;
+  gap: 32px;
+}
+
+.location-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.location-selector label { font-size: 0.82rem; color: var(--qm-text-dim); }
+.location-selector select {
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.04);
+  color: var(--qm-white);
+}
+
+.dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.el-card {
+  background: var(--qm-panel-bg);
+  border: 1px solid rgba(255, 215, 0, 0.15);
+  border-radius: 12px;
+  padding: 16px;
+}
+.el-card h3 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+  color: var(--qm-gold);
+}
+.el-card .el-card-sub {
+  font-size: 0.72rem;
+  color: var(--qm-text-dim);
+  margin: 0 0 12px;
+}
+
+.el-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  padding: 5px 0;
+}
+.el-stat-row .el-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  display: inline-block; margin-right: 6px;
+}
+.dot--fire { background: var(--qm-el-fire); }
+.dot--earth { background: var(--qm-el-earth); }
+.dot--air { background: var(--qm-el-air); }
+.dot--water { background: var(--qm-el-water); border: 1px solid rgba(255,255,255,0.35); }
+
+.lunar-panel {
+  background: var(--qm-panel-bg);
+  border: 1px solid rgba(255, 215, 0, 0.15);
+  border-radius: 12px;
+  padding: 20px;
+}
+.lunar-panel h2 { margin: 0 0 4px; font-size: 1.05rem; color: var(--qm-gold); }
+.lunar-events { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 10px; }
+.lunar-events li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.82rem;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+}
+.lunar-events .le-type { color: var(--qm-white); font-weight: 600; }
+.lunar-events .le-date { color: var(--qm-text-dim); }

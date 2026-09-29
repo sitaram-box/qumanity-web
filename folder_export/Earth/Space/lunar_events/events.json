@@ -1,0 +1,42 @@
+[
+  {
+    "id": 29,
+    "event_type": "New Moon",
+    "date": "2026-10-10",
+    "time": "15:50",
+    "zodiac_sign": "Virgo",
+    "nakshatra": "Hasta",
+    "description": "Next new moon",
+    "is_visible_in_india": 1
+  },
+  {
+    "id": 30,
+    "event_type": "Full Moon",
+    "date": "2026-10-26",
+    "time": "04:11",
+    "zodiac_sign": "Aries",
+    "nakshatra": "Ashwini",
+    "description": "Next full moon",
+    "is_visible_in_india": 1
+  },
+  {
+    "id": 31,
+    "event_type": "Lunar Eclipse",
+    "date": "2027-02-20",
+    "time": "23:12",
+    "zodiac_sign": "Leo",
+    "nakshatra": "Magha",
+    "description": "Next lunar eclipse visible from India (checked at Delhi)",
+    "is_visible_in_india": 1
+  },
+  {
+    "id": 32,
+    "event_type": "Solar Eclipse",
+    "date": "2027-08-02",
+    "time": "10:59",
+    "zodiac_sign": "Cancer",
+    "nakshatra": "Pushya",
+    "description": "Next solar eclipse visible from India (checked at Delhi)",
+    "is_visible_in_india": 1
+  }
+]

@@ -1,0 +1,827 @@
+/**
+ * dashboard.js — 4-tab dashboard shell + Edit Profile request queueing.
+ *
+ * Private is fully built out; Global/Public have real sub-tabs wired to
+ * the user's present location (Earth/Continent/Country and Zone/State/
+ * District/Tehsil/Village respectively, via /api/location/stats/<level>/
+ * <id>?basis=present — see app.py); Personal is an honest "Coming Soon"
+ * placeholder, matching Karma Summary/Recent Activities' same pattern
+ * elsewhere on this page (no backing system built for either yet).
+ */
+(function () {
+  "use strict";
+
+  var tabs = Array.prototype.slice.call(document.querySelectorAll(".qm-dash-tab"));
+  var panels = {
+    private: document.getElementById("qm-dash-private"),
+    personal: document.getElementById("qm-dash-personal"),
+    public: document.getElementById("qm-dash-public"),
+    global: document.getElementById("qm-dash-global"),
+  };
+
+  tabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      var name = tab.getAttribute("data-tab");
+      tabs.forEach(function (t) { t.classList.toggle("is-active", t === tab); });
+      Object.keys(panels).forEach(function (key) { panels[key].hidden = key !== name; });
+    });
+  });
+
+  // ---- Global / Public sub-tabs -- same registered-user demographics
+  // shape/rendering the homepage's Earth/Continent/Country tabs already
+  // use (see earth.js's renderRegisteredStats/renderStatRows), just a
+  // page-local copy since these DOM refs and IDs are dashboard-specific. ----
+  var GENDER_LABELS = { male: "Male", female: "Female", both: "Third gender" };
+
+  function renderProgressRows(container, pairs) {
+    container.innerHTML = "";
+    var total = pairs.reduce(function (sum, p) { return sum + p[1]; }, 0);
+    pairs.forEach(function (pair) {
+      var pct = total > 0 ? Math.round((pair[1] / total) * 100) : 0;
+      var row = document.createElement("div");
+      row.className = "qm-stat-row";
+
+      var label = document.createElement("span");
+      label.className = "qm-stat-row-label";
+      label.textContent = pair[0];
+
+      var barWrap = document.createElement("div");
+      barWrap.className = "qm-stat-row-bar";
+      var barFill = document.createElement("div");
+      barFill.className = "qm-stat-row-bar-fill";
+      barFill.style.width = pct + "%";
+      barWrap.appendChild(barFill);
+
+      var value = document.createElement("span");
+      value.className = "qm-stat-row-value";
+      value.textContent = pair[1];
+
+      row.appendChild(label);
+      row.appendChild(barWrap);
+      row.appendChild(value);
+      container.appendChild(row);
+    });
+  }
+
+  function renderRegisteredStats(prefix, stats) {
+    var totalEl = document.getElementById(prefix + "-total");
+    if (!totalEl) return;
+    totalEl.textContent = stats.total_humans;
+    var emptyNote = document.getElementById(prefix + "-empty-note");
+    if (emptyNote) emptyNote.hidden = stats.total_humans !== 0;
+    renderProgressRows(document.getElementById(prefix + "-gender-list"), Object.keys(stats.gender).map(function (g) {
+      return [GENDER_LABELS[g] || g, stats.gender[g]];
+    }));
+    renderProgressRows(document.getElementById(prefix + "-age-list"), stats.age_bands.map(function (b) { return [b.label, b.count]; }));
+    renderProgressRows(document.getElementById(prefix + "-element-list"), Object.keys(stats.elements).map(function (e) { return [e, stats.elements[e]]; }));
+    renderProgressRows(document.getElementById(prefix + "-sign-list"), Object.keys(stats.signs).map(function (s) { return [s, stats.signs[s]]; }));
+  }
+
+  function loadStatsFor(prefix, url) {
+    fetch(url)
+      .then(function (r) { return r.json(); })
+      .then(function (stats) { renderRegisteredStats(prefix, stats); })
+      .catch(function (err) { console.error("Failed to load dashboard stats from " + url, err); });
+  }
+
+  function loadWalletBalanceFor(prefix, locationType, locationId) {
+    var el = document.getElementById(prefix + "-wallet");
+    if (!el) return;
+    fetch("/api/wallet/balance/" + locationType + "/" + encodeURIComponent(locationId))
+      .then(function (r) { return r.json(); })
+      .then(function (data) { el.textContent = data.balance_qoins + " Qoins"; })
+      .catch(function (err) { console.error("Failed to load wallet balance for " + prefix, err); });
+  }
+
+  // ==================== Location explorer (Global / Public tabs) ====================
+  // A left-sidebar tree scoped to the user's own present-location lineage
+  // (siblings at each level, not a free-roam browser of the whole Earth --
+  // see docs/DASHBOARD_REDESIGN_PLAN.md). Reuses the same static JSON
+  // endpoints register.js's own location pickers already consume; the one
+  // per-tehsil village fetch stays lazy (fetched on expand/on root load),
+  // everything else is fetched once and cached.
+  var presentLocation = window.QM_PRESENT_LOCATION || {};
+  var pilotVillageId = window.QM_PILOT_VILLAGE_ID || "";
+  var worldData = null, indiaStates = null, indiaDistricts = null;
+  // The 9 Indian Sub-continent countries have a Public timeline (zones down to
+  // villages); indiaStates/indiaDistricts hold all of them, zones tagged with
+  // their country_id.
+  var SUBCONTINENT_CODES = ["IND", "NPL", "BTN", "BGD", "MMR", "LKA", "PAK", "BLC", "AFG", "MDV"];
+  // Mirrors perception_core.SUBCONTINENT_COUNTRY_IDS / app.SUBCONTINENT_COUNTRY_IDS -- Country
+  // Perception is only offered for these 10, matching the Founder's own UI scoping.
+  var PERCEPTION_COUNTRY_IDS = [
+    "O_AS_IND", "O_AS_NPL", "O_AS_BTN", "O_AS_BGD", "O_AS_MMR",
+    "O_AS_LKA", "O_AS_PAK", "O_AS_BLC", "O_AS_AFG", "O_AS_MDV",
+  ];
+  var INDIA_COUNTRY_ID = "O_AS_IND";
+
+  function loadTreeData() {
+    var needsWorld = !!document.getElementById("global-explorer-tree");
+    var needsIndia = !!document.getElementById("public-explorer-tree") ||
+      (needsWorld && presentLocation.country && SUBCONTINENT_CODES.indexOf(presentLocation.country.code) !== -1);
+    var jobs = [];
+    if (needsWorld) jobs.push(fetch("/api/world-data").then(function (r) { return r.json(); }).then(function (d) { worldData = d; }));
+    if (needsIndia) {
+      jobs.push(fetch("/api/subcontinent").then(function (r) { return r.json(); }).then(function (d) {
+        indiaStates = { zones: [] };
+        d.countries.forEach(function (country) {
+          country.zones.forEach(function (zone) {
+            indiaStates.zones.push(Object.assign({ country_id: country.id }, zone));
+          });
+        });
+      }));
+      jobs.push(fetch("/api/subcontinent/districts").then(function (r) { return r.json(); }).then(function (d) { indiaDistricts = d; }));
+    }
+    return Promise.all(jobs);
+  }
+
+  function findContinentById(id) {
+    return (worldData.continents || []).filter(function (c) { return c.id === id; })[0] || null;
+  }
+  function findZoneById(id) {
+    return (indiaStates.zones || []).filter(function (z) { return z.id === id; })[0] || null;
+  }
+  function findDistrictById(stateId, districtId) {
+    var stateData = indiaDistricts.states[stateId];
+    if (!stateData) return null;
+    return (stateData.districts || []).filter(function (d) { return d.id === districtId; })[0] || null;
+  }
+
+  // ---- Generic tree node: a toggle (if it has children) + a selectable
+  // label. Children are built lazily on first expand -- getChildren may
+  // return an array (already-cached data) or a Promise (the one live
+  // per-tehsil village fetch). ----
+  function buildNode(tab, label, onSelect, getChildren, depth) {
+    var li = document.createElement("li");
+    li.className = "qm-explorer-node";
+
+    var row = document.createElement("div");
+    row.className = "qm-explorer-row";
+    row.style.paddingLeft = (depth * 14) + "px";
+
+    var toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "qm-explorer-toggle";
+
+    var labelBtn = document.createElement("button");
+    labelBtn.type = "button";
+    labelBtn.className = "qm-explorer-label";
+    labelBtn.textContent = label;
+
+    var childList = document.createElement("ul");
+    childList.className = "qm-explorer-tree";
+    childList.hidden = true;
+    var expanded = false, loaded = false;
+
+    if (getChildren) {
+      toggle.textContent = "▸";
+      toggle.addEventListener("click", function () {
+        if (!loaded) {
+          loaded = true;
+          var result = getChildren();
+          var apply = function (items) { items.forEach(function (node) { childList.appendChild(node.li); }); };
+          if (result && typeof result.then === "function") result.then(apply);
+          else apply(result);
+        }
+        expanded = !expanded;
+        childList.hidden = !expanded;
+        toggle.textContent = expanded ? "▾" : "▸";
+      });
+    } else {
+      toggle.disabled = true;
+    }
+
+    labelBtn.addEventListener("click", function () {
+      var container = document.getElementById(tab + "-explorer-tree");
+      Array.prototype.slice.call(container.querySelectorAll(".qm-explorer-label.is-active")).forEach(function (b) {
+        b.classList.remove("is-active");
+      });
+      labelBtn.classList.add("is-active");
+      onSelect();
+    });
+
+    row.appendChild(toggle);
+    row.appendChild(labelBtn);
+    li.appendChild(row);
+    li.appendChild(childList);
+    return { li: li, labelBtn: labelBtn };
+  }
+
+  function villageNode(tab, village, depth) {
+    return buildNode(tab, village.name, function () { selectLocation(tab, "village", village.id, village.name); }, null, depth);
+  }
+  function tehsilNode(tab, tehsil, depth) {
+    return buildNode(tab, tehsil.name, function () { selectLocation(tab, "tehsil", tehsil.id, tehsil.name); }, function () {
+      return fetch("/api/india-villages/" + encodeURIComponent(tehsil.id))
+        .then(function (r) { return r.json(); })
+        .then(function (data) { return (data.villages || []).map(function (v) { return villageNode(tab, v, depth + 1); }); });
+    }, depth);
+  }
+  // A district's children: its tehsils, plus any villages that hang straight
+  // off it (some countries have no tehsil tier there) -- fetched on demand.
+  function districtChildren(tab, district, depth) {
+    var tehsilNodes = (district.tehsils || []).map(function (t) { return tehsilNode(tab, t, depth); });
+    if (!district.direct_villages) return tehsilNodes;
+    return fetch("/api/india-villages/" + encodeURIComponent(district.id))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        return tehsilNodes.concat((data.villages || []).map(function (v) { return villageNode(tab, v, depth); }));
+      });
+  }
+  function districtNode(tab, district, depth) {
+    return buildNode(tab, district.name, function () { selectLocation(tab, "district", district.id, district.name); }, function () {
+      return districtChildren(tab, district, depth + 1);
+    }, depth);
+  }
+  function stateNode(tab, state, depth) {
+    return buildNode(tab, state.name, function () { selectLocation(tab, "state", state.id, state.name); }, function () {
+      var stateData = indiaDistricts.states[state.id];
+      return (stateData ? stateData.districts : []).map(function (d) { return districtNode(tab, d, depth + 1); });
+    }, depth);
+  }
+  function countryLeafNode(tab, country, depth) {
+    return buildNode(tab, country.name, function () { selectLocation(tab, "country", country.id, country.name); }, null, depth);
+  }
+  function continentNode(tab, continent, depth) {
+    return buildNode(tab, continent.name, function () { selectLocation(tab, "continent", continent.id, continent.name); }, function () {
+      return (continent.countries || []).map(function (c) { return countryLeafNode(tab, c, depth + 1); });
+    }, depth);
+  }
+
+  function renderTreeRoot(containerId, nodes, emptyMessage) {
+    var container = document.getElementById(containerId);
+    container.innerHTML = "";
+    Array.prototype.forEach.call(container.parentElement.querySelectorAll(".qm-explorer-note"), function (n) { n.remove(); });
+    if (!nodes.length) {
+      if (!emptyMessage) return;
+      var note = document.createElement("p");
+      note.className = "qm-explorer-note";
+      note.textContent = emptyMessage;
+      container.parentElement.insertBefore(note, container);
+      return;
+    }
+    nodes.forEach(function (node) { container.appendChild(node.li); });
+  }
+
+  function renderGlobalExplorer(root) {
+    if (root === "earth") {
+      renderTreeRoot("global-explorer-tree", (worldData.continents || []).map(function (c) { return continentNode("global", c, 0); }), "No continents available.");
+      loadStatsFor("qm-dg-stats", "/api/earth/stats");
+      loadWalletBalanceFor("qm-dg-stats", "earth", "EARTH");
+      document.getElementById("qm-dg-stats-heading").textContent = "🌍 Earth statistics";
+    } else if (root === "continent") {
+      var continent = presentLocation.continent && findContinentById(presentLocation.continent.id);
+      renderTreeRoot("global-explorer-tree", continent ? continent.countries.map(function (c) { return countryLeafNode("global", c, 0); }) : [], "Continent not set.");
+      if (presentLocation.continent) selectLocation("global", "continent", presentLocation.continent.id, presentLocation.continent.name);
+    } else if (root === "country") {
+      if (presentLocation.country && SUBCONTINENT_CODES.indexOf(presentLocation.country.code) !== -1) {
+        renderTreeRoot("global-explorer-tree", (indiaStates.zones || []).filter(function (z) {
+          return z.country_id === presentLocation.country.id;
+        }).map(function (z) {
+          return buildNode("global", z.name, function () { selectLocation("global", "zone", z.id, z.name); }, function () {
+            return (z.states || []).map(function (s) { return stateNode("global", s, 1); });
+          }, 0);
+        }), "No zones available.");
+      } else {
+        renderTreeRoot("global-explorer-tree", [], "No further breakdown available for this country.");
+      }
+      if (presentLocation.country) selectLocation("global", "country", presentLocation.country.id, presentLocation.country.name);
+    }
+  }
+
+  function renderPublicExplorer(root) {
+    var p = presentLocation;
+    if (root === "zone" && p.zone) {
+      var zone = findZoneById(p.zone.id);
+      renderTreeRoot("public-explorer-tree", zone ? zone.states.map(function (s) { return stateNode("public", s, 0); }) : [], "Zone not found.");
+      selectLocation("public", "zone", p.zone.id, p.zone.name);
+    } else if (root === "state" && p.state) {
+      var stateData = indiaDistricts.states[p.state.id];
+      renderTreeRoot("public-explorer-tree", stateData ? stateData.districts.map(function (d) { return districtNode("public", d, 0); }) : [], "State not found.");
+      selectLocation("public", "state", p.state.id, p.state.name);
+    } else if (root === "district" && p.district) {
+      var district = findDistrictById(p.state.id, p.district.id);
+      if (district) {
+        Promise.resolve(districtChildren("public", district, 0)).then(function (nodes) {
+          renderTreeRoot("public-explorer-tree", nodes, "No tehsils or villages found.");
+        });
+      } else {
+        renderTreeRoot("public-explorer-tree", [], "District not found.");
+      }
+      selectLocation("public", "district", p.district.id, p.district.name);
+    } else if (root === "tehsil" && p.tehsil) {
+      document.getElementById("public-explorer-tree").innerHTML = "";
+      fetch("/api/india-villages/" + encodeURIComponent(p.tehsil.id))
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          renderTreeRoot("public-explorer-tree", (data.villages || []).map(function (v) { return villageNode("public", v, 0); }), "No villages found.");
+        });
+      selectLocation("public", "tehsil", p.tehsil.id, p.tehsil.name);
+    } else if (root === "village" && p.village) {
+      renderTreeRoot("public-explorer-tree", [], "");
+      selectLocation("public", "village", p.village.id, p.village.name);
+    }
+  }
+
+  function wireRootTabs(groupId, onPick) {
+    var group = document.getElementById(groupId);
+    if (!group) return;
+    var buttons = Array.prototype.slice.call(group.querySelectorAll(".qm-panel-tab"));
+    buttons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (btn.disabled) return;
+        buttons.forEach(function (b) { b.classList.toggle("is-active", b === btn); });
+        onPick(btn.getAttribute("data-root"));
+      });
+    });
+  }
+
+  function selectLocation(tab, level, id, name) {
+    var prefix = tab === "global" ? "qm-dg-stats" : "qm-dp-stats";
+    document.getElementById(prefix + "-heading").textContent = name ? "📊 " + name : "Statistics";
+    loadStatsFor(prefix, "/api/location/stats/" + level + "/" + encodeURIComponent(id) + "?basis=present");
+    loadWalletBalanceFor(prefix, level, id);
+    if (tab === "public") {
+      var isVillage = level === "village";
+      var mc = document.getElementById("qm-village-members-card"); if (mc) mc.hidden = !isVillage;
+      document.getElementById("qm-elections-card").hidden = !(isVillage && id === pilotVillageId);
+      if (isVillage && document.getElementById("qm-village-member-list")) loadVillageMembers(id);
+
+      var zoneCard = document.getElementById("qm-perception-zone-card");
+      if (zoneCard) {
+        var zone = level === "zone" ? findZoneById(id) : null;
+        if (zone && zone.country_id === INDIA_COUNTRY_ID) {
+          zoneCard.hidden = false;
+          currentZonePerceptionId = id;
+          loadZonePerception(id, name);
+        } else {
+          zoneCard.hidden = true;
+        }
+      }
+    }
+    if (tab === "global") {
+      var countryCard = document.getElementById("qm-perception-country-card");
+      if (countryCard) {
+        if (level === "country" && PERCEPTION_COUNTRY_IDS.indexOf(id) !== -1) {
+          countryCard.hidden = false;
+          currentCountryPerceptionId = id;
+          loadCountryPerception(id, name);
+        } else {
+          countryCard.hidden = true;
+        }
+      }
+    }
+  }
+
+  // ---- Perception Calculator (annual Pro/Anti sentiment, see docs/perception_calculator.md) ----
+  function renderPerception(prefix, name, data) {
+    document.getElementById(prefix + "-name").textContent = name;
+    document.getElementById(prefix + "-year").textContent = data.voting_year;
+    var total = data.pro_count + data.anti_count;
+    var proPct = total > 0 ? Math.round((data.pro_count / total) * 100) : 0;
+    var antiPct = total > 0 ? Math.round((data.anti_count / total) * 100) : 0;
+    document.getElementById(prefix + "-pro-bar").style.width = proPct + "%";
+    document.getElementById(prefix + "-anti-bar").style.width = antiPct + "%";
+    document.getElementById(prefix + "-pro-count").textContent = data.pro_count;
+    document.getElementById(prefix + "-anti-count").textContent = data.anti_count;
+
+    var voteBlock = document.getElementById(prefix + "-vote-block");
+    var note = document.getElementById(prefix + "-note");
+    if (data.my_vote) {
+      voteBlock.hidden = true;
+      note.textContent = "You voted " + data.my_vote + " this year.";
+    } else if (data.can_vote) {
+      voteBlock.hidden = false;
+      note.textContent = "";
+    } else {
+      voteBlock.hidden = true;
+      note.textContent = data.vote_reason || "";
+    }
+  }
+
+  function loadCountryPerception(countryId, name) {
+    fetch("/api/perception/country/" + encodeURIComponent(countryId))
+      .then(function (r) { return r.json(); })
+      .then(function (data) { renderPerception("qm-perception-country", name, data); })
+      .catch(function (err) { console.error("Failed to load country perception", err); });
+  }
+
+  function loadZonePerception(zoneId, name) {
+    fetch("/api/perception/zone/" + encodeURIComponent(zoneId))
+      .then(function (r) { return r.json(); })
+      .then(function (data) { renderPerception("qm-perception-zone", name, data); })
+      .catch(function (err) { console.error("Failed to load zone perception", err); });
+  }
+
+  function wirePerceptionVoting(prefix, kind, getCurrentId) {
+    var block = document.getElementById(prefix + "-vote-block");
+    if (!block) return;
+    block.querySelectorAll("button[data-vote]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = getCurrentId();
+        if (!id) return;
+        fetch("/api/perception/" + kind + "/" + encodeURIComponent(id) + "/vote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ vote: btn.getAttribute("data-vote") }),
+        })
+          .then(function (res) { return res.json().then(function (body) { return { ok: res.ok, body: body }; }); })
+          .then(function (result) {
+            if (!result.ok) throw new Error(result.body.error || "Could not cast Perception vote");
+            var name = document.getElementById(prefix + "-name").textContent;
+            if (kind === "country") loadCountryPerception(id, name); else loadZonePerception(id, name);
+          })
+          .catch(function (err) { alert(err.message); });
+      });
+    });
+  }
+  var currentCountryPerceptionId = null, currentZonePerceptionId = null;
+  wirePerceptionVoting("qm-perception-country", "country", function () { return currentCountryPerceptionId; });
+  wirePerceptionVoting("qm-perception-zone", "zone", function () { return currentZonePerceptionId; });
+
+  // ---- Village member directory + profile popup (privacy-scoped: name/
+  // gender/age category only, see /api/location/members/village in app.py). ----
+  var villageMembersCache = [];
+  function loadVillageMembers(villageId) {
+    fetch("/api/location/members/village/" + encodeURIComponent(villageId))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        villageMembersCache = data.members || [];
+        renderVillageMembers(villageMembersCache);
+      })
+      .catch(function (err) { console.error("Failed to load village members", err); });
+  }
+  function renderVillageMembers(members) {
+    var list = document.getElementById("qm-village-member-list");
+    var empty = document.getElementById("qm-village-members-empty");
+    list.innerHTML = "";
+    empty.hidden = members.length !== 0;
+    members.forEach(function (m) {
+      var li = document.createElement("li");
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "qm-member-row";
+      btn.innerHTML = m.name + ' <span class="qm-member-meta">(' + m.gender + ", " + m.age_category + ")</span>";
+      btn.addEventListener("click", function () { openMemberPopup(m); });
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+  }
+  var memberSearch = document.getElementById("qm-village-search");
+  if (memberSearch) {
+    memberSearch.addEventListener("input", function () {
+      var q = memberSearch.value.trim().toLowerCase();
+      renderVillageMembers(!q ? villageMembersCache : villageMembersCache.filter(function (m) {
+        return m.name.toLowerCase().indexOf(q) !== -1;
+      }));
+    });
+  }
+
+  var memberPopup = document.createElement("div");
+  memberPopup.className = "qm-gate-message qm-edit-modal";
+  memberPopup.hidden = true;
+  memberPopup.innerHTML =
+    '<h3 id="qm-member-popup-name"></h3>' +
+    '<p id="qm-member-popup-meta"></p>' +
+    '<div class="qm-member-popup-actions">' +
+    '<button type="button" class="qm-btn qm-btn-ghost" disabled>✉️ Send Message</button>' +
+    '<button type="button" class="qm-btn qm-btn-ghost" disabled>🤝 Add Friend</button>' +
+    '<button type="button" class="qm-btn qm-btn-ghost" disabled>👪 Add Family</button>' +
+    '<p class="qm-member-popup-note">Coming soon — Message Box &amp; connections ship in a later update.</p>' +
+    '</div>' +
+    '<div class="qm-summary-actions" style="margin-top:14px;"><button type="button" class="qm-btn qm-btn-ghost" id="qm-member-popup-close">Close</button></div>';
+  document.body.appendChild(memberPopup);
+  memberPopup.querySelector("#qm-member-popup-close").addEventListener("click", function () { memberPopup.hidden = true; });
+
+  function openMemberPopup(member) {
+    memberPopup.querySelector("#qm-member-popup-name").textContent = member.name;
+    memberPopup.querySelector("#qm-member-popup-meta").textContent = member.gender + " · " + member.age_category;
+    memberPopup.hidden = false;
+  }
+
+  if (document.getElementById("global-explorer-tree") || document.getElementById("public-explorer-tree")) {
+    loadTreeData().then(function () {
+      if (document.getElementById("global-explorer-tree")) {
+        wireRootTabs("global-root-tabs", renderGlobalExplorer);
+        renderGlobalExplorer("earth");
+      }
+      if (document.getElementById("public-explorer-tree")) {
+        wireRootTabs("public-root-tabs", renderPublicExplorer);
+        renderPublicExplorer("zone");
+      }
+    }).catch(function (err) { console.error("Failed to load dashboard explorer data", err); });
+  }
+
+  // ---- Edit Profile -> queued change request (no auto-apply; see app.py) ----
+  var editBtn = document.getElementById("edit-profile-btn");
+  var editModal = document.getElementById("edit-profile-modal");
+  var editForm = document.getElementById("edit-profile-form");
+  var editCancel = document.getElementById("edit-profile-cancel");
+  var editError = document.getElementById("edit-profile-error");
+  var editSuccess = document.getElementById("edit-profile-success");
+
+  editBtn.addEventListener("click", function () {
+    editError.hidden = true;
+    editSuccess.hidden = true;
+    editModal.hidden = false;
+  });
+  editCancel.addEventListener("click", function () { editModal.hidden = true; });
+
+  editForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    editError.hidden = true;
+    editSuccess.hidden = true;
+
+    fetch("/api/dashboard/edit-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: document.getElementById("edit-name").value.trim(),
+        email: document.getElementById("edit-email").value.trim(),
+        phone: document.getElementById("edit-phone").value.trim(),
+        reason: document.getElementById("edit-reason").value.trim(),
+      }),
+    })
+      .then(function (res) {
+        return res.json().then(function (body) { return { ok: res.ok, body: body }; });
+      })
+      .then(function (result) {
+        if (!result.ok) throw new Error(result.body.error || "Could not queue request");
+        editSuccess.hidden = false;
+      })
+      .catch(function (err) {
+        editError.textContent = err.message;
+        editError.hidden = false;
+      });
+  });
+
+  // ---- Qoins Wallet (Private tab) ----
+  var walletBalanceEl = document.getElementById("qm-wallet-balance");
+
+  function loadWallet() {
+    if (!walletBalanceEl) return;
+    fetch("/api/wallet/balance")
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        walletBalanceEl.textContent = data.balance_qoins;
+        document.getElementById("qm-wallet-locked-note").hidden = !data.has_locked_share;
+        var list = document.getElementById("qm-wallet-tx-list");
+        var empty = document.getElementById("qm-wallet-tx-empty");
+        list.innerHTML = "";
+        empty.hidden = data.transactions.length !== 0;
+        var REASON_LABELS = {
+          donation_self: "Your donation share", donation_referrer: "Referral reward",
+          donation_location: "Location donation share", admin_adjustment: "Admin adjustment",
+        };
+        data.transactions.forEach(function (tx) {
+          var li = document.createElement("li");
+          var sign = tx.amount_qoins >= 0 ? "+" : "";
+          li.textContent = sign + tx.amount_qoins + " Qoins — " + (REASON_LABELS[tx.reason] || tx.reason) +
+            (tx.locked ? " (locked)" : "");
+          list.appendChild(li);
+        });
+      })
+      .catch(function (err) { console.error("Failed to load wallet", err); });
+  }
+  loadWallet();
+
+  // ---- Your Karma (Private tab) — a Social Credit score, never money, separate from Qoins ----
+  var karmaTotalEl = document.getElementById("qm-karma-total");
+
+  function loadKarma() {
+    if (!karmaTotalEl) return;
+    fetch("/api/karma/me")
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        karmaTotalEl.textContent = data.score.total;
+        document.getElementById("qm-karma-commercial").textContent = data.score.commercial;
+        document.getElementById("qm-karma-noncommercial").textContent = data.score.noncommercial;
+        var list = document.getElementById("qm-karma-history-list");
+        var empty = document.getElementById("qm-karma-history-empty");
+        list.innerHTML = "";
+        (data.history || []).forEach(function (entry) {
+          var li = document.createElement("li");
+          var sign = entry.points >= 0 ? "+" : "";
+          li.textContent = sign + entry.points + " — " + entry.reason;
+          list.appendChild(li);
+        });
+        empty.hidden = (data.history || []).length !== 0;
+      })
+      .catch(function (err) { console.error("Failed to load karma", err); });
+  }
+  loadKarma();
+
+  var karmaHistoryBtn = document.getElementById("qm-karma-history-btn");
+  if (karmaHistoryBtn) {
+    karmaHistoryBtn.addEventListener("click", function () {
+      var list = document.getElementById("qm-karma-history-list");
+      var empty = document.getElementById("qm-karma-history-empty");
+      var showing = !list.hidden;
+      list.hidden = showing;
+      empty.hidden = showing || list.children.length !== 0;
+    });
+  }
+
+  var donateBtn = document.getElementById("qm-wallet-donate-btn");
+  var donateModal = document.getElementById("wallet-donate-modal");
+  var donateForm = document.getElementById("wallet-donate-form");
+  var donateCancel = document.getElementById("wallet-donate-cancel");
+  var donateError = document.getElementById("wallet-donate-error");
+  var donateSuccess = document.getElementById("wallet-donate-success");
+
+  if (donateBtn) {
+    donateBtn.addEventListener("click", function () {
+      donateError.hidden = true;
+      donateSuccess.hidden = true;
+      donateModal.hidden = false;
+    });
+    donateCancel.addEventListener("click", function () { donateModal.hidden = true; });
+
+    donateForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      donateError.hidden = true;
+      donateSuccess.hidden = true;
+
+      fetch("/api/wallet/donate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount_rupees: Number(document.getElementById("donate-amount").value),
+          referrer_private_id: document.getElementById("donate-referrer").value.trim(),
+        }),
+      })
+        .then(function (res) { return res.json().then(function (body) { return { ok: res.ok, body: body }; }); })
+        .then(function (result) {
+          if (!result.ok) throw new Error(result.body.error || "Could not process donation");
+          donateSuccess.textContent = "Donated ₹" + result.body.amount_rupees + " — Qoins credited.";
+          donateSuccess.hidden = false;
+          loadWallet();
+        })
+        .catch(function (err) {
+          donateError.textContent = err.message;
+          donateError.hidden = false;
+        });
+    });
+  }
+
+  // ---- Village Council Elections (Public → Village sub-tab) ----
+  var electionsCard = document.getElementById("qm-elections-card");
+  var lastElectionEligibility = null;
+
+  function loadElectionCandidates() {
+    fetch("/api/election/candidates")
+      .then(function (r) { return r.json(); })
+      .then(function (candidates) {
+        var container = document.getElementById("qm-election-candidates");
+        var empty = document.getElementById("qm-election-candidates-empty");
+        container.innerHTML = "";
+        var total = (candidates.male || []).length + (candidates.female || []).length;
+        empty.hidden = total !== 0;
+
+        ["male", "female"].forEach(function (gender) {
+          (candidates[gender] || []).forEach(function (c) {
+            var row = document.createElement("div");
+            row.className = "qm-candidate-row";
+            var karmaTotal = c.karma ? c.karma.total : 0;
+            var report = document.createElement("div");
+            report.className = "qm-candidate-report";
+            var head = document.createElement("strong");
+            head.textContent = c.name;
+            report.appendChild(head);
+            report.appendChild(document.createTextNode(
+              " (" + gender + ") · Karma Score: " + karmaTotal
+            ));
+            var dl = document.createElement("dl");
+            [
+              ["Why running", c.form_reason || c.manifest || ""],
+              ["Why vote for me", c.form_why_vote || ""],
+              ["What I'll change", c.form_changes || ""],
+            ].concat(c.form_past_work ? [["Past work", c.form_past_work]] : [])
+              .forEach(function (pair) {
+                var dt = document.createElement("dt");
+                dt.textContent = pair[0];
+                var dd = document.createElement("dd");
+                dd.textContent = pair[1];
+                dl.appendChild(dt);
+                dl.appendChild(dd);
+              });
+            report.appendChild(dl);
+            row.appendChild(report);
+
+            var eligibility = lastElectionEligibility;
+            var canVote = eligibility && eligibility.can_vote && eligibility.voted_genders.indexOf(gender) === -1;
+            if (canVote) {
+              var btn = document.createElement("button");
+              btn.type = "button";
+              btn.className = "qm-btn qm-btn-ghost";
+              btn.textContent = "Vote";
+              btn.addEventListener("click", function () {
+                fetch("/api/election/vote", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ candidate_user_id: c.user_id, gender: gender }),
+                })
+                  .then(function (res) { return res.json().then(function (body) { return { ok: res.ok, body: body }; }); })
+                  .then(function (result) {
+                    if (!result.ok) throw new Error(result.body.error || "Could not vote");
+                    loadElectionStatus();
+                    loadElectionCandidates();
+                  })
+                  .catch(function (err) { alert(err.message); });
+              });
+              row.appendChild(btn);
+            }
+            container.appendChild(row);
+          });
+        });
+      })
+      .catch(function (err) { console.error("Failed to load candidates", err); });
+  }
+
+  function loadElectionCouncil() {
+    fetch("/api/election/council")
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var list = document.getElementById("qm-election-council");
+        var empty = document.getElementById("qm-election-council-empty");
+        list.innerHTML = "";
+        empty.hidden = data.council.length !== 0;
+        data.council.forEach(function (seat) {
+          var li = document.createElement("li");
+          li.textContent = seat.zodiac_sign + " " + seat.year + " — Nayak: " +
+            (seat.male_head_name || "—") + ", Nayika: " + (seat.female_head_name || "—") +
+            " (" + seat.term_status + ")";
+          list.appendChild(li);
+        });
+      })
+      .catch(function (err) { console.error("Failed to load council", err); });
+  }
+
+  function loadElectionStatus() {
+    fetch("/api/election/status")
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        lastElectionEligibility = data.eligibility;
+        document.getElementById("qm-election-sign").textContent = data.cycle.zodiac_sign + " (" + data.cycle.element + ")";
+        document.getElementById("qm-election-phase").textContent = data.cycle.status;
+        document.getElementById("qm-election-window").textContent =
+          "Nomination " + data.cycle.nomination_start + " – " + data.cycle.nomination_end +
+          " · Voting " + data.cycle.voting_start + " – " + data.cycle.voting_end;
+        // The 4-week rhythm and what THIS member should do (same guide as Q-Punch and the phone app).
+        var guideEl = document.getElementById("qm-election-guide");
+        if (!guideEl) {
+          guideEl = document.createElement("p");
+          guideEl.id = "qm-election-guide";
+          guideEl.className = "qp-elec-guide";
+          document.getElementById("qm-election-window").insertAdjacentElement("afterend", guideEl);
+        }
+        if (data.guide) {
+          var wk = (data.weeks || []).filter(function (w) { return w.week === data.week; })[0];
+          guideEl.textContent = (data.guide.action ? "📣 " : "ℹ️ ") + "Week " + data.week + " of 4" +
+            (wk ? " · " + wk.title : "") + " — " + data.guide.text;
+          guideEl.classList.toggle("is-action", !!data.guide.action);
+        }
+
+        var nominateBlock = document.getElementById("qm-election-nominate-block");
+        var nominateNote = document.getElementById("qm-election-nominate-note");
+        nominateBlock.hidden = !data.eligibility.can_nominate;
+        if (data.eligibility.already_nominated) {
+          nominateNote.textContent = "You've submitted a nomination for this cycle.";
+          nominateNote.hidden = false;
+        } else if (!data.eligibility.can_nominate && data.eligibility.nominate_reason) {
+          nominateNote.textContent = data.eligibility.nominate_reason;
+          nominateNote.hidden = false;
+        } else {
+          nominateNote.hidden = true;
+        }
+        loadElectionCandidates();
+      })
+      .catch(function (err) { console.error("Failed to load election status", err); });
+  }
+
+  if (electionsCard) {
+    loadElectionStatus();
+    loadElectionCouncil();
+
+    var nominateForm = document.getElementById("qm-election-nominate-form");
+    nominateForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      fetch("/api/election/nominate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reason: document.getElementById("qm-election-reason").value.trim(),
+          why_vote: document.getElementById("qm-election-why-vote").value.trim(),
+          changes: document.getElementById("qm-election-changes").value.trim(),
+          past_work: document.getElementById("qm-election-past-work").value.trim(),
+        }),
+      })
+        .then(function (res) { return res.json().then(function (body) { return { ok: res.ok, body: body }; }); })
+        .then(function (result) {
+          if (!result.ok) throw new Error(result.body.error || "Could not submit nomination");
+          loadElectionStatus();
+        })
+        .catch(function (err) { alert(err.message); });
+    });
+  }
+})();

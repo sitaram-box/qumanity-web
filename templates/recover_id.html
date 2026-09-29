@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qumanity — Recover Private ID</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body>
+  <header class="qm-header">
+    <a href="{{ url_for('index') }}" style="display:contents">
+      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+    </a>
+    <div class="qm-header-text">
+      <h1>Forgot your Private ID?</h1>
+      <p>Your Private ID is never sent by SMS or email. Tell us who you are and where to reach you, and — once our team has checked it against your birth details — we post it to your home address in a sealed letter.</p>
+    </div>
+  </header>
+
+  <main class="qm-register-main">
+    <section class="qm-screen is-active">
+      <form id="ri-form" class="qm-form">
+        <label class="qm-field"><span>👤 Full name (as you registered it)</span><input type="text" id="ri-name" required /></label>
+        <label class="qm-field"><span>📅 Date of birth</span><input type="date" id="ri-dob" required /></label>
+        <label class="qm-field"><span>🌍 Birth country (optional, narrows the search)</span><input type="text" id="ri-country" placeholder="e.g. India" /></label>
+        <div class="qm-row2">
+          <label class="qm-field"><span>📱 Phone</span><input type="text" id="ri-phone" placeholder="at least one of phone/email" /></label>
+          <label class="qm-field"><span>📧 Email</span><input type="email" id="ri-email" /></label>
+        </div>
+        <label class="qm-field"><span>🏠 Home mailing address (where the letter should go)</span><textarea id="ri-address" rows="3" required></textarea></label>
+        <label class="qm-field"><span>📝 Anything else that helps us confirm it's you (optional)</span><textarea id="ri-note" rows="2"></textarea></label>
+        <p class="qm-timeline-note">⚠️ This is a manual process reviewed by our team — it is not instant, and your Private ID is only ever sent by physical post, never electronically.</p>
+        <button type="submit" class="qm-btn qm-btn-primary qm-form-submit">Submit request →</button>
+      </form>
+      <p class="qm-summary-error" id="ri-error" hidden></p>
+      <div class="qm-timeline-note" id="ri-success" hidden></div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+      var form = document.getElementById("ri-form"), errorEl = document.getElementById("ri-error"), successEl = document.getElementById("ri-success");
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        errorEl.hidden = true;
+        fetch("/api/auth/recover-id", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: document.getElementById("ri-name").value.trim(), dob: document.getElementById("ri-dob").value,
+            birth_country: document.getElementById("ri-country").value.trim(),
+            phone: document.getElementById("ri-phone").value.trim(), email: document.getElementById("ri-email").value.trim(),
+            mailing_address: document.getElementById("ri-address").value.trim(), note: document.getElementById("ri-note").value.trim(),
+          }),
+        })
+          .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
+          .then(function (res) {
+            if (!res.ok) throw new Error(res.b.error || "Could not submit your request");
+            form.hidden = true;
+            successEl.hidden = false;
+            successEl.textContent = "✅ Request received — reference " + res.b.reference + ". Keep this reference in case you need to follow up.";
+          })
+          .catch(function (err) { errorEl.textContent = err.message; errorEl.hidden = false; });
+      });
+    })();
+  </script>
+  {% include '_poems_marquee.html' %}
+</body>
+</html>

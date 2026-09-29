@@ -1,0 +1,31 @@
+{
+  "space": { "name": "Earth", "id": "O" },
+  "india": {
+    "code": "IND",
+    "id": "O_AS_IND",
+    "continent": "AS",
+    "name": "India",
+    "lat": 22.3511,
+    "lng": 78.6677,
+    "color": "#FF9933",
+    "zones": [
+      { "code": "CS", "id": "IND/CS", "name": "Central State" },
+      { "code": "NS", "id": "IND/NS", "name": "North India State" },
+      { "code": "SS", "id": "IND/SS", "name": "South India State" },
+      { "code": "ES", "id": "IND/ES", "name": "East India" },
+      { "code": "WS", "id": "IND/WS", "name": "West India State" }
+    ]
+  },
+  "global_timeline_stats": {
+    "as_of": "prototype-placeholder",
+    "note": "Zone-to-village counts are the real India Public Timeline dataset (SITAXML). Continent/country coverage is the real World Data sheet. This prototype does not connect to a database yet.",
+    "continents_mapped": 7,
+    "countries_mapped": 229,
+    "countries_onboarded": 1,
+    "zones": 5,
+    "states": 37,
+    "districts": 635,
+    "tehsils": 5971,
+    "villages": 621057
+  }
+}

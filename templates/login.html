@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qumanity — Login</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body>
+  <header class="qm-header">
+    <a href="{{ url_for('index') }}" style="display:contents">
+      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+    </a>
+    <div class="qm-header-text">
+      <h1>Login</h1>
+      <p>Sign in with your 9-digit Private ID and 5-digit PIN.</p>
+    </div>
+  </header>
+
+  <main class="qm-register-main">
+    <section class="qm-screen is-active">
+      <h2>Sign in</h2>
+      <form id="login-form" class="qm-form">
+        <label class="qm-field">
+          <span>🔢 9-digit Private ID</span>
+          <input type="text" id="field-private-id" required inputmode="numeric" pattern="[0-9]{9}" maxlength="9" autocomplete="username" placeholder="e.g. <FOUNDER_PRIVATE_ID_REDACTED>" />
+        </label>
+        <label class="qm-field">
+          <span>🔑 5-digit PIN</span>
+          <input type="password" id="field-pin" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="current-password" placeholder="•••••" />
+        </label>
+        <button type="submit" class="qm-btn qm-btn-primary qm-form-submit">Sign in →</button>
+      </form>
+      <p class="qm-summary-error" id="login-error" hidden></p>
+      <p class="qm-timeline-note">New here? <a href="/register">Create your account</a></p>
+      <p class="qm-timeline-note"><a href="/forgot-pin">Forgot your PIN?</a> · <a href="/recover-id">Forgot your Private ID?</a></p>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+      var form = document.getElementById("login-form");
+      var errorEl = document.getElementById("login-error");
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        errorEl.hidden = true;
+        fetch("/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            private_id: document.getElementById("field-private-id").value.trim(),
+            pin: document.getElementById("field-pin").value.trim(),
+          }),
+        })
+          .then(function (res) {
+            return res.json().then(function (body) { return { ok: res.ok, body: body }; });
+          })
+          .then(function (result) {
+            if (!result.ok) throw new Error(result.body.error || "Login failed");
+            window.location.href = result.body.redirect;
+          })
+          .catch(function (err) {
+            errorEl.textContent = err.message;
+            errorEl.hidden = false;
+          });
+      });
+    })();
+  </script>
+  {% include '_poems_marquee.html' %}
+</body>
+</html>
