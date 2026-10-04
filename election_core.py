@@ -17,6 +17,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 
+import cycle_middleware
 import id_generator
 import karma_core
 import wallet_core
@@ -279,10 +280,10 @@ def nominate(conn, user_row, reason: str, why_vote: str, changes: str, past_work
         raise ValueError(f"This month's {CANDIDATES_PER_GENDER} {user_row['gender'].lower()} candidates have already been chosen.")
     conn.execute(
         """INSERT INTO election_candidates
-           (election_cycle_id, user_id, gender, manifest, form_reason, form_why_vote, form_changes, form_past_work)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+           (election_cycle_id, user_id, gender, manifest, form_reason, form_why_vote, form_changes, form_past_work, cycle_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (cycle["id"], user_row["id"], user_row["gender"].lower(), reason,
-         reason, why_vote, changes, (past_work or "").strip()),
+         reason, why_vote, changes, (past_work or "").strip(), cycle_middleware.get_active_cycle_id(conn)),
     )
     conn.commit()
     return cycle
@@ -336,9 +337,9 @@ def cast_vote(conn, user_row, candidate_user_id: int, gender: str, today: dt.dat
     ).fetchone()
 
     conn.execute(
-        """INSERT INTO election_votes (election_cycle_id, voter_user_id, candidate_user_id, gender)
-           VALUES (?, ?, ?, ?)""",
-        (cycle["id"], user_row["id"], candidate_user_id, gender),
+        """INSERT INTO election_votes (election_cycle_id, voter_user_id, candidate_user_id, gender, cycle_id)
+           VALUES (?, ?, ?, ?, ?)""",
+        (cycle["id"], user_row["id"], candidate_user_id, gender, cycle_middleware.get_active_cycle_id(conn)),
     )
     conn.commit()
 
@@ -807,8 +808,9 @@ def auto_nominate(conn, village_id: str, per_gender: int = CANDIDATES_PER_GENDER
         for u in pool[: max(0, per_gender - have)]:
             conn.execute(
                 """INSERT INTO election_candidates (election_cycle_id, user_id, gender, manifest, status,
-                   form_reason, form_why_vote, form_changes, form_past_work) VALUES (?, ?, ?, ?, 'approved', ?, ?, ?, ?)""",
-                (cycle["id"], u["id"], gender, "", rng.choice(_FORM_REASONS), rng.choice(_FORM_WHY), rng.choice(_FORM_CHANGES), ""),
+                   form_reason, form_why_vote, form_changes, form_past_work, cycle_id) VALUES (?, ?, ?, ?, 'approved', ?, ?, ?, ?, ?)""",
+                (cycle["id"], u["id"], gender, "", rng.choice(_FORM_REASONS), rng.choice(_FORM_WHY), rng.choice(_FORM_CHANGES), "",
+                 cycle_middleware.get_active_cycle_id(conn)),
             )
             picked[gender].append(u["name"])
     conn.execute("UPDATE election_candidates SET manifest = form_reason WHERE election_cycle_id = ? AND (manifest IS NULL OR manifest = '')", (cycle["id"],))

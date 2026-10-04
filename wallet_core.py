@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import datetime as dt
 
+import cycle_middleware
 import elemental_core
 
 LOCATION_TIERS = ("earth", "continent", "country", "zone", "state", "district", "tehsil", "village")
@@ -122,9 +123,9 @@ def _credit(conn, owner_type: str, owner_id: str, amount_qoins: int, reason: str
         return
     wallet_id = ensure_wallet(conn, owner_type, owner_id)
     conn.execute(
-        """INSERT INTO wallet_transactions (wallet_id, amount_qoins, reason, locked, related_user_id)
-           VALUES (?, ?, ?, ?, ?)""",
-        (wallet_id, amount_qoins, reason, 1 if locked else 0, related_user_id),
+        """INSERT INTO wallet_transactions (wallet_id, amount_qoins, reason, locked, related_user_id, cycle_id)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (wallet_id, amount_qoins, reason, 1 if locked else 0, related_user_id, cycle_middleware.get_active_cycle_id(conn)),
     )
     if not locked:
         conn.execute(

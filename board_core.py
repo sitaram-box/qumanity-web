@@ -15,6 +15,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 
+import cycle_middleware
 import qoin_core
 
 LEVELS = ["village", "tehsil", "district", "state", "zone", "country", "continent", "earth"]
@@ -99,9 +100,10 @@ def _open_window(conn, author_id, chain, idx, content, origin_id, now):
     end = now + dt.timedelta(days=WINDOW_DAYS[g["level"]])
     cur = conn.execute(
         """INSERT INTO board_posts (author_id, level, group_id, group_name, content, status, score, voting_start, voting_end,
-                                    origin_post_id, chain_json, created_at)
-           VALUES (?, ?, ?, ?, ?, 'active', 0, ?, ?, ?, ?, ?)""",
-        (author_id, g["level"], g["id"], g["name"], content, _iso(now), _iso(end), origin_id, json.dumps(chain), _iso(now)),
+                                    origin_post_id, chain_json, created_at, cycle_id)
+           VALUES (?, ?, ?, ?, ?, 'active', 0, ?, ?, ?, ?, ?, ?)""",
+        (author_id, g["level"], g["id"], g["name"], content, _iso(now), _iso(end), origin_id, json.dumps(chain), _iso(now),
+         cycle_middleware.get_active_cycle_id(conn)),
     )
     return cur.lastrowid
 
@@ -223,7 +225,8 @@ def cast_vote(conn, user_id, present_location, post_id, value, now=None):
     if not _is_resident(chain_of(present_location), post):
         raise PermissionError("Only people living in this group can vote")
     old = conn.execute("SELECT value FROM board_votes WHERE post_id=? AND user_id=?", (post_id, user_id)).fetchone()
-    conn.execute("INSERT OR REPLACE INTO board_votes (post_id, user_id, value) VALUES (?, ?, ?)", (post_id, user_id, value))
+    conn.execute("INSERT OR REPLACE INTO board_votes (post_id, user_id, value, cycle_id) VALUES (?, ?, ?, ?)",
+                (post_id, user_id, value, cycle_middleware.get_active_cycle_id(conn)))
     conn.execute("UPDATE board_posts SET score = score + ? WHERE id = ?", (value - (old["value"] if old else 0), post_id))
     conn.commit()
     return conn.execute("SELECT score FROM board_posts WHERE id=?", (post_id,)).fetchone()["score"]
@@ -244,7 +247,8 @@ def add_comment(conn, user_id, present_location, post_id, text, now=None):
         raise PermissionError("Comments open once voting has finished")
     if not _is_resident(chain_of(present_location), post):
         raise PermissionError("Only people living in this group can comment")
-    conn.execute("INSERT INTO board_comments (post_id, user_id, text, created_at) VALUES (?, ?, ?, ?)", (post_id, user_id, text, _iso(now)))
+    conn.execute("INSERT INTO board_comments (post_id, user_id, text, created_at, cycle_id) VALUES (?, ?, ?, ?, ?)",
+                (post_id, user_id, text, _iso(now), cycle_middleware.get_active_cycle_id(conn)))
     conn.commit()
 
 
@@ -368,8 +372,8 @@ def create_subgroup(conn, admin_id, village_id, name, description, admin_label=N
     if not 2 <= len(name) <= 60:
         raise ValueError("Give the sub-group a name (2–60 characters)")
     label = (admin_label or "").strip()[:80] or "Village Council"  # e.g. "RWA Committee" (urban) or "Panchayat" (rural) -- the creator names their own local body
-    cur = conn.execute("INSERT INTO subgroups (village_id, name, description, admin_label, created_by, created_at) VALUES (?,?,?,?,?,?)",
-                       (village_id, name, (description or "").strip()[:200], label, admin_id, _now_iso()))
+    cur = conn.execute("INSERT INTO subgroups (village_id, name, description, admin_label, created_by, created_at, cycle_id) VALUES (?,?,?,?,?,?,?)",
+                       (village_id, name, (description or "").strip()[:200], label, admin_id, _now_iso(), cycle_middleware.get_active_cycle_id(conn)))
     conn.commit()
     return cur.lastrowid
 
@@ -390,7 +394,8 @@ def request_join(conn, user_id, present_location, sg_id):
     if conn.execute("""SELECT 1 FROM subgroup_members m JOIN subgroups g ON g.id = m.subgroup_id
                        WHERE m.user_id = ? AND g.village_id = ?""", (user_id, g["village_id"])).fetchone():
         raise ValueError("You can be a member of only one village group")
-    conn.execute("INSERT INTO subgroup_members VALUES (?,?,?,?)", (sg_id, user_id, "pending", _now_iso()))
+    conn.execute("INSERT INTO subgroup_members (subgroup_id, user_id, status, requested_at, cycle_id) VALUES (?,?,?,?,?)",
+                (sg_id, user_id, "pending", _now_iso(), cycle_middleware.get_active_cycle_id(conn)))
     conn.commit()
 
 
@@ -432,7 +437,8 @@ def send_message(conn, user_id, sg_id, text, is_admin):
     text = (text or "").strip()
     if not text or len(text) > 1000:
         raise ValueError("Write a message (up to 1000 characters)")
-    conn.execute("INSERT INTO board_messages (subgroup_id, user_id, text, created_at) VALUES (?,?,?,?)", (sg_id, user_id, text, _now_iso()))
+    conn.execute("INSERT INTO board_messages (subgroup_id, user_id, text, created_at, cycle_id) VALUES (?,?,?,?,?)",
+                (sg_id, user_id, text, _now_iso(), cycle_middleware.get_active_cycle_id(conn)))
     conn.commit()
 
 
@@ -443,7 +449,8 @@ def register_volunteer(conn, user_id, present_location, skill):
     skill = (skill or "").strip()
     if not 2 <= len(skill) <= 80:
         raise ValueError("Tell us what you do (2–80 characters), e.g. vegetable seller, electrician")
-    conn.execute("INSERT OR REPLACE INTO volunteers VALUES (?,?,?,?,?,?)", (user_id, "village", v["id"], "volunteer", skill, _now_iso()))
+    conn.execute("INSERT OR REPLACE INTO volunteers (user_id, level, group_id, kind, skill, created_at, cycle_id) VALUES (?,?,?,?,?,?,?)",
+                (user_id, "village", v["id"], "volunteer", skill, _now_iso(), cycle_middleware.get_active_cycle_id(conn)))
     conn.commit()
 
 
@@ -454,7 +461,8 @@ def apply_as_referrer(conn, user_id, note):
         raise ValueError("You already have an application waiting for review")
     if conn.execute("SELECT 1 FROM referrers WHERE user_id=?", (user_id,)).fetchone():
         raise ValueError("You already hold a referral code")
-    conn.execute("INSERT INTO referrer_applications (user_id, note, created_at) VALUES (?,?,?)", (user_id, (note or "").strip()[:300], _now_iso()))
+    conn.execute("INSERT INTO referrer_applications (user_id, note, created_at, cycle_id) VALUES (?,?,?,?)",
+                (user_id, (note or "").strip()[:300], _now_iso(), cycle_middleware.get_active_cycle_id(conn)))
     conn.commit()
 
 

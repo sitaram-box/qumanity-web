@@ -5,6 +5,8 @@ One reaction per person per message; picking a new one replaces the old, and it 
 """
 from __future__ import annotations
 
+import cycle_middleware
+
 KINDS = ("agree", "disagree", "read")
 EMOJI = {"agree": "\U0001F44D", "disagree": "\U0001F44E", "read": "\U0001F441️"}
 
@@ -35,9 +37,9 @@ def set_reaction(conn, scope, message_id, user_id, reaction):
             raise ValueError("Unknown reaction")
         import datetime as dt
         conn.execute(
-            "INSERT INTO message_reactions (scope, message_id, user_id, reaction, created_at) VALUES (?,?,?,?,?) "
-            "ON CONFLICT(scope, message_id, user_id) DO UPDATE SET reaction=excluded.reaction, created_at=excluded.created_at",
-            (scope, message_id, user_id, reaction, dt.datetime.now(dt.timezone.utc).isoformat()),
+            "INSERT INTO message_reactions (scope, message_id, user_id, reaction, created_at, cycle_id) VALUES (?,?,?,?,?,?) "
+            "ON CONFLICT(scope, message_id, user_id) DO UPDATE SET reaction=excluded.reaction, created_at=excluded.created_at, cycle_id=excluded.cycle_id",
+            (scope, message_id, user_id, reaction, dt.datetime.now(dt.timezone.utc).isoformat(), cycle_middleware.get_active_cycle_id(conn)),
         )
     conn.commit()
 

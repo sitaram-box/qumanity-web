@@ -39,6 +39,8 @@ from __future__ import annotations
 import datetime as dt
 import json
 
+import cycle_middleware
+
 SUBCONTINENT_COUNTRY_IDS = (
     "O_AS_IND", "O_AS_NPL", "O_AS_BTN", "O_AS_BGD", "O_AS_MMR",
     "O_AS_LKA", "O_AS_PAK", "O_AS_BLC", "O_AS_AFG", "O_AS_MDV",
@@ -146,9 +148,9 @@ def cast_country_vote(conn, user_id: int, country_id: str, vote: str) -> dict:
         raise ValueError("You've already cast your Perception vote for this country this year.")
     now = _now()
     conn.execute(
-        """INSERT INTO country_sentiment (user_id, country_id, voting_year, vote, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (user_id, country_id, window["voting_year"], vote, now, now),
+        """INSERT INTO country_sentiment (user_id, country_id, voting_year, vote, created_at, updated_at, cycle_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (user_id, country_id, window["voting_year"], vote, now, now, cycle_middleware.get_active_cycle_id(conn)),
     )
     conn.commit()
     return {"status": "ok", "voting_year": window["voting_year"], "vote": vote}
@@ -230,9 +232,9 @@ def cast_zone_vote(conn, user_id: int, zone_id: str, vote: str) -> dict:
         raise ValueError("You've already cast your Perception vote for this zone this year.")
     now = _now()
     conn.execute(
-        """INSERT INTO zone_sentiment (user_id, zone_id, voting_year, vote, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (user_id, zone_id, window["voting_year"], vote, now, now),
+        """INSERT INTO zone_sentiment (user_id, zone_id, voting_year, vote, created_at, updated_at, cycle_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (user_id, zone_id, window["voting_year"], vote, now, now, cycle_middleware.get_active_cycle_id(conn)),
     )
     conn.commit()
     return {"status": "ok", "voting_year": window["voting_year"], "vote": vote}

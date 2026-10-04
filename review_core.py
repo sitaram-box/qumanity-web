@@ -10,6 +10,8 @@ from __future__ import annotations
 import datetime as dt
 import json
 
+import cycle_middleware
+
 MAX_REVIEW_CHARS = 100
 TOUR_STATES = ("done", "skipped")
 
@@ -73,8 +75,8 @@ def submit_review(conn, user_id, rating, text, allow_public, source="app"):
     if len(text) > MAX_REVIEW_CHARS:
         raise ValueError(f"Keep your review within {MAX_REVIEW_CHARS} characters")
     conn.execute(
-        "INSERT INTO app_reviews (user_id, rating, text, allow_public, source, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (user_id, rating, text, 1 if allow_public else 0, source, _now()),
+        "INSERT INTO app_reviews (user_id, rating, text, allow_public, source, created_at, cycle_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (user_id, rating, text, 1 if allow_public else 0, source, _now(), cycle_middleware.get_active_cycle_id(conn)),
     )
     _upsert(conn, user_id)
     conn.execute("UPDATE user_onboarding SET review_prompt_done = 1 WHERE user_id = ?", (user_id,))
