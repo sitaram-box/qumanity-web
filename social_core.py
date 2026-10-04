@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime as dt
 import secrets
 
+import cycle_middleware
 import notify_core
 
 CATEGORIES = ("private", "family", "friends", "business", "custom")  # "private" has no groups of its own -- it's the 1:1 chat list
@@ -123,8 +124,8 @@ def backfill_account_ids(conn):
         if conn.execute("SELECT 1 FROM account_ids WHERE user_id = ? AND account_id = ?", (u["id"], u["account_id"])).fetchone():
             continue
         conn.execute(
-            "INSERT INTO account_ids (user_id, account_id, search_code, present_location_json, is_current, created_at) VALUES (?, ?, ?, ?, 1, ?)",
-            (u["id"], u["account_id"], _new_code(conn), u["present_location_json"], _now()),
+            "INSERT INTO account_ids (user_id, account_id, search_code, present_location_json, is_current, created_at, cycle_id) VALUES (?, ?, ?, ?, 1, ?, ?)",
+            (u["id"], u["account_id"], _new_code(conn), u["present_location_json"], _now(), cycle_middleware.get_active_cycle_id(conn)),
         )
     conn.commit()
 
@@ -135,8 +136,8 @@ def record_new_account_id(conn, user_id, account_id, present_location):
     import json
     conn.execute("UPDATE account_ids SET is_current = 0 WHERE user_id = ?", (user_id,))
     conn.execute(
-        "INSERT INTO account_ids (user_id, account_id, search_code, present_location_json, is_current, created_at) VALUES (?, ?, ?, ?, 1, ?)",
-        (user_id, account_id, _new_code(conn), json.dumps(present_location), _now()),
+        "INSERT INTO account_ids (user_id, account_id, search_code, present_location_json, is_current, created_at, cycle_id) VALUES (?, ?, ?, ?, 1, ?, ?)",
+        (user_id, account_id, _new_code(conn), json.dumps(present_location), _now(), cycle_middleware.get_active_cycle_id(conn)),
     )
     conn.commit()
 
@@ -278,8 +279,8 @@ def ensure_defaults(conn, owner_user_id, is_admin=False):
 
 def _insert_group(conn, owner_user_id, category, name, business_name=None, business_sector=None, business_services=None):
     conn.execute(
-        "INSERT INTO personal_groups (owner_user_id, category, name, business_name, business_sector, business_services, created_at) VALUES (?,?,?,?,?,?,?)",
-        (owner_user_id, category, name, business_name, business_sector, business_services, _now()),
+        "INSERT INTO personal_groups (owner_user_id, category, name, business_name, business_sector, business_services, created_at, cycle_id) VALUES (?,?,?,?,?,?,?,?)",
+        (owner_user_id, category, name, business_name, business_sector, business_services, _now(), cycle_middleware.get_active_cycle_id(conn)),
     )
     return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
@@ -387,7 +388,8 @@ def send_group_message(conn, user_id, group_id, text):
     text = (text or "").strip()
     if not text or len(text) > MAX_MESSAGE_CHARS:
         raise ValueError(f"Write a message (up to {MAX_MESSAGE_CHARS} characters)")
-    conn.execute("INSERT INTO personal_messages (group_id, user_id, text, created_at) VALUES (?, ?, ?, ?)", (group_id, user_id, text, _now()))
+    conn.execute("INSERT INTO personal_messages (group_id, user_id, text, created_at, cycle_id) VALUES (?, ?, ?, ?, ?)",
+                (group_id, user_id, text, _now(), cycle_middleware.get_active_cycle_id(conn)))
     conn.commit()
 
 
@@ -404,8 +406,8 @@ def send_message_request(conn, from_user_id, to_user_id, text):
     text = (text or "").strip()
     if not text or len(text) > MAX_MESSAGE_CHARS:
         raise ValueError(f"Write your message (up to {MAX_MESSAGE_CHARS} characters)")
-    conn.execute("INSERT INTO people_requests (from_user_id, to_user_id, kind, first_message, created_at) VALUES (?, ?, 'message', ?, ?)",
-                 (from_user_id, to_user_id, text, _now()))
+    conn.execute("INSERT INTO people_requests (from_user_id, to_user_id, kind, first_message, created_at, cycle_id) VALUES (?, ?, 'message', ?, ?, ?)",
+                 (from_user_id, to_user_id, text, _now(), cycle_middleware.get_active_cycle_id(conn)))
     conn.commit()
 
 
@@ -420,8 +422,8 @@ def send_group_invite(conn, owner_user_id, group_id, to_user_id):
     if conn.execute("SELECT 1 FROM people_requests WHERE from_user_id=? AND to_user_id=? AND group_id=? AND kind='group' AND status='pending'",
                      (owner_user_id, to_user_id, g["id"])).fetchone():
         raise ValueError("An invitation is already waiting for them")
-    conn.execute("INSERT INTO people_requests (from_user_id, to_user_id, kind, group_id, created_at) VALUES (?, ?, 'group', ?, ?)",
-                 (owner_user_id, to_user_id, g["id"], _now()))
+    conn.execute("INSERT INTO people_requests (from_user_id, to_user_id, kind, group_id, created_at, cycle_id) VALUES (?, ?, 'group', ?, ?, ?)",
+                 (owner_user_id, to_user_id, g["id"], _now(), cycle_middleware.get_active_cycle_id(conn)))
     conn.commit()
 
 
@@ -456,7 +458,8 @@ def _open_chat(conn, a, b):
     if row:
         return row["id"]
     lo, hi = sorted((a, b))
-    cur = conn.execute("INSERT INTO private_chats (user_lo, user_hi, created_at) VALUES (?, ?, ?)", (lo, hi, _now()))
+    cur = conn.execute("INSERT INTO private_chats (user_lo, user_hi, created_at, cycle_id) VALUES (?, ?, ?, ?)",
+                      (lo, hi, _now(), cycle_middleware.get_active_cycle_id(conn)))
     conn.commit()
     return cur.lastrowid
 
@@ -477,14 +480,14 @@ def decide_request(conn, user_id, request_id, decision):
     if decision == "accept":
         if r["kind"] == "message":
             chat_id = _open_chat(conn, r["from_user_id"], r["to_user_id"])
-            conn.execute("INSERT INTO private_messages (chat_id, user_id, text, created_at) VALUES (?, ?, ?, ?)",
-                         (chat_id, r["from_user_id"], r["first_message"], r["created_at"]))
+            conn.execute("INSERT INTO private_messages (chat_id, user_id, text, created_at, cycle_id) VALUES (?, ?, ?, ?, ?)",
+                         (chat_id, r["from_user_id"], r["first_message"], r["created_at"], cycle_middleware.get_active_cycle_id(conn)))
             # The sender already knows what they wrote -- their own first message shouldn't show as
             # an unread notification for them once the recipient accepts.
             notify_core.mark_read(conn, r["from_user_id"], "private", chat_id)
         elif r["kind"] == "group":
-            conn.execute("INSERT OR REPLACE INTO personal_group_members (group_id, user_id, status, invited_by, created_at) VALUES (?, ?, 'approved', ?, ?)",
-                         (r["group_id"], user_id, r["from_user_id"], _now()))
+            conn.execute("INSERT OR REPLACE INTO personal_group_members (group_id, user_id, status, invited_by, created_at, cycle_id) VALUES (?, ?, 'approved', ?, ?, ?)",
+                         (r["group_id"], user_id, r["from_user_id"], _now(), cycle_middleware.get_active_cycle_id(conn)))
         elif r["kind"] == "rejoin":
             # group_id holds the private_chats id here (see request_rejoin()); `user_id` is deciding
             # on THEIR OWN chat (they never left it), so the rejoining member is r["from_user_id"].
@@ -554,7 +557,8 @@ def send_chat_message(conn, user_id, chat_id, text):
     text = (text or "").strip()
     if not text or len(text) > MAX_MESSAGE_CHARS:
         raise ValueError(f"Write a message (up to {MAX_MESSAGE_CHARS} characters)")
-    conn.execute("INSERT INTO private_messages (chat_id, user_id, text, created_at) VALUES (?, ?, ?, ?)", (chat_id, user_id, text, _now()))
+    conn.execute("INSERT INTO private_messages (chat_id, user_id, text, created_at, cycle_id) VALUES (?, ?, ?, ?, ?)",
+                (chat_id, user_id, text, _now(), cycle_middleware.get_active_cycle_id(conn)))
     conn.commit()
 
 
@@ -587,8 +591,8 @@ def request_rejoin(conn, user_id, chat_id):
     if conn.execute("SELECT 1 FROM people_requests WHERE from_user_id=? AND to_user_id=? AND kind='rejoin' AND group_id=? AND status='pending'",
                      (user_id, other_id, chat_id)).fetchone():
         raise ValueError("A rejoin request is already waiting")
-    conn.execute("INSERT INTO people_requests (from_user_id, to_user_id, kind, group_id, created_at) VALUES (?, ?, 'rejoin', ?, ?)",
-                 (user_id, other_id, chat_id, _now()))
+    conn.execute("INSERT INTO people_requests (from_user_id, to_user_id, kind, group_id, created_at, cycle_id) VALUES (?, ?, 'rejoin', ?, ?, ?)",
+                 (user_id, other_id, chat_id, _now(), cycle_middleware.get_active_cycle_id(conn)))
     conn.commit()
 
 
@@ -635,8 +639,8 @@ def request_new_account(conn, user_id, present_location):
         raise ValueError("Choose at least a state for your new present location")
     if conn.execute("SELECT 1 FROM account_id_requests WHERE user_id=? AND status='pending'", (user_id,)).fetchone():
         raise ValueError("You already have a request waiting for the council")
-    conn.execute("INSERT INTO account_id_requests (user_id, present_location_json, created_at) VALUES (?,?,?)",
-                 (user_id, __import__("json").dumps(present_location), _now()))
+    conn.execute("INSERT INTO account_id_requests (user_id, present_location_json, created_at, cycle_id) VALUES (?,?,?,?)",
+                 (user_id, __import__("json").dumps(present_location), _now(), cycle_middleware.get_active_cycle_id(conn)))
     conn.commit()
 
 

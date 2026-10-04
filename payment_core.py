@@ -24,6 +24,8 @@ import os
 import urllib.error
 import urllib.request
 
+import cycle_middleware
+
 RAZORPAY_API_BASE = "https://api.razorpay.com/v1"
 MIN_AMOUNT = 1
 MAX_AMOUNT = 200  # matches qoin_core.MAX_DONATION -- the whole Qoins system is a micro-donation model, not a wallet top-up store
@@ -86,8 +88,8 @@ def create_order(conn, user_id: int, purpose: str, amount_rupees: int, present_l
     ensure_tables(conn)
     cur = conn.execute(
         """INSERT INTO payment_orders (user_id, purpose, amount_rupees, referrer_user_id,
-               present_location_json, status, created_at) VALUES (?, ?, ?, ?, ?, 'created', ?)""",
-        (user_id, purpose, amount_rupees, referrer_user_id, json.dumps(present_location), _now()),
+               present_location_json, status, created_at, cycle_id) VALUES (?, ?, ?, ?, ?, 'created', ?, ?)""",
+        (user_id, purpose, amount_rupees, referrer_user_id, json.dumps(present_location), _now(), cycle_middleware.get_active_cycle_id(conn)),
     )
     local_order_id = cur.lastrowid
     conn.commit()

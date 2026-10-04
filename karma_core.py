@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import datetime as dt
 
+import cycle_middleware
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS karma_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,8 +89,8 @@ def add_individual_karma(conn, user_id: int, kind: str, points: int, reason: str
         raise ValueError("Unknown karma kind")
     ensure_tables(conn)
     conn.execute(
-        "INSERT INTO karma_entries (user_id, kind, points, reason, from_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (user_id, kind, points, reason, from_user_id, _now()),
+        "INSERT INTO karma_entries (user_id, kind, points, reason, from_user_id, created_at, cycle_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (user_id, kind, points, reason, from_user_id, _now(), cycle_middleware.get_active_cycle_id(conn)),
     )
     conn.commit()
 
@@ -127,8 +129,8 @@ def bump_collective_karma(conn, location_id: str, location_level: str, points: i
         (location_id, location_level, points, _now()),
     )
     conn.execute(
-        "INSERT INTO collective_karma_log (location_id, location_level, points, reason, created_at) VALUES (?, ?, ?, ?, ?)",
-        (location_id, location_level, points, reason, _now()),
+        "INSERT INTO collective_karma_log (location_id, location_level, points, reason, created_at, cycle_id) VALUES (?, ?, ?, ?, ?, ?)",
+        (location_id, location_level, points, reason, _now(), cycle_middleware.get_active_cycle_id(conn)),
     )
     conn.commit()
 
@@ -185,8 +187,8 @@ def rate_business(conn, rater_user_id: int, group_id: int, stars: int, comment: 
             add_individual_karma(conn, provider_id, "commercial", delta, f"Rating updated to {stars}★ ({group['name']})", rater_user_id)
     else:
         conn.execute(
-            "INSERT INTO business_ratings (group_id, rater_user_id, provider_user_id, stars, comment, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (group_id, rater_user_id, provider_id, stars, (comment or "").strip()[:500], _now(), _now()),
+            "INSERT INTO business_ratings (group_id, rater_user_id, provider_user_id, stars, comment, created_at, updated_at, cycle_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (group_id, rater_user_id, provider_id, stars, (comment or "").strip()[:500], _now(), _now(), cycle_middleware.get_active_cycle_id(conn)),
         )
         if points:
             add_individual_karma(conn, provider_id, "commercial", points, f"Rated {stars}★ ({group['name']})", rater_user_id)

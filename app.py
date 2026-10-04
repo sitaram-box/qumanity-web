@@ -22,6 +22,7 @@ from flask import Flask, jsonify, redirect, render_template, request, session, u
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import cycle_middleware
 import election_core
 import elemental_core
 import folder_connector
@@ -1545,8 +1546,8 @@ def api_dashboard_edit_request():
         return jsonify({"error": "Nothing to change"}), 400
 
     _ensure_profile_change_table(conn)
-    conn.execute("INSERT INTO profile_change_requests (user_id, fields_json, reason) VALUES (?, ?, ?)",
-                 (session["user_id"], json.dumps(fields), data.get("reason", "")))
+    conn.execute("INSERT INTO profile_change_requests (user_id, fields_json, reason, cycle_id) VALUES (?, ?, ?, ?)",
+                 (session["user_id"], json.dumps(fields), data.get("reason", ""), cycle_middleware.get_active_cycle_id(conn)))
     conn.commit()
 
     birth_location = json.loads(user["birth_location_json"])
@@ -2806,6 +2807,91 @@ def api_admin_election_cycle_set(country_code):
     return jsonify({"status": "ok", "years": years})
 
 
+@app.route("/admin/lunar/current-cycle")
+@login_required
+def admin_lunar_current_cycle():
+    """Phase 1 verification only -- see docs/lunar_cycle_system.md / docs/phase_build_plan.md.
+    Not called from anywhere else yet; no DB writes, no pipeline."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    from lunar_calendar import get_current_cycle_id, get_cycle_dates
+    cycle_id = get_current_cycle_id()
+    start, mid, end = get_cycle_dates(cycle_id)
+    return jsonify({
+        "cycle_id": cycle_id,
+        "start_amavasya": start.isoformat(),
+        "mid_purnima": mid.isoformat(),
+        "end_amavasya": end.isoformat(),
+    })
+
+
+@app.route("/admin/lunar/upcoming")
+@login_required
+def admin_lunar_upcoming():
+    """Phase 1 verification only -- next 6 Purnima/Amavasya events. Same caveats as
+    admin_lunar_current_cycle above."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    from lunar_calendar import upcoming_events
+    return jsonify({"events": upcoming_events(6)})
+
+
+@app.route("/api/admin/lunar/cycle-state")
+@login_required
+def api_admin_lunar_cycle_state():
+    """Phase 2: the cycle_state row every new write is currently being stamped with (self-seeds
+    from lunar_calendar's live computation the first time this is ever asked)."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    row = cycle_middleware.get_active_cycle_row(conn)
+    conn.close()
+    return jsonify(row)
+
+
+@app.route("/api/admin/lunar/cycle-state/transition", methods=["POST"])
+@login_required
+def api_admin_lunar_cycle_state_transition():
+    """Phase 2: manually close the current active cycle and activate the next one. Nothing calls
+    this automatically yet -- Year 1 is bootstrap-only and Phase 5's cron is what will eventually
+    do this on its own. Body: {} to advance to whatever lunar_calendar says is the real current
+    cycle right now, or {"cycle_id": "Chaitra_2027"} to activate a specific one. Never touches the
+    pipeline/safety rule (Phase 3) or 0_Earth (Phase 4)."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        row = cycle_middleware.transition_to(conn, data.get("cycle_id"), activated_by=f"admin:{session['user_id']}")
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 400
+    conn.close()
+    return jsonify(row)
+
+
+@app.route("/api/admin/lunar/cycle-state/status")
+@login_required
+def api_admin_lunar_cycle_state_status():
+    """Phase 2: cycle_state's full history (newest-activated first), plus what lunar_calendar says
+    the REAL current cycle is right now -- so an admin can see at a glance whether cycle_state has
+    drifted behind the calendar (expected during Year 1 bootstrap, since nothing transitions it
+    automatically yet)."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    from lunar_calendar import get_current_cycle_id
+    conn = get_db()
+    active = cycle_middleware.get_active_cycle_row(conn)
+    past = cycle_middleware.history(conn)
+    conn.close()
+    return jsonify({
+        "active": active,
+        "live_calendar_cycle_id": get_current_cycle_id(),
+        "in_sync": active["cycle_id"] == get_current_cycle_id(),
+        "history": past,
+    })
+
+
 @app.route("/api/admin/sync-folders", methods=["POST"])
 def api_admin_sync_folders():
     conn = get_db()
@@ -2874,6 +2960,7 @@ with get_db() as _startup_conn:
     karma_core.ensure_tables(_startup_conn)
     visibility_core.ensure_tables(_startup_conn)
     payment_core.ensure_tables(_startup_conn)
+    cycle_middleware.ensure_tables(_startup_conn)
 
 # Runs on import, not just under `python app.py` -- a production deploy runs this module under
 # gunicorn (see Procfile), which never executes the `__main__` block below, so the daily DB->folder
