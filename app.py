@@ -26,11 +26,14 @@ import election_core
 import elemental_core
 import folder_connector
 import folder_sync
+import founder_core
 import id_generator
+import kundali_analyser
 import lunar_core
 import board_core
 import karma_core
 import notify_core
+import payment_core
 import perception_core
 import qoin_core
 import reactions_core
@@ -38,6 +41,7 @@ import recovery_core
 import review_core
 import social_core
 import timebox_core
+import visibility_core
 import wallet_core
 import zodiac_core
 from db import get_db
@@ -88,6 +92,17 @@ def _ensure_user_columns():
         ("work_profile", "TEXT"), ("work_profile_other", "TEXT"),
         # "Register a new member": who registered this person (their referrer), 2026-09-29.
         ("referred_by_user_id", "INTEGER"),
+        # Preferred UI language (2026-10-04): a language CODE, must be one of the user's own 3
+        # (_user_languages) -- which one the whole app's UI text displays in, not just the marquee.
+        ("preferred_language", "TEXT"),
+        # Hidden identity (2026-10-04, the Founder's own account): when set, this member's name is
+        # replaced with their Account ID everywhere a stranger could discover them (search, a
+        # friend/message request sent to or received from them, a village member list) and their
+        # present-location is capped at State/Country/Continent/Earth (District/Tehsil/Village
+        # withheld) in those same places. Their real name still shows to their own Family group
+        # members, and on anything they themselves post to a Public/Global Collective Board --
+        # see social_core.py's identity-masking helpers.
+        ("hide_identity", "INTEGER DEFAULT 0"),
     ):
         if col not in cols:
             conn.execute(f"ALTER TABLE users ADD COLUMN {col} {ddl}")
@@ -108,8 +123,13 @@ def _user_languages(user):
 
 
 app = Flask(__name__)
-# Prototype-only secret key — override via QM_SECRET_KEY for any real deployment.
-app.secret_key = os.environ.get("QM_SECRET_KEY", "dev-insecure-secret-change-me")
+# Prototype-only secret key — override via QM_SECRET_KEY for any real deployment. Refuses to boot
+# with the insecure default on Railway (every Railway deploy sets RAILWAY_ENVIRONMENT) rather than
+# silently shipping sessions signed with a key anyone can read in this file.
+_INSECURE_DEFAULT_SECRET = "dev-insecure-secret-change-me"
+app.secret_key = os.environ.get("QM_SECRET_KEY", _INSECURE_DEFAULT_SECRET)
+if os.environ.get("RAILWAY_ENVIRONMENT") and app.secret_key == _INSECURE_DEFAULT_SECRET:
+    raise RuntimeError("QM_SECRET_KEY must be set to a real secret before deploying (Railway environment detected).")
 
 
 def login_required(view):
@@ -171,9 +191,21 @@ def register():
     of the 10 Indian Sub-continent countries) -> Step 3 (Public Account:
     Zone/State/District/Tehsil/Village for India, each country's own tiers
     for the rest) -> Step 4 (Review & Submit). Kundali
-    is not shown here -- see /dashboard after login."""
+    is not shown here -- see /dashboard after login.
+
+    If the visitor is already signed in, they may be here to register someone else (a member
+    with no smartphone) -- that person's name + Account ID is shown so the form can say who's
+    registering them, and that logged-in id becomes the new member's referrer automatically
+    (see api_auth_register's `helper_user_id`) -- no referral code to type in either direction."""
+    helper = None
+    if session.get("user_id"):
+        conn = get_db()
+        row = conn.execute("SELECT name, account_id FROM users WHERE id = ?", (session["user_id"],)).fetchone()
+        conn.close()
+        if row:
+            helper = {"name": row["name"], "account_id": row["account_id"]}
     return render_template("register.html", languages=_load_json(LANGUAGES_FILE),
-                           test_pin=os.environ.get("QM_TEST_PIN", ""))
+                           test_pin=os.environ.get("QM_TEST_PIN", ""), helper=helper)
 
 
 @app.route("/about")
@@ -182,6 +214,26 @@ def about():
     timelines, Qoins, Quantum Punch governance, status and roadmap -- written
     from the SITA Foundation manuscripts and briefs."""
     return render_template("about.html")
+
+
+@app.route("/founders-message")
+def founders_message():
+    """The full Founder's Message -- homepage links here for "Read Full Message". Public, no
+    login needed (same as the homepage itself)."""
+    conn = get_db()
+    message = founder_core.get_message(conn, request.args.get("lang", "en"))
+    conn.close()
+    return render_template("founders_message.html", message=message)
+
+
+@app.route("/api/founder-message")
+def api_founder_message():
+    conn = get_db()
+    message = founder_core.get_message(conn, request.args.get("lang", "en"))
+    conn.close()
+    if not message:
+        return jsonify({"error": "No message published"}), 404
+    return jsonify(message)
 
 
 @app.route("/elements")
@@ -281,37 +333,6 @@ def _location_display(location: dict) -> str:
         if node and node.get("name"):
             parts.append(node["name"])
     return " › ".join(parts) if parts else "—"
-
-
-SIGNS = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"]
-NAKSHATRAS = ["Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra", "Punarvasu", "Pushya", "Ashlesha", "Magha",
-              "Purva Phalguni", "Uttara Phalguni", "Hasta", "Chitra", "Swati", "Vishakha", "Anuradha", "Jyeshtha", "Mula",
-              "Purva Ashadha", "Uttara Ashadha", "Shravana", "Dhanishta", "Shatabhisha", "Purva Bhadrapada", "Uttara Bhadrapada", "Revati"]
-NAKSHATRA_LORDS = ["Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu", "Jupiter", "Saturn", "Mercury"] * 3
-
-
-def _nakshatra_of(sign, degree):
-    lon = SIGNS.index(sign) * 30 + float(degree)
-    i = int(lon // (360 / 27)) % 27
-    return NAKSHATRAS[i], NAKSHATRA_LORDS[i], int((lon % (360 / 27)) // (360 / 108)) + 1
-
-
-def _kundali_view(kundali):
-    """Rows for the Kundali table + the 12 houses, from the stored chart JSON."""
-    if not kundali:
-        return None
-    rows = []
-    def row(name, d, nak=None):
-        n = nak or _nakshatra_of(d["sign"], d["degree"])[0]
-        _, lord, pada = _nakshatra_of(d["sign"], d["degree"])
-        d_int = int(d["degree"]); minutes = int(round((d["degree"] - d_int) * 60))
-        rows.append({"planet": name, "sign": d["sign"], "degree": f"{d_int}°{minutes:02d}′", "nakshatra": n, "lord": lord, "pada": pada})
-    row("Ascendant", kundali["ascendant"]); row("Sun", kundali["sun"]); row("Moon", kundali["moon"])
-    for name, d in kundali["planets"].items():
-        row(name, d)
-    houses = [{"n": int(n), "sign": h["sign"], "planets": [x.strip() for x in h["planet"].split(",") if x.strip()]}
-              for n, h in sorted(kundali["houses"].items(), key=lambda kv: int(kv[0]))]
-    return {"rows": rows, "houses": houses}
 
 
 @app.route("/api/timebox")
@@ -662,7 +683,7 @@ def _social(conn):
 @login_required
 def api_people_search():
     conn = _social(get_db())
-    person = social_core.find_person(conn, request.args.get("q", ""))
+    person = social_core.find_person(conn, request.args.get("q", ""), session.get("user_id"))
     conn.close()
     if not person:
         return jsonify({"error": "No one found with that ID"}), 404
@@ -1057,10 +1078,17 @@ def api_election_history():
 @app.route("/api/election-sentiment/<level>/<path:location_id>")
 def api_election_sentiment(level, location_id):
     """Lok-Sabha-equivalent % breakdown on a country page, Vidhan-Sabha-equivalent on a state page.
-    Nowhere else -- see election_core.loksabha_aggregate/vidhansabha_aggregate."""
+    Nowhere else -- see election_core.loksabha_aggregate/vidhansabha_aggregate. The aggregate itself
+    is gated by visibility_core.election_history_visibility -- hidden system-wide until 2028 (Sun
+    entering Aries) or the 50,00,000-India-responses early unlock, or an Admin override; saving a
+    user's own choice (see api_election_history above) is never affected by this gate."""
     if level not in ("country", "state"):
         return jsonify({"error": "Sentiment is only shown on Country and State pages"}), 404
     conn = get_db()
+    vis = visibility_core.election_history_visibility(conn)
+    if not vis["visible"]:
+        conn.close()
+        return jsonify({"visible": False, "level": level, "reason": vis["reason"]})
     if level == "country":
         code = location_id.split("_")[-1] if "_" in location_id else location_id
         data = election_core.loksabha_aggregate(conn, location_id, code)
@@ -1071,7 +1099,7 @@ def api_election_sentiment(level, location_id):
         data = election_core.vidhansabha_aggregate(conn, location_id, code)
         label = "State Election"
     conn.close()
-    return jsonify(dict(data, level=level, label=label))
+    return jsonify(dict(data, level=level, label=label, visible=True))
 
 
 @app.route("/api/auth/forgot-pin/request", methods=["POST"])
@@ -1192,21 +1220,35 @@ def api_qoins_preview():
 @app.route("/api/user/languages", methods=["GET", "POST"])
 @login_required
 def api_user_languages():
-    """GET the user's languages (mother tongue, English, optional daily-use one).
-    POST {"daily": "<language name>"|""} sets or clears the third language."""
+    """GET the user's languages (mother tongue, English, optional daily-use one) + which one is
+    preferred for the UI. POST {"daily": "<language name>"|""} sets/clears the third language;
+    POST {"preferred": "<language code>"} sets which of the (now up to 3) languages the UI shows
+    in -- must be one of the user's own languages, enforced both here and by the picker itself
+    only ever offering those 3."""
     conn = get_db()
     user = _current_user_row(conn)
     if request.method == "POST":
-        name = ((request.get_json(silent=True) or {}).get("daily") or "").strip()
-        table = _language_table()
-        if name and (name not in table or name in ("English", user["language"])):
-            conn.close()
-            return jsonify({"error": "Choose a language other than your mother tongue and English"}), 400
-        conn.execute("UPDATE users SET daily_language = ? WHERE id = ?", (name or None, user["id"]))
-        conn.commit()
-        user = _current_user_row(conn)
+        data = request.get_json(silent=True) or {}
+        if "daily" in data:
+            name = (data.get("daily") or "").strip()
+            table = _language_table()
+            if name and (name not in table or name in ("English", user["language"])):
+                conn.close()
+                return jsonify({"error": "Choose a language other than your mother tongue and English"}), 400
+            conn.execute("UPDATE users SET daily_language = ? WHERE id = ?", (name or None, user["id"]))
+            conn.commit()
+            user = _current_user_row(conn)
+        if "preferred" in data:
+            code = (data.get("preferred") or "").strip()
+            available = {l["code"] for l in _user_languages(user)}
+            if code and code not in available:
+                conn.close()
+                return jsonify({"error": "Preferred language must be one of your own 3 languages"}), 400
+            conn.execute("UPDATE users SET preferred_language = ? WHERE id = ?", (code or None, user["id"]))
+            conn.commit()
+            user = _current_user_row(conn)
     conn.close()
-    return jsonify({"languages": _user_languages(user)})
+    return jsonify({"languages": _user_languages(user), "preferred": user["preferred_language"]})
 
 
 @app.route("/dashboard")
@@ -1396,7 +1438,8 @@ def _profile_for(user_id):
         "mother_tongue": user["language"] or "—",
         "daily_language": user["daily_language"] or "",
         "languages": _user_languages(user),
-        "kundali_view": _kundali_view(json.loads(zodiac["birth_chart"])) if zodiac and zodiac["birth_chart"] else None,
+        "preferred_language": user["preferred_language"] or "",
+        "kundali_view": kundali_analyser.analyse(user["dob"], json.loads(zodiac["birth_chart"])) if zodiac and zodiac["birth_chart"] else None,
         "sun_sign": zodiac["sun_sign"] if zodiac else None,
         "sun_element": zodiac["sun_element"] if zodiac else None,
         "moon_sign": zodiac["moon_sign"] if zodiac else None,
@@ -1408,6 +1451,7 @@ def _profile_for(user_id):
         "element_bars": element_bars,
         "birth_location": _location_display(json.loads(user["birth_location_json"])),
         "present_location": _location_display(json.loads(user["present_location_json"])),
+        "birth_location_struct": json.loads(user["birth_location_json"]),
         "present_location_struct": json.loads(user["present_location_json"]),
     }
     return profile
@@ -1803,6 +1847,16 @@ def api_subcontinent_stats():
     return jsonify(elemental_core.registered_user_stats_from_rows(rows))
 
 
+@app.route("/api/scoreboard/india")
+def api_scoreboard_india():
+    """Homepage live scoreboard: India's total members, Zones and (top 10) States ranked by
+    member count. Shared by the website homepage and the phone app."""
+    conn = get_db()
+    data = elemental_core.india_scoreboard(conn, _load_json(INDIA_STATES_FILE))
+    conn.close()
+    return jsonify(data)
+
+
 @app.route("/api/india/state-districts/<path:state_id>")
 def api_india_state_districts(state_id):
     """Real 2011-census district shapes for one state, for the registration
@@ -1912,19 +1966,29 @@ def api_location_members(village_id):
     (Phase 1 of docs/DASHBOARD_REDESIGN_PLAN.md) -- every other level already
     has real aggregate stats (/api/location/stats above); only villages are
     small/bounded enough for a browsable name list. Privacy-scoped per the
-    plan: name/gender/age category only, never private_id/account_id/email/
-    phone/zodiac -- `id` here is just the internal numeric user id, used only
-    to key the profile popup client-side, never displayed."""
+    plan: name/gender/age category only, never private_id/email/phone/zodiac
+    -- `id` here is just the internal numeric user id, used only to key the
+    profile popup client-side, never displayed. The one exception: a
+    hide_identity member's "name" here IS their Account ID (see
+    social_core.display_identity) -- that's the whole point of the setting."""
     conn = get_db()
     rows = conn.execute(
-        "SELECT id, name, gender, dob FROM users WHERE json_extract(present_location_json, '$.village.id') = ?",
+        "SELECT id, name, gender, dob, hide_identity, account_id FROM users WHERE json_extract(present_location_json, '$.village.id') = ?",
         (village_id,),
     ).fetchall()
+    viewer_id = session.get("user_id")
+    # A hide_identity member (e.g. the Founder's own account) still appears in their own
+    # village's list -- the village is already known from context, so there's no location to
+    # cap here -- but by Account ID, not name, unless the viewer is their own Family.
+    masked_names = {
+        r["id"]: (r["account_id"] if r["hide_identity"] and not social_core.is_family_member(conn, r["id"], viewer_id) else r["name"])
+        for r in rows
+    }
     conn.close()
     members = [
         {
             "id": r["id"],
-            "name": r["name"],
+            "name": masked_names[r["id"]],
             "gender": r["gender"],
             "age_category": _AGE_CATEGORY_NAMES[id_generator.age_code(dt.date.fromisoformat(r["dob"]))],
         }
@@ -2128,43 +2192,41 @@ def api_auth_register():
     conn = get_db()
     donation_error = None
     donation_breakdown = None
+    donation_pending_amount = 0
     try:
         donation_amount = int(data.get("donation_amount") or 0)
     except (TypeError, ValueError):
         donation_amount = 0
     donation_amount = max(0, min(donation_amount, qoin_core.MAX_DONATION))
-    referral_code = (data.get("referral_code") or "").strip()
-    referrer_user_id = None
+    # There is no referral code to type in any more -- the only way to be credited as a
+    # referrer is to BE the logged-in member doing the registering (helper_user_id, "Register a
+    # new member"); their Account ID is recorded automatically, nothing for either party to enter.
+    referrer_user_id = helper_user_id
     board_core.ensure_sub_tables(conn)
-    if helper_user_id:
-        # The helper registering them in person is the referrer, and has already proved who they are.
-        referrer_user_id = helper_user_id
-        referral_code = ""
-    elif referral_code:
-        referrer_user_id = board_core.referrer_for_code(conn, referral_code)
-        if referrer_user_id is None:
-            donation_error = "That referral code was not recognised — registered without it."
-        elif donation_amount > 0:
-            referrer_pin = str(data.get("referrer_pin") or "")
-            referrer_row = conn.execute("SELECT pin_hash FROM users WHERE id = ?", (referrer_user_id,)).fetchone()
-            if not referrer_row or not referrer_row["pin_hash"] or not check_password_hash(referrer_row["pin_hash"], referrer_pin):
-                donation_error = "The volunteer's PIN did not match, so the cash donation could not be confirmed — registered without it."
-                referrer_user_id = None
-                donation_amount = 0
-    try:
-        donation_breakdown = wallet_core.apply_registration_donation(conn, user_id, present_location, donation_amount, referrer_user_id)
-        if referrer_user_id is not None:
-            board_core.record_referral_use(conn, referral_code)
-    except ValueError as e:
-        donation_error = str(e)
-        donation_breakdown = None
+    if donation_amount <= 0 or helper_user_id:
+        # Free registration (no money at all) -- always safe to credit immediately. An assisted
+        # signup with a requested donation (helper_user_id + amount > 0) is forced free here too:
+        # the new member has no live session in THIS response to pay with, and real-money paths
+        # must always go through a verified payment (see /api/payment/order + /api/payment/verify
+        # below), never a client-reported amount. Paid registration donations for assisted signups
+        # aren't wired yet -- the new member can Donate for real from their own dashboard instead.
+        try:
+            donation_breakdown = wallet_core.apply_registration_donation(conn, user_id, present_location, 0, referrer_user_id)
+        except ValueError as e:
+            donation_error = str(e)
+    else:
+        # A real donation (self-registration, no helper) -- credit nothing yet. The client pays via
+        # /api/payment/order + /api/payment/verify (purpose="registration") right after this
+        # response, once session["user_id"] below makes them a logged-in member; only a verified
+        # payment ever credits Qoins.
+        donation_pending_amount = donation_amount
     conn.close()
 
     if helper_user_id:
         # The helper stays signed in as themself; the new member signs in later with their own ID + PIN.
         return jsonify({
             "user_id": user_id, "private_code": private_code, "token": None, "assisted": True,
-            "donation": donation_breakdown, "donation_error": donation_error,
+            "donation": donation_breakdown, "donation_error": donation_error, "donation_pending_amount": donation_pending_amount,
             "account_id": account_id, "zodiac": zodiac_row, "redirect": url_for("register"),
         }), 201
 
@@ -2179,7 +2241,7 @@ def api_auth_register():
         "user_id": user_id,
         "private_code": private_code,
         "token": app_token,
-        "donation": donation_breakdown, "donation_error": donation_error,
+        "donation": donation_breakdown, "donation_error": donation_error, "donation_pending_amount": donation_pending_amount,
         "account_id": account_id,
         "zodiac": zodiac_row,
         "kundali": kundali,
@@ -2212,12 +2274,15 @@ def _validate_password(password: str) -> str | None:
 def api_user_zodiac(user_id):
     conn = get_db()
     row = conn.execute("SELECT * FROM user_zodiac WHERE user_id = ?", (user_id,)).fetchone()
+    dob_row = conn.execute("SELECT dob FROM users WHERE id = ?", (user_id,)).fetchone()
     conn.close()
     if not row:
         return jsonify({"error": "Not found"}), 404
     result = dict(row)
     result["birth_chart"] = json.loads(result["birth_chart"]) if result["birth_chart"] else None
     result["planetary_positions"] = json.loads(result["planetary_positions"]) if result["planetary_positions"] else None
+    if result["birth_chart"] and dob_row:
+        result["moon_based_analysis"] = kundali_analyser.analyse(dob_row["dob"], result["birth_chart"])
     return jsonify(result)
 
 
@@ -2359,45 +2424,80 @@ def api_wallet_location_balance(location_type, location_id):
     return jsonify({"location_type": location_type, "location_id": location_id, "balance_qoins": balance})
 
 
-@app.route("/api/wallet/donate", methods=["POST"])
+def _resolve_referrer(conn, user, referrer_private_id: str):
+    referrer_private_id = (referrer_private_id or "").strip()
+    if not referrer_private_id:
+        return None, None
+    referrer = conn.execute("SELECT id FROM users WHERE private_id_9digit = ?", (referrer_private_id,)).fetchone()
+    if not referrer:
+        return None, "Unknown referrer Private ID"
+    if referrer["id"] == user["id"]:
+        return None, "You can't refer yourself"
+    return referrer["id"], None
+
+
+@app.route("/api/payment/order", methods=["POST"])
 @login_required
-def api_wallet_donate():
-    """Simulated donation — no real payment processor. User picks a rupee
-    amount (and optionally a referrer's Private ID); the system computes and
-    credits the Qoin split immediately (see wallet_core.calculate_donation_
-    distribution). The donor's own share is credited locked, unlocked on
-    their first election vote."""
+def api_payment_order():
+    """Step 1 of a real donation: create a Razorpay order (or, if RAZORPAY_KEY_ID/SECRET aren't
+    set yet, the same dev-mode 'simulated' instant-credit path the old /api/wallet/donate always
+    used) -- see payment_core.create_order. Nothing is credited here."""
     data = request.get_json(force=True) or {}
     try:
         amount_rupees = int(data.get("amount_rupees"))
     except (TypeError, ValueError):
         return jsonify({"error": "amount_rupees must be an integer"}), 400
+    purpose = data.get("purpose") or "donation"
 
     conn = get_db()
     user = _current_user_row(conn)
-    referrer_user_id = None
-    referrer_private_id = (data.get("referrer_private_id") or "").strip()
-    if referrer_private_id:
-        referrer = conn.execute(
-            "SELECT id FROM users WHERE private_id_9digit = ?", (referrer_private_id,)
-        ).fetchone()
-        if not referrer:
-            conn.close()
-            return jsonify({"error": "Unknown referrer Private ID"}), 400
-        if referrer["id"] == user["id"]:
-            conn.close()
-            return jsonify({"error": "You can't refer yourself"}), 400
-        referrer_user_id = referrer["id"]
-
+    referrer_user_id, ref_error = _resolve_referrer(conn, user, data.get("referrer_private_id"))
+    if ref_error:
+        conn.close()
+        return jsonify({"error": ref_error}), 400
     try:
-        split = wallet_core.apply_donation(
-            conn, user["id"], json.loads(user["present_location_json"]), amount_rupees, referrer_user_id
+        order = payment_core.create_order(
+            conn, user["id"], purpose, amount_rupees, json.loads(user["present_location_json"]), referrer_user_id
         )
     except ValueError as e:
         conn.close()
         return jsonify({"error": str(e)}), 400
     conn.close()
-    return jsonify({"status": "credited", "amount_rupees": amount_rupees, "distribution": split})
+    return jsonify(order)
+
+
+@app.route("/api/payment/verify", methods=["POST"])
+@login_required
+def api_payment_verify():
+    """Step 2: verify the Razorpay payment (or, in simulated dev mode, just mark it paid) and THEN
+    credit Qoins using the order's own stored amount/purpose/referrer/location -- never anything
+    re-sent by the client at this step."""
+    data = request.get_json(force=True) or {}
+    conn = get_db()
+    try:
+        local_order_id = int(data.get("local_order_id"))
+    except (TypeError, ValueError):
+        conn.close()
+        return jsonify({"error": "local_order_id must be an integer"}), 400
+    try:
+        order = payment_core.verify_payment(
+            conn, local_order_id, session["user_id"],
+            data.get("razorpay_payment_id"), data.get("razorpay_order_id"), data.get("razorpay_signature"),
+        )
+        present_location = json.loads(order["present_location_json"])
+        if order["purpose"] == "registration":
+            split = wallet_core.apply_registration_donation(
+                conn, order["user_id"], present_location, order["amount_rupees"], order["referrer_user_id"]
+            )
+        else:
+            split = wallet_core.apply_donation(
+                conn, order["user_id"], present_location, order["amount_rupees"], order["referrer_user_id"]
+            )
+    except ValueError as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 400
+    conn.close()
+    return jsonify({"status": "credited", "amount_rupees": order["amount_rupees"], "distribution": split})
 
 
 # ---- Village elections API (piloted on election_core.PILOT_VILLAGE_ID) ----
@@ -2443,11 +2543,25 @@ def api_election_status():
 
 
 @app.route("/api/election/candidates")
+@login_required
 def api_election_candidates():
+    """Candidates (names, manifestos, karma) are only shown to members actually born under this
+    cycle's sign -- everyone else gets `restricted: true` and no candidate data at all, not just a
+    hidden button (Founder, 2026-10-04: "this election process... visible only to those members
+    who are born with Sun-Sign Libra"). Winners, once decided, are a different thing entirely --
+    council_roster() / /api/election/council is NOT sign-gated, so results stay visible to everyone
+    via Q-Punch once the cycle closes."""
     conn = get_db()
+    user = _current_user_row(conn)
     cycle = election_core.current_cycle_for_village(conn, election_core.PILOT_VILLAGE_ID)
+    zodiac = conn.execute("SELECT sun_sign FROM user_zodiac WHERE user_id = ?", (user["id"],)).fetchone()
+    my_sign = zodiac["sun_sign"] if zodiac else None
+    if my_sign != cycle["zodiac_sign"]:
+        conn.close()
+        return jsonify({"restricted": True, "your_sign": my_sign, "cycle_sign": cycle["zodiac_sign"], "male": [], "female": []})
     candidates = election_core.candidates_for_cycle(conn, cycle["id"])
     conn.close()
+    candidates["restricted"] = False
     return jsonify(candidates)
 
 
@@ -2569,11 +2683,23 @@ def api_admin_election_reject(candidate_id):
 # Country Perception: any of the 10 Sub-continent countries, shown on that country's Global-tab
 # page. Zone Perception: India's own zones only, shown on India's Public-tab page.
 
+def _gate_perception_result(conn, result: dict) -> dict:
+    """Strips the aggregate pro/anti counts when visibility_core.perception_visibility says so --
+    `my_vote`/`can_vote`/`vote_reason` (the user's own voting state) are never touched by this."""
+    vis = visibility_core.perception_visibility(conn)
+    result["results_visible"] = vis["visible"]
+    result["results_reason"] = vis["reason"]
+    if not vis["visible"]:
+        result["pro_count"] = None
+        result["anti_count"] = None
+    return result
+
+
 @app.route("/api/perception/country/<country_id>")
 def api_perception_country(country_id):
     conn = get_db()
     user_id = session.get("user_id")
-    result = perception_core.country_results(conn, country_id, user_id)
+    result = _gate_perception_result(conn, perception_core.country_results(conn, country_id, user_id))
     conn.close()
     return jsonify(result)
 
@@ -2596,7 +2722,7 @@ def api_perception_country_vote(country_id):
 def api_perception_zone(zone_id):
     conn = get_db()
     user_id = session.get("user_id")
-    result = perception_core.zone_results(conn, zone_id, user_id)
+    result = _gate_perception_result(conn, perception_core.zone_results(conn, zone_id, user_id))
     conn.close()
     return jsonify(result)
 
@@ -2613,6 +2739,36 @@ def api_perception_zone_vote(zone_id):
         return jsonify({"error": str(e)}), 400
     conn.close()
     return jsonify(result)
+
+
+@app.route("/api/admin/visibility")
+@login_required
+def api_admin_visibility():
+    """Admin-only snapshot of both gates (election history + perception) -- see visibility_core."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    snapshot = visibility_core.admin_snapshot(conn)
+    conn.close()
+    return jsonify(snapshot)
+
+
+@app.route("/api/admin/visibility/<key>", methods=["POST"])
+@login_required
+def api_admin_visibility_set(key):
+    """Admin override for one gate. Body: {"enabled": true|false|null, "display_until": "YYYY-MM-DD"|null}.
+    enabled=null clears the override, falling back to the automatic schedule (election history only)."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        value = visibility_core.set_override(conn, key, data.get("enabled"), data.get("display_until"), session["user_id"])
+    except ValueError as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 400
+    conn.close()
+    return jsonify(value)
 
 
 @app.route("/api/admin/election-cycle")
@@ -2714,10 +2870,20 @@ with get_db() as _startup_conn:
     election_core.ensure_history_table(_startup_conn)
     election_core.ensure_council_columns(_startup_conn)
     perception_core.ensure_tables(_startup_conn)
+    founder_core.ensure_tables(_startup_conn)
     karma_core.ensure_tables(_startup_conn)
+    visibility_core.ensure_tables(_startup_conn)
+    payment_core.ensure_tables(_startup_conn)
+
+# Runs on import, not just under `python app.py` -- a production deploy runs this module under
+# gunicorn (see Procfile), which never executes the `__main__` block below, so the daily DB->folder
+# export job needs to start here to run at all in production. Deploy with a SINGLE gunicorn worker
+# while this stays SQLite + an in-process scheduler: more workers would both register this cron job
+# once per worker (running the midnight export N times) and let multiple processes write the same
+# SQLite file at once.
+_start_scheduler()
 
 if __name__ == "__main__":
-    _start_scheduler()
     port = int(os.environ.get("PORT", 5050))
     # QM_HOST=0.0.0.0 lets phones on the same Wi-Fi reach the site (Qumanity_App testing).
     # The debugger is switched off then, unless QM_DEBUG=1 asks for it.

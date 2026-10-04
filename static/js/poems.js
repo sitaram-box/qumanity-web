@@ -118,6 +118,16 @@
     if (changed) reset(curIdx, 0);
   }
 
+  // The dashboard's own language switcher (static/js/i18n.js) dispatches this whenever the
+  // signed-in member's preferred UI language changes -- follow it here too, but only if a poem
+  // translation actually exists for it (poems are a fixed set of translated files, not every one
+  // of the 23 UI languages has one yet; see Poems/poems_<lang>.json).
+  document.addEventListener("qm-lang", function (e) {
+    if (!meta) return;
+    var ok = meta.languages.some(function (l) { return l.code === e.detail && l.available !== false; });
+    if (ok) setLang(e.detail);
+  });
+
   function setPlayingUi() {
     bar.classList.toggle("pm-paused", !playing);
     playBtn.setAttribute("aria-label", playing ? "Pause" : "Play");

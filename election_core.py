@@ -392,7 +392,7 @@ PARTIES_BY_COUNTRY = {
     # opposition; Awami League banned), Sri Lanka Nov 2024 (NPP; SJB), Pakistan Feb 2024 (PML-N-led
     # government; PTI opposition; PPP), Balochistan assembly 2024 (PPP, PML-N, JUI-F), Bhutan Jan 2024
     # (PDP; BTP), Maldives Apr 2024 (PNC; MDP), Myanmar 2025-26 junta-run vote (USDP; NLD dissolved).
-    "IND": [("BJP", "BJP / NDA Alliance"), ("INC", "INC / INDIA Alliance"), ("OTH", "OTH / Independent / Regional / NOTA")],
+    "IND": [("BJP", "BJP / NDA Alliance"), ("INC", "INC / INDIA Alliance"), ("OTH", "Other")],
     "NPL": [("RSP", "Rastriya Swatantra Party"), ("NC", "Nepali Congress"), ("OTH", "CPN-UML / NCP / Other")],
     "BGD": [("BNP", "BNP"), ("JI", "Jamaat-e-Islami"), ("OTH", "NCP / Jatiya Party / Other")],
     "LKA": [("NPP", "NPP (National People's Power)"), ("SJB", "SJB"), ("OTH", "SLPP / UNP / Other")],
@@ -404,7 +404,7 @@ PARTIES_BY_COUNTRY = {
     "MMR": [("USDP", "USDP"), ("NLD", "NLD / NUG"), ("OTH", "Other")],
 }
 DEFAULT_PARTIES = PARTIES_BY_COUNTRY["IND"]
-NOT_VOTED = ("NOTVOTED", "Not Voted")
+NOT_VOTED = ("NOTVOTED", "Not Voted / NOTA")
 
 
 def parties_for_country(country_code: str):
@@ -531,9 +531,19 @@ def get_party_history(conn, user_id: int, country_code: str = "IND") -> dict:
 
 
 def save_party_history(conn, user_id: int, data: dict, country_code: str = "IND") -> None:
+    """Past elections (every Lok Sabha year except the latest/upcoming one, and Vidhan Sabha
+    "last") lock forever once saved -- a second attempt to change one is rejected outright,
+    the whole save fails, and nothing is written. Only the upcoming slots (Lok Sabha's newest
+    year, Vidhan Sabha's "next") can be changed and re-saved at any time."""
     ensure_history_table(conn)
     valid = {code for code, _ in parties_for_country(country_code)}
     years = loksabha_years(conn, country_code)
+    locked_slots = {("loksabha", str(y)) for y in years[:-1]} | {("vidhansabha", "last")}
+    existing = {
+        (r["kind"], r["slot"]): r["choice"]
+        for r in conn.execute("SELECT kind, slot, choice FROM election_history_entries WHERE user_id = ?", (user_id,))
+    }
+
     entries = []  # (kind, slot, choice)
     for y in years:
         v = (data.get("loksabha") or {}).get(str(y))
@@ -548,17 +558,27 @@ def save_party_history(conn, user_id: int, data: dict, country_code: str = "IND"
             if v not in valid:
                 raise ValueError(f"{v} is not a recognised choice for this country")
             entries.append(("vidhansabha", slot, v))
+
+    for kind, slot, choice in entries:
+        if (kind, slot) in locked_slots and existing.get((kind, slot)) not in (None, choice):
+            label = f"{slot} Lok Sabha" if kind == "loksabha" else "Vidhan Sabha's last election"
+            raise ValueError(f"Your {label} answer is already saved and can't be changed.")
+
     for kind, slot, choice in entries:
         conn.execute(
             """INSERT INTO election_history_entries (user_id, kind, slot, choice, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
                ON CONFLICT(user_id, kind, slot) DO UPDATE SET choice=excluded.choice, updated_at=CURRENT_TIMESTAMP""",
             (user_id, kind, slot, choice),
         )
-    # A slot cleared back to "no answer" in this save is deleted rather than stored as empty.
+    # A slot cleared back to "no answer" in this save is deleted rather than stored as empty --
+    # but never a locked slot that already has a saved answer (that's a change, not a clear).
     for kind, slot_field, slots in (("loksabha", "loksabha", [str(y) for y in years]), ("vidhansabha", "vidhansabha", ["last", "next"])):
         sent = data.get(slot_field) or {}
         for slot in slots:
             if slot in sent and not sent[slot]:
+                if (kind, slot) in locked_slots and existing.get((kind, slot)) is not None:
+                    label = f"{slot} Lok Sabha" if kind == "loksabha" else "Vidhan Sabha's last election"
+                    raise ValueError(f"Your {label} answer is already saved and can't be cleared.")
                 conn.execute("DELETE FROM election_history_entries WHERE user_id = ? AND kind = ? AND slot = ?", (user_id, kind, slot))
     conn.commit()
 
@@ -587,18 +607,26 @@ def qpunch_history(conn, user_id: int) -> list[dict]:
 # only the % breakdown, from whoever in that place chose to record a 2029/next-election answer. ----
 
 def loksabha_aggregate(conn, country_id: str, country_code: str):
+    """Aggregate sentiment for the NEXT (upcoming) Lok Sabha election -- the one slot every user
+    can keep changing, so this is the live-sentiment figure, not a record of past votes."""
+    ensure_history_table(conn)
+    next_year = str(loksabha_years(conn, country_code)[-1])
     rows = conn.execute(
-        """SELECT eh.loksabha_2029 AS choice FROM election_history eh JOIN users u ON u.id = eh.user_id
-           WHERE json_extract(u.present_location_json, '$.country.id') = ? AND eh.loksabha_2029 IS NOT NULL""",
-        (country_id,),
+        """SELECT eh.choice FROM election_history_entries eh JOIN users u ON u.id = eh.user_id
+           WHERE eh.kind = 'loksabha' AND eh.slot = ?
+             AND json_extract(u.present_location_json, '$.country.id') = ?""",
+        (next_year, country_id),
     ).fetchall()
     return _breakdown(rows, country_code)
 
 
 def vidhansabha_aggregate(conn, state_id: str, country_code: str):
+    """Aggregate sentiment for the NEXT (upcoming) Vidhan Sabha election."""
+    ensure_history_table(conn)
     rows = conn.execute(
-        """SELECT eh.vidhansabha_next AS choice FROM election_history eh JOIN users u ON u.id = eh.user_id
-           WHERE json_extract(u.present_location_json, '$.state.id') = ? AND eh.vidhansabha_next IS NOT NULL""",
+        """SELECT eh.choice FROM election_history_entries eh JOIN users u ON u.id = eh.user_id
+           WHERE eh.kind = 'vidhansabha' AND eh.slot = 'next'
+             AND json_extract(u.present_location_json, '$.state.id') = ?""",
         (state_id,),
     ).fetchall()
     return _breakdown(rows, country_code)

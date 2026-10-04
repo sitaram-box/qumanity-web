@@ -68,6 +68,27 @@ body.hm {
 .hm-links a:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
 .hm-links a.is-active { color: var(--hm-gold); background: rgba(255, 153, 51, 0.12); }
 .hm-nav-cta { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.dq-pop { position: relative; }
+.hm-lang-btn {
+  height: 34px; width: 34px; border-radius: 999px; cursor: pointer; font-size: 1rem;
+  border: 1.5px solid var(--hm-line); background: var(--hm-panel); color: var(--hm-text);
+  display: inline-grid; place-items: center;
+}
+.hm-lang-btn:hover, .hm-lang-btn[aria-expanded="true"] { border-color: rgba(255, 210, 74, 0.5); }
+.dq-menu {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; min-width: 200px; max-height: 60vh; overflow-y: auto;
+  margin: 0; padding: 6px; list-style: none;
+  background: #0b1626; border: 1px solid rgba(255, 210, 74, 0.5); border-radius: 14px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+.dq-menu[hidden] { display: none; }
+.dq-menu button {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; padding: 9px 12px; border: 0; border-radius: 9px;
+  background: transparent; color: #f4ead0; cursor: pointer; text-align: left; font: 500 0.92rem "Inter", "Noto Sans Bengali", "Noto Sans Devanagari", system-ui, sans-serif;
+}
+.dq-menu button i { display: none; font-style: normal; font-weight: 800; }
+.dq-menu button:hover { background: rgba(255, 153, 51, 0.16); }
+.dq-menu button.is-active { background: linear-gradient(120deg, #ff8a1f, #ffd24a); color: #1a1205; font-weight: 700; }
+.dq-menu button.is-active i { display: inline; }
 .hm-burger { display: none; width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--hm-line); background: var(--hm-panel); cursor: pointer; padding: 0; }
 .hm-burger span { display: block; width: 18px; height: 2px; margin: 4px auto; background: #fff; border-radius: 2px; transition: transform 0.2s, opacity 0.2s; }
 .hm-burger[aria-expanded="true"] span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
@@ -189,6 +210,38 @@ body.hm {
 .hm-bar-track { height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .hm-bar-fill { height: 100%; border-radius: 999px; background: var(--hm-grad); transition: width 0.9s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .hm-bar-value { text-align: right; font-weight: 700; color: #fff; }
+
+/* ---------- Founder's Message ---------- */
+.hm-founder-panel { padding: 36px; text-align: center; max-width: 760px; margin: 0 auto; }
+.hm-founder-panel h2 { margin: 0 0 18px; font-family: var(--hm-display); font-size: 1.8rem; color: var(--hm-gold); }
+.hm-founder-preview { font-size: 1.05rem; line-height: 1.7; color: var(--hm-text); font-style: italic; margin: 0 0 24px; }
+
+/* ---------- India Scoreboard ---------- */
+.hm-sb-panel { padding: 28px; }
+.hm-sb-total { text-align: center; margin-bottom: 26px; padding-bottom: 22px; border-bottom: 1px solid var(--hm-line); }
+.hm-sb-total b { display: block; font-family: var(--hm-display); font-size: clamp(2.6rem, 6vw, 4.4rem); line-height: 1; background: var(--hm-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hm-sb-total span { display: block; margin-top: 8px; font-size: 0.85rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--hm-dim); }
+.hm-sb-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+.hm-sb-col h3 { margin: 0 0 14px; font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--hm-saffron); }
+.hm-sb-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.hm-sb-row { }
+.hm-sb-link {
+  display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: 10px; text-decoration: none; color: inherit;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid transparent; transition: background 0.2s, border-color 0.2s, transform 0.2s;
+}
+.hm-sb-link:hover { background: rgba(255, 153, 51, 0.08); border-color: var(--hm-line); transform: translateX(2px); }
+.hm-sb-row:first-child .hm-sb-link { background: rgba(255, 215, 0, 0.08); border-color: rgba(255, 215, 0, 0.3); }
+.hm-sb-rank { font-family: var(--hm-display); font-weight: 700; font-size: 1.05rem; color: var(--hm-dim); text-align: center; }
+.hm-sb-row:first-child .hm-sb-rank { color: #ffd700; }
+.hm-sb-mid { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.hm-sb-name { font-size: 0.92rem; font-weight: 600; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-sb-track { height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.hm-sb-fill { display: block; height: 100%; border-radius: 999px; background: var(--hm-grad); transition: width 0.9s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.hm-sb-count { font-size: 0.82rem; font-weight: 700; color: #fff; white-space: nowrap; }
+@media (max-width: 760px) {
+  .hm-sb-cols { grid-template-columns: 1fr; }
+}
 
 /* ---------- Numbers ---------- */
 .hm-numbers { border-top: 1px solid var(--hm-line); border-bottom: 1px solid var(--hm-line); background: linear-gradient(90deg, rgba(255, 153, 51, 0.07), rgba(139, 123, 255, 0.07)); }

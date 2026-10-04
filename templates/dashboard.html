@@ -36,10 +36,10 @@
 
   <main class="qm-dashboard-main">
     <div class="qm-dash-tabs">
-      <button class="qm-dash-tab" data-tab="global" type="button" data-i18n="tab_global">Global</button>
-      <button class="qm-dash-tab" data-tab="public" type="button" data-i18n="tab_public">Public</button>
-      <button class="qm-dash-tab" data-tab="personal" type="button" data-i18n="tab_personal">Personal</button>
-      <button class="qm-dash-tab is-active" data-tab="private" type="button" data-i18n="tab_private">Private</button>
+      <button class="qm-dash-tab" data-tab="global" type="button" data-i18n="tab_global" title="Earth, your Continent and Country">Global</button>
+      <button class="qm-dash-tab" data-tab="public" type="button" data-i18n="tab_public" title="Where you live now: Zone down to Village">Public</button>
+      <button class="qm-dash-tab" data-tab="personal" type="button" data-i18n="tab_personal" title="Your Family, Friends and Business groups">Personal</button>
+      <button class="qm-dash-tab is-active" data-tab="private" type="button" data-i18n="tab_private" title="Your own profile, wallet and settings">Private</button>
     </div>
 
     <section class="qm-dash-panel is-active" id="qm-dash-private">
@@ -57,6 +57,7 @@
         <div class="pv-hero-actions">
           <button class="qm-btn qm-btn-primary" id="kundali-btn" type="button">🪐 <span data-i18n="kundali">Kundali</span></button>
           <button class="qm-btn qm-btn-ghost" id="edit-profile-btn" type="button">✏️ <span data-i18n="edit_profile">Edit Profile</span></button>
+          <button class="qm-btn qm-btn-ghost" id="tutorial-replay-btn" type="button" title="Replay the guided tour">🎓 Tutorial</button>
         </div>
       </div>
 
@@ -73,10 +74,24 @@
           <div id="account-history-box" hidden></div>
         </article>
 
-        <article class="pv-card">
+        <article class="pv-card pv-card-wide">
           <h3><span class="pv-ico">📍</span> <span data-i18n="locations">Locations</span></h3>
-          <div class="pv-field"><label>🌍 <span data-i18n="birth">Birth</span></label><span>{{ profile.birth_location }}</span></div>
-          <div class="pv-field"><label>🏠 <span data-i18n="present">Present</span></label><span>{{ profile.present_location }}</span></div>
+          <table class="pv-loc-table">
+            <thead><tr><th></th><th>🌍 <span data-i18n="birth">Birth</span></th><th>🏠 <span data-i18n="present">Present</span></th></tr></thead>
+            <tbody>
+              {% for level, label in [("continent","Continent"), ("country","Country"), ("zone","Zone"), ("state","State"), ("district","District"), ("tehsil","Tehsil"), ("village","Village")] %}
+              {% set b = profile.birth_location_struct.get(level) %}
+              {% set p = profile.present_location_struct.get(level) %}
+              {% if b or p %}
+              <tr>
+                <th scope="row">{{ label }}</th>
+                <td data-label="Birth">{{ b.name if b else "—" }}</td>
+                <td data-label="Present">{{ p.name if p else "—" }}</td>
+              </tr>
+              {% endif %}
+              {% endfor %}
+            </tbody>
+          </table>
         </article>
 
         <article class="pv-card">
@@ -111,6 +126,10 @@
                 <button type="button" class="qm-btn qm-btn-ghost" id="daily-lang-save" data-i18n="save">Save</button>
               </div>
             </div>
+          </div>
+          <div class="pv-field" id="pref-lang-field" style="margin-top:10px;">
+            <label data-i18n="pref_lang_title">Preferred language</label>
+            <div class="pv-lang-row" id="pref-lang-options"></div>
           </div>
         </article>
 
@@ -197,6 +216,12 @@
         <div class="qm-stat-big-label">Total Circulation</div>
       </div>
 
+      <div class="qm-stats-section qm-stats-section--big">
+        <div class="qm-stats-section-title">🏅 Collective Karma</div>
+        <div class="qm-stat-big-number" id="{{ prefix }}-karma">0</div>
+        <div class="qm-stat-big-label">Recognition earned together here</div>
+      </div>
+
       <div class="qm-stats-section">
         <div class="qm-stats-section-title">⚧️ Gender Distribution</div>
         <div id="{{ prefix }}-gender-list"></div>
@@ -229,6 +254,7 @@
       <header class="bd-head">
         <button type="button" class="bd-groups" title="Village groups and places"><span aria-hidden="true">☰</span> <span>Groups</span></button>
         <div class="bd-headtext"><b class="bd-title">Collective Board</b><small class="bd-sub">Loading…</small></div>
+        <button type="button" class="bd-stats" title="Statistics for this place">📊 <span>Stats</span></button>
         <button type="button" class="bd-qp" title="Quantum Punch council of this group">⚖️ <span>Q-Punch</span></button>
       </header>
       <div class="bd-feed" aria-live="polite"></div>
@@ -260,7 +286,8 @@
           <h2>🧭 Country Perception</h2>
           <p class="qm-dash-empty">Pro/Anti sentiment on this country — not your own birth country. Voting is open October 1 – December 31; results shown here are last year's frozen tally.</p>
           <p><strong id="qm-perception-country-name">—</strong> · results for <span id="qm-perception-country-year">—</span></p>
-          <div class="qm-perception-bars">
+          <p class="qm-dash-empty" id="qm-perception-country-hidden-note" hidden></p>
+          <div class="qm-perception-bars" id="qm-perception-country-results">
             <div class="qm-perception-bar-row"><span>👍 Pro</span><div class="qm-perception-bar-track"><div class="qm-perception-bar-fill qm-perception-pro" id="qm-perception-country-pro-bar"></div></div><span id="qm-perception-country-pro-count">0</span></div>
             <div class="qm-perception-bar-row"><span>👎 Anti</span><div class="qm-perception-bar-track"><div class="qm-perception-bar-fill qm-perception-anti" id="qm-perception-country-anti-bar"></div></div><span id="qm-perception-country-anti-count">0</span></div>
           </div>
@@ -308,7 +335,8 @@
           <h2>🧭 Zone Perception</h2>
           <p class="qm-dash-empty">Pro/Anti sentiment on this zone — not your own birth zone. Voting is open October 1 – December 31; results shown here are last year's frozen tally.</p>
           <p><strong id="qm-perception-zone-name">—</strong> · results for <span id="qm-perception-zone-year">—</span></p>
-          <div class="qm-perception-bars">
+          <p class="qm-dash-empty" id="qm-perception-zone-hidden-note" hidden></p>
+          <div class="qm-perception-bars" id="qm-perception-zone-results">
             <div class="qm-perception-bar-row"><span>👍 Pro</span><div class="qm-perception-bar-track"><div class="qm-perception-bar-fill qm-perception-pro" id="qm-perception-zone-pro-bar"></div></div><span id="qm-perception-zone-pro-count">0</span></div>
             <div class="qm-perception-bar-row"><span>👎 Anti</span><div class="qm-perception-bar-track"><div class="qm-perception-bar-fill qm-perception-anti" id="qm-perception-zone-anti-bar"></div></div><span id="qm-perception-zone-anti-count">0</span></div>
           </div>
@@ -472,12 +500,26 @@
         <div class="kd-chart" id="kundali-chart"></div>
         <div class="kd-tablewrap">
           <table class="kd-table">
-            <thead><tr><th data-i18n="planet">Planet</th><th data-i18n="sign">Sign</th><th data-i18n="degree">Degree</th><th data-i18n="nakshatra">Nakshatra</th><th>Pada</th><th data-i18n="lord">Lord</th></tr></thead>
+            <thead><tr><th data-i18n="planet">Planet</th><th data-i18n="sign">Sign</th><th>Element</th><th data-i18n="degree">Degree</th><th data-i18n="nakshatra">Nakshatra</th><th>Pada</th><th>House</th></tr></thead>
             <tbody id="kundali-rows"></tbody>
           </table>
         </div>
       </div>
       <p class="qm-timeline-note">{{ profile.kundali_summary }}</p>
+
+      <div class="kd-analysis" id="kd-analysis">
+        <h4 class="qm-panel-subhead">🔥 Elemental Balance</h4>
+        <div id="kd-elements" class="kd-elements"></div>
+
+        <h4 class="qm-panel-subhead">🏠 House Strength</h4>
+        <div id="kd-houses" class="kd-houses"></div>
+
+        <h4 class="qm-panel-subhead">👁️ Planetary Aspects (Drishti)</h4>
+        <div id="kd-aspects" class="kd-aspects"></div>
+
+        <h4 class="qm-panel-subhead">⏳ Vimshottari Dasha</h4>
+        <div id="kd-dasha" class="kd-dasha"></div>
+      </div>
     </div>
   </div>
 
@@ -500,10 +542,14 @@
   <script>
     var QM_KUNDALI = {{ profile.kundali_view | tojson }};
     var QM_LANGS = {{ profile.languages | tojson }};
+    var QM_PREFERRED_LANG = {{ profile.preferred_language | tojson }};
   </script>
   <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script src="{{ url_for('static', filename='js/payments.js') }}"></script>
   <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
   <script src="{{ url_for('static', filename='js/dash_extras.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/tutorial.js') }}"></script>
   <script src="{{ url_for('static', filename='js/board.js') }}"></script>
   <script src="{{ url_for('static', filename='js/social.js') }}"></script>
   <script src="{{ url_for('static', filename='js/mobile_keyboard.js') }}"></script>

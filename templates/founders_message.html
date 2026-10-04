@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="{{ message.language if message else 'en' }}" {{ 'dir="rtl"' | safe if message and message.language == 'ur' }}>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Founder's Message — Qumanity</title>
+  <meta name="description" content="A personal letter from Qumanity's founder to every human being on Earth." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/founders_message.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body class="fm-body">
+  <header class="qm-header">
+    <a href="{{ url_for('index') }}" style="display:contents">
+      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+    </a>
+    <div class="qm-header-text">
+      <h1>Qumanity</h1>
+      <p>Quantum + Humanity</p>
+    </div>
+    <nav class="qm-header-actions">
+      <div class="dq-pop" id="home-lang-wrap">
+        <button type="button" class="hm-lang-btn" id="home-lang-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Language" title="Language">🌐</button>
+        <ul class="dq-menu" id="home-lang-menu" role="listbox" hidden></ul>
+      </div>
+      <a class="qm-btn qm-btn-ghost" href="{{ url_for('index') }}">← Home</a>
+    </nav>
+  </header>
+
+  <main class="fm-main">
+    {% if message %}
+    <article class="fm-article">
+      <h2 class="fm-title">{{ message.title }}</h2>
+      {% for para in message.full_text.split('\n\n') %}
+        {% if para.startswith('## ') %}
+        <h3 class="fm-heading">{{ para[3:] }}</h3>
+        {% else %}
+        <p class="fm-para{{ ' fm-closing' if loop.last else '' }}">{% for line in para.split('\n') %}{{ line }}{% if not loop.last %}<br />{% endif %}{% endfor %}</p>
+        {% endif %}
+      {% endfor %}
+    </article>
+    {% else %}
+    <p class="fm-para">No message is published right now.</p>
+    {% endif %}
+  </main>
+
+  <script src="{{ url_for('static', filename='js/founders_message_i18n.js') }}"></script>
+</body>
+</html>
