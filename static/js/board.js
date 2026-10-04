@@ -269,14 +269,18 @@
       if (!groupId) { sentimentBox.hidden = true; return; }
       api("/api/election-sentiment/" + lvl + "/" + encodeURIComponent(groupId)).then(function (s) {
         sentimentBox.hidden = false; sentimentBox.innerHTML = "";
-        sentimentBox.appendChild(el("b", "", "📊 " + s.label + " sentiment · based on " + s.total_responses + " response" + (s.total_responses === 1 ? "" : "s")));
-        s.parties.forEach(function (p) {
-          var row = el("div", "bd-sentiment-row");
-          row.appendChild(el("span", "", p.label));
-          var bar = el("div", "bd-sentiment-bar"), fill = el("i"); fill.style.width = p.pct + "%"; bar.appendChild(fill);
-          row.appendChild(bar); row.appendChild(el("b", "", p.pct + "%"));
-          sentimentBox.appendChild(row);
-        });
+        if (!s.visible) {
+          sentimentBox.appendChild(el("b", "", "📊 Election sentiment is not shown yet — " + s.reason));
+        } else {
+          sentimentBox.appendChild(el("b", "", "📊 " + s.label + " sentiment · based on " + s.total_responses + " response" + (s.total_responses === 1 ? "" : "s")));
+          s.parties.forEach(function (p) {
+            var row = el("div", "bd-sentiment-row");
+            row.appendChild(el("span", "", p.label));
+            var bar = el("div", "bd-sentiment-bar"), fill = el("i"); fill.style.width = p.pct + "%"; bar.appendChild(fill);
+            row.appendChild(bar); row.appendChild(el("b", "", p.pct + "%"));
+            sentimentBox.appendChild(row);
+          });
+        }
         if (!sentimentBox.parentNode) root.querySelector(".bd-head").insertAdjacentElement("afterend", sentimentBox);
       }).catch(function () { sentimentBox.hidden = true; });
     }
@@ -389,6 +393,14 @@
     var drawer = panel.querySelector(".dr"), back = panel.querySelector(".dr-backdrop");
     function setDrawer(open) { drawer.classList.toggle("is-open", open); back.hidden = !open; if (open && cfg[0] === "bd-public") loadSubgroups(); }
     root.querySelector(".bd-groups").addEventListener("click", function () { setDrawer(!drawer.classList.contains("is-open")); });
+    // Stats lives in its own always-rendered column beside the board (qm-stats-col) -- on a
+    // narrow/stacked layout that column ends up far down the page, so this button's whole job is
+    // just making it easy to find: scroll straight to it (the data itself is already loading there).
+    var statsBtn = root.querySelector(".bd-stats");
+    if (statsBtn) statsBtn.addEventListener("click", function () {
+      var statsCol = panel.querySelector(".qm-stats-col");
+      if (statsCol) statsCol.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
     panel.querySelector(".dr-close").addEventListener("click", function () { setDrawer(false); });
     back.addEventListener("click", function () { setDrawer(false); });
     document.addEventListener("keydown", function (e) { if (e.key === "Escape") setDrawer(false); });

@@ -146,50 +146,71 @@
     }).catch(function (e) { box.innerHTML = ""; box.appendChild(el("p", "qm-dash-empty", e.message)); });
   });
 
-  // ---- Kundali (North Indian style) ----
-  var CELLS = { // house -> polygon in a 400x400 square
-    1: [[100, 100], [200, 0], [300, 100], [200, 200]], 2: [[0, 0], [200, 0], [100, 100]], 3: [[0, 0], [100, 100], [0, 200]],
-    4: [[100, 100], [0, 200], [100, 300], [200, 200]], 5: [[0, 200], [100, 300], [0, 400]], 6: [[0, 400], [100, 300], [200, 400]],
-    7: [[100, 300], [200, 400], [300, 300], [200, 200]], 8: [[200, 400], [300, 300], [400, 400]], 9: [[400, 400], [300, 300], [400, 200]],
-    10: [[300, 300], [400, 200], [300, 100], [200, 200]], 11: [[400, 200], [300, 100], [400, 0]], 12: [[400, 0], [300, 100], [200, 0]]
-  };
-  var SIGN_NO = { Aries: 1, Taurus: 2, Gemini: 3, Cancer: 4, Leo: 5, Virgo: 6, Libra: 7, Scorpio: 8, Sagittarius: 9, Capricorn: 10, Aquarius: 11, Pisces: 12 };
-  var ABBR = { Sun: "Su", Moon: "Mo", Mars: "Ma", Mercury: "Me", Jupiter: "Ju", Venus: "Ve", Saturn: "Sa", Rahu: "Ra", Ketu: "Ke" };
-
-  function chartSvg(houses, ascLabel) {
-    var ns = "http://www.w3.org/2000/svg", NS = function (n, a) { var e = document.createElementNS(ns, n); for (var k in a) e.setAttribute(k, a[k]); return e; };
-    var svg = NS("svg", { viewBox: "0 0 400 400", role: "img", "aria-label": "Kundali chart" });
-    houses.forEach(function (h) {
-      var pts = CELLS[h.n], cx = 0, cy = 0;
-      pts.forEach(function (p) { cx += p[0]; cy += p[1]; }); cx /= pts.length; cy /= pts.length;
-      svg.appendChild(NS("polygon", { points: pts.map(function (p) { return p.join(","); }).join(" "), fill: h.n === 1 ? "rgba(255,138,31,0.18)" : "rgba(255,255,255,0.03)", stroke: "#ffd24a", "stroke-width": 1.6 }));
-      var t = NS("text", { x: cx, y: cy - (h.planets.length ? 8 : 0), "text-anchor": "middle", "font-size": 13, fill: "#8fa3ba" });
-      t.textContent = SIGN_NO[h.sign]; svg.appendChild(t);
-      if (h.planets.length) {
-        var pl = NS("text", { x: cx, y: cy + 10, "text-anchor": "middle", "font-size": 13, "font-weight": 700, fill: "#fff" });
-        pl.textContent = h.planets.map(function (p) { return ABBR[p] || p; }).join(" "); svg.appendChild(pl);
-      }
-    });
-    svg.appendChild(NS("rect", { x: 0.8, y: 0.8, width: 398.4, height: 398.4, fill: "none", stroke: "#ffd24a", "stroke-width": 2.4 }));
-    return svg;
-  }
-
+  // ---- Kundali (North Indian style, Moon-based -- House 1 = the Moon's own sign) ----
+  // The chart SVG itself is built server-side (kundali_analyser.chart_svg) from verified
+  // ephemeris data; the client only injects it and renders the analysis around it.
   var kBtn = $("kundali-btn"), kModal = $("kundali-modal");
   if (kBtn && window.QM_KUNDALI) {
     var built = false;
     kBtn.addEventListener("click", function () {
       if (!built) {
         var k = window.QM_KUNDALI;
-        $("kundali-chart").appendChild(chartSvg(k.houses));
+        $("kundali-chart").innerHTML = k.chart_svg;
         var cap = document.createElement("p"); cap.className = "qm-timeline-note";
-        cap.textContent = "North Indian style · numbers are signs (1 = Aries … 12 = Pisces), house 1 (top) is the ascendant.";
+        cap.textContent = "North Indian style · House 1 (top) is the sign the Moon occupies (Chandra Lagna).";
         $("kundali-chart").appendChild(cap);
+
         var tb = $("kundali-rows");
-        k.rows.forEach(function (r) {
+        k.table.forEach(function (r) {
           var tr_ = document.createElement("tr");
-          [r.planet, r.sign, r.degree, r.nakshatra, r.pada, r.lord].forEach(function (v) { var td = document.createElement("td"); td.textContent = v; tr_.appendChild(td); });
+          [r.point, r.sign, r.element, r.degree, r.nakshatra, r.pada, r.house].forEach(function (v) {
+            var td = document.createElement("td"); td.textContent = v; tr_.appendChild(td);
+          });
           tb.appendChild(tr_);
         });
+
+        var elWrap = $("kd-elements");
+        var maxEl = Math.max.apply(null, Object.keys(k.elemental_balance.counts).map(function (e) { return k.elemental_balance.counts[e]; })) || 1;
+        Object.keys(k.elemental_balance.counts).forEach(function (name) {
+          var count = k.elemental_balance.counts[name];
+          var row = el("div", "kd-el-row");
+          row.appendChild(el("span", "kd-el-label", name + (name === k.elemental_balance.dominant ? " (dominant)" : "")));
+          var track = el("div", "kd-el-track");
+          var fill = el("div", "kd-el-fill"); fill.style.width = Math.round(100 * count / maxEl) + "%";
+          track.appendChild(fill); row.appendChild(track);
+          row.appendChild(el("span", "kd-el-count", String(count)));
+          elWrap.appendChild(row);
+        });
+
+        var housesWrap = $("kd-houses");
+        for (var n = 1; n <= 12; n++) {
+          var h = k.house_strength[n];
+          var card = el("div", "kd-house kd-house--" + h.status);
+          card.appendChild(el("b", "", "House " + n + " · " + h.sign));
+          card.appendChild(el("span", "", h.status.charAt(0).toUpperCase() + h.status.slice(1) + (h.occupants.length ? " — " + h.occupants.join(", ") : " — empty")));
+          housesWrap.appendChild(card);
+        }
+
+        var aspWrap = $("kd-aspects");
+        Object.keys(k.aspects).forEach(function (planet) {
+          var row = el("p", "kd-aspect-row");
+          row.appendChild(el("b", "", planet + ": "));
+          row.appendChild(document.createTextNode("views house" + (k.aspects[planet].length > 1 ? "s " : " ") + k.aspects[planet].join(", ")));
+          aspWrap.appendChild(row);
+        });
+
+        var dashaWrap = $("kd-dasha");
+        if (k.dasha.current) {
+          dashaWrap.appendChild(el("p", "kd-dasha-current", "Current Mahadasha: " + k.dasha.current.lord + " (" + k.dasha.current.start + " → " + k.dasha.current.end + ")"));
+        }
+        if (k.dasha.upcoming.length) {
+          dashaWrap.appendChild(el("p", "qm-dash-empty", "Upcoming periods:"));
+          var list = el("ul", "kd-dasha-list");
+          k.dasha.upcoming.forEach(function (p) {
+            list.appendChild(el("li", "", p.lord + ": " + p.start + " → " + p.end));
+          });
+          dashaWrap.appendChild(list);
+        }
         built = true;
       }
       openModal(kModal);
@@ -220,6 +241,27 @@
       .then(function () { location.reload(); })
       .catch(function (e) { alert(e.message); saveBtn.disabled = false; });
   });
+
+  // ---- Preferred language (which of the user's up-to-3 languages the whole UI shows in) ----
+  var prefWrap = $("pref-lang-options");
+  if (prefWrap && window.QM_LANGS) {
+    window.QM_LANGS.forEach(function (l) {
+      var label = document.createElement("label");
+      label.style.cssText = "display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-weight:400;text-transform:none;letter-spacing:0;";
+      var radio = document.createElement("input");
+      radio.type = "radio"; radio.name = "pref-lang"; radio.value = l.code;
+      radio.checked = (window.QM_PREFERRED_LANG || "en") === l.code;
+      radio.addEventListener("change", function () {
+        fetch("/api/user/languages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferred: l.code }) })
+          .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || "Could not save"); return j; }); })
+          .then(function () { location.reload(); })
+          .catch(function (e) { alert(e.message); });
+      });
+      label.appendChild(radio);
+      label.appendChild(document.createTextNode(" " + l.native + (l.native !== l.name ? " (" + l.name + ")" : "")));
+      prefWrap.appendChild(label);
+    });
+  }
 
   // ---- Time-box ----
   var tBtn = $("timebox-btn"), tModal = $("timebox-modal"), tBody = $("timebox-body"), timer = null, tData = null;

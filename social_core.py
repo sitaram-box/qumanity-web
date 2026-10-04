@@ -152,10 +152,71 @@ def my_search_code(conn, user_id):
     return row["search_code"] if row else None
 
 
-def find_person(conn, query):
-    """Search by 12-digit search code or by a readable Account ID string. Returns a public-safe profile or None.
-    Never returns the private (9-digit) ID, email or phone -- matches the village-member-list privacy scoping."""
+# ---- Identity masking: for an account with users.hide_identity set (the Founder's own, as of
+# 2026-10-04), a stranger never sees the real name or any location finer than State -- only Gender,
+# Age-Category and Zodiac Sun-Element, plus their Account ID as the thing to actually contact them
+# by. Their own Family group members, and their own authored Collective Board posts, are exempt --
+# see is_family_member() and board_core.py (board posts were never routed through this module, so
+# they're unaffected by design, not by an explicit carve-out here). ----
+
+def _is_hidden(conn, user_id) -> bool:
+    row = conn.execute("SELECT hide_identity FROM users WHERE id = ?", (user_id,)).fetchone()
+    return bool(row and row["hide_identity"])
+
+
+def is_family_member(conn, owner_user_id, viewer_user_id) -> bool:
+    """True if viewer_user_id belongs to one of owner_user_id's OWN "family" category groups --
+    the one relationship that still sees a hidden-identity account's real name."""
+    if viewer_user_id == owner_user_id:
+        return True
+    row = conn.execute(
+        """SELECT 1 FROM personal_group_members m
+           JOIN personal_groups g ON g.id = m.group_id
+           WHERE g.owner_user_id = ? AND g.category = 'family' AND m.user_id = ? AND m.status = 'approved'""",
+        (owner_user_id, viewer_user_id),
+    ).fetchone()
+    return bool(row)
+
+
+def _capped_location(location_json: str) -> dict:
     import json
+    loc = json.loads(location_json)
+    return {k: loc[k] for k in ("continent", "country", "zone", "state") if k in loc}
+
+
+def display_identity(conn, user_id, viewer_user_id=None) -> dict:
+    """{name, place, hidden, gender, age_category, sun_element} for showing someone else's
+    identity to `viewer_user_id` (None = no viewer / not logged in, treated as a stranger).
+    When the target isn't hidden, or the viewer is their own Family, this is just their real
+    name + present village/country. When hidden and the viewer doesn't qualify: name is replaced
+    by their Account ID, place is capped at State, and age_category/sun_element are filled in
+    (gender was already shown everywhere this is used) -- the exact fields the Founder's own
+    privacy request asked to keep visible."""
+    import json
+    u = conn.execute("SELECT id, name, gender, present_location_json, account_id, hide_identity, dob FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not u:
+        return None
+    hidden = bool(u["hide_identity"]) and not is_family_member(conn, user_id, viewer_user_id)
+    loc = json.loads(u["present_location_json"])
+    if not hidden:
+        village = (loc.get("village") or {}).get("name") or (loc.get("country") or {}).get("name")
+        return {"name": u["name"], "place": village, "hidden": False}
+    capped = _capped_location(u["present_location_json"])
+    place = (capped.get("state") or capped.get("country") or capped.get("continent") or {}).get("name") or "Earth"
+    import id_generator
+    age_category = {"A1": "Balak", "A2": "Yuvak", "A3": "Vridh", "A4": "Mentor"}[id_generator.age_code(dt.date.fromisoformat(u["dob"]))]
+    z = conn.execute("SELECT sun_element FROM user_zodiac WHERE user_id = ?", (user_id,)).fetchone()
+    return {
+        "name": u["account_id"], "place": place, "hidden": True,
+        "age_category": age_category, "sun_element": z["sun_element"] if z else None,
+    }
+
+
+def find_person(conn, query, viewer_user_id=None):
+    """Search by 12-digit search code or by a readable Account ID string. Returns a public-safe profile or None.
+    Never returns the private (9-digit) ID, email or phone -- matches the village-member-list privacy scoping.
+    A hide_identity account (see display_identity()) never gives up its real name or village/
+    tehsil/district here, no matter who's searching -- the Account ID itself becomes the "name"."""
     query = (query or "").strip()
     if not query:
         return None
@@ -169,12 +230,15 @@ def find_person(conn, query):
         ).fetchone()
     if not row:
         return None
-    u = conn.execute("SELECT id, name, gender, present_location_json FROM users WHERE id = ?", (row["user_id"],)).fetchone()
+    u = conn.execute("SELECT id, gender FROM users WHERE id = ?", (row["user_id"],)).fetchone()
     if not u:
         return None
-    loc = json.loads(u["present_location_json"])
-    village = (loc.get("village") or {}).get("name") or (loc.get("country") or {}).get("name")
-    return {"user_id": u["id"], "name": u["name"], "gender": u["gender"], "place": village, "account_id": row["account_id"]}
+    identity = display_identity(conn, u["id"], viewer_user_id)
+    result = {"user_id": u["id"], "name": identity["name"], "gender": u["gender"], "place": identity["place"], "account_id": row["account_id"]}
+    if identity["hidden"]:
+        result["age_category"] = identity["age_category"]
+        result["sun_element"] = identity["sun_element"]
+    return result
 
 
 # ---- Personal groups: Private (1:1, no groups) / Family / Friends / Business / Custom ----
@@ -366,13 +430,20 @@ def inbox(conn, user_id):
     # kind='rejoin' (see request_rejoin()) -- each JOIN is gated by kind so the two id spaces (both
     # autoincrement from 1) can never cross-match into the wrong row.
     rows = conn.execute(
-        """SELECT r.id, r.kind, r.first_message, r.created_at, r.status, u.name AS from_name,
+        """SELECT r.id, r.kind, r.first_message, r.created_at, r.status, r.from_user_id, u.name AS from_name,
                   pg.name AS group_name, pg.category AS group_category, pc.name AS chat_name
            FROM people_requests r JOIN users u ON u.id = r.from_user_id
            LEFT JOIN personal_groups pg ON pg.id = r.group_id AND r.kind = 'group'
            LEFT JOIN private_chats pc ON pc.id = r.group_id AND r.kind = 'rejoin'
            WHERE r.to_user_id = ? AND r.status IN ('pending', 'waiting') ORDER BY r.id DESC""", (user_id,)).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        item = dict(r)
+        if _is_hidden(conn, r["from_user_id"]) and not is_family_member(conn, r["from_user_id"], user_id):
+            identity = display_identity(conn, r["from_user_id"], user_id)
+            item["from_name"] = identity["name"]
+        out.append(item)
+    return out
 
 
 def existing_chat(conn, a, b):

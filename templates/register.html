@@ -126,15 +126,18 @@
         </div>
 
         <div class="qm-donate-panel">
+          {% if helper %}
+          <p class="qm-timeline-note qm-registered-by">🧑‍🤝‍🧑 You are being registered by: <strong>{{ helper.name }}</strong> <small>(Account ID: {{ helper.account_id }})</small></p>
+          {% endif %}
           <label class="qm-donate-toggle">
             <input type="checkbox" id="donate-toggle" />
             <span class="qm-donate-switch" aria-hidden="true"></span>
-            <span>💰 Support Qumanity with a donation <em>(optional)</em></span>
+            <span>💰 Registration Fee <em>(optional)</em></span>
           </label>
           <div class="qm-donate-why">
-            <p>A donation isn't required — a free account works exactly the same. If you do donate:</p>
+            <p>A Registration Fee isn't required — a free account works exactly the same. If you do pay one:</p>
             <ul>
-              <li>most of it supports the volunteer who referred you, or comes back to your own wallet</li>
+              <li>{% if helper %}most of it supports {{ helper.name }}, who registered you{% else %}most of it comes back to your own wallet{% endif %}</li>
               <li>a share reaches every level from your Village up to Earth</li>
               <li>a share always comes back to you as Qoins in your own wallet</li>
             </ul>
@@ -146,12 +149,7 @@
               <button type="button" data-amt="20">20</button><button type="button" data-amt="50">50</button>
               <button type="button" data-amt="100">100</button><button type="button" data-amt="200">200</button>
             </div>
-            <label class="qm-field"><span>Or enter any amount (max 200)</span><input type="number" id="donate-custom" min="0" max="200" placeholder="e.g. 36" /></label>
-            <label class="qm-field"><span>Referral code (optional)</span><input type="text" id="donate-referral-code" placeholder="e.g. REF-7K2QDX" style="text-transform:uppercase" /></label>
-            <div id="donate-referrer-confirm" hidden>
-              <p class="qm-timeline-note">This donation is paid in person to the volunteer above. They confirm receipt with their own PIN:</p>
-              <label class="qm-field"><span>Volunteer's 5-digit PIN</span><input type="password" id="donate-referrer-pin" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="•••••" /></label>
-            </div>
+            <label class="qm-field"><span>Or enter any amount (max 200)</span><input type="number" id="donate-custom" min="1" max="200" placeholder="e.g. 36" /></label>
             <div class="qm-donate-preview" id="donate-preview"></div>
           </div>
         </div>
@@ -342,6 +340,7 @@
         <p class="qm-idbox"><code id="review-private-id"></code></p>
         <p><strong>Account ID:</strong> <code id="review-account-id"></code></p>
         <p class="qm-kundali-note">⚠️ Save this ID now. You need it together with your 5-digit PIN to sign in, and Qumanity cannot recover it.</p>
+        <p class="qm-timeline-note" id="review-donation-status" hidden></p>
         <div class="qm-summary-actions">
           <button type="button" class="qm-btn qm-btn-ghost" id="review-copy-private-btn">📋 Copy Private ID</button>
           <button type="button" class="qm-btn qm-btn-ghost" id="review-copy-account-btn">📋 Copy Account ID</button>
@@ -371,6 +370,8 @@
   <script src="{{ url_for('static', filename='js/india_map.js') }}"></script>
   <script src="{{ url_for('static', filename='js/searchable_select.js') }}"></script>
   <script src="{{ url_for('static', filename='js/time_picker.js') }}"></script>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script src="{{ url_for('static', filename='js/payments.js') }}"></script>
   <script src="{{ url_for('static', filename='js/register.js') }}"></script>
   {% include '_poems_marquee.html' %}
 </body>

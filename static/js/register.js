@@ -988,8 +988,8 @@
       language: state.form.language, email: state.form.email, phone: state.form.phone, pin: state.form.pin,
       birth_location: buildLocationPayload(state.birthLocation, state.birthPublic),
       present_location: buildLocationPayload(state.presentLocation, state.presentPublic),
-      donation_amount: donateState.amount, referral_code: donateState.code, referrer_pin: donateState.pin,
-      assisted: new URLSearchParams(location.search).get("assist") === "1",
+      donation_amount: donateState.amount,
+      assisted: hasHelper,
     };
 
     fetch("/api/auth/register", {
@@ -1006,6 +1006,7 @@
         document.getElementById("review-account-id").textContent = result.body.account_id;
         document.getElementById("review-submit-actions").hidden = true;
         document.getElementById("review-result").hidden = false;
+        if (result.body.donation_pending_amount > 0) payRegistrationDonation(result.body.donation_pending_amount);
       })
       .catch(function (err) {
         errorEl.textContent = "Could not complete registration: " + err.message;
@@ -1016,6 +1017,32 @@
         reviewSubmitBtn.textContent = "Submit →";
       });
   });
+
+  // The new member is now logged in (self-registration only -- an assisted signup never reaches
+  // here with a pending amount, see app.py's donation_pending_amount). Pays for the registration-
+  // time donation they picked, now that a real payment can be verified against a live session.
+  function payRegistrationDonation(amountRupees) {
+    var statusEl = document.getElementById("review-donation-status");
+    statusEl.hidden = false;
+    statusEl.textContent = "Completing your ₹" + amountRupees + " donation…";
+    fetch("/api/payment/order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ purpose: "registration", amount_rupees: amountRupees }),
+    })
+      .then(function (res) { return res.json().then(function (body) { return { ok: res.ok, body: body }; }); })
+      .then(function (result) {
+        if (!result.ok) throw new Error(result.body.error || "Could not start payment");
+        QMPayments.payWithRazorpay(result.body, "Registration donation ₹" + amountRupees, function (credited) {
+          statusEl.textContent = "✅ Donated ₹" + credited.amount_rupees + " — Qoins credited.";
+        }, function (err) {
+          statusEl.textContent = "⚠️ Donation not completed: " + err.message + " — you can still donate later from your dashboard.";
+        });
+      })
+      .catch(function (err) {
+        statusEl.textContent = "⚠️ Donation not completed: " + err.message + " — you can still donate later from your dashboard.";
+      });
+  }
 
   document.getElementById("review-copy-private-btn").addEventListener("click", function () {
     if (state.registeredResult) copyToClipboard(state.registeredResult.private_code);
@@ -1028,17 +1055,18 @@
     window.location.href = (state.registeredResult && state.registeredResult.redirect) || "/dashboard";
   });
 
-  // ==================== Registration donation (optional) ====================
-  var donateState = { amount: 0, code: "", pin: "" };
+  // ==================== Registration Fee (optional) ====================
+  // There is no referral code to type any more -- "is there a referrer" is simply "is this an
+  // assisted registration" (?assist=1, a logged-in member registering someone else); see
+  // api_auth_register's helper_user_id, which records that member's own Account ID automatically.
+  var donateState = { amount: 0 };
   var donateToggleEl = document.getElementById("donate-toggle");
   var donateBody = document.querySelector(".qm-donate-body");
   var donateAmounts = document.getElementById("donate-amounts");
   var donateCustom = document.getElementById("donate-custom");
-  var donateCodeEl = document.getElementById("donate-referral-code");
-  var donateConfirm = document.getElementById("donate-referrer-confirm");
-  var donatePinEl = document.getElementById("donate-referrer-pin");
   var donatePreview = document.getElementById("donate-preview");
   var donatePreviewTimer = null;
+  var hasHelper = new URLSearchParams(location.search).get("assist") === "1";
 
   if (donateToggleEl) {
     donateToggleEl.addEventListener("change", function () {
@@ -1054,17 +1082,10 @@
       Array.prototype.forEach.call(donateAmounts.querySelectorAll("button"), function (x) { x.classList.remove("is-active"); });
       setDonateAmount(Math.max(0, Math.min(200, parseInt(donateCustom.value, 10) || 0)));
     });
-    donateCodeEl.addEventListener("input", function () {
-      donateState.code = donateCodeEl.value.trim().toUpperCase();
-      donateConfirm.hidden = !(donateState.code && donateState.amount > 0);
-      refreshDonatePreview();
-    });
-    donatePinEl.addEventListener("input", function () { donateState.pin = donatePinEl.value.trim(); });
   }
 
   function setDonateAmount(n) {
     donateState.amount = n;
-    donateConfirm.hidden = !(donateState.code && n > 0);
     refreshDonatePreview();
   }
 
@@ -1072,8 +1093,7 @@
   function refreshDonatePreview() {
     clearTimeout(donatePreviewTimer);
     donatePreviewTimer = setTimeout(function () {
-      var hasReferrer = !!donateState.code;
-      fetch("/api/registration/donation-preview?amount=" + donateState.amount + "&referrer=" + (hasReferrer ? "1" : "0"))
+      fetch("/api/registration/donation-preview?amount=" + donateState.amount + "&referrer=" + (hasHelper ? "1" : "0"))
         .then(function (r) { return r.json(); })
         .then(function (d) {
           donatePreview.innerHTML = "";
@@ -1081,7 +1101,7 @@
           var unit = d.unit === "paisa" ? "p" : "₹";
           d.rows.forEach(function (row) {
             if (!row[1]) return;
-            var key = row[0] === "village" && d.unit === "rupees" && !hasReferrer ? "village_wallet" : row[0];
+            var key = row[0] === "village" && d.unit === "rupees" && !hasHelper ? "village_wallet" : row[0];
             var div = document.createElement("div"); div.className = "qm-donate-row";
             var label = key === "new_user" ? "You" : key === "referrer" ? "Referrer (volunteer)" : key === "village_wallet" ? "Village" : key.charAt(0).toUpperCase() + key.slice(1);
             div.innerHTML = "<span>" + (DONATE_ICON[key] || "•") + " " + label + "</span><b>" + unit + row[1] + "</b>";

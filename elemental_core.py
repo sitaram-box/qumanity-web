@@ -159,3 +159,34 @@ def location_elements_row_to_dict(row) -> dict:
         "space_count": row["space_count"], "space_percentage": pct(row["space_count"]),
         "updated_at": row["updated_at"],
     }
+
+
+def india_scoreboard(conn, india_states_data: dict, top_n: int = 10) -> dict:
+    """The homepage's live India scoreboard: total registered members, Zones ranked by
+    `total_users`, and the top `top_n` States ranked the same way -- all from
+    `location_elements` (already kept current by `update_location_stats` on every
+    registration), joined against `india_states.json`'s zone/state names for display. A
+    zone/state with no members yet is still listed, at 0."""
+    totals = {
+        (r["location_type"], r["location_id"]): r["total_users"]
+        for r in conn.execute("SELECT location_type, location_id, total_users FROM location_elements WHERE location_type IN ('zone', 'state')")
+    }
+    zones = []
+    states = []
+    for zone in india_states_data.get("zones", []):
+        zones.append({"id": zone["id"], "name": zone["name"], "total_users": totals.get(("zone", zone["id"]), 0)})
+        for state in zone.get("states", []):
+            states.append({"id": state["id"], "name": state["name"], "zone_id": zone["id"], "total_users": totals.get(("state", state["id"]), 0)})
+    zones.sort(key=lambda z: z["total_users"], reverse=True)
+    states.sort(key=lambda s: s["total_users"], reverse=True)
+    for rank, z in enumerate(zones, 1):
+        z["rank"] = rank
+    for rank, s in enumerate(states, 1):
+        s["rank"] = rank
+    total_members = sum(z["total_users"] for z in zones)
+    return {
+        "total_members": total_members,
+        "zones": zones,
+        "states": states[:top_n],
+        "states_total_count": len(states),
+    }

@@ -12,6 +12,14 @@
 
   var allLocations = [];
 
+  // Deep-link from the homepage scoreboard: ?level=zone&id=IND/CS&name=Central%20State --
+  // pre-select that level and highlight+scroll to the matching card once rendered.
+  var params = new URLSearchParams(location.search);
+  var targetLevel = params.get("level");
+  var targetId = params.get("id");
+  var targetName = params.get("name");
+  if (targetLevel) levelSelect.value = targetLevel;
+
   function renderCards(level) {
     var rows = allLocations.filter(function (r) { return r.location_type === level; });
     cardsEl.innerHTML = "";
@@ -20,9 +28,11 @@
     rows.forEach(function (r) {
       var card = document.createElement("div");
       card.className = "el-card";
+      var isTarget = targetLevel === level && targetId === r.location_id;
+      if (isTarget) card.className += " el-card--target";
 
       var h3 = document.createElement("h3");
-      h3.textContent = r.location_id;
+      h3.textContent = isTarget && targetName ? targetName : r.location_id;
       var sub = document.createElement("p");
       sub.className = "el-card-sub";
       sub.textContent = r.total_users + " user" + (r.total_users === 1 ? "" : "s") + " registered";
@@ -45,6 +55,8 @@
 
       cardsEl.appendChild(card);
     });
+    var target = cardsEl.querySelector(".el-card--target");
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   levelSelect.addEventListener("change", function () { renderCards(levelSelect.value); });

@@ -26,17 +26,21 @@
         <span>Qumanity</span>
       </a>
       <nav class="hm-links" id="hm-links" aria-label="Primary">
-        <a href="#vision">Vision</a>
-        <a href="#how">How it works</a>
-        <a href="#identity">Identity</a>
-        <a href="#governance">Governance</a>
-        <a href="#qoins">Qoins</a>
-        <a href="#roadmap">Roadmap</a>
-        <a href="{{ url_for('about') }}">About</a>
+        <a href="#vision" data-i18n="nav_vision">Vision</a>
+        <a href="#how" data-i18n="nav_how">How it works</a>
+        <a href="#identity" data-i18n="nav_identity">Identity</a>
+        <a href="#governance" data-i18n="nav_governance">Governance</a>
+        <a href="#qoins" data-i18n="nav_qoins">Qoins</a>
+        <a href="#roadmap" data-i18n="nav_roadmap">Roadmap</a>
+        <a href="{{ url_for('about') }}" data-i18n="nav_about">About</a>
       </nav>
       <div class="hm-nav-cta">
-        <a class="hm-btn hm-btn-ghost" href="{{ url_for('login') }}">Login</a>
-        <a class="hm-btn hm-btn-primary" href="{{ url_for('register') }}">Register</a>
+        <div class="dq-pop" id="home-lang-wrap">
+          <button type="button" class="hm-lang-btn" id="home-lang-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Language" title="Language">🌐</button>
+          <ul class="dq-menu" id="home-lang-menu" role="listbox" hidden></ul>
+        </div>
+        <a class="hm-btn hm-btn-ghost" href="{{ url_for('login') }}" data-i18n="login">Login</a>
+        <a class="hm-btn hm-btn-primary" href="{{ url_for('register') }}" data-i18n="register">Register</a>
         <button class="hm-burger" id="hm-burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="hm-links"><span></span><span></span><span></span></button>
       </div>
     </div>
@@ -49,16 +53,16 @@
       <div class="hm-aurora" aria-hidden="true"><i></i><i></i><i></i></div>
       <div class="hm-hero-grid">
         <div class="hm-hero-copy">
-          <p class="hm-chip"><span class="hm-chip-dot"></span> Quantum&nbsp;+&nbsp;Humanity</p>
-          <h1>The operating system for a <em>conscious</em> civilization.</h1>
+          <p class="hm-chip"><span class="hm-chip-dot"></span> <span data-i18n="hero_chip">Quantum&nbsp;+&nbsp;Humanity</span></p>
+          <h1><span data-i18n="hero_title">The operating system for a conscious civilization.</span></h1>
           <p class="hm-lead">
-            Qumanity is a nested, transparent ledger of <b>Space</b>, <b>Time</b> and <b>Consciousness</b> — where every
+            <span data-i18n="hero_lead">Qumanity is a nested, transparent ledger of Space, Time and Consciousness — where every
             place has an address, every moment a rhythm, and every act of service a permanent record. Governance that
-            rotates with the cosmos. An economy that rewards contribution. A village that speaks to the planet.
+            rotates with the cosmos. An economy that rewards contribution. A village that speaks to the planet.</span>
           </p>
           <div class="hm-cta-row">
-            <a class="hm-btn hm-btn-primary hm-btn-lg" href="{{ url_for('register') }}">Create your Qumanity account <span aria-hidden="true">→</span></a>
-            <a class="hm-btn hm-btn-ghost hm-btn-lg" href="#live">See it live</a>
+            <a class="hm-btn hm-btn-primary hm-btn-lg" href="{{ url_for('register') }}"><span data-i18n="hero_cta">Create your Qumanity account</span> <span aria-hidden="true">→</span></a>
+            <a class="hm-btn hm-btn-ghost hm-btn-lg" href="#live" data-i18n="hero_see_live">See it live</a>
           </div>
           <ul class="hm-trust">
             <li><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/></svg>Non-profit stewarded</li>
@@ -98,6 +102,17 @@
           <span>🌾 Farm regeneratively</span><span>🎭 Preserve a tradition</span><span>🤝 Mediate a dispute</span><span>🏛️ Serve on a council</span>
           <span aria-hidden="true">🌱 Plant a tree</span><span aria-hidden="true">📚 Teach an hour</span><span aria-hidden="true">👵 Care for an elder</span><span aria-hidden="true">💧 Restore water</span>
           <span aria-hidden="true">🌾 Farm regeneratively</span><span aria-hidden="true">🎭 Preserve a tradition</span><span aria-hidden="true">🤝 Mediate a dispute</span><span aria-hidden="true">🏛️ Serve on a council</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ FOUNDER'S MESSAGE ============ -->
+    <section class="hm-section hm-founder-section" id="founder-message">
+      <div class="hm-wrap">
+        <div class="hm-panel hm-glass hm-founder-panel">
+          <h2 data-i18n="founder_msg_title">Founder's Message</h2>
+          <p class="hm-founder-preview" data-i18n="founder_preview">I have watched a mother skip her own meal so her child could eat, and a farmer stare at a drought-cracked field he can no longer afford to sow. I have watched a street dog flinch from every hand because not one of them has ever been kind. I am not writing to sell you anything. I am writing because I am done watching.</p>
+          <a class="hm-btn hm-btn-primary" href="{{ url_for('founders_message') }}" data-i18n="read_full_message">Read Full Message</a>
         </div>
       </div>
     </section>
@@ -152,6 +167,34 @@
                 <section><h4>Zodiac signs</h4><div id="qm-country-sign-list" class="hm-bars hm-bars-2col"></div></section>
               </div>
               <p class="hm-fine" id="qm-country-empty-note" hidden>No one has registered from here yet.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ INDIA SCOREBOARD ============ -->
+    <section class="hm-section hm-sb-section" id="scoreboard">
+      <div class="hm-wrap">
+        <header class="hm-head">
+          <p class="hm-kicker">🇮🇳 India · Live Scoreboard</p>
+          <h2>Every Zone and State is racing to grow.</h2>
+          <p class="hm-sub">Live member counts, ranked — tap any row to see that place on the Elemental Dashboard.</p>
+        </header>
+        <div class="hm-panel hm-glass hm-sb-panel">
+          <div class="hm-sb-total">
+            <b id="sb-total-count">0</b>
+            <span>Total Members in India</span>
+          </div>
+          <div class="hm-sb-cols">
+            <div class="hm-sb-col">
+              <h3>🏆 Zones (Ranked)</h3>
+              <ol class="hm-sb-list" id="sb-zones-list"></ol>
+            </div>
+            <div class="hm-sb-col">
+              <h3>🏆 Top States</h3>
+              <ol class="hm-sb-list" id="sb-states-list"></ol>
+              <p class="hm-fine" id="sb-states-more" hidden></p>
             </div>
           </div>
         </div>
@@ -529,6 +572,8 @@
   <script src="{{ url_for('static', filename='js/india_map.js') }}"></script>
   <script src="{{ url_for('static', filename='js/earth.js') }}"></script>
   <script src="{{ url_for('static', filename='js/home.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/scoreboard.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/home_i18n.js') }}"></script>
   {% include '_poems_marquee.html' %}
 </body>
 </html>

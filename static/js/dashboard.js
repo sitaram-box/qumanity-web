@@ -93,6 +93,15 @@
       .catch(function (err) { console.error("Failed to load wallet balance for " + prefix, err); });
   }
 
+  function loadCollectiveKarmaFor(prefix, locationType, locationId) {
+    var el = document.getElementById(prefix + "-karma");
+    if (!el) return;
+    fetch("/api/karma/collective/" + locationType + "/" + encodeURIComponent(locationId))
+      .then(function (r) { return r.json(); })
+      .then(function (data) { el.textContent = data.points; })
+      .catch(function (err) { console.error("Failed to load collective karma for " + prefix, err); });
+  }
+
   // ==================== Location explorer (Global / Public tabs) ====================
   // A left-sidebar tree scoped to the user's own present-location lineage
   // (siblings at each level, not a free-roam browser of the whole Earth --
@@ -268,6 +277,7 @@
       renderTreeRoot("global-explorer-tree", (worldData.continents || []).map(function (c) { return continentNode("global", c, 0); }), "No continents available.");
       loadStatsFor("qm-dg-stats", "/api/earth/stats");
       loadWalletBalanceFor("qm-dg-stats", "earth", "EARTH");
+      loadCollectiveKarmaFor("qm-dg-stats", "earth", "EARTH");
       document.getElementById("qm-dg-stats-heading").textContent = "🌍 Earth statistics";
     } else if (root === "continent") {
       var continent = presentLocation.continent && findContinentById(presentLocation.continent.id);
@@ -341,6 +351,7 @@
     document.getElementById(prefix + "-heading").textContent = name ? "📊 " + name : "Statistics";
     loadStatsFor(prefix, "/api/location/stats/" + level + "/" + encodeURIComponent(id) + "?basis=present");
     loadWalletBalanceFor(prefix, level, id);
+    loadCollectiveKarmaFor(prefix, level, id);
     if (tab === "public") {
       var isVillage = level === "village";
       var mc = document.getElementById("qm-village-members-card"); if (mc) mc.hidden = !isVillage;
@@ -377,13 +388,23 @@
   function renderPerception(prefix, name, data) {
     document.getElementById(prefix + "-name").textContent = name;
     document.getElementById(prefix + "-year").textContent = data.voting_year;
-    var total = data.pro_count + data.anti_count;
-    var proPct = total > 0 ? Math.round((data.pro_count / total) * 100) : 0;
-    var antiPct = total > 0 ? Math.round((data.anti_count / total) * 100) : 0;
-    document.getElementById(prefix + "-pro-bar").style.width = proPct + "%";
-    document.getElementById(prefix + "-anti-bar").style.width = antiPct + "%";
-    document.getElementById(prefix + "-pro-count").textContent = data.pro_count;
-    document.getElementById(prefix + "-anti-count").textContent = data.anti_count;
+    var resultsBox = document.getElementById(prefix + "-results");
+    if (!data.results_visible) {
+      if (resultsBox) { resultsBox.hidden = true; }
+      var hiddenNote = document.getElementById(prefix + "-hidden-note");
+      if (hiddenNote) { hiddenNote.hidden = false; hiddenNote.textContent = "📊 " + (data.results_reason || "Results are not shown yet."); }
+    } else {
+      if (resultsBox) { resultsBox.hidden = false; }
+      var hiddenNote2 = document.getElementById(prefix + "-hidden-note");
+      if (hiddenNote2) { hiddenNote2.hidden = true; }
+      var total = data.pro_count + data.anti_count;
+      var proPct = total > 0 ? Math.round((data.pro_count / total) * 100) : 0;
+      var antiPct = total > 0 ? Math.round((data.anti_count / total) * 100) : 0;
+      document.getElementById(prefix + "-pro-bar").style.width = proPct + "%";
+      document.getElementById(prefix + "-anti-bar").style.width = antiPct + "%";
+      document.getElementById(prefix + "-pro-count").textContent = data.pro_count;
+      document.getElementById(prefix + "-anti-count").textContent = data.anti_count;
+    }
 
     var voteBlock = document.getElementById(prefix + "-vote-block");
     var note = document.getElementById(prefix + "-note");
@@ -641,21 +662,28 @@
       e.preventDefault();
       donateError.hidden = true;
       donateSuccess.hidden = true;
+      var amount = Number(document.getElementById("donate-amount").value);
 
-      fetch("/api/wallet/donate", {
+      fetch("/api/payment/order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount_rupees: Number(document.getElementById("donate-amount").value),
+          purpose: "donation",
+          amount_rupees: amount,
           referrer_private_id: document.getElementById("donate-referrer").value.trim(),
         }),
       })
         .then(function (res) { return res.json().then(function (body) { return { ok: res.ok, body: body }; }); })
         .then(function (result) {
-          if (!result.ok) throw new Error(result.body.error || "Could not process donation");
-          donateSuccess.textContent = "Donated ₹" + result.body.amount_rupees + " — Qoins credited.";
-          donateSuccess.hidden = false;
-          loadWallet();
+          if (!result.ok) throw new Error(result.body.error || "Could not start payment");
+          QMPayments.payWithRazorpay(result.body, "Donate ₹" + amount, function (credited) {
+            donateSuccess.textContent = "Donated ₹" + credited.amount_rupees + " — Qoins credited.";
+            donateSuccess.hidden = false;
+            loadWallet();
+          }, function (err) {
+            donateError.textContent = err.message;
+            donateError.hidden = false;
+          });
         })
         .catch(function (err) {
           donateError.textContent = err.message;
@@ -675,8 +703,16 @@
         var container = document.getElementById("qm-election-candidates");
         var empty = document.getElementById("qm-election-candidates-empty");
         container.innerHTML = "";
+        if (candidates.restricted) {
+          empty.hidden = false;
+          empty.textContent = candidates.your_sign
+            ? "This cycle's candidates are only shown to members born under " + candidates.cycle_sign + "."
+            : "Sign in to see this cycle's candidates.";
+          return;
+        }
         var total = (candidates.male || []).length + (candidates.female || []).length;
         empty.hidden = total !== 0;
+        empty.textContent = "No approved candidates yet.";
 
         ["male", "female"].forEach(function (gender) {
           (candidates[gender] || []).forEach(function (c) {
