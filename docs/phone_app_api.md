@@ -101,3 +101,22 @@ Every month belongs to one sun sign. The election for that sign runs in 4 weeks:
 `GET|POST /api/perception/{country|zone}/<id>[/vote]` (Country and Zone pages) ·
 `GET /api/referrer/me`, `POST /api/referrer/apply {note}` (Q-Punch) ·
 `POST /api/dashboard/edit-request {name?, email?, phone?, dob?, tob?, reason}` (Private → Change my profile).
+
+## Website changes of Oct 2026 that the app follows (synced 2026-10-06)
+
+- **Server:** release builds talk to `https://qumanity.in` (Railway); `expo start` builds still default to the Mac on the same Wi-Fi. The sign-in screen can override either.
+- **Donations are real money now** (`payment_core.py`). `POST /api/wallet/donate` is gone. Use `POST /api/payment/order {amount_rupees, purpose: "donation"|"registration"}`, then:
+  - mode `simulated` (no Razorpay keys on the server): call `POST /api/payment/verify {local_order_id}` straight away;
+  - mode `razorpay`: the app opens Razorpay Checkout in a WebView (`components/Payment.tsx`), then sends `POST /api/payment/verify {local_order_id, razorpay_payment_id, razorpay_order_id, razorpay_signature}`.
+  - Qoins are credited only after verify, from the amount stored on the order. An order can't be credited twice.
+- **Registration:** no referral code or volunteer PIN any more. The only referrer is the member doing an assisted registration.
+  - A self-registration with a donation gets back `donation_pending_amount` and pays it right away with `purpose: "registration"`.
+  - Assisted registrations are always free.
+- **Hidden results:** `/api/election-sentiment/...` returns `{visible:false, reason}` until 2028 (or until the Founder opens it). Perception GETs return `pro_count/anti_count: null`, `results_visible:false` and `results_reason`. Voting still works.
+- **New endpoints the app uses:**
+  - `GET /api/me/kundali`: Moon-based Vedic chart SVG, planet table, house strength, elements and dasha. **New website route, added 2026-10-06.**
+  - `GET /api/karma/collective/<level>/<id>`;
+  - `GET /api/scoreboard/india`;
+  - `GET /api/founder-message?lang=`;
+  - `POST /api/user/languages {preferred: code}`;
+  - `/api/me` adds `birth_location_struct` and `preferred_language`.
