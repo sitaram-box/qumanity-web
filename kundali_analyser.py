@@ -227,9 +227,14 @@ _HOUSE_POLYGONS = {
 # Where the house number goes in each cell -- near its outward tip for the kites, near its
 # corner for the triangles -- kept clear of the centroid, which is where the sign/planets go.
 _NUMBER_POS = {
-    1: (200, 28), 2: (230, 35), 3: (365, 70), 4: (372, 200), 5: (365, 330), 6: (230, 365),
-    7: (200, 372), 8: (170, 365), 9: (35, 330), 10: (28, 200), 11: (35, 70), 12: (170, 35),
+    1: (200, 28), 2: (330, 35), 3: (365, 70), 4: (372, 200), 5: (365, 330), 6: (330, 365),
+    7: (200, 372), 8: (70, 365), 9: (35, 330), 10: (28, 200), 11: (35, 70), 12: (70, 35),
 }
+# (2026-10-05 fix: houses 2/6/8/12 previously used the x-coordinate belonging to their mirror-
+# image neighbor, so their number label rendered inside the ADJACENT kite house (1 or 7) instead
+# of their own triangle -- verified by point-in-polygon check against _HOUSE_POLYGONS, and the
+# corrected positions cross-checked via two independent 90-degree-rotation derivations from the
+# 8 already-correct houses, both landing on the same point.)
 
 _PLANET_ABBR = {
     "Ascendant": "As", "Sun": "Su", "Moon": "Mo", "Mars": "Ma", "Mercury": "Me",
@@ -276,6 +281,23 @@ SIGNS_SHORT = {
 }
 
 
+def _ascendant_note(kundali: dict) -> str:
+    """One-line clarification shown under the chart: this Kundali is sidereal (Lahiri), while
+    the profile's own "Sun Sign" badge elsewhere in the app is tropical -- the two legitimately
+    differ by design (see zodiac_core.py's own module docstring), and without this note a user
+    could easily read the mismatch as a bug. Also flags when the Ascendant sits close enough to
+    a sign boundary that the result is unusually sensitive to the exact recorded birth minute --
+    verified during the 2026-10-05 UI fix pass that this is a real, data-precision question, not
+    a computation error (see docs/dashboard_fixes_2026_10_05.md)."""
+    note = ('Vedic Kundali uses sidereal (Lahiri); Qumanity profile "Sun Sign" uses tropical. '
+            "Both are correct for their purpose.")
+    deg = (kundali.get("ascendant") or {}).get("degree")
+    if deg is not None and (deg < 1.0 or deg > 29.0):
+        note += (" Your Ascendant sits very close to a sign boundary, so this result is "
+                  "unusually sensitive to your exact recorded birth minute.")
+    return note
+
+
 def analyse(dob_iso: str, kundali: dict, today: dt.date | None = None) -> dict:
     """Everything the Private Account's Kundali Analysis section needs, in one call."""
     return {
@@ -286,4 +308,5 @@ def analyse(dob_iso: str, kundali: dict, today: dt.date | None = None) -> dict:
         "house_strength": house_strength(kundali),
         "elemental_balance": elemental_balance(kundali),
         "dasha": vimshottari_dasha(dob_iso, kundali, today),
+        "ascendant_note": _ascendant_note(kundali),
     }

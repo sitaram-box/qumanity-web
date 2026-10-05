@@ -91,6 +91,15 @@
       parties.forEach(function (p) { var o = document.createElement("option"); o.value = p.code; o.textContent = p.label; if (p.code === value) o.selected = true; s_.appendChild(o); });
       return s_;
     }
+    // A locked slot (a past election that's already been answered) renders as a read-only chip,
+    // not a <select> -- matches election_core.save_party_history's own immutability rule exactly:
+    // once a past slot has a real saved value, any attempt to change it is rejected server-side,
+    // so the UI shouldn't offer to change it at all. A past slot with NO saved value yet (never
+    // answered) still gets the normal editable dropdown, since that first save is still allowed.
+    function partyLockedChip(value, parties) {
+      var label = (parties.filter(function (p) { return p.code === value; })[0] || {}).label || value;
+      return el("span", "eh-locked-chip", "🔒 " + label);
+    }
     api("/api/election-history").then(function (d) {
       var parties = d.parties.map(function (p) { return { code: p[0], label: p[1] }; });
       // Always the 2 most recent elections + the next one, rolling forward automatically
@@ -99,22 +108,29 @@
       var nextYear = years[years.length - 1];
       var lsRow = $("eh-loksabha");
       years.forEach(function (y) {
+        var value = d.party.loksabha[y] || "";
+        var locked = y !== nextYear && !!value;
         var wrap = el("div", "pv-lang");
         wrap.appendChild(el("label", "", y + (y === nextYear ? " (planning to)" : "")));
-        wrap.appendChild(partySelect("eh-ls-" + y, d.party.loksabha[y] || "", parties));
+        wrap.appendChild(locked ? partyLockedChip(value, parties) : partySelect("eh-ls-" + y, value, parties));
         lsRow.appendChild(wrap);
       });
       var vsRow = $("eh-vidhansabha");
       [["last", "Last election"], ["next", "Next election"]].forEach(function (k) {
+        var value = d.party.vidhansabha[k[0]] || "";
+        var locked = k[0] === "last" && !!value;
         var wrap = el("div", "pv-lang");
         wrap.appendChild(el("label", "", k[1]));
-        wrap.appendChild(partySelect("eh-vs-" + k[0], d.party.vidhansabha[k[0]] || "", parties));
+        wrap.appendChild(locked ? partyLockedChip(value, parties) : partySelect("eh-vs-" + k[0], value, parties));
         vsRow.appendChild(wrap);
       });
       $("eh-save-btn").addEventListener("click", function () {
         var payload = { loksabha: {}, vidhansabha: {} };
-        years.forEach(function (y) { payload.loksabha[y] = $("eh-ls-" + y).value; });
-        payload.vidhansabha.last = $("eh-vs-last").value; payload.vidhansabha.next = $("eh-vs-next").value;
+        // Only read editable slots -- a locked slot has no <select> to read from anymore, and
+        // resubmitting its already-saved value isn't needed (the backend only rejects a CHANGE).
+        years.forEach(function (y) { var s_ = $("eh-ls-" + y); if (s_) payload.loksabha[y] = s_.value; });
+        var vsLast = $("eh-vs-last"); if (vsLast) payload.vidhansabha.last = vsLast.value;
+        var vsNext = $("eh-vs-next"); if (vsNext) payload.vidhansabha.next = vsNext.value;
         api("/api/election-history", payload).then(function () { $("eh-saved").hidden = false; setTimeout(function () { $("eh-saved").hidden = true; }, 2500); }).catch(function (e) { alert(e.message); });
       });
       var qp = $("eh-qpunch"); $("eh-qpunch-empty").hidden = d.qpunch.length > 0;
@@ -159,6 +175,11 @@
         var cap = document.createElement("p"); cap.className = "qm-timeline-note";
         cap.textContent = "North Indian style · House 1 (top) is the sign the Moon occupies (Chandra Lagna).";
         $("kundali-chart").appendChild(cap);
+        if (k.ascendant_note) {
+          var ascNote = document.createElement("p"); ascNote.className = "qm-timeline-note";
+          ascNote.textContent = k.ascendant_note;
+          $("kundali-chart").appendChild(ascNote);
+        }
 
         var tb = $("kundali-rows");
         k.table.forEach(function (r) {
@@ -260,6 +281,23 @@
       label.appendChild(radio);
       label.appendChild(document.createTextNode(" " + l.native + (l.native !== l.name ? " (" + l.name + ")" : "")));
       prefWrap.appendChild(label);
+    });
+  }
+
+  // ---- Change PIN ----
+  var pinForm = $("pin-change-form");
+  if (pinForm) {
+    var pinErr = $("pin-change-error"), pinOk = $("pin-change-success");
+    pinForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      pinErr.hidden = true; pinOk.hidden = true;
+      var current = $("pin-current").value, next = $("pin-new").value;
+      api("/api/user/pin", { current_pin: current, new_pin: next })
+        .then(function () {
+          pinOk.hidden = false;
+          pinForm.reset();
+        })
+        .catch(function (e) { pinErr.textContent = e.message; pinErr.hidden = false; });
     });
   }
 
