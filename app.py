@@ -16,6 +16,7 @@ import functools
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
@@ -24,6 +25,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 import cycle_middleware
 import election_core
+import pipeline_core
+import pipeline_scheduler
 import elemental_core
 import folder_connector
 import folder_sync
@@ -80,8 +83,15 @@ def _language_table():
 
 
 def _ensure_user_columns():
-    """Small in-place migrations for columns added after the first schema."""
+    """Small in-place migrations for columns added after the first schema. ensure_database_ready()
+    (called before this, at the bottom of this module) already guarantees `users` exists on any
+    real boot -- this check is defense in depth, not the actual fix, for a DB file that somehow
+    reaches this point still schema-less."""
     conn = get_db()
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'").fetchone():
+        print("[boot] users table not present -- skipping column migrations (ensure_database_ready() should have created it)")
+        conn.close()
+        return
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(users)")}
     if "daily_language" not in cols:
         conn.execute("ALTER TABLE users ADD COLUMN daily_language TEXT")
@@ -2385,6 +2395,33 @@ def api_lunar_phase():
     })
 
 
+@app.route("/healthz")
+def healthz():
+    """Unauthenticated health/boot-state check (2026-10-05 Railway boot-crash fix) -- for Railway's
+    own healthcheck and for debugging live DB state without shell access to the Volume. Reports no
+    user data beyond a row count."""
+    db_path = os.environ.get("QM_DB_PATH", str(Path(__file__).resolve().parent / "qumanity_prototype.db"))
+    db_exists = Path(db_path).exists()
+    has_users_table = False
+    user_count = None
+    if db_exists:
+        try:
+            conn = get_db()
+            has_users_table = bool(conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'").fetchone())
+            if has_users_table:
+                user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            conn.close()
+        except Exception as e:
+            return jsonify({"status": "error", "error": str(e)}), 500
+    return jsonify({
+        "status": "ok",
+        "db_path": db_path,
+        "db_exists": db_exists,
+        "has_users_table": has_users_table,
+        "user_count": user_count,
+    })
+
+
 def _current_user_row(conn):
     return conn.execute("SELECT * FROM users WHERE id = ?", (session["user_id"],)).fetchone()
 
@@ -2892,6 +2929,214 @@ def api_admin_lunar_cycle_state_status():
     })
 
 
+# ---- Phase 3: pipeline engine admin endpoints (manual triggers only -- see pipeline_core.py /
+# docs/phase_3_report.md; nothing here fires automatically, Phase 5's cron will eventually) ----
+
+@app.route("/api/admin/pipeline/transfer", methods=["POST"])
+@login_required
+def api_admin_pipeline_transfer():
+    """Body: {"from_level": "village", "cycle_id": "Chaitra_2026"} -- advances that cycle's data
+    one hop, from_level to the next level up. Rejects a non-adjacent/unknown from_level and the
+    N/N-1 safety rule (enforced inside pipeline_core.transfer_level) with a 400, not a 500."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    data = request.get_json(silent=True) or {}
+    from_level, cycle_id = data.get("from_level"), data.get("cycle_id")
+    if not from_level or not cycle_id:
+        return jsonify({"error": "from_level and cycle_id are required"}), 400
+    if from_level not in pipeline_core.PIPELINE_LEVELS[:-1]:
+        return jsonify({"error": f"Unknown or non-transferable from_level: {from_level}"}), 400
+    to_level = pipeline_core.PIPELINE_LEVELS[pipeline_core.PIPELINE_LEVELS.index(from_level) + 1]
+    conn = get_db()
+    try:
+        result = pipeline_core.transfer_level(conn, from_level, to_level, cycle_id)
+    except (PermissionError, ValueError) as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify(result)
+
+
+@app.route("/api/admin/pipeline/run-all", methods=["POST"])
+@login_required
+def api_admin_pipeline_run_all():
+    """Body: {"cycle_id": "Chaitra_2026"} -- runs all 7 real transfers (village through earth) in
+    sequence for that cycle. Skips earth->archive (Phase 4)."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    data = request.get_json(silent=True) or {}
+    cycle_id = data.get("cycle_id")
+    if not cycle_id:
+        return jsonify({"error": "cycle_id is required"}), 400
+    conn = get_db()
+    try:
+        results = pipeline_core.run_full_pipeline(conn, cycle_id)
+    except (PermissionError, ValueError) as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"cycle_id": cycle_id, "transfers": results})
+
+
+@app.route("/api/admin/pipeline/status")
+@login_required
+def api_admin_pipeline_status():
+    """pipeline_state (the last completed transfer) + the 20 most recent transfer_log rows."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    pipeline_core.ensure_tables(conn)
+    state = dict(conn.execute("SELECT * FROM pipeline_state WHERE id = 1").fetchone())
+    log = [dict(r) for r in conn.execute("SELECT * FROM transfer_log ORDER BY id DESC LIMIT 20")]
+    conn.close()
+    return jsonify({"pipeline_state": state, "recent_transfers": log})
+
+
+@app.route("/api/admin/pipeline/holdings/<level>/<path:level_id>")
+@login_required
+def api_admin_pipeline_holdings(level, level_id):
+    """Every level_holdings row for this (level, level_id), across all cycles it's ever appeared in."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    if level not in pipeline_core.PIPELINE_LEVELS:
+        return jsonify({"error": "Unknown level"}), 400
+    conn = get_db()
+    pipeline_core.ensure_tables(conn)
+    rows = [dict(r) for r in conn.execute(
+        "SELECT * FROM level_holdings WHERE level = ? AND level_id = ? ORDER BY cycle_id", (level, level_id)
+    )]
+    conn.close()
+    for r in rows:
+        r["summary"] = json.loads(r.pop("summary_json"))
+        r["source_ids"] = json.loads(r["source_ids"]) if r.get("source_ids") else []
+        r["record_counts"] = json.loads(r["record_counts"]) if r.get("record_counts") else {}
+    return jsonify({"level": level, "level_id": level_id, "holdings": rows})
+
+
+@app.route("/api/admin/pipeline/eligible-cycles")
+@login_required
+def api_admin_pipeline_eligible_cycles():
+    """Cycles with real activity data that are N-2 or older -- the only ones a transfer will accept."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    pipeline_core.ensure_tables(conn)
+    eligible = pipeline_core.get_eligible_cycles_for_pipeline(conn)
+    conn.close()
+    return jsonify({"eligible_cycles": eligible})
+
+
+@app.route("/api/admin/pipeline/archive", methods=["POST"])
+@login_required
+def api_admin_pipeline_archive():
+    """Phase 4: Body: {"cycle_id": "Chaitra_2026", "dry_run": false} -- writes that cycle's
+    earth-level data to 0_Earth, then deletes the raw rows (unless dry_run). Never fires on its
+    own -- manual admin trigger only, same as every other pipeline endpoint."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    data = request.get_json(silent=True) or {}
+    cycle_id = data.get("cycle_id")
+    if not cycle_id:
+        return jsonify({"error": "cycle_id is required"}), 400
+    conn = get_db()
+    try:
+        result = pipeline_core.transfer_earth_to_archive(conn, cycle_id, dry_run=bool(data.get("dry_run")))
+    except (PermissionError, ValueError, RuntimeError) as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify(result)
+
+
+@app.route("/api/admin/pipeline/archive-status/<cycle_id>")
+@login_required
+def api_admin_pipeline_archive_status(cycle_id):
+    """Phase 4: {archived, folder_count, total_bytes, records_deleted, checksum_match} -- works
+    whether or not archiving ran in this same process (derives its answer from level_holdings +
+    the filesystem, not in-memory state)."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    from archive_writer import archive_status
+    conn = get_db()
+    pipeline_core.ensure_tables(conn)
+    result = archive_status(conn, cycle_id)
+    conn.close()
+    return jsonify(result)
+
+
+# ---- Phase 5: bootstrap + cron automation admin endpoints (manual overrides for testing and
+# emergency use -- see pipeline_scheduler.py / docs/phase_5_report.md) ----
+
+@app.route("/api/admin/pipeline/bootstrap/activate", methods=["POST"])
+@login_required
+def api_admin_pipeline_bootstrap_activate():
+    """Force pipeline_active=1 immediately, bypassing the Year-2-start date check. Emergency/
+    testing use only -- the normal path is daily_pipeline_tick() reaching year_2_start_amavasya
+    on its own."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    try:
+        now = dt.datetime.now(pipeline_scheduler.IST)
+        pipeline_scheduler.init_bootstrap(conn, now)
+        bootstrap = pipeline_scheduler._activate_pipeline(conn, now, note=f"manual admin override by user {session['user_id']}")
+        pipeline_scheduler._notify(conn, "pipeline_activated", f"Pipeline manually activated by admin at {now.isoformat()}.")
+    finally:
+        conn.close()
+    return jsonify(bootstrap)
+
+
+@app.route("/api/admin/pipeline/bootstrap/reset", methods=["POST"])
+@login_required
+def api_admin_pipeline_bootstrap_reset():
+    """Body: {"confirm": "RESET-BOOTSTRAP"} -- deletes and recomputes the bootstrap row fresh
+    (back to Year 1, pipeline_active=0). Does NOT touch any already-moved/archived pipeline data
+    -- only the bootstrap row itself. Emergency/testing use only."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    data = request.get_json(silent=True) or {}
+    if data.get("confirm") != "RESET-BOOTSTRAP":
+        return jsonify({"error": 'Pass {"confirm": "RESET-BOOTSTRAP"} to confirm this reset.'}), 400
+    conn = get_db()
+    try:
+        bootstrap = pipeline_scheduler.bootstrap_reset(conn)
+        pipeline_scheduler._notify(conn, "bootstrap_reset", f"Bootstrap reset by admin (user {session['user_id']}) to Year 1.")
+    finally:
+        conn.close()
+    return jsonify(bootstrap)
+
+
+@app.route("/api/admin/pipeline/tick", methods=["POST"])
+@login_required
+def api_admin_pipeline_tick():
+    """Body: {"simulate_date": "2027-04-15"} (optional) -- runs daily_pipeline_tick immediately.
+    Without simulate_date this runs against the REAL current date -- on the real DB, only use
+    this when you actually mean to; every test/tool in this phase always passes simulate_date."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        result = pipeline_scheduler.daily_pipeline_tick(conn, simulate_date=data.get("simulate_date"))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify(result)
+
+
+@app.route("/api/admin/pipeline/health")
+@login_required
+def api_admin_pipeline_health():
+    """Bootstrap state, current cycle, KP day, last transfer, next scheduled action, recent errors."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    result = pipeline_scheduler.health(conn)
+    conn.close()
+    return jsonify(result)
+
+
 @app.route("/api/admin/sync-folders", methods=["POST"])
 def api_admin_sync_folders():
     conn = get_db()
@@ -2945,22 +3190,51 @@ def _validate_india_location_data():
         print(f"[STARTUP WARNING] Could not validate India location data against Qumanity_Master.json: {e}")
 
 
+def ensure_database_ready() -> None:
+    """Startup safety net (2026-10-05): a brand-new Railway Volume has no DB file at all, so the
+    very first thing to touch it used to be _ensure_user_columns() trying to ALTER a `users` table
+    that didn't exist yet -- crashing boot outright. This applies the FULL schema unconditionally,
+    before anything else runs: db/schema.sql (users/zodiac/location/wallet/election tables), the
+    zodiac reference-data seed, founder/visibility/recovery's own tables, then every other
+    *_core module's tables and the Phase 2 lunar-cycle migrations (cycle_state + cycle_id columns)
+    via tools/run_migrations.py, then the two data-normalization passes
+    (backfill_account_ids/migrate_group_defaults) and election_core's history table. Every one of
+    these calls is already its own idempotent "CREATE TABLE IF NOT EXISTS" / tracked migration --
+    this is exactly as safe against the long-lived local/production DB as against an empty file,
+    and seeds no user DATA (see tools/seed_admin_only.py for that, a separate, explicit step)."""
+    conn = get_db()
+    try:
+        schema_sql = (Path(__file__).resolve().parent / "db" / "schema.sql").read_text(encoding="utf-8")
+        conn.executescript(schema_sql)
+        conn.commit()
+        db_dir = str(Path(__file__).resolve().parent / "db")
+        if db_dir not in sys.path:
+            sys.path.insert(0, db_dir)
+        import seed_zodiac_data
+        seed_zodiac_data.seed(conn)
+        founder_core.ensure_tables(conn)
+        visibility_core.ensure_tables(conn)
+        recovery_core.ensure_tables(conn)
+    finally:
+        conn.close()
+
+    tools_dir = str(Path(__file__).resolve().parent / "tools")
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    import run_migrations
+    run_migrations.main()
+
+    with get_db() as conn2:
+        social_core.backfill_account_ids(conn2)
+        social_core.migrate_group_defaults(conn2)
+        election_core.ensure_history_table(conn2)
+
+    print(f"[boot] database ready at {os.environ.get('QM_DB_PATH', '<local default: qumanity_prototype.db>')}")
+
+
+ensure_database_ready()
 _ensure_user_columns()
 _validate_india_location_data()
-with get_db() as _startup_conn:
-    social_core.ensure_tables(_startup_conn)
-    social_core.backfill_account_ids(_startup_conn)
-    social_core.migrate_group_defaults(_startup_conn)
-    recovery_core.ensure_tables(_startup_conn)
-    review_core.ensure_tables(_startup_conn)
-    election_core.ensure_history_table(_startup_conn)
-    election_core.ensure_council_columns(_startup_conn)
-    perception_core.ensure_tables(_startup_conn)
-    founder_core.ensure_tables(_startup_conn)
-    karma_core.ensure_tables(_startup_conn)
-    visibility_core.ensure_tables(_startup_conn)
-    payment_core.ensure_tables(_startup_conn)
-    cycle_middleware.ensure_tables(_startup_conn)
 
 # Runs on import, not just under `python app.py` -- a production deploy runs this module under
 # gunicorn (see Procfile), which never executes the `__main__` block below, so the daily DB->folder
@@ -2969,6 +3243,14 @@ with get_db() as _startup_conn:
 # once per worker (running the midnight export N times) and let multiple processes write the same
 # SQLite file at once.
 _start_scheduler()
+
+# Phase 5 (2026-10-05): the lunar-cycle pipeline's own bootstrap row + daily cron, separate from
+# the folder-export scheduler above. init_bootstrap() only ever creates the row (never activates
+# the pipeline itself -- see pipeline_scheduler.init_bootstrap's own docstring), so this is safe
+# to run against the existing, long-lived production DB exactly like ensure_database_ready() is.
+with get_db() as _bootstrap_conn:
+    pipeline_scheduler.init_bootstrap(_bootstrap_conn)
+pipeline_scheduler.init_scheduler(app)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
