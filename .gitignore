@@ -34,6 +34,11 @@ nohup.out
 .idea/
 *.swp
 
+# Local dev server config -- carries QM_ADMIN_PRIVATE_IDS (the real Admin's Private ID) and other
+# per-machine env values; was previously tracked (removed from tracking 2026-10-05), never commit
+# it again. Recreated automatically by the dev-server tool if missing.
+.claude/launch.json
+
 # Backups
 *.bak
 *_backup_*
