@@ -1,0 +1,984 @@
+=== python3 tools/run_migrations.py ===
+No pending migrations.
+
+=== python3 tools/verify_lunar_calendar.py ===
+======================================================================
+Lunar cycle table: April 2026 - April 2027
+======================================================================
+Date                   Phase      Vedic Month    Cycle ID
+----------------------------------------------------------------------
+2026-04-02 07:42 UTC+05:30 Purnima    Phalguna       —
+2026-04-17 17:21 UTC+05:30 Amavasya   Chaitra        Chaitra_2026
+2026-05-01 22:53 UTC+05:30 Purnima    Chaitra        —
+2026-05-17 01:31 UTC+05:30 Amavasya   Vaishakha      Vaishakha_2026
+2026-05-31 14:15 UTC+05:30 Purnima    Vaishakha      —
+2026-06-15 08:24 UTC+05:30 Amavasya   Jyeshtha       Jyeshtha_2026
+2026-06-30 05:26 UTC+05:30 Purnima    Jyeshtha       —
+2026-07-14 15:13 UTC+05:30 Amavasya   Ashadha        Ashadha_2026
+2026-07-29 20:05 UTC+05:30 Purnima    Ashadha        —
+2026-08-12 23:06 UTC+05:30 Amavasya   Shravana       Shravana_2026
+2026-08-28 09:48 UTC+05:30 Purnima    Shravana       —
+2026-09-11 08:57 UTC+05:30 Amavasya   Bhadrapada     Bhadrapada_2026
+2026-09-26 22:19 UTC+05:30 Purnima    Bhadrapada     —
+2026-10-10 21:20 UTC+05:30 Amavasya   Ashwin         Ashwin_2026
+2026-10-26 09:41 UTC+05:30 Purnima    Ashwin         —
+2026-11-09 12:32 UTC+05:30 Amavasya   Kartik         Kartik_2026
+2026-11-24 20:23 UTC+05:30 Purnima    Kartik         —
+2026-12-09 06:21 UTC+05:30 Amavasya   Margashirsha   Margashirsha_2026
+2026-12-24 06:58 UTC+05:30 Purnima    Margashirsha   —
+2027-01-08 01:54 UTC+05:30 Amavasya   Pausha         Pausha_2027
+2027-01-22 17:47 UTC+05:30 Purnima    Pausha         —
+2027-02-06 21:26 UTC+05:30 Amavasya   Magha          Magha_2027
+2027-02-21 04:53 UTC+05:30 Purnima    Magha          —
+2027-03-08 14:59 UTC+05:30 Amavasya   Phalguna       Phalguna_2027
+2027-03-22 16:13 UTC+05:30 Purnima    Phalguna       —
+2027-04-07 05:21 UTC+05:30 Amavasya   Chaitra        Chaitra_2027
+2027-04-21 03:57 UTC+05:30 Purnima    Chaitra        —
+
+======================================================================
+Consistency checks
+======================================================================
+PASS: Purnima/Amavasya alternate correctly
+PASS: no two cycles overlap (consecutive Amavasyas ~29.5 days apart)
+PASS: cycle IDs are unique (['Chaitra_2026', 'Vaishakha_2026', 'Jyeshtha_2026', 'Ashadha_2026', 'Shravana_2026', 'Bhadrapada_2026', 'Ashwin_2026', 'Kartik_2026', 'Margashirsha_2026', 'Pausha_2027', 'Magha_2027', 'Phalguna_2027', 'Chaitra_2027'])
+PASS: translation file has all 13 languages for all 12 months + 2 suffixes
+  Sample: Chaitra in Tamil = "சித்திரை"
+
+======================================================================
+Sample cycle_metadata.json (Chaitra_2027)
+======================================================================
+{
+  "cycle_id": "Chaitra_2027",
+  "display_names": {
+    "en": "Chaitra Purnima to Vaishakha Amavasya 2027",
+    "hi": "चैत्र पूर्णिमा to वैशाख अमावस्या 2027",
+    "bn": "চৈত্র পূর্ণিমা to বৈশাখ অমাবস্যা 2027",
+    "ta": "சித்திரை பௌர்ணமி to வைகாசி அமாவாசை 2027",
+    "te": "చైత్రం పూర్ణిమ to వైశాఖం అమావాస్య 2027",
+    "kn": "ಚೈತ್ರ ಹುಣ್ಣಿಮೆ to ವೈಶಾಖ ಅಮಾವಾಸ್ಯೆ 2027",
+    "ml": "ചൈത്രം പൗർണ്ണമി to വൈശാഖം അമാവാസി 2027",
+    "mr": "चैत्र पौर्णिमा to वैशाख अमावास्या 2027",
+    "gu": "ચૈત્ર પૂર્ણિમા to વૈશાખ અમાસ 2027",
+    "pa": "ਚੇਤਰ ਪੂਰਨਮਾਸ਼ੀ to ਵੈਸਾਖ ਮੱਸਿਆ 2027",
+    "ur": "چترا پورنیما to ویساکھ اماوسیا 2027",
+    "or": "ଚୈତ୍ର ପୂର୍ଣ୍ଣିମା to ବୈଶାଖ ଅମାବାସ୍ୟା 2027",
+    "as": "চ'ত্ৰ পূৰ্ণিমা to বহাগ অমাৱস্যা 2027"
+  },
+  "start_date": "2027-04-07T05:21:09+05:30",
+  "start_phase": "Amavasya",
+  "mid_date": "2027-04-21T03:57:11+05:30",
+  "mid_phase": "Purnima",
+  "end_date": "2027-05-06T16:28:37+05:30",
+  "end_phase": "Amavasya",
+  "archive_folder_name": "Chaitra_Purnima-to-Vaishakha_Amavasya_2027"
+}
+PASS: sample cycle metadata generates correctly
+
+======================================================================
+OVERALL: ALL CHECKS PASSED
+======================================================================
+
+Cross-check manually against drikpanchang.com or a similar panchang for a few of the
+dates above, especially the Chaitra_2027 Amavasya (expected around 2027-04-06/07, per
+the Founder's own stated Chaitra Navratri boundary) -- this script cannot reach the
+internet to verify that automatically.
+EXIT CODE: 0
+
+=== python3 tools/verify_cycle_stamping.py ===
+======================================================================
+Phase 2 verification: cycle_id stamping
+======================================================================
+PASS: cycle_state has exactly one active row (Bhadrapada_2026), matching lunar_calendar's live cycle (Bhadrapada_2026)
+PASS: all 28 tables have a cycle_id column
+PASS: no pre-existing rows missing cycle_id (found 0)
+PASS: live writes through karma_core/wallet_core stamp cycle_id='Bhadrapada_2026' (temp copy at verify_cycle_stamping_tmp.db, never the real DB)
+
+======================================================================
+OVERALL: ALL CHECKS PASSED
+======================================================================
+EXIT CODE: 0
+
+=== python3 tools/verify_pipeline.py ===
+======================================================================
+Isolated test DB: /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmpojo47p6i/verify_pipeline.db (never the real qumanity_prototype.db)
+======================================================================
+  wallet_transactions: backfilled 0 row(s)
+  election_candidates: backfilled 0 row(s)
+  election_votes: backfilled 0 row(s)
+  karma_entries: backfilled 0 row(s)
+  collective_karma_log: backfilled 0 row(s)
+  business_ratings: backfilled 0 row(s)
+  board_posts: backfilled 0 row(s)
+  board_votes: backfilled 0 row(s)
+  board_comments: backfilled 0 row(s)
+  board_messages: backfilled 0 row(s)
+  personal_messages: backfilled 0 row(s)
+  private_messages: backfilled 0 row(s)
+  account_ids: backfilled 0 row(s)
+  people_requests: backfilled 0 row(s)
+  account_id_requests: backfilled 0 row(s)
+  payment_orders: backfilled 0 row(s)
+  country_sentiment: backfilled 0 row(s)
+  zone_sentiment: backfilled 0 row(s)
+  app_reviews: backfilled 0 row(s)
+  profile_change_requests: backfilled 0 row(s)
+  volunteers: backfilled 0 row(s)
+  message_reactions: backfilled 0 row(s)
+  referrer_applications: backfilled 0 row(s)
+  subgroups: backfilled 0 row(s)
+  personal_groups: backfilled 0 row(s)
+  private_chats: backfilled 0 row(s)
+  subgroup_members: backfilled 0 row(s)
+  personal_group_members: backfilled 0 row(s)
+Backfill complete -- 0 row(s) across 28 table(s).
+Seeded 9 activity rows across 5 tables, cycle_id=Chaitra_2026
+cycle_state: N=Jyeshtha_2026, N-1=Vaishakha_2026
+Eligible cycles (N-2 and older): ['Chaitra_2026']
+Rows at pipeline_level='village' for Chaitra_2026 before any transfer: 9
+
+Hop                          Records Moved   Holdings Created   Excluded  
+---------------------------------------------------------------------------
+[pipeline] village -> tehsil for Chaitra_2026: 9 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+village -> tehsil            9               1                  0         
+[pipeline] tehsil -> district for Chaitra_2026: 9 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+tehsil -> district           9               1                  0         
+[pipeline] district -> state for Chaitra_2026: 9 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+district -> state            9               1                  0         
+[pipeline] state -> zone for Chaitra_2026: 9 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+state -> zone                9               1                  0         
+[pipeline] zone -> country for Chaitra_2026: 9 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+zone -> country              9               1                  0         
+[pipeline] country -> continent for Chaitra_2026: 9 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+country -> continent         9               1                  0         
+[pipeline] continent -> earth for Chaitra_2026: 9 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+continent -> earth           9               1                  0         
+
+Total rows for Chaitra_2026: seeded 9, still present 9
+
+Sample tehsil holding (CS.DL.3.4, Chaitra_2026):
+{
+  "cycle_id": "Chaitra_2026",
+  "level": "tehsil",
+  "level_id": "CS.DL.3.4",
+  "counts": {
+    "posts": 1,
+    "votes": 1,
+    "comments": 0,
+    "wallet_transactions": 1,
+    "karma_entries": 3,
+    "payment_orders": 0,
+    "reviews": 0,
+    "chat_messages": 0,
+    "group_joins": 0,
+    "group_creates": 0,
+    "election_candidates": 0,
+    "election_votes": 0,
+    "collective_karma_log": 0,
+    "business_ratings": 0,
+    "account_ids": 3,
+    "people_requests": 0,
+    "account_id_requests": 0,
+    "country_sentiment": 0,
+    "zone_sentiment": 0,
+    "profile_change_requests": 0,
+    "volunteers": 0,
+    "message_reactions": 0,
+    "referrer_applications": 0,
+    "private_chats": 0
+  },
+  "totals": {
+    "qoins_circulating": 25,
+    "karma_total_value": 90
+  },
+  "top_contributors": [
+    {
+      "user_id": 1,
+      "name": "Test Alpha",
+      "karma": 50
+    },
+    {
+      "user_id": 2,
+      "name": "Test Beta",
+      "karma": 30
+    },
+    {
+      "user_id": 3,
+      "name": "Test Gamma",
+      "karma": 10
+    }
+  ],
+  "by_element": {
+    "fire": 50,
+    "earth": 10,
+    "air": 0,
+    "water": 30
+  },
+  "computed_at": "2026-10-05T01:21:37+00:00",
+  "source_ids": [
+    "CS.DL.3.4.1A"
+  ]
+}
+[pipeline] continent -> earth for Chaitra_2026: 0 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+
+Re-run continent -> earth: records_moved=0 (expect 0)
+
+======================================================================
+Consistency checks
+======================================================================
+PASS: cycle_state identifies N/N-1 correctly
+PASS: Chaitra_2026 is eligible, N/N-1 are not
+PASS: Safety rule rejects N and N-1
+PASS: Full chain village -> earth moves every row, none deleted
+PASS: Total row count unchanged end to end (no deletes)
+PASS: level_holdings has the expected tehsil row
+PASS: Aggregate karma_entries count matches manual SQL count
+PASS: Re-running continent->earth is idempotent (0 rows moved second time)
+
+======================================================================
+OVERALL: ALL CHECKS PASSED
+======================================================================
+EXIT CODE: 0
+
+=== python3 tools/verify_archive_writer.py ===
+======================================================================
+Isolated test DB: /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmp3jkalmwh/verify_archive_writer.db
+Isolated 0_Earth: /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmp3jkalmwh/0_Earth_test
+======================================================================
+  wallet_transactions: backfilled 0 row(s)
+  election_candidates: backfilled 0 row(s)
+  election_votes: backfilled 0 row(s)
+  karma_entries: backfilled 0 row(s)
+  collective_karma_log: backfilled 0 row(s)
+  business_ratings: backfilled 0 row(s)
+  board_posts: backfilled 0 row(s)
+  board_votes: backfilled 0 row(s)
+  board_comments: backfilled 0 row(s)
+  board_messages: backfilled 0 row(s)
+  personal_messages: backfilled 0 row(s)
+  private_messages: backfilled 0 row(s)
+  account_ids: backfilled 0 row(s)
+  people_requests: backfilled 0 row(s)
+  account_id_requests: backfilled 0 row(s)
+  payment_orders: backfilled 0 row(s)
+  country_sentiment: backfilled 0 row(s)
+  zone_sentiment: backfilled 0 row(s)
+  app_reviews: backfilled 0 row(s)
+  profile_change_requests: backfilled 0 row(s)
+  volunteers: backfilled 0 row(s)
+  message_reactions: backfilled 0 row(s)
+  referrer_applications: backfilled 0 row(s)
+  subgroups: backfilled 0 row(s)
+  personal_groups: backfilled 0 row(s)
+  private_chats: backfilled 0 row(s)
+  subgroup_members: backfilled 0 row(s)
+  personal_group_members: backfilled 0 row(s)
+Backfill complete -- 0 row(s) across 28 table(s).
+Seeded 22 activity rows, cycle_id=Chaitra_2026
+[pipeline] village -> tehsil for Chaitra_2026: 20 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] tehsil -> district for Chaitra_2026: 20 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] district -> state for Chaitra_2026: 20 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] state -> zone for Chaitra_2026: 20 records moved, 2 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] zone -> country for Chaitra_2026: 21 records moved, 2 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] country -> continent for Chaitra_2026: 22 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] continent -> earth for Chaitra_2026: 22 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+Rows at pipeline_level='earth' after climbing: 22
+Writing Village CS.DL.3.4.1A archive (20 records, 8369 bytes)...
+Writing Country O_AS_NPL archive (1 records, 2203 bytes)...
+Writing Zone IND/NS archive (1 records, 2194 bytes)...
+Writing User  archive (12 records, 6634 bytes)...
+Writing User  archive (12 records, 6634 bytes)...
+Writing User  archive (7 records, 3572 bytes)...
+Writing User  archive (7 records, 3572 bytes)...
+Writing User  archive (3 records, 2699 bytes)...
+Writing User  archive (3 records, 2699 bytes)...
+Wrote 3 locations, 3 users, 12766 bytes total
+[archive] dry_run=True -- raw records left untouched for Chaitra_2026
+
+Dry run result: {'status': 'dry_run_complete', 'cycle_id': 'Chaitra_2026', 'locations': 3, 'users': 3, 'bytes': 12766}
+
+File                           Exists   Valid    Records
+------------------------------------------------------------
+account_activity.json          ✓        ✓        2
+collective_karma.json          ✓        ✓        1
+comments.json                  ✓        ✓        1
+cycle_metadata.json            ✓        ✓        -
+group_activity.json            ✓        ✓        5
+karma_entries.json             ✓        ✓        3
+payment_orders.json            ✓        ✓        1
+posts.json                     ✓        ✓        1
+profile_changes.json           ✓        ✓        1
+reviews.json                   ✓        ✓        1
+volunteers.json                ✓        ✓        2
+votes.json                     ✓        ✓        1
+wallet_transactions.json       ✓        ✓        1
+
+Sample cycle_metadata.json:
+{
+  "cycle_id": "Chaitra_2026",
+  "display_names": {
+    "en": "Chaitra Purnima to Vaishakha Amavasya 2026",
+    "hi": "चैत्र पूर्णिमा to वैशाख अमावस्या 2026",
+    "bn": "চৈত্র পূর্ণিমা to বৈশাখ অমাবস্যা 2026",
+    "ta": "சித்திரை பௌர்ணமி to வைகாசி அமாவாசை 2026",
+    "te": "చైత్రం పూర్ణిమ to వైశాఖం అమావాస్య 2026",
+    "kn": "ಚೈತ್ರ ಹುಣ್ಣಿಮೆ to ವೈಶಾಖ ಅಮಾವಾಸ್ಯೆ 2026",
+    "ml": "ചൈത്രം പൗർണ്ണമി to വൈശാഖം അമാവാസി 2026",
+    "mr": "चैत्र पौर्णिमा to वैशाख अमावास्या 2026",
+    "gu": "ચૈત્ર પૂર્ણિમા to વૈશાખ અમાસ 2026",
+    "pa": "ਚੇਤਰ ਪੂਰਨਮਾਸ਼ੀ to ਵੈਸਾਖ ਮੱਸਿਆ 2026",
+    "ur": "چترا پورنیما to ویساکھ اماوسیا 2026",
+    "or": "ଚୈତ୍ର ପୂର୍ଣ୍ଣିମା to ବୈଶାଖ ଅମାବାସ୍ୟା 2026",
+    "as": "চ'ত্ৰ পূৰ্ণিমা to বহাগ অমাৱস্যা 2026"
+  },
+  "start_date": "2026-04-17T17:21:49+05:30",
+  "start_phase": "Amavasya",
+  "start_vedic_name": "Chaitra_Amavasya",
+  "mid_date": "2026-05-01T22:53:11+05:30",
+  "mid_phase": "Purnima",
+  "mid_vedic_name": "Chaitra_Purnima",
+  "end_date": "2026-05-17T01:31:04+05:30",
+  "end_phase": "Amavasya",
+  "end_vedic_name": "Vaishakha_Amavasya",
+  "archived_at": "2026-10-05T01:21:38+00:00",
+  "archive_level": "Village",
+  "records_archived": {
+    "wallet_transactions.json": 1,
+    "
+Writing Village CS.DL.3.4.1A archive (20 records, 8370 bytes)...
+Writing Country O_AS_NPL archive (1 records, 2204 bytes)...
+Writing Zone IND/NS archive (1 records, 2195 bytes)...
+Writing User  archive (12 records, 6635 bytes)...
+Writing User  archive (12 records, 6635 bytes)...
+Writing User  archive (7 records, 3573 bytes)...
+Writing User  archive (7 records, 3573 bytes)...
+Writing User  archive (3 records, 2700 bytes)...
+Writing User  archive (3 records, 2700 bytes)...
+Wrote 3 locations, 3 users, 12769 bytes total
+Backed up 22 row(s) to /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmp3jkalmwh/0_Earth_test/.backups/pre_archive_Chaitra_2026.sql
+Deleting rows from DB for cycle Chaitra_2026...
+Archive complete for Chaitra_2026
+
+Real run result: {'status': 'archived', 'cycle_id': 'Chaitra_2026', 'locations': 3, 'users': 3, 'bytes': 12769, 'records_deleted': 22}
+[archive] Chaitra_2026 already archived (no raw rows remain at earth level) -- skipping
+
+Re-run result: {'status': 'already_archived', 'cycle_id': 'Chaitra_2026'}
+
+archive_status(): {'cycle_id': 'Chaitra_2026', 'archived': True, 'folder_count': 1, 'total_bytes': 8370, 'records_deleted': 22, 'checksum_match': True}
+
+======================================================================
+Consistency checks
+======================================================================
+PASS: All seeded rows reached earth
+PASS: Dry run writes files but does not delete
+PASS: Every written file exists and is valid JSON
+PASS: cycle_metadata.json has all 13 language display_names
+PASS: checksum_sha256 matches recomputation
+PASS: Raw records ARE deleted after the real run
+PASS: records_deleted matches what was seeded
+PASS: Backup SQL file was written before delete
+PASS: Idempotency: re-run reports already_archived, no error
+PASS: archive_status reports archived=True with a checksum match
+
+======================================================================
+OVERALL: ALL CHECKS PASSED
+======================================================================
+EXIT CODE: 0
+
+=== python3 tools/verify_scheduler.py ===
+======================================================================
+Isolated test DB: /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmp1dhpmvsr/verify_scheduler.db
+Isolated 0_Earth: /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmp1dhpmvsr/0_Earth_test
+======================================================================
+  wallet_transactions: backfilled 0 row(s)
+  election_candidates: backfilled 0 row(s)
+  election_votes: backfilled 0 row(s)
+  karma_entries: backfilled 0 row(s)
+  collective_karma_log: backfilled 0 row(s)
+  business_ratings: backfilled 0 row(s)
+  board_posts: backfilled 0 row(s)
+  board_votes: backfilled 0 row(s)
+  board_comments: backfilled 0 row(s)
+  board_messages: backfilled 0 row(s)
+  personal_messages: backfilled 0 row(s)
+  private_messages: backfilled 0 row(s)
+  account_ids: backfilled 0 row(s)
+  people_requests: backfilled 0 row(s)
+  account_id_requests: backfilled 0 row(s)
+  payment_orders: backfilled 0 row(s)
+  country_sentiment: backfilled 0 row(s)
+  zone_sentiment: backfilled 0 row(s)
+  app_reviews: backfilled 0 row(s)
+  profile_change_requests: backfilled 0 row(s)
+  volunteers: backfilled 0 row(s)
+  message_reactions: backfilled 0 row(s)
+  referrer_applications: backfilled 0 row(s)
+  subgroups: backfilled 0 row(s)
+  personal_groups: backfilled 0 row(s)
+  private_chats: backfilled 0 row(s)
+  subgroup_members: backfilled 0 row(s)
+  personal_group_members: backfilled 0 row(s)
+Backfill complete -- 0 row(s) across 28 table(s).
+[bootstrap] pipeline_bootstrap created: Year 1 starts 2026-10-10, Year 2 starts 2027-04-07 (Chaitra Navratri)
+Bootstrap: year_1_start=2026-10-10T21:20:07+05:30, year_2_start=2027-04-07T05:21:09+05:30, active=False
+[scheduler] lunar pipeline daily tick registered for 00:00 Asia/Kolkata
+[scheduler] QM_DISABLE_SCHEDULER set -- lunar pipeline cron not registered
+[scheduler] cycle_state advanced: Bhadrapada_2026 -> Phalguna_2026
+[scheduler] 2026-04-12: Year 1 bootstrap still active (pipeline starts 2026-04-17) -- no transfers
+
+Before year_2_start (2026-04-12T17:21:49+05:30): {'date': '2026-04-12T17:21:49+05:30', 'pipeline_active': False, 'activated_this_tick': False, 'kp_day': None, 'actions': []}
+[scheduler] cycle_state advanced: Phalguna_2026 -> Chaitra_2026
+[notify] pipeline_activated: Pipeline activated 2026-04-17T18:21:49+05:30 -- Year 2 has begun, transfers can now run.
+[scheduler] 2026-04-17: not in Krishna Paksha -- no transfers
+On/after year_2_start (2026-04-17T18:21:49+05:30): activated_this_tick=True, pipeline_active=True
+[scheduler] cycle_state advanced: Chaitra_2026 -> Vaishakha_2026
+[scheduler] 2026-05-17: not in Krishna Paksha -- no transfers
+Advance into Vaishakha_2026: kp_day=None
+[scheduler] cycle_state advanced: Vaishakha_2026 -> Jyeshtha_2026
+[scheduler] 2026-06-15: not in Krishna Paksha -- no transfers
+Advance into Jyeshtha_2026: kp_day=None
+[scheduler] 2026-06-28: not in Krishna Paksha -- no transfers
+
+Waxing phase, before Jyeshtha_2026's own Purnima (2026-06-28T05:26:43+05:30): kp_day=None, actions=[]
+[pipeline] village -> tehsil for Chaitra_2026: 1 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[notify] kp_run_started: Krishna Paksha Day 1: Chaitra_2026 moving village -> tehsil.
+
+KP Day 1 (2026-07-01T05:26:43+05:30): kp_day=1, hop=village->tehsil, actions=1
+[pipeline] tehsil -> district for Chaitra_2026: 1 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] district -> state for Chaitra_2026: 1 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] state -> zone for Chaitra_2026: 1 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] zone -> country for Chaitra_2026: 1 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] country -> continent for Chaitra_2026: 1 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] continent -> earth for Chaitra_2026: 1 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+Writing Village CS.DL.3.4.1A archive (1 records, 2196 bytes)...
+Writing User  archive (1 records, 2206 bytes)...
+Writing User  archive (1 records, 2206 bytes)...
+Wrote 1 locations, 1 users, 2196 bytes total
+Backed up 1 row(s) to /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmp1dhpmvsr/0_Earth_test/.backups/pre_archive_Chaitra_2026.sql
+Deleting rows from DB for cycle Chaitra_2026...
+Archive complete for Chaitra_2026
+[notify] archive_complete: Cycle Chaitra_2026 archived to 0_Earth (1 records).
+
+KP Day 15 (2026-07-14T14:13:36+05:30): kp_day=14, hop=earth->archive, actions=[{'cycle_id': 'Chaitra_2026', 'from_level': 'earth', 'to_level': 'archive', 'result': {'status': 'archived', 'cycle_id': 'Chaitra_2026', 'locations': 1, 'users': 1, 'bytes': 2196, 'records_deleted': 1}}]
+
+Notifications queued (3):
+  [archive_complete] Cycle Chaitra_2026 archived to 0_Earth (1 records).
+  [kp_run_started] Krishna Paksha Day 1: Chaitra_2026 moving village -> tehsil.
+  [pipeline_activated] Pipeline activated 2026-04-17T18:21:49+05:30 -- Year 2 has begun, transfers can now run.
+
+======================================================================
+Phase 1-4 verification suites
+======================================================================
+PASS: verify_lunar_calendar.py
+PASS: verify_cycle_stamping.py
+PASS: verify_pipeline.py
+PASS: verify_archive_writer.py
+
+======================================================================
+Consistency checks
+======================================================================
+PASS: Bootstrap row created on first call
+PASS: init_bootstrap is idempotent (same row, not recreated)
+PASS: Cron job registers in test mode (scheduler.get_jobs() == 1)
+PASS: Cron job is NOT registered when QM_DISABLE_SCHEDULER=1
+PASS: Before year_2_start: pipeline inactive, no actions
+PASS: On year_2_start: pipeline activates
+PASS: After advancing to Jyeshtha_2026, Chaitra_2026 is eligible (N-2)
+PASS: Waxing phase (before Purnima): kp_day is None, no actions
+PASS: KP Day 1: village -> tehsil fires for the eligible (N-2) cycle
+PASS: Idempotency: re-running the same tick moves nothing new
+PASS: KP Day ~15 (last day of Krishna Paksha): earth -> archive fires and completes
+PASS: Notifications queued for activation, KP start, and archive-complete
+PASS: verify_lunar_calendar.py still passes
+PASS: verify_cycle_stamping.py still passes
+PASS: verify_pipeline.py still passes
+PASS: verify_archive_writer.py still passes
+
+======================================================================
+OVERALL: ALL CHECKS PASSED
+======================================================================
+EXIT CODE: 0
+
+=== python3 tools/simulate_lunar_year.py ===
+======================================================================
+Isolated test DB: /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmppw5lygi9/simulate_lunar_year.db
+Isolated 0_Earth: /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmppw5lygi9/0_Earth_sim
+Simulating 9 lunar cycles, ~50 rows/cycle, 3 users
+======================================================================
+  wallet_transactions: backfilled 0 row(s)
+  election_candidates: backfilled 0 row(s)
+  election_votes: backfilled 0 row(s)
+  karma_entries: backfilled 0 row(s)
+  collective_karma_log: backfilled 0 row(s)
+  business_ratings: backfilled 0 row(s)
+  board_posts: backfilled 0 row(s)
+  board_votes: backfilled 0 row(s)
+  board_comments: backfilled 0 row(s)
+  board_messages: backfilled 0 row(s)
+  personal_messages: backfilled 0 row(s)
+  private_messages: backfilled 0 row(s)
+  account_ids: backfilled 0 row(s)
+  people_requests: backfilled 0 row(s)
+  account_id_requests: backfilled 0 row(s)
+  payment_orders: backfilled 0 row(s)
+  country_sentiment: backfilled 0 row(s)
+  zone_sentiment: backfilled 0 row(s)
+  app_reviews: backfilled 0 row(s)
+  profile_change_requests: backfilled 0 row(s)
+  volunteers: backfilled 0 row(s)
+  message_reactions: backfilled 0 row(s)
+  referrer_applications: backfilled 0 row(s)
+  subgroups: backfilled 0 row(s)
+  personal_groups: backfilled 0 row(s)
+  private_chats: backfilled 0 row(s)
+  subgroup_members: backfilled 0 row(s)
+  personal_group_members: backfilled 0 row(s)
+Backfill complete -- 0 row(s) across 28 table(s).
+
+Cycles (oldest to newest): ['Bhadrapada_2026', 'Ashwin_2026', 'Kartik_2026', 'Margashirsha_2026', 'Pausha_2027', 'Magha_2027', 'Phalguna_2027', 'Chaitra_2027', 'Vaishakha_2027']
+  seeded 46 rows for Bhadrapada_2026
+  seeded 45 rows for Ashwin_2026
+  seeded 45 rows for Kartik_2026
+  seeded 45 rows for Margashirsha_2026
+  seeded 45 rows for Pausha_2027
+  seeded 45 rows for Magha_2027
+  seeded 45 rows for Phalguna_2027
+  seeded 45 rows for Chaitra_2027
+  seeded 45 rows for Vaishakha_2027
+[notify] pipeline_activated: Pipeline activated 2026-09-11T08:57:01+05:30 -- Year 2 has begun, transfers can now run.
+[scheduler] 2026-09-11: not in Krishna Paksha -- no transfers
+[scheduler] 2026-09-12: not in Krishna Paksha -- no transfers
+[scheduler] 2026-09-13: not in Krishna Paksha -- no transfers
+[scheduler] 2026-09-14: not in Krishna Paksha -- no transfers
+[scheduler] 2026-09-15: not in Krishna Paksha -- no transfers
+[scheduler] 2026-09-16: not in Krishna Paksha -- no transfers
+[scheduler] 2026-09-17: not in Krishna Paksha -- no transfers
+[scheduler] 2026-09-18: not in Krishna Paksha -- no transfers
+[scheduler] 2026-09-19: not in Krishna Paksha -- no transfers
+[scheduler] 2026-09-20: not in Krishna Paksha -- no transfers
+[scheduler] 2026-09-21: not in Krishna Paksha -- no transfers
+[scheduler] 2026-09-22: not in Krishna Paksha -- no transfers
+[scheduler] 2026-09-23: not in Krishna Paksha -- no transfers
+[scheduler] 2026-09-24: not in Krishna Paksha -- no transfers
+[scheduler] 2026-09-25: not in Krishna Paksha -- no transfers
+[scheduler] 2026-09-26: not in Krishna Paksha -- no transfers
+[scheduler] 2026-09-27: not in Krishna Paksha -- no transfers
+[pipeline] village -> tehsil for Ashwin_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[notify] kp_run_started: Krishna Paksha Day 1: Ashwin_2026 moving village -> tehsil.
+[pipeline] village -> tehsil for Chaitra_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[notify] kp_run_started: Krishna Paksha Day 1: Chaitra_2027 moving village -> tehsil.
+[pipeline] village -> tehsil for Kartik_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[notify] kp_run_started: Krishna Paksha Day 1: Kartik_2026 moving village -> tehsil.
+[pipeline] village -> tehsil for Magha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[notify] kp_run_started: Krishna Paksha Day 1: Magha_2027 moving village -> tehsil.
+[pipeline] village -> tehsil for Margashirsha_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[notify] kp_run_started: Krishna Paksha Day 1: Margashirsha_2026 moving village -> tehsil.
+[pipeline] village -> tehsil for Pausha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[notify] kp_run_started: Krishna Paksha Day 1: Pausha_2027 moving village -> tehsil.
+[pipeline] village -> tehsil for Phalguna_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[notify] kp_run_started: Krishna Paksha Day 1: Phalguna_2027 moving village -> tehsil.
+[pipeline] village -> tehsil for Vaishakha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[notify] kp_run_started: Krishna Paksha Day 1: Vaishakha_2027 moving village -> tehsil.
+[pipeline] tehsil -> district for Ashwin_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] tehsil -> district for Chaitra_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] tehsil -> district for Kartik_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] tehsil -> district for Magha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] tehsil -> district for Margashirsha_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] tehsil -> district for Pausha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] tehsil -> district for Phalguna_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] tehsil -> district for Vaishakha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] district -> state for Ashwin_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] district -> state for Chaitra_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] district -> state for Kartik_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] district -> state for Magha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] district -> state for Margashirsha_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] district -> state for Pausha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] district -> state for Phalguna_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] district -> state for Vaishakha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] state -> zone for Ashwin_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] state -> zone for Chaitra_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] state -> zone for Kartik_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] state -> zone for Magha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] state -> zone for Margashirsha_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] state -> zone for Pausha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] state -> zone for Phalguna_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] state -> zone for Vaishakha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] zone -> country for Ashwin_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] zone -> country for Chaitra_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] zone -> country for Kartik_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] zone -> country for Magha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] zone -> country for Margashirsha_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] zone -> country for Pausha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] zone -> country for Phalguna_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] zone -> country for Vaishakha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] country -> continent for Ashwin_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] country -> continent for Chaitra_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] country -> continent for Kartik_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] country -> continent for Magha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] country -> continent for Margashirsha_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] country -> continent for Pausha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] country -> continent for Phalguna_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] country -> continent for Vaishakha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[scheduler] cycle_state advanced: Bhadrapada_2026 -> Ashwin_2026
+[scheduler] 2026-10-11: not in Krishna Paksha -- no transfers
+[scheduler] 2026-10-12: not in Krishna Paksha -- no transfers
+[scheduler] 2026-10-13: not in Krishna Paksha -- no transfers
+[scheduler] 2026-10-14: not in Krishna Paksha -- no transfers
+[scheduler] 2026-10-15: not in Krishna Paksha -- no transfers
+[scheduler] 2026-10-16: not in Krishna Paksha -- no transfers
+[scheduler] 2026-10-17: not in Krishna Paksha -- no transfers
+[scheduler] 2026-10-18: not in Krishna Paksha -- no transfers
+[scheduler] 2026-10-19: not in Krishna Paksha -- no transfers
+[scheduler] 2026-10-20: not in Krishna Paksha -- no transfers
+[scheduler] 2026-10-21: not in Krishna Paksha -- no transfers
+[scheduler] 2026-10-22: not in Krishna Paksha -- no transfers
+[scheduler] 2026-10-23: not in Krishna Paksha -- no transfers
+[scheduler] 2026-10-24: not in Krishna Paksha -- no transfers
+[scheduler] 2026-10-25: not in Krishna Paksha -- no transfers
+[scheduler] 2026-10-26: not in Krishna Paksha -- no transfers
+[scheduler] 2026-10-27: not in Krishna Paksha -- no transfers
+[scheduler] cycle_state advanced: Ashwin_2026 -> Kartik_2026
+[scheduler] 2026-11-10: not in Krishna Paksha -- no transfers
+[scheduler] 2026-11-11: not in Krishna Paksha -- no transfers
+[scheduler] 2026-11-12: not in Krishna Paksha -- no transfers
+[scheduler] 2026-11-13: not in Krishna Paksha -- no transfers
+[scheduler] 2026-11-14: not in Krishna Paksha -- no transfers
+[scheduler] 2026-11-15: not in Krishna Paksha -- no transfers
+[scheduler] 2026-11-16: not in Krishna Paksha -- no transfers
+[scheduler] 2026-11-17: not in Krishna Paksha -- no transfers
+[scheduler] 2026-11-18: not in Krishna Paksha -- no transfers
+[scheduler] 2026-11-19: not in Krishna Paksha -- no transfers
+[scheduler] 2026-11-20: not in Krishna Paksha -- no transfers
+[scheduler] 2026-11-21: not in Krishna Paksha -- no transfers
+[scheduler] 2026-11-22: not in Krishna Paksha -- no transfers
+[scheduler] 2026-11-23: not in Krishna Paksha -- no transfers
+[scheduler] 2026-11-24: not in Krishna Paksha -- no transfers
+[scheduler] 2026-11-25: not in Krishna Paksha -- no transfers
+[pipeline] village -> tehsil for Bhadrapada_2026: 46 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[notify] kp_run_started: Krishna Paksha Day 1: Bhadrapada_2026 moving village -> tehsil.
+[pipeline] tehsil -> district for Bhadrapada_2026: 46 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] district -> state for Bhadrapada_2026: 46 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] state -> zone for Bhadrapada_2026: 46 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] zone -> country for Bhadrapada_2026: 46 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] country -> continent for Bhadrapada_2026: 46 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[scheduler] cycle_state advanced: Kartik_2026 -> Margashirsha_2026
+[scheduler] 2026-12-09: not in Krishna Paksha -- no transfers
+[scheduler] 2026-12-10: not in Krishna Paksha -- no transfers
+[scheduler] 2026-12-11: not in Krishna Paksha -- no transfers
+[scheduler] 2026-12-12: not in Krishna Paksha -- no transfers
+[scheduler] 2026-12-13: not in Krishna Paksha -- no transfers
+[scheduler] 2026-12-14: not in Krishna Paksha -- no transfers
+[scheduler] 2026-12-15: not in Krishna Paksha -- no transfers
+[scheduler] 2026-12-16: not in Krishna Paksha -- no transfers
+[scheduler] 2026-12-17: not in Krishna Paksha -- no transfers
+[scheduler] 2026-12-18: not in Krishna Paksha -- no transfers
+[scheduler] 2026-12-19: not in Krishna Paksha -- no transfers
+[scheduler] 2026-12-20: not in Krishna Paksha -- no transfers
+[scheduler] 2026-12-21: not in Krishna Paksha -- no transfers
+[scheduler] 2026-12-22: not in Krishna Paksha -- no transfers
+[scheduler] 2026-12-23: not in Krishna Paksha -- no transfers
+[scheduler] 2026-12-24: not in Krishna Paksha -- no transfers
+[pipeline] continent -> earth for Ashwin_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] continent -> earth for Bhadrapada_2026: 46 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] continent -> earth for Chaitra_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] continent -> earth for Magha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] continent -> earth for Pausha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] continent -> earth for Phalguna_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+[pipeline] continent -> earth for Vaishakha_2027: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+Writing Village CS.DL.3.4.1A archive (45 records, 13622 bytes)...
+Writing User  archive (17 records, 6366 bytes)...
+Writing User  archive (17 records, 6366 bytes)...
+Writing User  archive (14 records, 5782 bytes)...
+Writing User  archive (14 records, 5782 bytes)...
+Writing User  archive (14 records, 5782 bytes)...
+Writing User  archive (14 records, 5782 bytes)...
+Wrote 1 locations, 3 users, 13622 bytes total
+Backed up 45 row(s) to /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmppw5lygi9/0_Earth_sim/.backups/pre_archive_Ashwin_2026.sql
+Deleting rows from DB for cycle Ashwin_2026...
+Archive complete for Ashwin_2026
+[notify] archive_complete: Cycle Ashwin_2026 archived to 0_Earth (45 records).
+Writing Village CS.DL.3.4.1A archive (46 records, 14118 bytes)...
+Writing User  archive (18 records, 6735 bytes)...
+Writing User  archive (18 records, 6735 bytes)...
+Writing User  archive (14 records, 5847 bytes)...
+Writing User  archive (14 records, 5847 bytes)...
+Writing User  archive (14 records, 5848 bytes)...
+Writing User  archive (14 records, 5848 bytes)...
+Wrote 1 locations, 3 users, 14118 bytes total
+Backed up 46 row(s) to /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmppw5lygi9/0_Earth_sim/.backups/pre_archive_Bhadrapada_2026.sql
+Deleting rows from DB for cycle Bhadrapada_2026...
+Archive complete for Bhadrapada_2026
+[notify] archive_complete: Cycle Bhadrapada_2026 archived to 0_Earth (46 records).
+Writing Village CS.DL.3.4.1A archive (45 records, 13657 bytes)...
+Writing User  archive (17 records, 6341 bytes)...
+Writing User  archive (17 records, 6341 bytes)...
+Writing User  archive (14 records, 5748 bytes)...
+Writing User  archive (14 records, 5748 bytes)...
+Writing User  archive (14 records, 5748 bytes)...
+Writing User  archive (14 records, 5748 bytes)...
+Wrote 1 locations, 3 users, 13657 bytes total
+Backed up 45 row(s) to /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmppw5lygi9/0_Earth_sim/.backups/pre_archive_Chaitra_2027.sql
+Deleting rows from DB for cycle Chaitra_2027...
+Archive complete for Chaitra_2027
+[notify] archive_complete: Cycle Chaitra_2027 archived to 0_Earth (45 records).
+Writing Village CS.DL.3.4.1A archive (45 records, 13515 bytes)...
+Writing User  archive (17 records, 6263 bytes)...
+Writing User  archive (17 records, 6263 bytes)...
+Writing User  archive (14 records, 5676 bytes)...
+Writing User  archive (14 records, 5676 bytes)...
+Writing User  archive (14 records, 5676 bytes)...
+Writing User  archive (14 records, 5676 bytes)...
+Wrote 1 locations, 3 users, 13515 bytes total
+Backed up 45 row(s) to /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmppw5lygi9/0_Earth_sim/.backups/pre_archive_Magha_2027.sql
+Deleting rows from DB for cycle Magha_2027...
+Archive complete for Magha_2027
+[notify] archive_complete: Cycle Magha_2027 archived to 0_Earth (45 records).
+Writing Village CS.DL.3.4.1A archive (45 records, 13461 bytes)...
+Writing User  archive (17 records, 6177 bytes)...
+Writing User  archive (17 records, 6177 bytes)...
+Writing User  archive (14 records, 5590 bytes)...
+Writing User  archive (14 records, 5590 bytes)...
+Writing User  archive (14 records, 5590 bytes)...
+Writing User  archive (14 records, 5590 bytes)...
+Wrote 1 locations, 3 users, 13461 bytes total
+Backed up 45 row(s) to /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmppw5lygi9/0_Earth_sim/.backups/pre_archive_Pausha_2027.sql
+Deleting rows from DB for cycle Pausha_2027...
+Archive complete for Pausha_2027
+[notify] archive_complete: Cycle Pausha_2027 archived to 0_Earth (45 records).
+Writing Village CS.DL.3.4.1A archive (45 records, 13745 bytes)...
+Writing User  archive (17 records, 6397 bytes)...
+Writing User  archive (17 records, 6397 bytes)...
+Writing User  archive (14 records, 5801 bytes)...
+Writing User  archive (14 records, 5801 bytes)...
+Writing User  archive (14 records, 5801 bytes)...
+Writing User  archive (14 records, 5801 bytes)...
+Wrote 1 locations, 3 users, 13745 bytes total
+Backed up 45 row(s) to /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmppw5lygi9/0_Earth_sim/.backups/pre_archive_Phalguna_2027.sql
+Deleting rows from DB for cycle Phalguna_2027...
+Archive complete for Phalguna_2027
+[notify] archive_complete: Cycle Phalguna_2027 archived to 0_Earth (45 records).
+Writing Village CS.DL.3.4.1A archive (45 records, 13779 bytes)...
+Writing User  archive (17 records, 6399 bytes)...
+Writing User  archive (17 records, 6399 bytes)...
+Writing User  archive (14 records, 5800 bytes)...
+Writing User  archive (14 records, 5800 bytes)...
+Writing User  archive (14 records, 5800 bytes)...
+Writing User  archive (14 records, 5800 bytes)...
+Wrote 1 locations, 3 users, 13779 bytes total
+Backed up 45 row(s) to /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmppw5lygi9/0_Earth_sim/.backups/pre_archive_Vaishakha_2027.sql
+Deleting rows from DB for cycle Vaishakha_2027...
+Archive complete for Vaishakha_2027
+[notify] archive_complete: Cycle Vaishakha_2027 archived to 0_Earth (45 records).
+[scheduler] cycle_state advanced: Margashirsha_2026 -> Pausha_2027
+[scheduler] 2027-01-08: not in Krishna Paksha -- no transfers
+[scheduler] 2027-01-09: not in Krishna Paksha -- no transfers
+[scheduler] 2027-01-10: not in Krishna Paksha -- no transfers
+[scheduler] 2027-01-11: not in Krishna Paksha -- no transfers
+[scheduler] 2027-01-12: not in Krishna Paksha -- no transfers
+[scheduler] 2027-01-13: not in Krishna Paksha -- no transfers
+[scheduler] 2027-01-14: not in Krishna Paksha -- no transfers
+[scheduler] 2027-01-15: not in Krishna Paksha -- no transfers
+[scheduler] 2027-01-16: not in Krishna Paksha -- no transfers
+[scheduler] 2027-01-17: not in Krishna Paksha -- no transfers
+[scheduler] 2027-01-18: not in Krishna Paksha -- no transfers
+[scheduler] 2027-01-19: not in Krishna Paksha -- no transfers
+[scheduler] 2027-01-20: not in Krishna Paksha -- no transfers
+[scheduler] 2027-01-21: not in Krishna Paksha -- no transfers
+[scheduler] 2027-01-22: not in Krishna Paksha -- no transfers
+[scheduler] 2027-01-23: not in Krishna Paksha -- no transfers
+[pipeline] continent -> earth for Kartik_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+Writing Village CS.DL.3.4.1A archive (45 records, 13690 bytes)...
+Writing User  archive (17 records, 6434 bytes)...
+Writing User  archive (17 records, 6434 bytes)...
+Writing User  archive (14 records, 5850 bytes)...
+Writing User  archive (14 records, 5850 bytes)...
+Writing User  archive (14 records, 5850 bytes)...
+Writing User  archive (14 records, 5850 bytes)...
+Wrote 1 locations, 3 users, 13690 bytes total
+Backed up 45 row(s) to /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmppw5lygi9/0_Earth_sim/.backups/pre_archive_Kartik_2026.sql
+Deleting rows from DB for cycle Kartik_2026...
+Archive complete for Kartik_2026
+[notify] archive_complete: Cycle Kartik_2026 archived to 0_Earth (45 records).
+[scheduler] cycle_state advanced: Pausha_2027 -> Magha_2027
+[scheduler] 2027-02-07: not in Krishna Paksha -- no transfers
+[scheduler] 2027-02-08: not in Krishna Paksha -- no transfers
+[scheduler] 2027-02-09: not in Krishna Paksha -- no transfers
+[scheduler] 2027-02-10: not in Krishna Paksha -- no transfers
+[scheduler] 2027-02-11: not in Krishna Paksha -- no transfers
+[scheduler] 2027-02-12: not in Krishna Paksha -- no transfers
+[scheduler] 2027-02-13: not in Krishna Paksha -- no transfers
+[scheduler] 2027-02-14: not in Krishna Paksha -- no transfers
+[scheduler] 2027-02-15: not in Krishna Paksha -- no transfers
+[scheduler] 2027-02-16: not in Krishna Paksha -- no transfers
+[scheduler] 2027-02-17: not in Krishna Paksha -- no transfers
+[scheduler] 2027-02-18: not in Krishna Paksha -- no transfers
+[scheduler] 2027-02-19: not in Krishna Paksha -- no transfers
+[scheduler] 2027-02-20: not in Krishna Paksha -- no transfers
+[scheduler] 2027-02-21: not in Krishna Paksha -- no transfers
+[pipeline] continent -> earth for Margashirsha_2026: 45 records moved, 1 holdings upserted, 0 rows excluded (no full India chain)
+Writing Village CS.DL.3.4.1A archive (45 records, 13913 bytes)...
+Writing User  archive (17 records, 6453 bytes)...
+Writing User  archive (17 records, 6453 bytes)...
+Writing User  archive (14 records, 5845 bytes)...
+Writing User  archive (14 records, 5845 bytes)...
+Writing User  archive (14 records, 5845 bytes)...
+Writing User  archive (14 records, 5845 bytes)...
+Wrote 1 locations, 3 users, 13913 bytes total
+Backed up 45 row(s) to /var/folders/q8/r9jw88g13fd1y0fmskr7znj80000gn/T/tmppw5lygi9/0_Earth_sim/.backups/pre_archive_Margashirsha_2026.sql
+Deleting rows from DB for cycle Margashirsha_2026...
+Archive complete for Margashirsha_2026
+[notify] archive_complete: Cycle Margashirsha_2026 archived to 0_Earth (45 records).
+[scheduler] cycle_state advanced: Magha_2027 -> Phalguna_2027
+[scheduler] 2027-03-09: not in Krishna Paksha -- no transfers
+[scheduler] 2027-03-10: not in Krishna Paksha -- no transfers
+[scheduler] 2027-03-11: not in Krishna Paksha -- no transfers
+[scheduler] 2027-03-12: not in Krishna Paksha -- no transfers
+[scheduler] 2027-03-13: not in Krishna Paksha -- no transfers
+[scheduler] 2027-03-14: not in Krishna Paksha -- no transfers
+[scheduler] 2027-03-15: not in Krishna Paksha -- no transfers
+[scheduler] 2027-03-16: not in Krishna Paksha -- no transfers
+[scheduler] 2027-03-17: not in Krishna Paksha -- no transfers
+[scheduler] 2027-03-18: not in Krishna Paksha -- no transfers
+[scheduler] 2027-03-19: not in Krishna Paksha -- no transfers
+[scheduler] 2027-03-20: not in Krishna Paksha -- no transfers
+[scheduler] 2027-03-21: not in Krishna Paksha -- no transfers
+[scheduler] 2027-03-22: not in Krishna Paksha -- no transfers
+[scheduler] 2027-03-23: not in Krishna Paksha -- no transfers
+[scheduler] cycle_state advanced: Phalguna_2027 -> Chaitra_2027
+[scheduler] 2027-04-07: not in Krishna Paksha -- no transfers
+[scheduler] 2027-04-08: not in Krishna Paksha -- no transfers
+[scheduler] 2027-04-09: not in Krishna Paksha -- no transfers
+[scheduler] 2027-04-10: not in Krishna Paksha -- no transfers
+[scheduler] 2027-04-11: not in Krishna Paksha -- no transfers
+[scheduler] 2027-04-12: not in Krishna Paksha -- no transfers
+[scheduler] 2027-04-13: not in Krishna Paksha -- no transfers
+[scheduler] 2027-04-14: not in Krishna Paksha -- no transfers
+[scheduler] 2027-04-15: not in Krishna Paksha -- no transfers
+[scheduler] 2027-04-16: not in Krishna Paksha -- no transfers
+[scheduler] 2027-04-17: not in Krishna Paksha -- no transfers
+[scheduler] 2027-04-18: not in Krishna Paksha -- no transfers
+[scheduler] 2027-04-19: not in Krishna Paksha -- no transfers
+[scheduler] 2027-04-20: not in Krishna Paksha -- no transfers
+[scheduler] 2027-04-21: not in Krishna Paksha -- no transfers
+[scheduler] cycle_state advanced: Chaitra_2027 -> Vaishakha_2027
+[scheduler] 2027-05-07: not in Krishna Paksha -- no transfers
+[scheduler] 2027-05-08: not in Krishna Paksha -- no transfers
+[scheduler] 2027-05-09: not in Krishna Paksha -- no transfers
+[scheduler] 2027-05-10: not in Krishna Paksha -- no transfers
+[scheduler] 2027-05-11: not in Krishna Paksha -- no transfers
+[scheduler] 2027-05-12: not in Krishna Paksha -- no transfers
+[scheduler] 2027-05-13: not in Krishna Paksha -- no transfers
+[scheduler] 2027-05-14: not in Krishna Paksha -- no transfers
+[scheduler] 2027-05-15: not in Krishna Paksha -- no transfers
+[scheduler] 2027-05-16: not in Krishna Paksha -- no transfers
+[scheduler] 2027-05-17: not in Krishna Paksha -- no transfers
+[scheduler] 2027-05-18: not in Krishna Paksha -- no transfers
+[scheduler] 2027-05-19: not in Krishna Paksha -- no transfers
+[scheduler] 2027-05-20: not in Krishna Paksha -- no transfers
+[scheduler] 2027-05-21: not in Krishna Paksha -- no transfers
+[scheduler] cycle_state advanced: Vaishakha_2027 -> Jyeshtha_2027
+[scheduler] 2027-06-05: not in Krishna Paksha -- no transfers
+[scheduler] 2027-06-06: not in Krishna Paksha -- no transfers
+
+Ran 269 daily ticks covering 268 days.
+
+Date         Cycle            Hop                  Result
+----------------------------------------------------------------------
+2026-09-28   Ashwin_2026      village->tehsil      {'from_level': 'village', 'to_level': 'tehsil', 'cycle_id': 'Ashwin_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-09-28   Chaitra_2027     village->tehsil      {'from_level': 'village', 'to_level': 'tehsil', 'cycle_id': 'Chaitra_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-09-28   Kartik_2026      village->tehsil      {'from_level': 'village', 'to_level': 'tehsil', 'cycle_id': 'Kartik_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-09-28   Magha_2027       village->tehsil      {'from_level': 'village', 'to_level': 'tehsil', 'cycle_id': 'Magha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-09-28   Margashirsha_2026 village->tehsil      {'from_level': 'village', 'to_level': 'tehsil', 'cycle_id': 'Margashirsha_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-09-28   Pausha_2027      village->tehsil      {'from_level': 'village', 'to_level': 'tehsil', 'cycle_id': 'Pausha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-09-28   Phalguna_2027    village->tehsil      {'from_level': 'village', 'to_level': 'tehsil', 'cycle_id': 'Phalguna_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-09-28   Vaishakha_2027   village->tehsil      {'from_level': 'village', 'to_level': 'tehsil', 'cycle_id': 'Vaishakha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-09-30   Ashwin_2026      tehsil->district     {'from_level': 'tehsil', 'to_level': 'district', 'cycle_id': 'Ashwin_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-09-30   Chaitra_2027     tehsil->district     {'from_level': 'tehsil', 'to_level': 'district', 'cycle_id': 'Chaitra_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-09-30   Kartik_2026      tehsil->district     {'from_level': 'tehsil', 'to_level': 'district', 'cycle_id': 'Kartik_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-09-30   Magha_2027       tehsil->district     {'from_level': 'tehsil', 'to_level': 'district', 'cycle_id': 'Magha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-09-30   Margashirsha_2026 tehsil->district     {'from_level': 'tehsil', 'to_level': 'district', 'cycle_id': 'Margashirsha_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-09-30   Pausha_2027      tehsil->district     {'from_level': 'tehsil', 'to_level': 'district', 'cycle_id': 'Pausha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-09-30   Phalguna_2027    tehsil->district     {'from_level': 'tehsil', 'to_level': 'district', 'cycle_id': 'Phalguna_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-09-30   Vaishakha_2027   tehsil->district     {'from_level': 'tehsil', 'to_level': 'district', 'cycle_id': 'Vaishakha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-02   Ashwin_2026      district->state      {'from_level': 'district', 'to_level': 'state', 'cycle_id': 'Ashwin_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-02   Chaitra_2027     district->state      {'from_level': 'district', 'to_level': 'state', 'cycle_id': 'Chaitra_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-02   Kartik_2026      district->state      {'from_level': 'district', 'to_level': 'state', 'cycle_id': 'Kartik_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-02   Magha_2027       district->state      {'from_level': 'district', 'to_level': 'state', 'cycle_id': 'Magha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-02   Margashirsha_2026 district->state      {'from_level': 'district', 'to_level': 'state', 'cycle_id': 'Margashirsha_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-02   Pausha_2027      district->state      {'from_level': 'district', 'to_level': 'state', 'cycle_id': 'Pausha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-02   Phalguna_2027    district->state      {'from_level': 'district', 'to_level': 'state', 'cycle_id': 'Phalguna_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-02   Vaishakha_2027   district->state      {'from_level': 'district', 'to_level': 'state', 'cycle_id': 'Vaishakha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-04   Ashwin_2026      state->zone          {'from_level': 'state', 'to_level': 'zone', 'cycle_id': 'Ashwin_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-04   Chaitra_2027     state->zone          {'from_level': 'state', 'to_level': 'zone', 'cycle_id': 'Chaitra_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-04   Kartik_2026      state->zone          {'from_level': 'state', 'to_level': 'zone', 'cycle_id': 'Kartik_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-04   Magha_2027       state->zone          {'from_level': 'state', 'to_level': 'zone', 'cycle_id': 'Magha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-04   Margashirsha_2026 state->zone          {'from_level': 'state', 'to_level': 'zone', 'cycle_id': 'Margashirsha_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-04   Pausha_2027      state->zone          {'from_level': 'state', 'to_level': 'zone', 'cycle_id': 'Pausha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-04   Phalguna_2027    state->zone          {'from_level': 'state', 'to_level': 'zone', 'cycle_id': 'Phalguna_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-04   Vaishakha_2027   state->zone          {'from_level': 'state', 'to_level': 'zone', 'cycle_id': 'Vaishakha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-06   Ashwin_2026      zone->country        {'from_level': 'zone', 'to_level': 'country', 'cycle_id': 'Ashwin_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-06   Chaitra_2027     zone->country        {'from_level': 'zone', 'to_level': 'country', 'cycle_id': 'Chaitra_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-06   Kartik_2026      zone->country        {'from_level': 'zone', 'to_level': 'country', 'cycle_id': 'Kartik_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-06   Magha_2027       zone->country        {'from_level': 'zone', 'to_level': 'country', 'cycle_id': 'Magha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-06   Margashirsha_2026 zone->country        {'from_level': 'zone', 'to_level': 'country', 'cycle_id': 'Margashirsha_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-06   Pausha_2027      zone->country        {'from_level': 'zone', 'to_level': 'country', 'cycle_id': 'Pausha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-06   Phalguna_2027    zone->country        {'from_level': 'zone', 'to_level': 'country', 'cycle_id': 'Phalguna_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-06   Vaishakha_2027   zone->country        {'from_level': 'zone', 'to_level': 'country', 'cycle_id': 'Vaishakha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-08   Ashwin_2026      country->continent   {'from_level': 'country', 'to_level': 'continent', 'cycle_id': 'Ashwin_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-08   Chaitra_2027     country->continent   {'from_level': 'country', 'to_level': 'continent', 'cycle_id': 'Chaitra_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-08   Kartik_2026      country->continent   {'from_level': 'country', 'to_level': 'continent', 'cycle_id': 'Kartik_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-08   Magha_2027       country->continent   {'from_level': 'country', 'to_level': 'continent', 'cycle_id': 'Magha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-08   Margashirsha_2026 country->continent   {'from_level': 'country', 'to_level': 'continent', 'cycle_id': 'Margashirsha_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-08   Pausha_2027      country->continent   {'from_level': 'country', 'to_level': 'continent', 'cycle_id': 'Pausha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-08   Phalguna_2027    country->continent   {'from_level': 'country', 'to_level': 'continent', 'cycle_id': 'Phalguna_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-10-08   Vaishakha_2027   country->continent   {'from_level': 'country', 'to_level': 'continent', 'cycle_id': 'Vaishakha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-11-26   Bhadrapada_2026  village->tehsil      {'from_level': 'village', 'to_level': 'tehsil', 'cycle_id': 'Bhadrapada_2026', 'records_moved': 46, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-11-28   Bhadrapada_2026  tehsil->district     {'from_level': 'tehsil', 'to_level': 'district', 'cycle_id': 'Bhadrapada_2026', 'records_moved': 46, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-11-30   Bhadrapada_2026  district->state      {'from_level': 'district', 'to_level': 'state', 'cycle_id': 'Bhadrapada_2026', 'records_moved': 46, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-12-02   Bhadrapada_2026  state->zone          {'from_level': 'state', 'to_level': 'zone', 'cycle_id': 'Bhadrapada_2026', 'records_moved': 46, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-12-04   Bhadrapada_2026  zone->country        {'from_level': 'zone', 'to_level': 'country', 'cycle_id': 'Bhadrapada_2026', 'records_moved': 46, 'holdings_created': 1, 'excluded_no_chain': 0}
+2026-12-06   Bhadrapada_2026  country->continent   {'from_level': 'country', 'to_level': 'continent', 'cycle_id': 'Bhadrapada_2026', 'records_moved': 46, 'holdings_created': 1, 'excluded_no_chain': 0}
+2027-01-06   Ashwin_2026      continent->earth     {'from_level': 'continent', 'to_level': 'earth', 'cycle_id': 'Ashwin_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2027-01-06   Bhadrapada_2026  continent->earth     {'from_level': 'continent', 'to_level': 'earth', 'cycle_id': 'Bhadrapada_2026', 'records_moved': 46, 'holdings_created': 1, 'excluded_no_chain': 0}
+2027-01-06   Chaitra_2027     continent->earth     {'from_level': 'continent', 'to_level': 'earth', 'cycle_id': 'Chaitra_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2027-01-06   Magha_2027       continent->earth     {'from_level': 'continent', 'to_level': 'earth', 'cycle_id': 'Magha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2027-01-06   Pausha_2027      continent->earth     {'from_level': 'continent', 'to_level': 'earth', 'cycle_id': 'Pausha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2027-01-06   Phalguna_2027    continent->earth     {'from_level': 'continent', 'to_level': 'earth', 'cycle_id': 'Phalguna_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2027-01-06   Vaishakha_2027   continent->earth     {'from_level': 'continent', 'to_level': 'earth', 'cycle_id': 'Vaishakha_2027', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2027-01-07   Ashwin_2026      earth->archive       archived
+2027-01-07   Bhadrapada_2026  earth->archive       archived
+2027-01-07   Chaitra_2027     earth->archive       archived
+2027-01-07   Magha_2027       earth->archive       archived
+2027-01-07   Pausha_2027      earth->archive       archived
+2027-01-07   Phalguna_2027    earth->archive       archived
+2027-01-07   Vaishakha_2027   earth->archive       archived
+2027-02-05   Kartik_2026      continent->earth     {'from_level': 'continent', 'to_level': 'earth', 'cycle_id': 'Kartik_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2027-02-06   Kartik_2026      earth->archive       archived
+2027-03-06   Margashirsha_2026 continent->earth     {'from_level': 'continent', 'to_level': 'earth', 'cycle_id': 'Margashirsha_2026', 'records_moved': 45, 'holdings_created': 1, 'excluded_no_chain': 0}
+2027-03-08   Margashirsha_2026 earth->archive       archived
+
+======================================================================
+Final state per cycle
+======================================================================
+  Bhadrapada_2026: archived (0_Earth)
+  Ashwin_2026: archived (0_Earth)
+  Kartik_2026: archived (0_Earth)
+  Margashirsha_2026: archived (0_Earth)
+  Pausha_2027: archived (0_Earth)
+  Magha_2027: archived (0_Earth)
+  Phalguna_2027: archived (0_Earth)
+  Chaitra_2027: archived (0_Earth)
+  Vaishakha_2027: archived (0_Earth)
+
+Total rows seeded: 406; total rows accounted for (DB + archived): 406
+
+======================================================================
+Consistency checks
+======================================================================
+PASS: Cycle 1 (Bhadrapada_2026) reached 0_Earth archive
+PASS: Cycle 2 (Ashwin_2026) progressed beyond village (not stuck)
+PASS: No data lost (seeded == DB-remaining + archived)
+
+======================================================================
+OVERALL: ALL CHECKS PASSED
+======================================================================
+EXIT CODE: 0

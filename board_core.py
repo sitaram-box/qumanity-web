@@ -66,6 +66,11 @@ CREATE INDEX IF NOT EXISTS idx_board_comments ON board_comments(post_id);
 
 def ensure_tables(conn):
     conn.executescript(SCHEMA)
+    # subgroups is SUB_SCHEMA's table, not SCHEMA's -- ensure it exists before checking its columns
+    # below. Call order used to matter (this only ever worked because every real DB already had
+    # subgroups from prior use); ensure_sub_tables() is idempotent, so calling it here makes this
+    # function self-sufficient regardless of what's called it, including on a brand-new DB.
+    ensure_sub_tables(conn)
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(subgroups)")}
     if "admin_label" not in cols:
         conn.execute("ALTER TABLE subgroups ADD COLUMN admin_label TEXT")
