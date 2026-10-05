@@ -15,7 +15,7 @@
       <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
     </a>
     <div class="qm-header-text">
-      <h1 data-i18n="dashboard">Dashboard</h1>
+      <h1 data-i18n="dashboard">Q-Dashboard</h1>
       <p>{{ profile.name }}</p>
     </div>
     <nav class="qm-header-actions">
@@ -61,7 +61,7 @@
         </div>
       </div>
 
-      <div class="pv-grid">
+      <div class="pv-grid pv-grid-compact">
         <article class="pv-card">
           <h3><span class="pv-ico">🆔</span> <span data-i18n="identity">Identity</span></h3>
           <div class="pv-field"><label data-i18n="private_id">Private ID (9 digits)</label>
@@ -70,6 +70,11 @@
           <div class="pv-field"><label data-i18n="account_id">Account ID</label><code>{{ profile.account_id }}</code></div>
           <div class="pv-field"><label>🔎 Public search ID <small class="pv-hint">safe to share</small></label><code id="pv-search-code">…</code>
             <small class="pv-hintline">Others can find you with this 12-digit ID.</small></div>
+          <div class="pv-mini" style="margin-top:8px;">
+            <div><label data-i18n="dob">Date of birth</label><b>{{ profile.dob }}</b><small>{{ profile.tob }}</small></div>
+            <div><label data-i18n="email">Email</label><b>{{ profile.email or "—" }}</b></div>
+            <div><label data-i18n="phone">Phone</label><b>{{ profile.phone or "—" }}</b></div>
+          </div>
           <button type="button" class="sg-btn" id="account-history-btn" style="margin-top:6px;">Past Account IDs →</button>
           <div id="account-history-box" hidden></div>
         </article>
@@ -92,58 +97,6 @@
               {% endfor %}
             </tbody>
           </table>
-        </article>
-
-        <article class="pv-card">
-          <h3><span class="pv-ico">✨</span> <span data-i18n="zodiac">Zodiac</span></h3>
-          <div class="pv-mini">
-            <div><label data-i18n="sun">Sun</label><b>{{ profile.sun_sign }}</b><small>{{ profile.sun_element }}</small></div>
-            <div><label data-i18n="moon">Moon</label><b>{{ profile.moon_sign }}</b><small>{{ profile.moon_nakshatra }}</small></div>
-            <div><label data-i18n="ascendant">Ascendant</label><b>{{ profile.ascendant_sign }}</b><small>&nbsp;</small></div>
-          </div>
-        </article>
-
-        <article class="pv-card">
-          <h3><span class="pv-ico">📞</span> <span data-i18n="contact">Contact</span></h3>
-          <div class="pv-field"><label>📧 <span data-i18n="email">Email</span></label><span>{{ profile.email or "—" }}</span></div>
-          <div class="pv-field"><label>📱 <span data-i18n="phone">Phone</span></label><span>{{ profile.phone or "—" }}</span></div>
-        </article>
-
-        <article class="pv-card pv-card-wide">
-          <h3><span class="pv-ico">🌐</span> <span data-i18n="languages">Languages</span> <small class="pv-hint" data-i18n="lang_hint">up to 3 · switch from the top bar</small></h3>
-          <div class="pv-langs">
-            <div class="pv-lang"><label data-i18n="mother_tongue">Mother tongue</label><b>{{ profile.mother_tongue }}</b><small data-i18n="locked">locked</small></div>
-            <div class="pv-lang"><label data-i18n="second_lang">Second language</label><b>English</b><small data-i18n="locked">locked</small></div>
-            <div class="pv-lang pv-lang-edit">
-              <label for="daily-lang" data-i18n="daily_lang">Daily-use language (optional)</label>
-              <div class="pv-lang-row">
-                <select id="daily-lang">
-                  <option value="">— none —</option>
-                  {% for l in all_languages %}{% if l.name != 'English' and l.name != profile.mother_tongue %}
-                  <option value="{{ l.name }}" {{ 'selected' if l.name == profile.daily_language }}>{{ l.name }}{% if l.native != l.name %} — {{ l.native }}{% endif %}</option>
-                  {% endif %}{% endfor %}
-                </select>
-                <button type="button" class="qm-btn qm-btn-ghost" id="daily-lang-save" data-i18n="save">Save</button>
-              </div>
-            </div>
-          </div>
-          <div class="pv-field" id="pref-lang-field" style="margin-top:10px;">
-            <label data-i18n="pref_lang_title">Preferred language</label>
-            <div class="pv-lang-row" id="pref-lang-options"></div>
-          </div>
-        </article>
-
-        <article class="pv-card">
-          <h3><span class="pv-ico">🔥</span> <span data-i18n="elemental">Elemental Balance</span></h3>
-          <div class="elemental-balance">
-            {% for bar in profile.element_bars %}
-            <div class="el-row">
-              <span class="el-label">{{ bar.name }}</span>
-              <div class="el-track"><div class="el-fill {{ bar.css_class }}" style="width: {{ bar.width_pct }}%">{{ bar.count }}</div></div>
-            </div>
-            {% endfor %}
-            {% if profile.elemental_balance %}<p class="el-dominant"><span data-i18n="dominant">Dominant</span>: <strong>{{ profile.elemental_balance.dominant_element }}</strong></p>{% endif %}
-          </div>
         </article>
 
         <article class="pv-card" id="qm-wallet-card">
@@ -185,15 +138,61 @@
           <p class="qm-dash-empty" id="eh-qpunch-empty" hidden>You haven't voted in a Q-Punch election yet.</p>
         </article>
 
+        <article class="pv-card" id="qm-messagebox-card">
+          <h3><span class="pv-ico">📥</span> Message Box</h3>
+          <p class="qm-dash-empty">Coming soon — Message Box ships in a later update. Your chats already live under the <b>Personal</b> tab.</p>
+        </article>
+
         <article class="pv-card" id="removed-card" hidden>
           <h3><span class="pv-ico">🗂️</span> Removed posts <small class="pv-hint">saved here, only you can see them</small></h3>
           <ul class="bd-removed" id="removed-list"></ul>
         </article>
 
         <article class="pv-card">
-          <h3><span class="pv-ico">🕘</span> <span data-i18n="activities">Recent Activities</span></h3>
+          <h3><span class="pv-ico">🕘</span> <span data-i18n="activities">Recent Activities</span> <small class="pv-hint">last 5</small></h3>
           <p class="qm-dash-empty">No activity yet — activity logging isn't built yet.</p>
         </article>
+
+        <details class="pv-card pv-card-wide pv-settings">
+          <summary><span class="pv-ico">⚙️</span> <span data-i18n="settings">Settings</span> <small class="pv-hint">Language, PIN, sign out</small></summary>
+          <div class="pv-settings-body">
+            <div class="pv-langs">
+              <div class="pv-lang"><label data-i18n="mother_tongue">Mother tongue</label><b>{{ profile.mother_tongue }}</b><small data-i18n="locked">locked</small></div>
+              <div class="pv-lang"><label data-i18n="second_lang">Second language</label><b>English</b><small data-i18n="locked">locked</small></div>
+              <div class="pv-lang pv-lang-edit">
+                <label for="daily-lang" data-i18n="daily_lang">Daily-use language (optional)</label>
+                <div class="pv-lang-row">
+                  <select id="daily-lang">
+                    <option value="">— none —</option>
+                    {% for l in all_languages %}{% if l.name != 'English' and l.name != profile.mother_tongue %}
+                    <option value="{{ l.name }}" {{ 'selected' if l.name == profile.daily_language }}>{{ l.name }}{% if l.native != l.name %} — {{ l.native }}{% endif %}</option>
+                    {% endif %}{% endfor %}
+                  </select>
+                  <button type="button" class="qm-btn qm-btn-ghost" id="daily-lang-save" data-i18n="save">Save</button>
+                </div>
+              </div>
+            </div>
+            <div class="pv-field" id="pref-lang-field" style="margin-top:10px;">
+              <label data-i18n="pref_lang_title">Preferred language</label>
+              <div class="pv-lang-row" id="pref-lang-options"></div>
+            </div>
+
+            <div class="pv-field" style="margin-top:14px;">
+              <label data-i18n="change_pin">Change PIN</label>
+              <form id="pin-change-form" class="pv-pin-form">
+                <input type="password" id="pin-current" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="Current PIN" autocomplete="current-password" required />
+                <input type="password" id="pin-new" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="New PIN" autocomplete="new-password" required />
+                <button type="submit" class="qm-btn qm-btn-ghost" data-i18n="update_pin">Update PIN</button>
+              </form>
+              <p class="qm-summary-error" id="pin-change-error" hidden></p>
+              <p class="qm-timeline-note" id="pin-change-success" hidden>PIN updated.</p>
+            </div>
+
+            <div class="pv-field" style="margin-top:14px;">
+              <a class="qm-btn qm-btn-ghost" href="{{ url_for('logout') }}" data-i18n="logout">🚪 Sign out</a>
+            </div>
+          </div>
+        </details>
       </div>
     </section>
 

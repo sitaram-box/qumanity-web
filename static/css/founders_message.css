@@ -1,45 +1,45 @@
-.fm-body { background: #050b14; color: #f4ead0; }
+.fm-body { background: var(--qm-bg); color: var(--qm-text); }
 
 /* Language picker in the header -- mirrors home.css's .dq-pop/.hm-lang-btn/.dq-menu (same colors,
 hardcoded here since this page doesn't load home.css's --hm-* variables). */
 .dq-pop { position: relative; }
 .hm-lang-btn {
   height: 34px; width: 34px; border-radius: 999px; cursor: pointer; font-size: 1rem;
-  border: 1.5px solid rgba(255, 255, 255, 0.09); background: rgba(255, 255, 255, 0.045); color: #e8eef7;
+  border: 1.5px solid var(--qm-input-border); background: var(--qm-input-bg); color: var(--qm-text);
   display: inline-grid; place-items: center;
 }
-.hm-lang-btn:hover, .hm-lang-btn[aria-expanded="true"] { border-color: rgba(255, 210, 74, 0.5); }
+.hm-lang-btn:hover, .hm-lang-btn[aria-expanded="true"] { border-color: #B8860B; }
 .dq-menu {
   position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; min-width: 200px; max-height: 60vh; overflow-y: auto;
   margin: 0; padding: 6px; list-style: none;
-  background: #0b1626; border: 1px solid rgba(255, 210, 74, 0.5); border-radius: 14px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  background: var(--qm-panel-bg); border: 1px solid rgba(201, 150, 12, 0.4); border-radius: 14px; box-shadow: 0 16px 40px rgba(10, 25, 41, 0.22);
 }
 html[dir="rtl"] .dq-menu { right: auto; left: 0; }
 .dq-menu[hidden] { display: none; }
 .dq-menu button {
   display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; padding: 9px 12px; border: 0; border-radius: 9px;
-  background: transparent; color: #f4ead0; cursor: pointer; text-align: left; font: 500 0.92rem "Inter", "Noto Sans Bengali", "Noto Sans Devanagari", system-ui, sans-serif;
+  background: transparent; color: var(--qm-text); cursor: pointer; text-align: left; font: 500 0.92rem "Inter", "Noto Sans Bengali", "Noto Sans Devanagari", system-ui, sans-serif;
 }
 .dq-menu button i { display: none; font-style: normal; font-weight: 800; }
-.dq-menu button:hover { background: rgba(255, 153, 51, 0.16); }
+.dq-menu button:hover { background: rgba(255, 153, 51, 0.12); }
 .dq-menu button.is-active { background: linear-gradient(120deg, #ff8a1f, #ffd24a); color: #1a1205; font-weight: 700; }
 .dq-menu button.is-active i { display: inline; }
 .fm-main { max-width: 720px; margin: 0 auto; padding: 40px 20px 80px; }
 .fm-article { display: flex; flex-direction: column; gap: 4px; }
 .fm-title {
   font: 700 2.1rem/1.2 "Fraunces", Georgia, serif;
-  color: #ffd700;
+  color: var(--qm-gold-text);
   margin: 0 0 28px;
   text-align: center;
 }
 .fm-heading {
   font: 700 1.25rem/1.4 "Fraunces", Georgia, serif;
-  color: #ff9933;
+  color: #C2650F;
   margin: 28px 0 10px;
 }
 .fm-para {
   font: 400 1.05rem/1.6 "Inter", system-ui, sans-serif;
-  color: #f4ead0;
+  color: var(--qm-text);
   margin: 0 0 10px;
 }
 .fm-closing {
@@ -47,7 +47,7 @@ html[dir="rtl"] .dq-menu { right: auto; left: 0; }
   text-align: center;
   font-weight: 700;
   font-size: 1.15rem;
-  color: #ff9933;
+  color: #C2650F;
   line-height: 1.8;
 }
 @media (max-width: 600px) {

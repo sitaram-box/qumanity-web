@@ -1442,6 +1442,8 @@ def _profile_for(user_id):
         "account_id": user["account_id"],
         "name": user["name"],
         "gender": user["gender"],
+        "dob": user["dob"],
+        "tob": user["tob"],
         "age_years": age_years,
         "age_category": age_category,
         "email": user["email"],

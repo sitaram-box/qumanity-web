@@ -9,7 +9,7 @@
   position: relative;
   border-radius: 14px;
   overflow: hidden;
-  border: 1px solid rgba(255, 215, 0, 0.15);
+  border: 1px solid var(--qm-border);
   background: var(--qm-bg);
 }
 
@@ -19,26 +19,26 @@
   background: var(--qm-bg);
 }
 
-/* Dark-theme the default Leaflet chrome */
+/* Light-theme the default Leaflet chrome */
 .leaflet-container {
   background: var(--qm-bg) !important;
   font-family: inherit !important;
 }
 .leaflet-control-zoom a {
-  background: rgba(10, 25, 41, 0.85) !important;
-  color: var(--qm-white) !important;
-  border-color: rgba(255, 215, 0, 0.3) !important;
+  background: var(--qm-panel-bg) !important;
+  color: var(--qm-text) !important;
+  border-color: var(--qm-border) !important;
 }
-.leaflet-control-zoom a:hover { background: rgba(255, 153, 51, 0.25) !important; }
+.leaflet-control-zoom a:hover { background: rgba(255, 153, 51, 0.15) !important; }
 .leaflet-control-attribution {
-  background: rgba(10, 25, 41, 0.7) !important;
+  background: rgba(255, 255, 255, 0.85) !important;
   color: var(--qm-text-dim) !important;
 }
-.leaflet-control-attribution a { color: var(--qm-gold) !important; }
+.leaflet-control-attribution a { color: var(--qm-gold-text) !important; }
 .leaflet-tooltip.qm-state-tooltip {
-  background: rgba(10, 25, 41, 0.92);
-  border: 1px solid rgba(255, 215, 0, 0.35);
-  color: var(--qm-white);
+  background: var(--qm-panel-bg);
+  border: 1px solid rgba(201, 150, 12, 0.4);
+  color: var(--qm-text);
   font-size: 0.78rem;
   padding: 4px 10px;
   border-radius: 6px;
@@ -67,14 +67,14 @@
   gap: 5px;
   padding: 4px 9px;
   border-radius: 999px;
-  background: rgba(10, 25, 41, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--qm-panel-bg);
+  border: 1px solid var(--qm-input-border);
   font-size: 0.68rem;
   color: var(--qm-text-dim);
 }
 .qm-india-map-legend .legend-swatch {
   width: 9px; height: 9px; border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.35);
+  border: 1px solid rgba(10, 25, 41, 0.3);
 }
 
 .qm-india-map-confirm {
@@ -90,9 +90,10 @@
   gap: 8px;
   padding: 8px 12px;
   border-radius: 10px;
-  background: rgba(10, 25, 41, 0.9);
-  border: 1px solid rgba(255, 215, 0, 0.35);
+  background: var(--qm-panel-bg);
+  border: 1px solid rgba(201, 150, 12, 0.4);
   font-size: 0.8rem;
+  color: var(--qm-text);
 }
 .qm-india-map-confirm[hidden] { display: none; }
 
@@ -121,18 +122,18 @@
 .qm-wizard-step-num {
   width: 26px; height: 26px;
   border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  border: 1.5px solid var(--qm-input-border);
   display: flex; align-items: center; justify-content: center;
   font-size: 0.75rem;
   color: var(--qm-text-dim);
 }
 .qm-wizard-step.is-active .qm-wizard-step-num {
   border-color: var(--qm-saffron);
-  color: var(--qm-white);
+  color: var(--qm-text);
   background: rgba(255, 153, 51, 0.15);
 }
 .qm-wizard-step.is-done .qm-wizard-step-num {
-  border-color: var(--qm-gold);
+  border-color: var(--qm-gold-text);
   background: var(--qm-gold);
   color: var(--qm-navy);
 }
@@ -141,15 +142,15 @@
   color: var(--qm-text-dim);
   white-space: nowrap;
 }
-.qm-wizard-step.is-active .qm-wizard-step-label { color: var(--qm-white); }
+.qm-wizard-step.is-active .qm-wizard-step-label { color: var(--qm-text); }
 .qm-wizard-connector {
   flex: 1;
   min-width: 16px;
   height: 1.5px;
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--qm-input-border);
   margin: 0 2px 16px;
 }
-.qm-wizard-connector.is-done { background: var(--qm-gold); }
+.qm-wizard-connector.is-done { background: var(--qm-gold-text); }
 
 .qm-wizard-card-list[hidden] { display: none; }
 .qm-wizard-card-list {
@@ -167,13 +168,13 @@
   text-align: left;
   padding: 10px 12px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-left: 3px solid rgba(255, 215, 0, 0.5);
+  border: 1px solid var(--qm-input-border);
+  border-left: 3px solid rgba(201, 150, 12, 0.5);
   background: var(--qm-panel-bg);
-  color: var(--qm-white);
+  color: var(--qm-text);
   cursor: pointer;
 }
-.qm-wizard-card:hover { background: rgba(255, 215, 0, 0.1); }
+.qm-wizard-card:hover { background: rgba(255, 153, 51, 0.08); }
 
 .qm-wizard-search {
   width: 100%;
@@ -181,9 +182,9 @@
   font-size: 0.85rem;
   padding: 10px 12px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--qm-white);
+  border: 1px solid var(--qm-input-border);
+  background: var(--qm-input-bg);
+  color: var(--qm-text);
 }
 .qm-wizard-search:focus { outline: none; border-color: var(--qm-saffron); }
 .qm-wizard-hint {
@@ -199,14 +200,14 @@
   margin-top: 16px;
 }
 
-.qm-wizard-summary-title { margin: 4px 0 12px; color: var(--qm-gold); font-size: 1rem; }
+.qm-wizard-summary-title { margin: 4px 0 12px; color: var(--qm-gold-text); font-size: 1rem; }
 .qm-wizard-summary-list { margin: 0 0 16px; }
 .qm-wizard-summary-list > div {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 9px 0;
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+  border-bottom: 1px dashed rgba(10, 25, 41, 0.14);
   font-size: 0.85rem;
 }
 .qm-wizard-summary-list dt { color: var(--qm-text-dim); }
@@ -215,7 +216,7 @@
   font-family: inherit;
   font-size: 0.7rem;
   font-weight: 400;
-  color: var(--qm-gold);
+  color: var(--qm-gold-text);
   background: none;
   border: none;
   cursor: pointer;
@@ -227,8 +228,8 @@
   margin: 0 0 16px;
 }
 .qm-wizard-path code {
-  color: var(--qm-white);
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--qm-text);
+  background: var(--qm-input-bg);
   padding: 2px 6px;
   border-radius: 4px;
 }

@@ -38,10 +38,10 @@
   var LANG_KEY = "qm_poem_lang";  // remembered across visits
   var IDX_KEY = "qm_poem_idx", T_KEY = "qm_poem_off", PLAY_KEY = "qm_poem_playing", STAMP_KEY = "qm_poem_stamp"; // per tab session
 
-  // Poems start paused (2026-09-28) -- the very first load of a browser session is always paused;
-  // once the user presses play, that choice carries across pages for the rest of the tab session
-  // (via PLAY_KEY in sessionStorage, read further down).
-  var meta = null, lang = "hi", playing = false, hoverPaused = false, speedIx = 0;
+  // Poems autoplay from the very first load (2026-10-05) -- if the user pauses, that choice
+  // carries across pages for the rest of the tab session (via PLAY_KEY in sessionStorage, read
+  // further down), but never persists into a new session: a fresh tab always starts playing.
+  var meta = null, lang = "hi", playing = true, hoverPaused = false, speedIx = 0;
   var segs = [], offset = 0, contentW = 0, nextIdx = 0, curIdx = 0, gen = 0, filling = false, lastTs = 0, shownIdx = -1;
   var cache = {};
 

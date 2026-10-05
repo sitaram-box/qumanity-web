@@ -18,9 +18,9 @@
   font-size: 0.85rem;
   padding: 8px 12px;
   border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.15);
-  background: rgba(255,255,255,0.04);
-  color: var(--qm-white);
+  border: 1px solid var(--qm-input-border);
+  background: var(--qm-input-bg);
+  color: var(--qm-text);
 }
 
 .dashboard-cards {
@@ -31,15 +31,15 @@
 
 .el-card {
   background: var(--qm-panel-bg);
-  border: 1px solid rgba(255, 215, 0, 0.15);
+  border: 1px solid var(--qm-border);
   border-radius: 12px;
   padding: 16px;
 }
-.el-card--target { border-color: var(--qm-gold); box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.25); }
+.el-card--target { border-color: var(--qm-gold-text); box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.2); }
 .el-card h3 {
   margin: 0 0 4px;
   font-size: 0.95rem;
-  color: var(--qm-gold);
+  color: var(--qm-gold-text);
 }
 .el-card .el-card-sub {
   font-size: 0.72rem;
@@ -60,16 +60,16 @@
 }
 .dot--fire { background: var(--qm-el-fire); }
 .dot--earth { background: var(--qm-el-earth); }
-.dot--air { background: var(--qm-el-air); }
+.dot--air { background: var(--qm-el-air); border: 1px solid rgba(10, 25, 41, 0.2); }
 .dot--water { background: var(--qm-el-water); border: 1px solid rgba(255,255,255,0.35); }
 
 .lunar-panel {
   background: var(--qm-panel-bg);
-  border: 1px solid rgba(255, 215, 0, 0.15);
+  border: 1px solid var(--qm-border);
   border-radius: 12px;
   padding: 20px;
 }
-.lunar-panel h2 { margin: 0 0 4px; font-size: 1.05rem; color: var(--qm-gold); }
+.lunar-panel h2 { margin: 0 0 4px; font-size: 1.05rem; color: var(--qm-gold-text); }
 .lunar-events { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 10px; }
 .lunar-events li {
   display: flex;
@@ -77,8 +77,8 @@
   gap: 10px;
   font-size: 0.82rem;
   padding: 10px 12px;
-  background: rgba(255,255,255,0.03);
+  background: var(--qm-input-bg);
   border-radius: 8px;
 }
-.lunar-events .le-type { color: var(--qm-white); font-weight: 600; }
+.lunar-events .le-type { color: var(--qm-text); font-weight: 600; }
 .lunar-events .le-date { color: var(--qm-text-dim); }
