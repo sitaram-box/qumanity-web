@@ -2297,6 +2297,21 @@ def api_user_zodiac(user_id):
     return jsonify(result)
 
 
+@app.route("/api/me/kundali")
+@login_required
+def api_me_kundali():
+    """The signed-in member's own Moon-based Vedic chart + analysis (kundali_analyser) -- the phone
+    app's Kundali screen. Same data as /api/user/zodiac/<id>'s moon_based_analysis, without the
+    app needing (or ever seeing) a numeric user id."""
+    conn = get_db()
+    row = conn.execute("SELECT birth_chart FROM user_zodiac WHERE user_id = ?", (session["user_id"],)).fetchone()
+    dob_row = conn.execute("SELECT dob FROM users WHERE id = ?", (session["user_id"],)).fetchone()
+    conn.close()
+    if not row or not row["birth_chart"] or not dob_row:
+        return jsonify({"error": "No birth chart"}), 404
+    return jsonify(kundali_analyser.analyse(dob_row["dob"], json.loads(row["birth_chart"])))
+
+
 @app.route("/api/user/kundali/summary/<int:user_id>")
 def api_user_kundali_summary(user_id):
     conn = get_db()
