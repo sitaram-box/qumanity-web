@@ -59,7 +59,7 @@ The five goals below are those suggested in the brief, and the review kept all f
 
 **How Qumanity advances these targets.** Only people who presently live in a place can post and vote on its board. Residents of a settlement therefore decide which local issues are raised and elevated (11.3). Rural villages and urban sectors use the same mechanism and the same escalation path from village to tehsil, district and state, so issues from rural areas reach regional levels on the same terms as urban ones (11.a). Within a large village, council members can create sub-groups for housing societies or resident welfare associations.
 
-**Concrete example.** The location hierarchy covers about 620,000 Indian villages, imported from administrative source data. A resident of a village in Bawana tehsil, Delhi, posts on their village board. If the post passes the village threshold, it moves to the Bawana tehsil board, where residents of neighbouring urban and rural villages vote on it.
+**Concrete example.** The hierarchy covers about 620,000 Indian villages. A resident of a village in Bawana tehsil, Delhi, posts on their village board. If the post passes the village threshold, it moves to the Bawana tehsil board, where residents of neighbouring urban and rural villages vote on it.
 
 **Evidence:** [docs/sub_groups.md](../sub_groups.md), [docs/user_restrictions.md](../user_restrictions.md), [docs/location_consolidation_report.md](../location_consolidation_report.md), [docs/voting_logic.md](../voting_logic.md).
 
@@ -70,9 +70,9 @@ The five goals below are those suggested in the brief, and the review kept all f
 - **9.1:** Develop quality, reliable, sustainable and resilient infrastructure, including regional and transborder infrastructure, to support economic development and human well-being, with a focus on affordable and equitable access for all.
 - **9.c:** Significantly increase access to information and communications technology and strive to provide universal and affordable access to the Internet in least developed countries by 2020.
 
-**How Qumanity advances these targets.** Qumanity is shared digital civic infrastructure. One Flask backend serves both the website and the phone app through a single API, and the platform runs on a low-cost stack (SQLite, one server process), which keeps hosting costs affordable for a non-profit steward (9.1). Its location data covers the 10 countries of the Indian subcontinent, including UN-listed least developed countries such as Afghanistan and Myanmar. Participation needs only a phone with the app or a browser (9.c).
+**How Qumanity advances these targets.** Qumanity is shared digital civic infrastructure. One Flask backend serves both the website and the phone app through a single API, and the platform runs on a low-cost stack (SQLite, one server process), which keeps hosting costs affordable for a non-profit steward (9.1). Its location data covers the 10 countries of the Indian subcontinent, including UN-listed least developed countries such as Afghanistan and Myanmar. Participation needs only a phone with the app or a browser (9.c). While target 9.c's 2020 deadline has passed, its intent (universal and affordable ICT access) remains relevant and guides Qumanity's infrastructure choices.
 
-**Concrete example.** A member signs in on the phone app with their 9-digit Private ID and 5-digit PIN and uses the same account, wallet and boards as on the website. They do not need an email address or a separate app account.
+**Concrete example.** A member signs in on the phone app with their 9-digit Private ID and 5-digit PIN and uses the same account, wallet and boards as on the website. No email address is needed.
 
 **Evidence:** [docs/phone_app_api.md](../phone_app_api.md), [docs/private_id_and_login.md](../private_id_and_login.md), [docs/go_live_hardening_2026_10.md](../go_live_hardening_2026_10.md).
 
@@ -85,7 +85,7 @@ The five goals below are those suggested in the brief, and the review kept all f
 
 **How Qumanity advances these targets.** Each optional registration donation is split according to a published table among the eight location wallets of the new member's present-location chain (Village to Earth), the referrer and the new member. Location wallets are credited immediately and their balances are visible to everyone (17.17). For every location, Qumanity publishes counts of registered members broken down by gender and age band, without exposing individual records (17.18).
 
-**Concrete example.** The public statistics endpoint for any district or state returns total members, a gender breakdown and four age bands. Local bodies and researchers can read it without an account.
+**Concrete example.** The public statistics endpoint (`/api/location/stats/<level>/<location_id>`, for example `/api/location/stats/district/<id>`) for any district or state returns total members, a gender breakdown and four age bands.
 
 **Evidence:** [docs/donation_distribution.md](../donation_distribution.md), [docs/transaction_history.md](../transaction_history.md), [docs/qoins_wallet_system.md](../qoins_wallet_system.md).
 
