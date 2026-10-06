@@ -34,6 +34,9 @@ import founder_core
 import id_generator
 import kundali_analyser
 import lunar_core
+import logout_review_core
+import announcements_core
+import reports_core
 import board_core
 import karma_core
 import notify_core
@@ -284,6 +287,15 @@ def kundali_view(user_id):
 PIN_MAX_TRIES = 5
 PIN_LOCK_MINUTES = 15
 
+# Item 5: PIN is exactly 5 characters -- digits, letters, or a mix of letters/numbers/
+# special chars -- but rejects an all-special-character PIN (at least one letter or
+# digit required). Case-sensitive; never normalized for storage.
+PIN_RE = re.compile(r"""^(?=.*[A-Za-z0-9])[A-Za-z0-9!@#$%^&*()_+\-=\[\]{}|;:'",.<>/?]{5}$""")
+PIN_FORMAT_ERROR = (
+    "PIN must be 5 characters. It can include numbers, letters, or special "
+    "characters — but not all special characters."
+)
+
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -295,7 +307,7 @@ def login():
     code = re.sub(r"\D", "", data.get("private_id") or "")
     pin = (data.get("pin") or "").strip()
     generic = jsonify({"error": "Invalid Private ID or PIN"}), 401
-    if not re.fullmatch(r"\d{9}", code) or not re.fullmatch(r"\d{5}", pin):
+    if not re.fullmatch(r"\d{9}", code) or not PIN_RE.fullmatch(pin):
         return generic
     conn = get_db()
     user = conn.execute("SELECT id, pin_hash, pin_fails, pin_locked_until FROM users WHERE private_id_9digit = ?", (code,)).fetchone()
@@ -335,6 +347,59 @@ def recover_id_page():
 def logout():
     session.pop("user_id", None)
     return redirect(url_for("login"))
+
+
+@app.route("/api/user/review-status")
+@login_required
+def api_user_review_status():
+    """Item 10c: has this user already rated/reviewed this lunar cycle? Drives whether the
+    Logout flow shows the Rating screen or skips straight to the confirm popup."""
+    from lunar_calendar import get_current_cycle_id
+    cycle_id = get_current_cycle_id()
+    conn = get_db()
+    reviewed = logout_review_core.has_reviewed(conn, session["user_id"], cycle_id)
+    conn.close()
+    return jsonify({"cycle_id": cycle_id, "reviewed": reviewed})
+
+
+@app.route("/api/user/review", methods=["POST"])
+@login_required
+def api_user_review_submit():
+    """Item 10c: save this cycle's logout rating/review (Submit only -- Skip never calls this,
+    so skipping never counts as a review and never blocks a future prompt this same cycle)."""
+    from lunar_calendar import get_current_cycle_id
+    data = request.get_json(silent=True) or {}
+    rating = data.get("rating")
+    if rating is not None:
+        try:
+            rating = int(rating)
+        except (TypeError, ValueError):
+            return jsonify({"error": "rating must be a number 1-5"}), 400
+        if not (1 <= rating <= 5):
+            return jsonify({"error": "rating must be between 1 and 5"}), 400
+    review = (data.get("review") or "").strip()[:500] or None
+    cycle_id = get_current_cycle_id()
+    conn = get_db()
+    logout_review_core.save_review(conn, session["user_id"], cycle_id, rating, review)
+    conn.close()
+    return jsonify({"status": "ok", "cycle_id": cycle_id})
+
+
+@app.route("/api/admin/logout-reviews")
+@login_required
+def api_admin_logout_reviews():
+    """Item 10d: admin-only view of this (or any) cycle's logout reviews -- no UI yet, just the
+    API, for a future dashboard widget. Named distinctly from the pre-existing
+    /api/admin/reviews (review_core.py's one-time app_reviews / onboarding-tour rating) --
+    a different, unrelated system; this one is the per-lunar-cycle logout gate (Item 10)."""
+    if not _is_admin():
+        return jsonify({"error": "Admin only"}), 403
+    from lunar_calendar import get_current_cycle_id
+    cycle_id = request.args.get("cycle_id") or get_current_cycle_id()
+    conn = get_db()
+    result = logout_review_core.admin_summary(conn, cycle_id)
+    conn.close()
+    return jsonify(result)
 
 
 def _location_display(location: dict) -> str:
@@ -387,10 +452,237 @@ def api_board(level):
         return jsonify({"error": "Unknown level"}), 404
     conn, user, loc = _board_user()
     view = board_core.board_view(conn, user["id"], loc, level)
+    if view is not None:
+        can_publish = announcements_core.can_publish_announcement(conn, user["id"], view["group_id"], view["level"], _is_admin())
+        view["can_publish_announcement"] = can_publish
+        view["announcements"] = announcements_core.list_for_location(conn, user["id"], view["level"], view["group_id"], limit=5)
+        # Same check as can_publish_announcement -- "is this user council (or admin) of this
+        # location" is identical logic for both features at village level, and both fall back
+        # to the same admin-only gate everywhere else (docs/reports_design.md §2).
+        view["can_view_report_inbox"] = can_publish
     conn.close()
     if view is None:
         return jsonify({"error": "You have no group at this level"}), 404
     return jsonify(view)
+
+
+def _user_location_chain(user) -> list[tuple[str, str]]:
+    """The user's own location lineage as (level, id) pairs -- Earth/Continent/Country come from
+    birth_location_json, Zone..Village from present_location_json, matching the Global-tab-uses-
+    birth / Public-tab-uses-present split used everywhere else in this file. Skips any level the
+    user doesn't have (e.g. no zone..village for a user outside the Indian sub-continent)."""
+    birth = json.loads(user["birth_location_json"] or "{}")
+    present = json.loads(user["present_location_json"] or "{}")
+    chain = [("earth", "EARTH")]
+    if birth.get("continent"):
+        chain.append(("continent", birth["continent"]["id"]))
+    if birth.get("country"):
+        chain.append(("country", birth["country"]["id"]))
+    for level in ("zone", "state", "district", "tehsil", "village"):
+        if present.get(level):
+            chain.append((level, present[level]["id"]))
+    return chain
+
+
+@app.route("/api/announcements", methods=["POST"])
+@login_required
+def api_create_announcement():
+    data = request.get_json(silent=True) or {}
+    location_id, location_level = data.get("location_id"), data.get("location_level")
+    body = (data.get("body") or "").strip()
+    if location_level not in announcements_core.LEVELS or not location_id or not body:
+        return jsonify({"error": "location_id, location_level and body are required"}), 400
+    conn = get_db()
+    user = _current_user_row(conn)
+    admin = _is_admin()
+    allowed = announcements_core.can_publish_announcement(conn, user["id"], location_id, location_level, admin)
+    if not allowed:
+        conn.close()
+        return jsonify({"error": "Only council members of this location can publish an announcement"}), 403
+    if admin and location_level != "village":
+        app.logger.info(
+            "Announcement published at %s level (%s) via admin fallback -- no elected council exists there yet (user %s)",
+            location_level, location_id, user["id"],
+        )
+    ann_id = announcements_core.create(
+        conn, user["id"], location_id, location_level,
+        (data.get("title") or "").strip() or None, body, (data.get("image_url") or "").strip() or None,
+    )
+    row = conn.execute("SELECT created_at FROM announcements WHERE id = ?", (ann_id,)).fetchone()
+    conn.close()
+    return jsonify({"id": ann_id, "created_at": row["created_at"]})
+
+
+@app.route("/api/announcements/<level>/<path:location_id>")
+@login_required
+def api_list_announcements(level, location_id):
+    if level not in announcements_core.LEVELS:
+        return jsonify({"error": "Unknown level"}), 404
+    limit = min(int(request.args.get("limit", 20)), 50)
+    conn = get_db()
+    user = _current_user_row(conn)
+    items = announcements_core.list_for_location(conn, user["id"], level, location_id, limit=limit)
+    conn.close()
+    return jsonify({"announcements": items})
+
+
+@app.route("/api/announcements/<int:ann_id>/read", methods=["POST"])
+@login_required
+def api_read_announcement(ann_id):
+    conn = get_db()
+    user = _current_user_row(conn)
+    row = conn.execute("SELECT id FROM announcements WHERE id = ?", (ann_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Unknown announcement"}), 404
+    announcements_core.mark_read(conn, user["id"], ann_id)
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/announcements/unread-count")
+@login_required
+def api_announcements_unread_count():
+    conn = get_db()
+    user = _current_user_row(conn)
+    total = announcements_core.unread_count(conn, user["id"], _user_location_chain(user))
+    conn.close()
+    return jsonify({"total": total})
+
+
+@app.route("/api/announcements/unread-recent")
+@login_required
+def api_announcements_unread_recent():
+    limit = min(int(request.args.get("limit", 5)), 20)
+    conn = get_db()
+    user = _current_user_row(conn)
+    items = announcements_core.unread_recent(conn, user["id"], _user_location_chain(user), limit=limit)
+    conn.close()
+    return jsonify({"announcements": items})
+
+
+@app.route("/api/reports", methods=["POST"])
+@login_required
+def api_create_report():
+    data = request.get_json(silent=True) or {}
+    body = (data.get("body") or "").strip()
+    if not body or len(body) > 2000:
+        return jsonify({"error": "A report must be 1-2000 characters"}), 400
+    conn = get_db()
+    user = _current_user_row(conn)
+    present = json.loads(user["present_location_json"] or "{}")
+    village = present.get("village")
+    if not village:
+        conn.close()
+        return jsonify({"error": "You need a present Village to submit a Report"}), 400
+    result = reports_core.create(conn, user["id"], village["id"], body, bool(data.get("anonymous")))
+    conn.close()
+    return jsonify(result)
+
+
+@app.route("/api/reports/mine")
+@login_required
+def api_reports_mine():
+    conn = get_db()
+    user = _current_user_row(conn)
+    items = reports_core.list_mine(conn, user["id"])
+    conn.close()
+    return jsonify({"reports": items})
+
+
+@app.route("/api/reports/inbox")
+@login_required
+def api_reports_inbox():
+    location_level = request.args.get("location_level")
+    location_id = request.args.get("location_id")
+    if not location_level or not location_id:
+        return jsonify({"error": "location_level and location_id are required"}), 400
+    conn = get_db()
+    user = _current_user_row(conn)
+    admin = _is_admin()
+    if not reports_core.is_holder_council(conn, user["id"], location_level, location_id, admin):
+        conn.close()
+        return jsonify({"error": "Only the council (or admin) holding this location can view its inbox"}), 403
+    items = reports_core.list_inbox(conn, location_level, location_id)
+    conn.close()
+    return jsonify({"reports": items})
+
+
+@app.route("/api/reports/<int:report_id>")
+@login_required
+def api_report_detail(report_id):
+    conn = get_db()
+    user = _current_user_row(conn)
+    admin = _is_admin()
+    report = reports_core.get(conn, report_id)
+    if report is None:
+        conn.close()
+        return jsonify({"error": "Unknown report"}), 404
+    if not reports_core.can_view(conn, user["id"], report, admin):
+        conn.close()
+        return jsonify({"error": "You can't view this report"}), 403
+    masked = reports_core.mask_identity(conn, report, user["id"], admin)
+    masked["updates"] = reports_core.updates_for(conn, report_id)
+    masked["is_owner"] = str(report["user_id"]) == str(user["id"])
+    masked["is_holder"] = reports_core.is_holder_council(conn, user["id"], report["current_holder_level"], report["current_holder_id"], admin)
+    conn.close()
+    return jsonify(masked)
+
+
+@app.route("/api/reports/<int:report_id>/update", methods=["POST"])
+@login_required
+def api_report_update(report_id):
+    data = request.get_json(silent=True) or {}
+    update_type = data.get("update_type")
+    conn = get_db()
+    user = _current_user_row(conn)
+    admin = _is_admin()
+    report = reports_core.get(conn, report_id)
+    if report is None:
+        conn.close()
+        return jsonify({"error": "Unknown report"}), 404
+    if not reports_core.is_holder_council(conn, user["id"], report["current_holder_level"], report["current_holder_id"], admin):
+        conn.close()
+        return jsonify({"error": "Only the council (or admin) currently holding this report can respond"}), 403
+    try:
+        reports_core.add_update(
+            conn, report_id, user["id"], "admin" if admin else "council_member",
+            update_type, (data.get("message") or "").strip() or None, data.get("new_deadline"),
+        )
+    except ValueError as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 400
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/reports/<int:report_id>/escalate", methods=["POST"])
+@login_required
+def api_report_escalate(report_id):
+    conn = get_db()
+    user = _current_user_row(conn)
+    admin = _is_admin()
+    report = reports_core.get(conn, report_id)
+    if report is None:
+        conn.close()
+        return jsonify({"error": "Unknown report"}), 404
+    if not reports_core.is_holder_council(conn, user["id"], report["current_holder_level"], report["current_holder_id"], admin):
+        conn.close()
+        return jsonify({"error": "Only the council (or admin) currently holding this report can escalate it"}), 403
+    try:
+        new_level, new_holder_id, is_fallback = reports_core.escalate(
+            conn, report_id, user["id"], "admin" if admin else "council_member",
+        )
+    except ValueError as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 400
+    if is_fallback:
+        app.logger.info(
+            "[reports] Report %s escalated to %s -- no elected council, falling back to Admin",
+            report_id, new_level,
+        )
+    conn.close()
+    return jsonify({"current_holder_level": new_level, "current_holder_id": new_holder_id})
 
 
 @app.route("/api/board/post", methods=["POST"])
@@ -1295,12 +1587,12 @@ def api_me():
 @app.route("/api/user/pin", methods=["POST"])
 @login_required
 def api_change_pin():
-    """Change the 5-digit PIN (the current PIN is required). Old app tokens stop working;
+    """Change the 5-character PIN (the current PIN is required). Old app tokens stop working;
     the app receives a fresh one."""
     data = request.get_json(silent=True) or {}
     current, new = str(data.get("current_pin", "")), str(data.get("new_pin", ""))
-    if not re.fullmatch(r"\d{5}", new):
-        return jsonify({"error": "Your new PIN must be exactly 5 digits"}), 400
+    if not PIN_RE.fullmatch(new):
+        return jsonify({"error": PIN_FORMAT_ERROR}), 400
     conn = get_db()
     user = _current_user_row(conn)
     if not user["pin_hash"] or not check_password_hash(user["pin_hash"], current):
@@ -2044,7 +2336,7 @@ def _verify_helper(private_id, pin):
     code = re.sub(r"\D", "", str(private_id or ""))
     pin = str(pin or "").strip()
     generic = "Your Private ID or PIN is not correct, so you can't be recorded as the referrer."
-    if not re.fullmatch(r"\d{9}", code) or not re.fullmatch(r"\d{5}", pin):
+    if not re.fullmatch(r"\d{9}", code) or not PIN_RE.fullmatch(pin):
         return None, generic
     conn = get_db()
     try:
@@ -2083,8 +2375,8 @@ def api_auth_register():
     if email and not _EMAIL_RE.match(email):
         return jsonify({"error": "Invalid email address"}), 400
     phone = (data.get("phone") or "").strip()
-    if not re.fullmatch(r"\d{5}", str(data["pin"])):
-        return jsonify({"error": "Your PIN must be exactly 5 digits"}), 400
+    if not PIN_RE.fullmatch(str(data["pin"])):
+        return jsonify({"error": PIN_FORMAT_ERROR}), 400
 
     try:
         dob = dt.date.fromisoformat(data["dob"])
@@ -3232,6 +3524,9 @@ def ensure_database_ready() -> None:
         founder_core.ensure_tables(conn)
         visibility_core.ensure_tables(conn)
         recovery_core.ensure_tables(conn)
+        logout_review_core.ensure_tables(conn)
+        announcements_core.ensure_tables(conn)
+        reports_core.ensure_tables(conn)
     finally:
         conn.close()
 

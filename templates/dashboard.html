@@ -12,7 +12,7 @@
 <body>
   <header class="qm-header">
     <a href="{{ url_for('index') }}" style="display:contents">
-      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+      {% include "partials/_logo_inline.html" %}
     </a>
     <div class="qm-header-text">
       <h1 data-i18n="dashboard">Q-Dashboard</h1>
@@ -23,14 +23,22 @@
         <button type="button" class="dq-dot dq-dot-lang" id="ui-lang-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Language" title="Change language"></button>
         <ul class="dq-menu" id="ui-lang-menu" role="listbox" hidden></ul>
       </div>
-      <a class="qm-btn qm-btn-ghost" href="{{ url_for('logout') }}" data-i18n="logout">Logout</a>
       <button type="button" class="dq-dot dq-dot-icon" id="notif-btn" aria-label="Notifications" title="New messages and requests">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 00-6 6v3.5L4 16h16l-2-3.5V9a6 6 0 00-6-6z"/><path d="M9.5 19a2.5 2.5 0 005 0"/></svg>
         <span class="dq-badge" id="notif-badge" hidden>0</span>
       </button>
+      <div class="dq-pop" id="announce-bell-wrap">
+        <button type="button" class="dq-dot dq-dot-icon qm-announce-bell" id="announce-bell-btn" aria-haspopup="true" aria-expanded="false" aria-label="Council announcements" title="Council announcements">
+          <span aria-hidden="true">📣</span>
+          <span class="dq-badge" id="announce-bell-badge" hidden>0</span>
+        </button>
+        <ul class="dq-menu qm-announce-dropdown" id="announce-bell-menu" hidden></ul>
+      </div>
       <button type="button" class="dq-dot dq-dot-icon" id="timebox-btn" aria-label="Time, weather and Vedic calendar" title="Time · weather · Vedic calendar">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
       </button>
+      <!-- Item 10a: extreme top-right corner -->
+      <button type="button" class="qm-btn qm-btn-ghost qm-logout-btn" id="logout-btn" data-i18n="logout">Logout</button>
     </nav>
   </header>
 
@@ -143,6 +151,12 @@
           <p class="qm-dash-empty">Coming soon — Message Box ships in a later update. Your chats already live under the <b>Personal</b> tab.</p>
         </article>
 
+        <article class="pv-card" id="qm-myreports-card">
+          <h3><span class="pv-ico">🚨</span> My Reports <small class="pv-hint">private — only you and the holding council see these</small></h3>
+          <ul class="qm-myreports-list" id="qm-myreports-list"></ul>
+          <p class="qm-dash-empty" id="qm-myreports-empty" hidden>You haven't submitted a Report yet.</p>
+        </article>
+
         <article class="pv-card" id="removed-card" hidden>
           <h3><span class="pv-ico">🗂️</span> Removed posts <small class="pv-hint">saved here, only you can see them</small></h3>
           <ul class="bd-removed" id="removed-list"></ul>
@@ -179,9 +193,9 @@
 
             <div class="pv-field" style="margin-top:14px;">
               <label data-i18n="change_pin">Change PIN</label>
-              <form id="pin-change-form" class="pv-pin-form">
-                <input type="password" id="pin-current" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="Current PIN" autocomplete="current-password" required />
-                <input type="password" id="pin-new" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="New PIN" autocomplete="new-password" required />
+              <form id="pin-change-form" class="pv-pin-form" novalidate>
+                <input type="password" id="pin-current" pattern="(?=.*[A-Za-z0-9])[A-Za-z0-9!@#$%^&amp;*()_+\-=\[\]{}|;:'&quot;,.&lt;&gt;/?]{5}" maxlength="5" placeholder="Current PIN" autocomplete="current-password" required />
+                <input type="password" id="pin-new" pattern="(?=.*[A-Za-z0-9])[A-Za-z0-9!@#$%^&amp;*()_+\-=\[\]{}|;:'&quot;,.&lt;&gt;/?]{5}" maxlength="5" placeholder="New PIN" autocomplete="new-password" required />
                 <button type="submit" class="qm-btn qm-btn-ghost" data-i18n="update_pin">Update PIN</button>
               </form>
               <p class="qm-summary-error" id="pin-change-error" hidden></p>
@@ -189,7 +203,7 @@
             </div>
 
             <div class="pv-field" style="margin-top:14px;">
-              <a class="qm-btn qm-btn-ghost" href="{{ url_for('logout') }}" data-i18n="logout">🚪 Sign out</a>
+              <button type="button" class="qm-btn qm-btn-ghost qm-logout-btn" data-i18n="logout">🚪 Sign out</button>
             </div>
           </div>
         </details>
@@ -241,9 +255,18 @@
         <div id="{{ prefix }}-sign-list"></div>
       </div>
 
-      <div class="qm-stats-section">
+      <div class="qm-stats-section" id="{{ prefix }}-announce-section">
         <div class="qm-stats-section-title">📢 Announcements</div>
-        <p class="qm-dash-empty">Not built yet — this will show pinned Collective Board posts once that ships.</p>
+        <ul class="qm-announce-list" id="{{ prefix }}-announce-list"></ul>
+        <p class="qm-dash-empty" id="{{ prefix }}-announce-empty" hidden>No announcements yet.</p>
+        <button type="button" class="qm-btn qm-btn-ghost" id="{{ prefix }}-announce-viewall" hidden>View all</button>
+        <button type="button" class="qm-btn qm-btn-primary" id="{{ prefix }}-announce-new" hidden>+ New Announcement</button>
+      </div>
+
+      <div class="qm-stats-section" id="{{ prefix }}-reportinbox-section" hidden>
+        <div class="qm-stats-section-title">📋 Report Inbox</div>
+        <ul class="qm-announce-list" id="{{ prefix }}-reportinbox-list"></ul>
+        <p class="qm-dash-empty" id="{{ prefix }}-reportinbox-empty" hidden>No open reports.</p>
       </div>
     </div>
     {% endmacro %}
@@ -252,15 +275,21 @@
     <section class="bd" id="{{ prefix }}-board" data-level="{{ level }}">
       <header class="bd-head">
         <button type="button" class="bd-groups" title="Village groups and places"><span aria-hidden="true">☰</span> <span>Groups</span></button>
-        <div class="bd-headtext"><b class="bd-title">Collective Board</b><small class="bd-sub">Loading…</small></div>
+        <div class="bd-headtext"><b class="bd-title">Loading…</b><small class="bd-sub"></small></div>
         <button type="button" class="bd-stats" title="Statistics for this place">📊 <span>Stats</span></button>
         <button type="button" class="bd-qp" title="Quantum Punch council of this group">⚖️ <span>Q-Punch</span></button>
       </header>
+      <div class="bd-announce-banner" hidden>
+        <span class="bd-announce-banner-icon">📢</span>
+        <span class="bd-announce-banner-text"></span>
+        <div class="bd-announce-banner-full" hidden></div>
+      </div>
       <div class="bd-feed" aria-live="polite"></div>
       <div class="bd-foot"><button type="button" class="bd-toggle" title="Switch between live voting and frozen posts">❄️ <span>Frozen posts</span></button></div>
       <form class="bd-compose" hidden>
         <textarea rows="2" maxlength="1000" placeholder="Post to your village — it is voted on for 7 days…" required></textarea>
         <button type="submit" class="qm-btn qm-btn-primary">Post</button>
+        <button type="button" class="qm-btn qm-btn-ghost bd-report-btn" hidden>🚨 Report</button>
       </form>
       <p class="bd-note" hidden></p>
     </section>
@@ -522,6 +551,121 @@
     </div>
   </div>
 
+  <!-- Item 10: Logout rating gate -->
+  <div class="dq-modal" id="rating-modal" hidden role="dialog" aria-modal="true" aria-labelledby="rating-title">
+    <div class="dq-modal-box">
+      <button type="button" class="dq-modal-close" data-close aria-label="Close">×</button>
+      <h3 id="rating-title">⭐ Rate your experience this cycle</h3>
+      <div class="qm-star-row" id="rating-stars">
+        <button type="button" class="qm-star" data-value="1" aria-label="1 star">★</button>
+        <button type="button" class="qm-star" data-value="2" aria-label="2 stars">★</button>
+        <button type="button" class="qm-star" data-value="3" aria-label="3 stars">★</button>
+        <button type="button" class="qm-star" data-value="4" aria-label="4 stars">★</button>
+        <button type="button" class="qm-star" data-value="5" aria-label="5 stars">★</button>
+      </div>
+      <label class="qm-field"><span>Tell us more (optional)</span>
+        <textarea id="rating-review-text" maxlength="500" rows="3" placeholder="What's working, what isn't…"></textarea>
+      </label>
+      <div class="qm-confirm-actions" style="margin-top:14px;">
+        <button type="button" class="qm-btn qm-btn-ghost" id="rating-skip-btn">Skip</button>
+        <button type="button" class="qm-btn qm-btn-primary" id="rating-submit-btn">Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="dq-modal" id="logout-confirm-modal" hidden role="dialog" aria-modal="true" aria-labelledby="logout-confirm-title">
+    <div class="dq-modal-box" style="max-width:360px;">
+      <p id="logout-confirm-title" style="margin:8px 0 18px;font-size:1rem;">Are you sure you want to Logout?</p>
+      <div class="qm-confirm-actions">
+        <button type="button" class="qm-btn qm-btn-ghost" data-close>Cancel</button>
+        <a class="qm-btn qm-btn-primary" href="{{ url_for('logout') }}">Yes, Logout</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="dq-modal" id="announce-new-modal" hidden role="dialog" aria-modal="true" aria-labelledby="announce-new-title">
+    <div class="dq-modal-box">
+      <button type="button" class="dq-modal-close" data-close aria-label="Close">×</button>
+      <h3 id="announce-new-title">📢 New Announcement</h3>
+      <form id="announce-new-form" class="qm-form" novalidate>
+        <label class="qm-field"><span>Title (optional)</span><input type="text" id="announce-new-title-input" maxlength="120" /></label>
+        <label class="qm-field"><span>Message</span><textarea id="announce-new-body" rows="4" maxlength="2000" required></textarea></label>
+        <label class="qm-field"><span>Image URL (optional)</span><input type="url" id="announce-new-image" placeholder="https://…" /></label>
+        <button type="submit" class="qm-btn qm-btn-primary">Publish →</button>
+      </form>
+      <p class="qm-summary-error" id="announce-new-error" hidden></p>
+    </div>
+  </div>
+
+  <div class="dq-modal" id="announce-viewall-modal" hidden role="dialog" aria-modal="true" aria-labelledby="announce-viewall-title">
+    <div class="dq-modal-box dq-modal-wide">
+      <button type="button" class="dq-modal-close" data-close aria-label="Close">×</button>
+      <h3 id="announce-viewall-title">📢 Announcements</h3>
+      <ul class="qm-announce-list qm-announce-list-full" id="announce-viewall-list"></ul>
+      <p class="qm-dash-empty" id="announce-viewall-empty" hidden>No announcements yet.</p>
+    </div>
+  </div>
+
+  <div class="dq-modal" id="post-or-report-modal" hidden role="dialog" aria-modal="true" aria-labelledby="post-or-report-title">
+    <div class="dq-modal-box" style="max-width:360px;">
+      <p id="post-or-report-title" style="margin:8px 0 18px;font-size:1rem;">What would you like to do?</p>
+      <div class="qm-confirm-actions">
+        <button type="button" class="qm-btn qm-btn-ghost" id="choose-make-post">📝 Make a Post</button>
+        <button type="button" class="qm-btn qm-btn-primary" id="choose-submit-report">🚨 Submit a Report</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="dq-modal" id="report-new-modal" hidden role="dialog" aria-modal="true" aria-labelledby="report-new-title">
+    <div class="dq-modal-box">
+      <button type="button" class="dq-modal-close" data-close aria-label="Close">×</button>
+      <h3 id="report-new-title">🚨 Submit a Report</h3>
+      <p class="qm-timeline-note">This goes only to your village council — never shown publicly.</p>
+      <form id="report-new-form" class="qm-form" novalidate>
+        <label class="qm-field"><span>What's the concern?</span><textarea id="report-new-body" rows="5" maxlength="2000" required></textarea></label>
+        <label class="qm-field" style="flex-direction:row;align-items:center;gap:8px;">
+          <input type="checkbox" id="report-new-anonymous" style="width:auto;" />
+          <span>Keep my identity hidden from the council</span>
+        </label>
+        <button type="submit" class="qm-btn qm-btn-primary">Submit Report →</button>
+      </form>
+      <p class="qm-summary-error" id="report-new-error" hidden></p>
+      <p class="qm-timeline-note" id="report-new-success" hidden>✅ Submitted — the council will respond within 10 days.</p>
+    </div>
+  </div>
+
+  <div class="dq-modal" id="report-detail-modal" hidden role="dialog" aria-modal="true" aria-labelledby="report-detail-title">
+    <div class="dq-modal-box dq-modal-wide">
+      <button type="button" class="dq-modal-close" data-close aria-label="Close">×</button>
+      <h3 id="report-detail-title">🚨 Report</h3>
+      <p id="report-detail-meta" class="qm-timeline-note"></p>
+      <p id="report-detail-body" style="white-space:pre-wrap;"></p>
+
+      <div id="report-detail-reply" hidden>
+        <h4 class="qm-panel-subhead">Respond</h4>
+        <form id="report-reply-form" class="qm-form">
+          <label class="qm-field"><span>Response type</span>
+            <select id="report-reply-type">
+              <option value="acknowledged">Acknowledged</option>
+              <option value="comment">Comment</option>
+              <option value="needs_time">Needs time (set new deadline)</option>
+              <option value="resolved">Resolved</option>
+              <option value="denied">Denied</option>
+            </select>
+          </label>
+          <label class="qm-field"><span>Message</span><textarea id="report-reply-message" rows="3"></textarea></label>
+          <label class="qm-field" id="report-reply-deadline-field" hidden><span>New deadline</span><input type="date" id="report-reply-deadline" /></label>
+          <button type="submit" class="qm-btn qm-btn-primary">Send response</button>
+        </form>
+        <button type="button" class="qm-btn qm-btn-ghost" id="report-escalate-btn">⬆️ Escalate to next level</button>
+        <p class="qm-summary-error" id="report-reply-error" hidden></p>
+      </div>
+
+      <h4 class="qm-panel-subhead">Timeline</h4>
+      <ul class="qm-report-timeline" id="report-detail-timeline"></ul>
+    </div>
+  </div>
+
   <div class="dq-modal" id="qp-modal" hidden role="dialog" aria-modal="true" aria-labelledby="qp-title">
     <div class="dq-modal-box">
       <button type="button" class="dq-modal-close" data-close aria-label="Close">×</button>
@@ -552,6 +696,7 @@
   <script src="{{ url_for('static', filename='js/board.js') }}"></script>
   <script src="{{ url_for('static', filename='js/social.js') }}"></script>
   <script src="{{ url_for('static', filename='js/mobile_keyboard.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/logo_nav.js') }}"></script>
   {% include '_poems_marquee.html' %}
 </body>
 </html>
