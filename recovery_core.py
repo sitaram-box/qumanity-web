@@ -83,8 +83,16 @@ def request_pin_reset(conn, private_code: str, channel: str):
 
 def verify_pin_reset(conn, private_code: str, otp: str, new_pin: str):
     import re
-    if not re.fullmatch(r"\d{5}", new_pin or ""):
-        raise ValueError("Your new PIN must be exactly 5 digits")
+    # Item 5: kept in sync with app.py's PIN_RE / PIN_FORMAT_ERROR -- 5 chars, at least one
+    # letter or digit, not all special characters.
+    if not re.fullmatch(
+        r"""^(?=.*[A-Za-z0-9])[A-Za-z0-9!@#$%^&*()_+\-=\[\]{}|;:'",.<>/?]{5}$""",
+        new_pin or "",
+    ):
+        raise ValueError(
+            "PIN must be 5 characters. It can include numbers, letters, or special "
+            "characters — but not all special characters."
+        )
     user = conn.execute("SELECT id FROM users WHERE private_id_9digit = ?", (private_code,)).fetchone()
     if not user:
         raise ValueError("Incorrect code")

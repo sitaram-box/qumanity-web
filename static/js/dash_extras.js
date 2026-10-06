@@ -20,6 +20,58 @@
     return fetch(url, opt).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || "Something went wrong"); return j; }); });
   }
 
+  // ---- Item 10: Logout rating gate ----
+  // First logout of the lunar cycle -> Rating screen; any later logout this same
+  // cycle -> straight to the "Are you sure?" confirm (server tracks this, not the
+  // browser, so it holds across devices/sessions too).
+  var ratingModal = $("rating-modal"), logoutConfirmModal = $("logout-confirm-modal");
+  var ratingStarsRow = $("rating-stars");
+  var ratingStars = ratingStarsRow ? Array.prototype.slice.call(ratingStarsRow.querySelectorAll(".qm-star")) : [];
+  var currentRating = 0;
+
+  function paintStars(value) {
+    ratingStars.forEach(function (btn) {
+      btn.classList.toggle("is-filled", parseInt(btn.getAttribute("data-value"), 10) <= value);
+    });
+  }
+  ratingStars.forEach(function (btn) {
+    var v = parseInt(btn.getAttribute("data-value"), 10);
+    btn.addEventListener("click", function () { currentRating = v; paintStars(currentRating); });
+    btn.addEventListener("mouseenter", function () { paintStars(v); });
+  });
+  if (ratingStarsRow) ratingStarsRow.addEventListener("mouseleave", function () { paintStars(currentRating); });
+
+  function openLogoutConfirm() {
+    if (ratingModal) closeModal(ratingModal);
+    openModal(logoutConfirmModal);
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll(".qm-logout-btn"), function (btn) {
+    btn.addEventListener("click", function () {
+      api("/api/user/review-status")
+        .then(function (res) {
+          if (res.reviewed || !ratingModal) {
+            openModal(logoutConfirmModal);
+          } else {
+            currentRating = 0;
+            paintStars(0);
+            $("rating-review-text").value = "";
+            openModal(ratingModal);
+          }
+        })
+        .catch(function () { openModal(logoutConfirmModal); }); // never trap logout behind a failed check
+    });
+  });
+
+  var ratingSkipBtn = $("rating-skip-btn"), ratingSubmitBtn = $("rating-submit-btn");
+  if (ratingSkipBtn) ratingSkipBtn.addEventListener("click", openLogoutConfirm); // Skip never saves
+  if (ratingSubmitBtn) ratingSubmitBtn.addEventListener("click", function () {
+    var review = $("rating-review-text").value.trim();
+    api("/api/user/review", { rating: currentRating || null, review: review || null })
+      .then(openLogoutConfirm)
+      .catch(openLogoutConfirm); // don't trap the user behind a failed save either
+  });
+
   // ---- Notification bell: unread Personal-timeline chats + pending people-requests ----
   var notifBtn = $("notif-btn"), notifBadge = $("notif-badge");
   if (notifBtn) {
@@ -36,6 +88,55 @@
     });
     refreshNotifs();
     setInterval(refreshNotifs, 30000);
+  }
+
+  // ---- Item 8: Announcements megaphone — separate from the bell above on purpose (unread
+  // council broadcasts, not personal chats/requests); dropdown + click-through-marks-read ----
+  var annBtn = $("announce-bell-btn"), annBadge = $("announce-bell-badge"), annMenu = $("announce-bell-menu"), annWrap = $("announce-bell-wrap");
+  if (annBtn) {
+    function refreshAnnounceBadge() {
+      api("/api/announcements/unread-count").then(function (d) {
+        if (d.total > 0) { annBadge.textContent = d.total > 99 ? "99+" : d.total; annBadge.hidden = false; }
+        else { annBadge.hidden = true; }
+      }).catch(function () {});
+    }
+    function closeAnnounceMenu() { annMenu.hidden = true; annBtn.setAttribute("aria-expanded", "false"); }
+    function renderAnnounceMenu(items) {
+      annMenu.innerHTML = "";
+      if (!items.length) {
+        var li = el("li", "", "No unread announcements"); li.style.padding = "9px 12px"; annMenu.appendChild(li);
+        return;
+      }
+      items.forEach(function (a) {
+        var li = el("li");
+        var b = document.createElement("button"); b.type = "button";
+        b.innerHTML = "<span></span>";
+        b.firstChild.textContent = (a.title ? a.title + " — " : "") + a.body.slice(0, 60) + (a.body.length > 60 ? "…" : "");
+        b.addEventListener("click", function () {
+          api("/api/announcements/" + a.id + "/read", {}).then(function () {
+            closeAnnounceMenu();
+            refreshAnnounceBadge();
+            var targetTab = (a.location_level === "continent" || a.location_level === "country" || a.location_level === "earth") ? "global" : "public";
+            var tabBtn = document.querySelector('.qm-dash-tab[data-tab="' + targetTab + '"]');
+            if (tabBtn) tabBtn.click();
+          }).catch(function () {});
+        });
+        li.appendChild(b); annMenu.appendChild(li);
+      });
+    }
+    annBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var opening = annMenu.hidden;
+      closeAnnounceMenu();
+      if (opening) {
+        annMenu.hidden = false; annBtn.setAttribute("aria-expanded", "true");
+        api("/api/announcements/unread-recent?limit=5").then(function (d) { renderAnnounceMenu(d.announcements); }).catch(function () { renderAnnounceMenu([]); });
+      }
+    });
+    document.addEventListener("click", function (e) { if (!annWrap.contains(e.target)) closeAnnounceMenu(); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeAnnounceMenu(); });
+    refreshAnnounceBadge();
+    setInterval(refreshAnnounceBadge, 30000);
   }
 
   // ---- Public search ID + past Account IDs ----
@@ -360,4 +461,25 @@
       .catch(function () { tBody.innerHTML = ""; tBody.appendChild(el("p", "qm-dash-empty", "Could not load the time-box right now.")); });
   });
   tModal.addEventListener("click", function () { if (tModal.hidden) clearInterval(timer); });
+
+  // ---- Item 9: My Reports (Private tab) ----
+  var myReportsList = $("qm-myreports-list"), myReportsEmpty = $("qm-myreports-empty");
+  function slaLeft(iso) {
+    var days = Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
+    return days <= 0 ? "overdue" : days + "d left";
+  }
+  if (myReportsList) {
+    api("/api/reports/mine").then(function (d) {
+      myReportsList.innerHTML = "";
+      myReportsEmpty.hidden = d.reports.length > 0;
+      d.reports.forEach(function (r) {
+        var li = el("li", "qm-announce-item"); li.style.cursor = "pointer";
+        li.appendChild(el("b", "", r.status.replace("_", " ")));
+        li.appendChild(el("p", "", r.body.slice(0, 100) + (r.body.length > 100 ? "…" : "")));
+        li.appendChild(el("small", "", "Holder: " + r.current_holder_level + " · SLA " + slaLeft(r.sla_deadline)));
+        li.addEventListener("click", function () { if (window.qmOpenReportDetail) window.qmOpenReportDetail(r.id); });
+        myReportsList.appendChild(li);
+      });
+    }).catch(function () {});
+  }
 })();

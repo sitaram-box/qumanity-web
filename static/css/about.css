@@ -4,7 +4,7 @@
 body.qm-about { height: auto; min-height: 100%; scroll-behavior: smooth; }
 html { scroll-behavior: smooth; scroll-padding-top: 20px; }
 
-.qm-about-header { position: sticky; top: 0; z-index: 40; background: rgba(250, 247, 241, 0.92); backdrop-filter: blur(10px); }
+.qm-about-header { position: sticky; top: 0; z-index: 40; background: rgba(10, 25, 41, 0.92); backdrop-filter: blur(10px); }
 
 /* ---------- Hero ---------- */
 .ab-hero {

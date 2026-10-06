@@ -4,13 +4,16 @@
   padding: 24px clamp(20px, 3.2vw, 64px) 60px;
 }
 
+/* Item 6: dark chrome band -- visually separates nav "chrome" from the
+   light body content below it. Same slate as the Item 13/14/15 section
+   headers (#2A3441), reused here for consistency. */
 .qm-dash-tabs {
   display: flex;
   width: 100%;
   gap: 2px;
   margin-bottom: 20px;
-  background: var(--qm-input-bg);
-  border: 1px solid var(--qm-border);
+  background: #2A3441;
+  border: none;
   border-radius: 10px;
   overflow: hidden;
 }
@@ -22,20 +25,20 @@
   text-align: center;
   border: none;
   background: transparent;
-  color: var(--qm-text-dim);
+  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
   border-bottom: 3px solid transparent;
   transition: all 0.2s ease;
 }
 .qm-dash-tab:hover {
-  color: var(--qm-text);
-  background: rgba(255, 153, 51, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  background: #354052;
 }
 .qm-dash-tab.is-active {
-  background: rgba(255, 153, 51, 0.15);
-  color: var(--qm-gold-text);
+  background: transparent;
+  color: #FFD700;
   font-weight: 600;
-  border-bottom-color: var(--qm-saffron);
+  border-bottom-color: #FFD700;
 }
 
 .qm-dash-panel[hidden] { display: none; }
@@ -173,8 +176,8 @@
   grid-column: 1 / -1;
   gap: 2px;
   margin-bottom: 0;
-  background: var(--qm-input-bg);
-  border: 1px solid var(--qm-border);
+  background: #2A3441;
+  border: none;
   border-radius: 10px;
   overflow: hidden;
 }
@@ -185,12 +188,17 @@
   border-radius: 0;
   border-bottom: 3px solid transparent;
   background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+}
+.qm-location-tabs-row .qm-panel-tab:hover:not(:disabled) {
+  color: rgba(255, 255, 255, 0.9);
+  background: #354052;
 }
 .qm-location-tabs-row .qm-panel-tab.is-active {
-  background: rgba(255, 153, 51, 0.15);
-  color: var(--qm-gold-text);
+  background: transparent;
+  color: #FFD700;
   font-weight: 600;
-  border-bottom-color: var(--qm-saffron);
+  border-bottom-color: #FFD700;
 }
 .qm-location-tabs-row .qm-panel-tab:disabled { opacity: 0.35; cursor: not-allowed; }
 
@@ -444,6 +452,14 @@
 .pv-pin-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .pv-pin-form input { flex: 1; min-width: 120px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--qm-input-border); background: var(--qm-panel-bg); color: var(--qm-text); font: inherit; }
 .pv-pin-form .qm-btn { padding: 6px 14px; font-size: 0.82rem; }
+
+/* Item 10: Logout rating gate */
+.qm-star-row { display: flex; gap: 6px; justify-content: center; margin: 10px 0 16px; }
+.qm-star { font-size: 2rem; line-height: 1; border: none; background: none; cursor: pointer; color: var(--qm-input-border); transition: color 0.15s ease, transform 0.1s ease; padding: 0; }
+.qm-star:hover { transform: scale(1.1); }
+.qm-star.is-filled { color: #FFD700; }
+#rating-review-text { width: 100%; resize: vertical; font: inherit; }
+.qm-logout-btn { margin-left: 4px; }
 .qm-summary-error { color: #c82f2f; font-size: 0.85rem; margin-top: 6px; }
 #qm-messagebox-card .qm-dash-empty { margin: 0; }
 
@@ -543,10 +559,11 @@
 
 /* ---- Collective Board (group-chat style) + Q-Punch ---- */
 .bd { display: flex; flex-direction: column; min-height: 320px; max-height: 72vh; border-radius: 16px; overflow: hidden; background: var(--qm-panel-bg); border: 1px solid var(--qm-border); }
-.bd-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; background: rgba(255, 153, 51, 0.08); border-bottom: 1px solid rgba(201, 150, 12, 0.25); }
+/* Item 6: same dark chrome band as the tab bars above it. */
+.bd-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; background: #2A3441; border-bottom: none; }
 .bd-headtext { min-width: 0; display: flex; flex-direction: column; }
-.bd-title { color: var(--qm-text); font-size: 0.98rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bd-sub { color: var(--qm-text-dim); font-size: 0.74rem; }
+.bd-title { color: #FFFFFF; font-size: 0.98rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bd-sub { color: rgba(255, 255, 255, 0.7); font-size: 0.74rem; }
 .bd-qp { flex: 0 0 auto; padding: 6px 12px; border-radius: 999px; cursor: pointer; border: 1.5px solid #B8860B; background: rgba(255, 210, 74, 0.18); color: var(--qm-gold-text); font: 700 0.78rem "Inter", system-ui, sans-serif; }
 .bd-qp:hover { background: rgba(255, 210, 74, 0.32); }
 .bd-feed { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: #FBF9F4; }
@@ -625,10 +642,11 @@
 .dr .qm-member-list { max-height: 30vh; }
 
 .bd { height: calc(100vh - 340px); min-height: 400px; max-height: none; }
-.bd-groups { flex: 0 0 auto; padding: 6px 12px; border-radius: 999px; cursor: pointer; border: 1.5px solid var(--qm-input-border); background: var(--qm-input-bg); color: var(--qm-text); font: 700 0.78rem "Inter", system-ui, sans-serif; }
-.bd-groups:hover { border-color: #B8860B; color: var(--qm-gold-text); }
-.bd-stats { flex: 0 0 auto; padding: 6px 12px; border-radius: 999px; cursor: pointer; border: 1.5px solid var(--qm-input-border); background: var(--qm-input-bg); color: var(--qm-text); font: 700 0.78rem "Inter", system-ui, sans-serif; }
-.bd-stats:hover { border-color: #B8860B; color: var(--qm-gold-text); }
+/* Item 6: light-on-dark now that these sit on the #2A3441 .bd-head band */
+.bd-groups { flex: 0 0 auto; padding: 6px 12px; border-radius: 999px; cursor: pointer; border: 1.5px solid rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.08); color: #FFFFFF; font: 700 0.78rem "Inter", system-ui, sans-serif; }
+.bd-groups:hover { border-color: #FFD700; color: #FFD700; background: #354052; }
+.bd-stats { flex: 0 0 auto; padding: 6px 12px; border-radius: 999px; cursor: pointer; border: 1.5px solid rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.08); color: #FFFFFF; font: 700 0.78rem "Inter", system-ui, sans-serif; }
+.bd-stats:hover { border-color: #FFD700; color: #FFD700; background: #354052; }
 .bd-sec { position: sticky; top: -14px; z-index: 1; align-self: stretch; margin: 4px -14px 0; padding: 6px 14px; font: 700 0.72rem "Inter", system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: var(--qm-saffron); background: rgba(250, 247, 241, 0.95); border-top: 1px solid rgba(201, 150, 12, 0.15); border-bottom: 1px solid rgba(201, 150, 12, 0.15); }
 .bd-sec small { text-transform: none; letter-spacing: 0; color: var(--qm-text-dim); font-weight: 400; margin-left: 6px; }
 .bd-msg { max-width: min(520px, 90%); align-self: flex-start; padding: 8px 12px; border-radius: 4px 14px 14px 14px; background: #F1EEE6; color: var(--qm-text); font-size: 0.92rem; overflow-wrap: anywhere; }
@@ -709,12 +727,51 @@
 .bd-sentiment-bar { height: 6px; border-radius: 3px; background: rgba(10, 25, 41, 0.08); overflow: hidden; }
 .bd-sentiment-bar i { display: block; height: 100%; background: linear-gradient(90deg, #8b7bff, #cfc8ff); }
 
-.qm-ptab { flex: 1; font-family: inherit; font-size: 0.85rem; padding: 14px 8px; text-align: center; border: none; background: transparent; color: var(--qm-text-dim); cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s ease; }
-.qm-ptab:hover { color: var(--qm-text); background: rgba(255, 153, 51, 0.08); }
-.qm-ptab.is-active { background: rgba(255, 153, 51, 0.15); color: var(--qm-gold-text); font-weight: 600; border-bottom-color: var(--qm-saffron); }
+/* ---- Item 8: Announcements -- pinned Lok banner, right-sidebar card, header dropdown ---- */
+.bd-announce-banner {
+  margin: 0; padding: 9px 16px; background: #354052; border-bottom: 1px solid rgba(255, 215, 0, 0.25);
+  display: flex; align-items: baseline; gap: 8px; cursor: pointer; font-size: 0.85rem; color: #fff;
+}
+.bd-announce-banner[hidden] { display: none; }
+.bd-announce-banner-icon { flex: 0 0 auto; }
+.bd-announce-banner-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(255, 255, 255, 0.92); }
+.bd-announce-banner-full { flex-basis: 100%; margin-top: 6px; white-space: normal; color: rgba(255, 255, 255, 0.85); font-size: 0.82rem; }
+.bd-announce-banner-full[hidden] { display: none; }
 
-.dq-modal-back { position: absolute; top: 10px; left: 12px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--qm-input-border); background: var(--qm-input-bg); color: var(--qm-text); font: 700 0.85rem "Inter", system-ui, sans-serif; cursor: pointer; z-index: 5; }
-.dq-modal-back:hover { background: rgba(255, 153, 51, 0.15); border-color: rgba(201, 150, 12, 0.4); }
+.qm-announce-list { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.qm-announce-item { padding: 8px 10px; border-radius: 10px; background: rgba(255, 153, 51, 0.08); border: 1px solid rgba(201, 150, 12, 0.25); }
+.qm-announce-item b { display: block; font-size: 0.85rem; margin-bottom: 2px; }
+.qm-announce-item p { margin: 0 0 4px; font-size: 0.82rem; color: var(--qm-text); }
+.qm-announce-item small { color: var(--qm-text-dim); font-size: 0.72rem; }
+.qm-announce-list-full { max-height: 60vh; overflow-y: auto; }
+
+.qm-announce-dropdown { min-width: 260px; max-width: 320px; }
+.qm-announce-dropdown li { padding: 0; }
+.qm-announce-dropdown button { width: 100%; text-align: left; padding: 9px 12px; border: 0; background: transparent; color: var(--qm-text); cursor: pointer; font: 500 0.85rem "Inter", system-ui, sans-serif; }
+.qm-announce-dropdown button:hover { background: rgba(255, 153, 51, 0.12); }
+.qm-announce-bell span[aria-hidden] { font-size: 0.95rem; }
+#qm-dg-stats-announce-viewall, #qm-dp-stats-announce-viewall, #qm-dg-stats-announce-new, #qm-dp-stats-announce-new { margin-top: 6px; width: 100%; }
+
+/* ---- Item 9: Citizen Report (FIR) ---- */
+.bd-compose { position: relative; display: flex; flex-direction: column; gap: 8px; }
+.bd-report-btn { align-self: flex-end; }
+.qm-report-timeline { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.qm-report-update { padding: 8px 10px; border-radius: 10px; background: rgba(139, 123, 255, 0.08); border: 1px solid rgba(139, 123, 255, 0.25); }
+.qm-report-update b { display: block; font-size: 0.82rem; text-transform: capitalize; }
+.qm-report-update p { margin: 4px 0; font-size: 0.85rem; color: var(--qm-text); }
+.qm-report-update small { color: var(--qm-text-dim); font-size: 0.72rem; }
+#report-escalate-btn { margin-top: 8px; }
+.qm-myreports-list { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+
+/* Item 6: shares the .qm-dash-tabs dark chrome band as its container
+   (see templates/dashboard.html's #personal-top-tabs). */
+.qm-ptab { flex: 1; font-family: inherit; font-size: 0.85rem; padding: 14px 8px; text-align: center; border: none; background: transparent; color: rgba(255, 255, 255, 0.7); cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s ease; }
+.qm-ptab:hover { color: rgba(255, 255, 255, 0.9); background: #354052; }
+.qm-ptab.is-active { background: transparent; color: #FFD700; font-weight: 600; border-bottom-color: #FFD700; }
+
+/* Item 6: sits on top of the dark .bd-head band in group/chat modals */
+.dq-modal-back { position: absolute; top: 10px; left: 12px; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.08); color: #FFFFFF; font: 700 0.85rem "Inter", system-ui, sans-serif; cursor: pointer; z-index: 5; }
+.dq-modal-back:hover { background: #354052; border-color: #FFD700; color: #FFD700; }
 .pt-group-modal .bd-head, #pt-group-modal .bd-head, #pt-chat-modal .bd-head { padding-left: 74px; }
 
 /* ---- Q-Punch: monthly sign election (board.js electionBlock) ---- */

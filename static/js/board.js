@@ -217,7 +217,19 @@
     var view = "live";                     // "live" (default) or "frozen" — each fills the whole board
     var toggle = root.querySelector(".bd-toggle"), foot = root.querySelector(".bd-foot"), lastView = null;
     var self = { setChat: null };
+    var announceBanner = root.querySelector(".bd-announce-banner");
+    var announceBannerText = announceBanner.querySelector(".bd-announce-banner-text");
+    var announceBannerFull = announceBanner.querySelector(".bd-announce-banner-full");
+    var announceRotateTimer = null, announceIndex = 0, announceItems = [];
+    announceBanner.addEventListener("click", function () {
+      if (!announceItems.length) return;
+      var expanded = !announceBannerFull.hidden;
+      announceBannerFull.hidden = expanded;
+      if (!expanded) announceBannerFull.textContent = announceItems[announceIndex].body;
+    });
     root.querySelector(".bd-qp").addEventListener("click", function () { openQp(level); });
+    var reportBtn = root.querySelector(".bd-report-btn");
+    reportBtn.addEventListener("click", function (e) { e.preventDefault(); openPostOrReportChoice(); });
 
     function section(text, small) { var h = el("div", "bd-sec", text); if (small) h.appendChild(el("small", "", small)); return h; }
 
@@ -230,13 +242,13 @@
     }
 
     function render(v) {
-      titleEl.textContent = "Collective Board · " + v.group;
+      titleEl.textContent = v.group + " Lok";
       subEl.innerHTML = "";
       subEl.appendChild(el("span", "bd-count", "\uD83D\uDC65 " + v.members.toLocaleString() + " member" + (v.members === 1 ? "" : "s")));
       subEl.appendChild(el("span", "bd-count", "\uD83D\uDD37 " + v.qoins.toLocaleString() + " Qoins"));
-      subEl.appendChild(el("span", "bd-count bd-rules", v.label + " group · " + v.window_days + "-day voting · +" + v.threshold.toLocaleString() + " lifts a post" + (v.next ? " to " + v.next : " (frozen at Earth)")));
       if (level === "country" || level === "state") loadSentiment(level, v.group_id); else if (sentimentBox) sentimentBox.hidden = true;
       form.hidden = !(v.can_post || v.can_pay_post);
+      reportBtn.hidden = !v.can_post;
       if (v.can_post) {
         ta.placeholder = "Post to your village — it is voted on for 7 days…";
         form.querySelector("button").textContent = "Post";
@@ -262,6 +274,75 @@
         if (!done.length) feed.appendChild(el("p", "bd-empty", "No closed posts yet."));
         done.forEach(function (p, i) { feed.appendChild(bubble(p, v, i)); });
       }
+      renderAnnouncements(v);
+      renderReportInbox(v);
+    }
+
+    // ---- Item 8: Announcements -- pinned banner (this panel) + right-sidebar card ----
+    function showBannerItem() {
+      if (!announceItems.length) { announceBanner.hidden = true; return; }
+      announceBanner.hidden = false;
+      announceBannerFull.hidden = true;
+      var a = announceItems[announceIndex];
+      announceBannerText.textContent = (a.title ? a.title + " — " : "") + a.body.slice(0, 80) + (a.body.length > 80 ? "…" : "");
+    }
+
+    function renderAnnouncements(v) {
+      announceItems = v.announcements || [];
+      announceIndex = 0;
+      showBannerItem();
+      clearInterval(announceRotateTimer);
+      if (announceItems.length > 1) {
+        announceRotateTimer = setInterval(function () {
+          announceIndex = (announceIndex + 1) % announceItems.length;
+          showBannerItem();
+        }, 5000);
+      }
+
+      var sidebarPrefix = (v.level === "continent" || v.level === "country" || v.level === "earth") ? "qm-dg-stats" : "qm-dp-stats";
+      var listEl = document.getElementById(sidebarPrefix + "-announce-list");
+      var emptyEl = document.getElementById(sidebarPrefix + "-announce-empty");
+      var viewAllBtn = document.getElementById(sidebarPrefix + "-announce-viewall");
+      var newBtn = document.getElementById(sidebarPrefix + "-announce-new");
+      if (!listEl) return;
+      listEl.innerHTML = "";
+      announceItems.slice(0, 5).forEach(function (a) {
+        var li = el("li", "qm-announce-item");
+        if (a.title) li.appendChild(el("b", "", a.title));
+        li.appendChild(el("p", "", a.body.slice(0, 120) + (a.body.length > 120 ? "…" : "")));
+        li.appendChild(el("small", "", (a.author_name || "Council") + " · " + ago(a.created_at)));
+        listEl.appendChild(li);
+      });
+      emptyEl.hidden = announceItems.length > 0;
+      viewAllBtn.hidden = announceItems.length === 0;
+      viewAllBtn.onclick = function () { openAnnounceViewAll(v.level, v.group_id); };
+      newBtn.hidden = !v.can_publish_announcement;
+      newBtn.onclick = function () { openAnnounceNew(v.level, v.group_id); };
+    }
+
+    // ---- Item 9: Report Inbox -- same sidebar, visible only to the council/admin holding
+    // this exact location (reuses v.can_view_report_inbox, computed identically to
+    // v.can_publish_announcement on the server; see docs/reports_design.md §2) ----
+    function renderReportInbox(v) {
+      var sidebarPrefix = (v.level === "continent" || v.level === "country" || v.level === "earth") ? "qm-dg-stats" : "qm-dp-stats";
+      var section = document.getElementById(sidebarPrefix + "-reportinbox-section");
+      if (!section) return;
+      section.hidden = !v.can_view_report_inbox;
+      if (!v.can_view_report_inbox) return;
+      var listEl = document.getElementById(sidebarPrefix + "-reportinbox-list");
+      var emptyEl = document.getElementById(sidebarPrefix + "-reportinbox-empty");
+      api("/api/reports/inbox?location_level=" + v.level + "&location_id=" + encodeURIComponent(v.group_id)).then(function (d) {
+        listEl.innerHTML = "";
+        emptyEl.hidden = d.reports.length > 0;
+        d.reports.forEach(function (r) {
+          var li = el("li", "qm-announce-item");
+          li.style.cursor = "pointer";
+          li.appendChild(el("p", "", r.body_preview));
+          li.appendChild(el("small", "", (r.author_name || "Citizen") + " · SLA " + left(r.sla_deadline)));
+          li.addEventListener("click", function () { openReportDetail(r.id); });
+          listEl.appendChild(li);
+        });
+      }).catch(function () {});
     }
 
     var sentimentBox = el("div", "bd-sentiment"); sentimentBox.hidden = true;
@@ -369,10 +450,156 @@
     return self;
   }
 
+  // ---- Item 8: shared "+ New Announcement" / "View all" modals (one pair, reused by
+  // whichever panel's sidebar card opened them -- the target location travels with the call) ----
+  var announceNewModal = document.getElementById("announce-new-modal");
+  var announceNewForm = document.getElementById("announce-new-form");
+  var announceNewError = document.getElementById("announce-new-error");
+  var announceNewTarget = null; // {level, groupId}
+  if (announceNewModal) {
+    announceNewForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      announceNewError.hidden = true;
+      if (!announceNewTarget) return;
+      api("/api/announcements", {
+        location_id: announceNewTarget.groupId, location_level: announceNewTarget.level,
+        title: document.getElementById("announce-new-title-input").value.trim(),
+        body: document.getElementById("announce-new-body").value.trim(),
+        image_url: document.getElementById("announce-new-image").value.trim(),
+      }).then(function () {
+        announceNewForm.reset();
+        announceNewModal.hidden = true;
+        boardInstances.forEach(function (inst) { inst.load(); });
+      }).catch(function (er) { announceNewError.textContent = er.message; announceNewError.hidden = false; });
+    });
+  }
+  function openAnnounceNew(level, groupId) {
+    announceNewTarget = { level: level, groupId: groupId };
+    announceNewError.hidden = true;
+    announceNewForm.reset();
+    announceNewModal.hidden = false;
+  }
+
+  var announceViewAllModal = document.getElementById("announce-viewall-modal");
+  function openAnnounceViewAll(level, groupId) {
+    var listEl = document.getElementById("announce-viewall-list"), emptyEl = document.getElementById("announce-viewall-empty");
+    listEl.innerHTML = ""; emptyEl.hidden = true;
+    announceViewAllModal.hidden = false;
+    api("/api/announcements/" + level + "/" + encodeURIComponent(groupId) + "?limit=20").then(function (d) {
+      emptyEl.hidden = d.announcements.length > 0;
+      d.announcements.forEach(function (a) {
+        var li = el("li", "qm-announce-item");
+        if (a.title) li.appendChild(el("b", "", a.title));
+        li.appendChild(el("p", "", a.body));
+        li.appendChild(el("small", "", (a.author_name || "Council") + " · " + ago(a.created_at)));
+        listEl.appendChild(li);
+      });
+    }).catch(function () { emptyEl.hidden = false; emptyEl.textContent = "Could not load announcements right now."; });
+  }
+
+  // ---- Item 9: Citizen Report (FIR) -- choice popup, submit modal, shared detail/reply modal ----
+  var postOrReportModal = document.getElementById("post-or-report-modal");
+  if (postOrReportModal) {
+    document.getElementById("choose-make-post").addEventListener("click", function () { postOrReportModal.hidden = true; });
+    document.getElementById("choose-submit-report").addEventListener("click", function () { postOrReportModal.hidden = true; openReportSubmit(); });
+  }
+  function openPostOrReportChoice() { postOrReportModal.hidden = false; }
+
+  var reportNewModal = document.getElementById("report-new-modal");
+  var reportNewForm = document.getElementById("report-new-form");
+  var reportNewError = document.getElementById("report-new-error");
+  var reportNewSuccess = document.getElementById("report-new-success");
+  function openReportSubmit() {
+    reportNewForm.hidden = false; reportNewError.hidden = true; reportNewSuccess.hidden = true;
+    reportNewForm.reset();
+    reportNewModal.hidden = false;
+  }
+  if (reportNewForm) {
+    reportNewForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      reportNewError.hidden = true;
+      api("/api/reports", {
+        body: document.getElementById("report-new-body").value.trim(),
+        anonymous: document.getElementById("report-new-anonymous").checked,
+      }).then(function () {
+        reportNewForm.hidden = true;
+        reportNewSuccess.hidden = false;
+      }).catch(function (er) { reportNewError.textContent = er.message; reportNewError.hidden = false; });
+    });
+  }
+
+  var reportDetailModal = document.getElementById("report-detail-modal");
+  var reportDetailMeta = document.getElementById("report-detail-meta");
+  var reportDetailBody = document.getElementById("report-detail-body");
+  var reportDetailTimeline = document.getElementById("report-detail-timeline");
+  var reportDetailReply = document.getElementById("report-detail-reply");
+  var reportReplyForm = document.getElementById("report-reply-form");
+  var reportReplyType = document.getElementById("report-reply-type");
+  var reportReplyDeadlineField = document.getElementById("report-reply-deadline-field");
+  var reportReplyError = document.getElementById("report-reply-error");
+  var reportEscalateBtn = document.getElementById("report-escalate-btn");
+  var currentReportId = null;
+
+  function openReportDetail(reportId) {
+    currentReportId = reportId;
+    reportDetailModal.hidden = false;
+    reportDetailMeta.textContent = "Loading…";
+    reportDetailBody.textContent = "";
+    reportDetailTimeline.innerHTML = "";
+    reportDetailReply.hidden = true;
+    api("/api/reports/" + reportId).then(renderReportDetail).catch(function (er) {
+      reportDetailMeta.textContent = "Could not load this report: " + er.message;
+    });
+  }
+
+  function renderReportDetail(d) {
+    reportDetailMeta.textContent = (d.anonymous ? "Anonymous Citizen" : d.author_name) + " · " + d.status + " · holder: " + d.current_holder_level + " · SLA " + left(d.sla_deadline);
+    reportDetailBody.textContent = d.body;
+    reportDetailTimeline.innerHTML = "";
+    d.updates.forEach(function (u) {
+      var li = el("li", "qm-report-update");
+      li.appendChild(el("b", "", u.update_type + (u.author_name ? " — " + u.author_name : "")));
+      if (u.message) li.appendChild(el("p", "", u.message));
+      li.appendChild(el("small", "", ago(u.created_at)));
+      reportDetailTimeline.appendChild(li);
+    });
+    reportDetailReply.hidden = !d.is_holder;
+    reportEscalateBtn.hidden = !d.is_holder || d.current_holder_level === "earth" || d.status === "resolved" || d.status === "denied";
+  }
+
+  if (reportReplyType) {
+    reportReplyType.addEventListener("change", function () {
+      reportReplyDeadlineField.hidden = reportReplyType.value !== "needs_time";
+    });
+    reportReplyForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      reportReplyError.hidden = true;
+      var type = reportReplyType.value;
+      var newDeadline = document.getElementById("report-reply-deadline").value;
+      if (type === "needs_time" && !newDeadline) {
+        reportReplyError.textContent = "Please choose a new deadline"; reportReplyError.hidden = false; return;
+      }
+      api("/api/reports/" + currentReportId + "/update", {
+        update_type: type, message: document.getElementById("report-reply-message").value.trim(),
+        new_deadline: type === "needs_time" ? newDeadline : undefined,
+      }).then(function () {
+        reportReplyForm.reset(); reportReplyDeadlineField.hidden = true;
+        openReportDetail(currentReportId);
+      }).catch(function (er) { reportReplyError.textContent = er.message; reportReplyError.hidden = false; });
+    });
+    reportEscalateBtn.addEventListener("click", function () {
+      api("/api/reports/" + currentReportId + "/escalate", {}).then(function () { openReportDetail(currentReportId); })
+        .catch(function (er) { reportReplyError.textContent = er.message; reportReplyError.hidden = false; });
+    });
+  }
+  window.qmOpenReportDetail = openReportDetail;
+
+  var boardInstances = [];
   var boards = [["bd-global", "global-root-tabs", "qm-dash-global"], ["bd-public", "public-root-tabs", "qm-dash-public"]];
   boards.forEach(function (cfg) {
     var root = document.getElementById(cfg[0] + "-board"); if (!root) return;
     var b = Board(root), tabs = document.getElementById(cfg[1]), panel = document.getElementById(cfg[2]);
+    boardInstances.push(b);
     var CHILD = { earth: "Continents", continent: "Countries", country: "Zones", zone: "States", state: "Districts", district: "Tehsils", tehsil: "Villages" };
     var heading = document.getElementById(cfg[0] === "bd-public" ? "public-places-h" : "global-places-h"), tree = panel.querySelector(".qm-explorer-tree");
     var sgBox = document.getElementById("subgroups-box");
