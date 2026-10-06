@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/india_map.css') }}" />
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
 </head>
-<body>
+<body data-logo-nav="confirm-exit">
   <header class="qm-header">
     <a href="{{ url_for('index') }}" style="display:contents">
       <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
@@ -45,13 +45,13 @@
         <p>Create your private account to begin your journey. Your Private ID will be your permanent identity on Qumanity.</p>
       </div>
 
-      <form id="private-form" class="qm-form">
+      <form id="private-form" class="qm-form" novalidate>
         <div class="qm-private-columns">
           <div class="qm-private-col">
             <h3 class="qm-form-section-title">✏️ Personal Details</h3>
             <div class="qm-row2">
-              <label class="qm-field"><span>👤 First Name</span><input type="text" id="field-first-name" required minlength="2" autocomplete="given-name" placeholder="e.g. Rohit" /></label>
-              <label class="qm-field"><span>👤 Last Name</span><input type="text" id="field-last-name" required minlength="2" autocomplete="family-name" placeholder="e.g. Mudgal" /></label>
+              <label class="qm-field"><span>👤 First Name</span><input type="text" id="field-first-name" required minlength="2" autocomplete="given-name" placeholder="e.g. Asha" /></label>
+              <label class="qm-field"><span>👤 Last Name</span><input type="text" id="field-last-name" required minlength="2" autocomplete="family-name" placeholder="e.g. Kumar" /></label>
             </div>
 
             <div class="qm-field">
@@ -102,13 +102,24 @@
           <div class="qm-private-col">
             <h3 class="qm-form-section-title">🔐 Security</h3>
             <div class="qm-row2">
-              <label class="qm-field"><span>📧 Email (recommended)</span><input type="email" id="field-email" autocomplete="email" placeholder="e.g. rohit@qumanity.in" /></label>
-              <label class="qm-field"><span>📱 Phone (recommended)</span><input type="text" id="field-phone" autocomplete="tel" placeholder="e.g. +91-9876543210" /></label>
+              <label class="qm-field"><span>📧 Email (recommended)</span><input type="email" id="field-email" autocomplete="email" placeholder="e.g. asha@example.com" /></label>
+              <label class="qm-field"><span>📱 Phone (recommended)</span><input type="text" id="field-phone" autocomplete="tel" placeholder="e.g. 9876543210" /></label>
             </div>
             <div class="qm-row2">
-              <label class="qm-field"><span>🔑 Choose a 5-digit PIN</span><input type="password" id="field-password" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="new-password" placeholder="•••••" /></label>
-              <label class="qm-field"><span>✅ Confirm PIN</span><input type="password" id="field-password-confirm" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="new-password" placeholder="•••••" /></label>
+              <label class="qm-field"><span>🔑 Choose a 5-character PIN</span>
+                <div class="qm-pin-input-wrap">
+                  <input type="password" id="field-password" required pattern="(?=.*[A-Za-z0-9])[A-Za-z0-9!@#$%^&amp;*()_+\-=\[\]{}|;:'&quot;,.&lt;&gt;/?]{5}" maxlength="5" autocomplete="new-password" placeholder="5 characters" />
+                  <button type="button" class="qm-pin-eye-btn" data-target="field-password" aria-label="Show PIN">👁️</button>
+                </div>
+              </label>
+              <label class="qm-field"><span>✅ Confirm PIN</span>
+                <div class="qm-pin-input-wrap">
+                  <input type="password" id="field-password-confirm" required pattern="(?=.*[A-Za-z0-9])[A-Za-z0-9!@#$%^&amp;*()_+\-=\[\]{}|;:'&quot;,.&lt;&gt;/?]{5}" maxlength="5" autocomplete="new-password" placeholder="5 characters" />
+                  <button type="button" class="qm-pin-eye-btn" data-target="field-password-confirm" aria-label="Show PIN">👁️</button>
+                </div>
+              </label>
             </div>
+            <p class="qm-pin-hint">5 characters — numbers, letters, or a mix. Not all special characters.</p>
             <p class="qm-timeline-note">⚠️ You sign in with your 9-digit Private ID (shown after registration) and this PIN. We cannot recover a lost PIN.</p>
             {% if test_pin %}
             <button type="button" class="qm-btn qm-btn-ghost qm-test-pw" id="use-test-password" data-pw="{{ test_pin }}">🔑 Use test PIN</button>
@@ -155,7 +166,8 @@
         </div>
 
         <p class="qm-summary-error" id="private-form-error" hidden></p>
-        <button type="submit" class="qm-btn qm-btn-primary qm-form-submit">Next →</button>
+        <p class="qm-consent-line">By continuing, you agree to Qumanity's <a href="#">Privacy Policy</a> and <a href="#">Terms of Service</a>.</p>
+        <button type="submit" class="qm-btn qm-btn-primary qm-btn-lg qm-form-submit">Next →</button>
       </form>
     </section>
 
@@ -169,18 +181,13 @@
 
       <div class="qm-target-toggle">
         <button type="button" class="qm-target-pill is-active" id="target-birth-btn">Setting: Birth Location</button>
-        <button type="button" class="qm-target-pill" id="target-present-btn">Setting: Present Location</button>
+        <button type="button" class="qm-target-pill" id="target-present-btn" disabled>Setting: Present Location</button>
       </div>
 
       <div class="qm-global-layout">
         <div class="qm-global-map-col">
-          <div class="qm-earth-stage qm-earth-stage--compact" id="global-zoom-stage">
-            <canvas id="global-earth-canvas"></canvas>
-            <div class="qm-earth-controls">
-              <button id="global-reset-view-btn" class="qm-btn qm-btn-ghost">Reset view</button>
-            </div>
-            <div id="global-breadcrumb" class="qm-breadcrumb">Indian Sub-continent</div>
-            <div id="global-tooltip" class="qm-tooltip" hidden></div>
+          <div class="qm-india-map-wrap" id="global-map-wrap">
+            <div id="global-subcontinent-map"></div>
           </div>
 
           <div class="qm-subcontinent-chips" id="global-country-chips" aria-label="Indian Sub-continent countries"></div>
@@ -192,7 +199,7 @@
         </div>
 
         <div class="qm-global-dropdown-col">
-          <div class="qm-dropdown-row">
+          <div class="qm-dropdown-row" id="global-birth-row">
             <h3 class="qm-panel-subhead">Birth Location</h3>
             <label class="qm-dropdown-field"><span>Continent</span>
               <select id="birth-continent-select"><option value="">Select a continent…</option></select>
@@ -200,9 +207,12 @@
             <label class="qm-dropdown-field"><span>Country</span>
               <select id="birth-country-select" disabled><option value="">Select a country…</option></select>
             </label>
+            <button type="button" class="qm-btn qm-btn-primary" id="confirm-birth-country-btn" disabled>Confirm Birth Location →</button>
+            <p class="qm-timeline-note" id="birth-country-confirmed-note" hidden>✓ Birth location confirmed.</p>
           </div>
-          <div class="qm-dropdown-row">
+          <div class="qm-dropdown-row" id="global-present-row">
             <h3 class="qm-panel-subhead">Present Location</h3>
+            <button type="button" class="qm-wizard-edit-link" id="edit-birth-country-link" hidden>← Edit Birth Location</button>
             <label class="qm-dropdown-field"><span>Continent</span>
               <select id="present-continent-select"><option value="">Select a continent…</option></select>
             </label>
@@ -219,8 +229,8 @@
 
       <p class="qm-summary-error" id="global-form-error" hidden></p>
       <div class="qm-summary-actions">
-        <button type="button" class="qm-btn qm-btn-ghost" id="global-back-btn">← Back</button>
-        <button type="button" class="qm-btn qm-btn-primary" id="global-next-btn">Next →</button>
+        <button type="button" class="qm-btn qm-btn-ghost qm-btn-lg" id="global-back-btn">← Back</button>
+        <button type="button" class="qm-btn qm-btn-primary qm-btn-lg" id="global-next-btn">Next →</button>
       </div>
     </section>
 
@@ -272,6 +282,11 @@
               <label class="qm-dropdown-field"><span>Village</span>
                 <select id="birth-village-select" disabled><option value="">Select a village…</option></select>
               </label>
+              <label class="qm-dropdown-field" id="birth-village-other-field" hidden><span>Describe your village/area</span>
+                <input type="text" id="birth-village-other-input" maxlength="200" placeholder="e.g. near the water tank, behind the market" />
+              </label>
+              <button type="button" class="qm-btn qm-btn-primary" id="confirm-birth-location-btn" disabled>Confirm Birth Location →</button>
+              <p class="qm-timeline-note" id="birth-location-confirmed-note" hidden>✓ Birth location confirmed.</p>
             </div>
             <p class="qm-panel-placeholder" id="public-birth-not-applicable" hidden>
               Birth location is outside the Indian Sub-continent — no zone/state breakdown for it.
@@ -281,6 +296,7 @@
           <div class="qm-panel-view" id="public-panel-present" hidden>
             <div class="qm-dropdown-row">
               <h3 class="qm-panel-subhead" id="public-present-heading">Present Location</h3>
+              <button type="button" class="qm-wizard-edit-link" id="edit-birth-location-link" hidden>← Edit Birth Location</button>
               <label class="qm-dropdown-field"><span>Zone</span>
                 <select id="present-zone-select"><option value="">Select a zone…</option></select>
               </label>
@@ -295,6 +311,9 @@
               </label>
               <label class="qm-dropdown-field"><span>Village</span>
                 <select id="present-village-select" disabled><option value="">Select a village…</option></select>
+              </label>
+              <label class="qm-dropdown-field" id="present-village-other-field" hidden><span>Describe your village/area</span>
+                <input type="text" id="present-village-other-input" maxlength="200" placeholder="e.g. near the water tank, behind the market" />
               </label>
             </div>
           </div>
@@ -339,7 +358,7 @@
         <p><strong>Your 9-digit Private ID:</strong></p>
         <p class="qm-idbox"><code id="review-private-id"></code></p>
         <p><strong>Account ID:</strong> <code id="review-account-id"></code></p>
-        <p class="qm-kundali-note">⚠️ Save this ID now. You need it together with your 5-digit PIN to sign in, and Qumanity cannot recover it.</p>
+        <p class="qm-kundali-note">⚠️ Save this ID now. You need it together with your 5-character PIN to sign in, and Qumanity cannot recover it.</p>
         <p class="qm-timeline-note" id="review-donation-status" hidden></p>
         <div class="qm-summary-actions">
           <button type="button" class="qm-btn qm-btn-ghost" id="review-copy-private-btn">📋 Copy Private ID</button>
@@ -368,11 +387,13 @@
   <script src="{{ url_for('static', filename='js/subcontinent.js') }}"></script>
   <script src="{{ url_for('static', filename='js/earth-globe.js') }}"></script>
   <script src="{{ url_for('static', filename='js/india_map.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/subcontinent_map.js') }}"></script>
   <script src="{{ url_for('static', filename='js/searchable_select.js') }}"></script>
   <script src="{{ url_for('static', filename='js/time_picker.js') }}"></script>
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script src="{{ url_for('static', filename='js/payments.js') }}"></script>
   <script src="{{ url_for('static', filename='js/register.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/logo_nav.js') }}"></script>
   {% include '_poems_marquee.html' %}
 </body>
 </html>

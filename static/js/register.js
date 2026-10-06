@@ -252,8 +252,26 @@
     document.getElementById("field-password-confirm").value = testPwBtn.getAttribute("data-pw");
   });
 
+  // Item 13a: PIN show/hide toggle
+  Array.prototype.forEach.call(document.querySelectorAll(".qm-pin-eye-btn"), function (btn) {
+    var target = document.getElementById(btn.getAttribute("data-target"));
+    btn.addEventListener("click", function () {
+      var showing = target.type === "text";
+      target.type = showing ? "password" : "text";
+      btn.textContent = showing ? "👁️" : "🙈";
+      btn.setAttribute("aria-label", showing ? "Show PIN" : "Hide PIN");
+    });
+  });
+
+  var PIN_RE = /^(?=.*[A-Za-z0-9])[A-Za-z0-9!@#$%^&*()_+\-=\[\]{}|;:'",.<>/?]{5}$/;
+
   function validatePassword(password) {
-    if (!/^\d{5}$/.test(password)) return { valid: false, message: "Your PIN must be exactly 5 digits" };
+    if (!PIN_RE.test(password)) {
+      return {
+        valid: false,
+        message: "PIN must be 5 characters. It can include numbers, letters, or special characters — but not all special characters.",
+      };
+    }
     return { valid: true, message: "PIN is valid" };
   }
 
@@ -332,28 +350,32 @@
   var targetBirthBtn = document.getElementById("target-birth-btn");
   var targetPresentBtn = document.getElementById("target-present-btn");
   function setGlobalTarget(target) {
+    if (target === "present" && targetPresentBtn.disabled) return;
     globalTarget = target;
     targetBirthBtn.classList.toggle("is-active", target === "birth");
     targetPresentBtn.classList.toggle("is-active", target === "present");
-    syncGlobalGlobeToTarget();
+    syncGlobalMapToTarget();
   }
   targetBirthBtn.addEventListener("click", function () { setGlobalTarget("birth"); });
   targetPresentBtn.addEventListener("click", function () { setGlobalTarget("present"); });
 
-  var activeContinentCode = null;
-  var globalBreadcrumb = document.getElementById("global-breadcrumb");
-  var globalTooltip = document.getElementById("global-tooltip");
   var countryChipsEl = document.getElementById("global-country-chips");
 
-  var globalGlobe = QMEarthGlobe.create(document.getElementById("global-earth-canvas"),
-    QMSubcontinent.globeOptions({ tooltipEl: globalTooltip, onCountryPick: handleGlobalCountryPick }));
+  // Flat Leaflet map of the 10 Sub-continent countries (Item 14c) --
+  // replaces the old 3D globe on this screen. Clicking a country on the
+  // map behaves exactly like clicking its chip below the map.
+  var globalMap = QMSubcontinentMap.create(document.getElementById("global-subcontinent-map"), {
+    onCountrySelect: function (qmCountryId) {
+      var entry = findWorldEntry(qmCountryId);
+      if (entry) applyLocationSelection(globalTarget, entry);
+    },
+  });
 
   function breadcrumbFor(loc) {
     if (!loc) return QMSubcontinent.NAME;
     if (QMSubcontinent.isMember(loc.country.code)) return QMSubcontinent.NAME + " › " + loc.country.name;
     return loc.continent.name + " › " + loc.country.name;
   }
-  function setGlobalBreadcrumb(loc) { globalBreadcrumb.textContent = breadcrumbFor(loc); }
 
   function updateCountryChips() {
     var loc = globalTarget === "birth" ? state.birthLocation : state.presentLocation;
@@ -377,29 +399,10 @@
     });
   }
 
-  // The map only ever shows the Sub-continent as one region -- choosing a
-  // country changes the dropdowns, chips and breadcrumb, never the map.
-  function focusContinentOnGlobe(code) {
-    var continent = findContinentByCode(code);
-    if (!continent) return null;
-    activeContinentCode = code;
-    return continent;
-  }
-
-  function syncGlobalGlobeToTarget() {
+  function syncGlobalMapToTarget() {
     var loc = globalTarget === "birth" ? state.birthLocation : state.presentLocation;
-    setGlobalBreadcrumb(loc);
+    globalMap.select(loc ? loc.country.id : null);
     updateCountryChips();
-  }
-
-  document.getElementById("global-reset-view-btn").addEventListener("click", function () {
-    globalGlobe.resetView();
-  });
-
-  function handleGlobalCountryPick(feature) {
-    if (feature && feature.properties.qm_country_id === "SUBCONTINENT") {
-      showModal("Choose your country from the Indian Sub-continent list under the map, or from the dropdowns.");
-    }
   }
 
   var birthContinentSelect = document.getElementById("birth-continent-select");
@@ -473,13 +476,8 @@
     QMSearchableSelect.refreshAll();
     updatePublicAccountEligibility();
 
-    if (target === globalTarget) {
-      focusContinentOnGlobe(entry.continent.code);
-      setGlobalBreadcrumb(loc);
-      updateCountryChips();
-    }
-
-    if (target === "birth" && !state.presentLocation) setGlobalTarget("present");
+    if (target === globalTarget) syncGlobalMapToTarget();
+    if (target === "birth") updateConfirmBirthCountryButtonState();
   }
 
   birthContinentSelect.addEventListener("change", function () {
@@ -491,7 +489,6 @@
       QMSearchableSelect.refresh(birthCountrySelect);
       return;
     }
-    focusContinentOnGlobe(code);
     populateCountryDropdown(birthCountrySelect, findContinentByCode(code), "birth");
   });
   birthCountrySelect.addEventListener("change", function () {
@@ -500,6 +497,7 @@
     if (entry) applyLocationSelection("birth", entry);
   });
   presentCountrySelect.addEventListener("change", function () {
+    if (presentCountrySelect.disabled) return;
     setGlobalTarget("present");
     var entry = findWorldEntry(presentCountrySelect.value);
     if (entry) applyLocationSelection("present", entry);
@@ -514,8 +512,47 @@
     return eligible;
   }
 
+  // Birth Location (Item 14d) must be confirmed before Present Location
+  // unlocks -- same lock-confirm flow as Public Account (Item 15a), adapted
+  // to this screen's two-always-visible-rows layout instead of tab panels.
+  var birthCountryConfirmed = false;
+  var confirmBirthCountryBtn = document.getElementById("confirm-birth-country-btn");
+  var birthCountryConfirmedNote = document.getElementById("birth-country-confirmed-note");
+  var editBirthCountryLink = document.getElementById("edit-birth-country-link");
+
+  function updateConfirmBirthCountryButtonState() {
+    confirmBirthCountryBtn.disabled = !state.birthLocation;
+  }
+  function setPresentCountryLocked(locked) {
+    presentCountrySelect.disabled = locked;
+    targetPresentBtn.disabled = locked;
+    targetPresentBtn.classList.toggle("is-locked", locked);
+  }
+  confirmBirthCountryBtn.addEventListener("click", function () {
+    if (!state.birthLocation) return;
+    birthCountryConfirmed = true;
+    birthContinentSelect.disabled = true;
+    birthCountrySelect.disabled = true;
+    confirmBirthCountryBtn.hidden = true;
+    birthCountryConfirmedNote.hidden = false;
+    editBirthCountryLink.hidden = false;
+    setPresentCountryLocked(false);
+    setGlobalTarget("present");
+  });
+  editBirthCountryLink.addEventListener("click", function () {
+    birthCountryConfirmed = false;
+    birthContinentSelect.disabled = false;
+    birthCountrySelect.disabled = !state.birthLocation && !birthContinentSelect.value;
+    confirmBirthCountryBtn.hidden = false;
+    birthCountryConfirmedNote.hidden = true;
+    editBirthCountryLink.hidden = true;
+    setPresentCountryLocked(true);
+    setGlobalTarget("birth");
+  });
+  setPresentCountryLocked(true);
+
   function enterGlobalStep() {
-    globalGlobe.resize();
+    globalMap.resize();
   }
 
   function requireBothLocations() {
@@ -602,15 +639,55 @@
     syncPublicMapToActiveTab();
   }
   publicTabBirthBtn.addEventListener("click", function () { setActivePublicTab("birth"); });
-  publicTabPresentBtn.addEventListener("click", function () { setActivePublicTab("present"); });
+  publicTabPresentBtn.addEventListener("click", function () {
+    if (publicTabPresentBtn.disabled) return;
+    setActivePublicTab("present");
+  });
 
-  // Once Birth's Zone + State (the minimum meaningful selection) are both
-  // set, auto-advance to the Present tab -- District/Tehsil/Village stay
-  // editable by clicking back to the Birth tab.
-  function maybeAutoAdvanceToPresent(target) {
-    if (target !== "birth" || activePublicTab !== "birth") return;
-    if (state.birthPublic.zone && state.birthPublic.state) setActivePublicTab("present");
+  // Birth Location must be fully filled (all 5 dropdowns, or the village
+  // fallback) and explicitly confirmed before Present Location unlocks --
+  // no more auto-advancing on just Zone+State. If birth isn't applicable at
+  // all (location outside the Sub-continent), Present is unlocked from the
+  // start (see publicBirthApplicable below).
+  var birthLocationConfirmed = false;
+  var confirmBirthBtn = document.getElementById("confirm-birth-location-btn");
+  var birthConfirmedNote = document.getElementById("birth-location-confirmed-note");
+  var editBirthLocationLink = document.getElementById("edit-birth-location-link");
+  var birthDropdownEls = ["birth-zone-select", "birth-state-select", "birth-district-select", "birth-tehsil-select", "birth-village-select", "birth-village-other-input"]
+    .map(function (id) { return document.getElementById(id); });
+
+  function updateConfirmBirthButtonState() {
+    confirmBirthBtn.disabled = !state.birthPublic.village;
   }
+  function setPresentTabLocked(locked) {
+    publicTabPresentBtn.disabled = locked;
+    publicTabPresentBtn.classList.toggle("is-locked", locked);
+  }
+  confirmBirthBtn.addEventListener("click", function () {
+    if (!state.birthPublic.village) return;
+    birthLocationConfirmed = true;
+    birthDropdownEls.forEach(function (el) { el.disabled = true; });
+    confirmBirthBtn.hidden = true;
+    birthConfirmedNote.hidden = false;
+    setPresentTabLocked(false);
+    setActivePublicTab("present");
+  });
+  editBirthLocationLink.addEventListener("click", function () {
+    birthLocationConfirmed = false;
+    birthDropdownEls.forEach(function (el) {
+      // Re-enable only up to the point the cascade actually supports -- a
+      // disabled select whose parent was never filled should stay disabled.
+      el.disabled = false;
+    });
+    document.getElementById("birth-state-select").disabled = !state.birthPublic.zone;
+    document.getElementById("birth-district-select").disabled = !state.birthPublic.state;
+    document.getElementById("birth-tehsil-select").disabled = !state.birthPublic.district;
+    document.getElementById("birth-village-select").disabled = !state.birthPublic.tehsil;
+    confirmBirthBtn.hidden = false;
+    birthConfirmedNote.hidden = true;
+    setPresentTabLocked(true);
+    setActivePublicTab("birth");
+  });
 
   function ensureIndiaMapPublic() {
     if (indiaMap) return;
@@ -716,9 +793,12 @@
     el.textContent = dedupe(parts).join(" → ");
   }
 
+  var VILLAGE_NOT_LISTED = "__NOT_LISTED__";
+
   function populateVillageDropdown(select, tehsilId) {
     select.innerHTML = '<option value="">' + ph(select, "village") + '</option>';
     select.disabled = true;
+    hideVillageOtherField(select);
     QMSearchableSelect.refresh(select);
     if (!tehsilId) return;
     fetch("/api/india-villages/" + encodeURIComponent(tehsilId))
@@ -729,10 +809,28 @@
           opt.value = v.id; opt.textContent = v.name;
           select.appendChild(opt);
         });
+        // Always offered last, even when the list above is full — a resident's
+        // village can be missing or mislabeled even when the tehsil otherwise
+        // has data (and ~16% of tehsils have none at all in the source).
+        var notListed = document.createElement("option");
+        notListed.value = VILLAGE_NOT_LISTED;
+        notListed.textContent = "Can't find my Village in the list";
+        select.appendChild(notListed);
         select.disabled = false;
         QMSearchableSelect.refresh(select);
       })
       .catch(function (err) { console.error("Failed to load villages", err); });
+  }
+
+  function villageOtherField(select) {
+    return document.getElementById(select.id.replace("-select", "-other-field"));
+  }
+  function villageOtherInput(select) {
+    return document.getElementById(select.id.replace("-select", "-other-input"));
+  }
+  function hideVillageOtherField(select) {
+    var field = villageOtherField(select);
+    if (field) { field.hidden = true; villageOtherInput(select).value = ""; }
   }
 
   function applyPublicStateSelection(target, stateProps) {
@@ -757,7 +855,7 @@
     recordPublicSelection(target, { zone: zone, state: st, district: null, tehsil: null, village: null });
     QMSearchableSelect.refreshAll();
     if (indiaMapActiveFor(target)) indiaMap.zoomToState(st.id);
-    maybeAutoAdvanceToPresent(target);
+    if (target === "birth") updateConfirmBirthButtonState();
   }
 
   function wirePublicDropdowns(target) {
@@ -784,7 +882,7 @@
       populateVillageDropdown(villageSelect, null);
       recordPublicSelection(target, { state: st, district: null, tehsil: null, village: null });
       if (st && indiaMapActiveFor(target)) indiaMap.zoomToState(st.id);
-      maybeAutoAdvanceToPresent(target);
+      if (target === "birth") updateConfirmBirthButtonState();
     });
     districtSelect.addEventListener("change", function () {
       var st = findStateById(stateSelect.value);
@@ -793,6 +891,7 @@
       populateVillageDropdown(villageSelect, district && district.direct_villages ? district.id : null);
       recordPublicSelection(target, { district: district, tehsil: null, village: null });
       if (district && indiaMapActiveFor(target)) indiaMap.highlightDistrictByName(district.name);
+      if (target === "birth") updateConfirmBirthButtonState();
     });
     tehsilSelect.addEventListener("change", function () {
       var st = findStateById(stateSelect.value);
@@ -801,10 +900,26 @@
       var villageParent = tehsil ? tehsil.id : (district && district.direct_villages ? district.id : null);
       populateVillageDropdown(villageSelect, villageParent);
       recordPublicSelection(target, { tehsil: tehsil || null, village: null });
+      if (target === "birth") updateConfirmBirthButtonState();
     });
     villageSelect.addEventListener("change", function () {
+      if (villageSelect.value === VILLAGE_NOT_LISTED) {
+        villageOtherField(villageSelect).hidden = false;
+        villageOtherInput(villageSelect).focus();
+        recordPublicSelection(target, { village: null });
+        if (target === "birth") updateConfirmBirthButtonState();
+        return;
+      }
+      hideVillageOtherField(villageSelect);
       var village = villageSelect.value ? { id: villageSelect.value, name: villageSelect.options[villageSelect.selectedIndex].textContent } : null;
       recordPublicSelection(target, { village: village });
+      if (target === "birth") updateConfirmBirthButtonState();
+    });
+    villageOtherInput(villageSelect).addEventListener("input", function () {
+      var text = villageOtherInput(villageSelect).value.trim();
+      var village = text ? { id: "PENDING", name: text, pending_assignment: true } : null;
+      recordPublicSelection(target, { village: village });
+      if (target === "birth") updateConfirmBirthButtonState();
     });
   }
   wirePublicDropdowns("birth");
@@ -875,6 +990,12 @@
     document.getElementById("public-birth-not-applicable").hidden = publicBirthApplicable;
     document.getElementById("public-birth-summary-row").hidden = !publicBirthApplicable;
     publicTabBirthBtn.hidden = !publicBirthApplicable;
+    confirmBirthBtn.hidden = !publicBirthApplicable;
+    birthConfirmedNote.hidden = true;
+    editBirthLocationLink.hidden = !publicBirthApplicable;
+    birthLocationConfirmed = false;
+    setPresentTabLocked(publicBirthApplicable);
+    updateConfirmBirthButtonState();
     setActivePublicTab(publicBirthApplicable ? "birth" : "present");
     updatePublicSummary("present");
     if (publicBirthApplicable) updatePublicSummary("birth");
@@ -1142,12 +1263,12 @@
         });
       });
       indiaDistricts = results[2];
-      QMSubcontinent.apply(globalGlobe, results[3]);
       populateContinentDropdown(birthContinentSelect);
       birthContinentSelect.value = "AS";
       populateCountryDropdown(birthCountrySelect, findContinentByCode("AS"), "birth");
       populateContinentDropdown(presentContinentSelect, "AS");
       populateCountryDropdown(presentCountrySelect, findContinentByCode("AS"), "present");
+      setPresentCountryLocked(!birthCountryConfirmed);
       QMSearchableSelect.refreshAll();
       buildCountryChips();
     });

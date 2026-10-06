@@ -43,8 +43,15 @@
       maxZoom: 8,
       attributionControl: false,
       worldCopyJump: false,
+      zoomControl: false,
+      dragging: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      touchZoom: false,
+      boxZoom: false,
+      keyboard: false,
+      tap: false,
     });
-    L.control.attribution({ prefix: false }).addTo(leafletMap).addAttribution("Qumanity — India states (SITAXML)");
 
     var geoLayer = null;
     var selectedLayer = null;
@@ -63,10 +70,10 @@
       // with fillOpacity 0 doesn't capture pointer events over its interior
       // in most browsers, so hovering the middle of a district would fall
       // through to the state layer underneath and never show its tooltip.
-      return { fillOpacity: 0.04, fillColor: "#8A6A4A", color: "#8A6A4A", weight: 1, opacity: 0.55 };
+      return { fillOpacity: 0.02, fillColor: "#000000", color: "#FFFFFF", weight: 1, opacity: 0.3 };
     }
     function districtSelectedStyle() {
-      return { fillColor: "#FF6600", fillOpacity: 0.95, color: "#FFFFFF", weight: 2, opacity: 1 };
+      return { fillColor: "#FF0000", fillOpacity: 0.95, color: "#FFFFFF", weight: 1, opacity: 1 };
     }
 
     function clearDistrictLayer() {
@@ -111,20 +118,20 @@
       }
     }
 
+    // Color language (15c): country interior black, inter-state borders white
+    // 1px (the international outline is its own separate yellow 2px layer,
+    // see the outline GeoJSON loaded below) -- a zone pick fills its states
+    // yellow, picking a state within it fills just that state yellow (the
+    // rest of the zone reverts to black), and picking a district within the
+    // selected state fills that district bright red.
     function baseStyle(feature) {
-      return {
-        fillColor: "#4A7A9A",
-        fillOpacity: 0.5,
-        color: "#4A7A9A",
-        weight: 1,
-        opacity: 0.6,
-      };
+      return { fillColor: "#000000", fillOpacity: 0.85, color: "#FFFFFF", weight: 1, opacity: 0.9 };
     }
     function dimStyle() {
-      return { fillColor: "#5A4A7A", fillOpacity: 0.35, color: "#5A4A7A", weight: 1, opacity: 0.4 };
+      return baseStyle();
     }
     function zoneActiveStyle() {
-      return { fillColor: "#FF9933", fillOpacity: 0.8, color: "#FF9933", weight: 1.5, opacity: 0.9 };
+      return { fillColor: "#FFD700", fillOpacity: 0.85, color: "#FFFFFF", weight: 1, opacity: 0.9 };
     }
     function styleFor(feature) {
       if (!zoneFilter) return baseStyle(feature);
@@ -134,10 +141,10 @@
       return !zoneFilter || feature.properties.qm_zone_id === zoneFilter;
     }
     function hoverStyle(feature) {
-      return { fillOpacity: 0.72, weight: 1.5, opacity: 0.9 };
+      return { fillOpacity: 0.95, weight: 1.5, opacity: 1 };
     }
     function selectedStyle() {
-      return { fillColor: "#00FF88", fillOpacity: 0.9, color: "#FFFFFF", weight: 2.5, opacity: 1 };
+      return { fillColor: "#FFD700", fillOpacity: 0.95, color: "#FFFFFF", weight: 2, opacity: 1 };
     }
 
     function onEachFeature(feature, layer) {
@@ -198,6 +205,20 @@
         .then(function (r) { return r.json(); })
         .then(function (geojson) {
           geoLayer = L.geoJSON(geojson, { style: baseStyle, onEachFeature: onEachFeature }).addTo(leafletMap);
+        })
+        .then(function () {
+          return fetch("/static/data/india_outline.geojson")
+            .then(function (r) { return r.json(); })
+            .then(function (geojson) {
+              // The international border -- a dissolved union of every state
+              // polygon, drawn fill-less and on top so its yellow 2px stroke
+              // reads as the country outline rather than being covered by
+              // the (interactive, pointer-events-capturing) state layer.
+              L.geoJSON(geojson, {
+                style: { fillOpacity: 0, color: "#FFD700", weight: 2, opacity: 1 },
+                interactive: false,
+              }).addTo(leafletMap);
+            });
         });
     }
 
