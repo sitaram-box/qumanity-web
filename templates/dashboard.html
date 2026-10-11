@@ -111,7 +111,6 @@
           <h3><span class="pv-ico">💰</span> <span data-i18n="wallet">Qoins Wallet</span></h3>
           <p class="qm-wallet-balance"><span id="qm-wallet-balance">0</span> Qoins</p>
           <p class="qm-dash-empty" id="qm-wallet-locked-note" hidden>Some Qoins are locked until you cast your first election vote.</p>
-          <button class="qm-btn qm-btn-ghost" id="qm-wallet-donate-btn" type="button" data-i18n="donate">Donate →</button>
           <button class="qm-btn qm-btn-ghost" id="qm-wallet-history-btn" type="button">📊 Weekly history</button>
           <ul class="qm-wallet-tx-list" id="qm-wallet-tx-list"></ul>
           <p class="qm-dash-empty" id="qm-wallet-tx-empty" hidden>No transactions yet.</p>
@@ -505,21 +504,6 @@
     </form>
   </div>
 
-  <div class="qm-gate-message qm-edit-modal" id="wallet-donate-modal" hidden>
-    <h3>Donate ₹ and Earn Qoins</h3>
-    <p class="qm-timeline-note">Simulated for this prototype — no real payment is processed. 1 Qoin = ₹1. Your own share is credited but locked until you cast your first election vote; the location shares (Earth → your Village) and any referrer's share are credited immediately.</p>
-    <form id="wallet-donate-form" class="qm-form">
-      <label class="qm-field"><span>Amount (₹1–₹200)</span><input type="number" id="donate-amount" min="1" max="200" required /></label>
-      <label class="qm-field"><span>Referrer's Private ID (optional)</span><input type="text" id="donate-referrer" /></label>
-      <div class="qm-summary-actions">
-        <button type="button" class="qm-btn qm-btn-ghost" id="wallet-donate-cancel">Cancel</button>
-        <button type="submit" class="qm-btn qm-btn-primary">Donate →</button>
-      </div>
-      <p class="qm-summary-error" id="wallet-donate-error" hidden></p>
-      <p class="qm-timeline-note" id="wallet-donate-success" hidden></p>
-    </form>
-  </div>
-
   <div class="dq-modal" id="kundali-modal" hidden role="dialog" aria-modal="true" aria-labelledby="kundali-title">
     <div class="dq-modal-box dq-modal-wide">
       <button type="button" class="dq-modal-close" data-close aria-label="Close">×</button>
@@ -688,8 +672,6 @@
     var QM_PREFERRED_LANG = {{ profile.preferred_language | tojson }};
   </script>
   <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
-  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-  <script src="{{ url_for('static', filename='js/payments.js') }}"></script>
   <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
   <script src="{{ url_for('static', filename='js/dash_extras.js') }}"></script>
   <script src="{{ url_for('static', filename='js/tutorial.js') }}"></script>

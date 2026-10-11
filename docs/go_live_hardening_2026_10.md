@@ -1,8 +1,6 @@
 # Production hardening + Railway deploy prep (2026-10-05)
 
-Next go-live step after Karma (`docs/karma_finalization_2026_10.md`) and Qoins payment
-(`docs/qoins_payment_2026_10.md`). The Founder is separately learning how to switch Razorpay to
-test mode and generate test keys — this pass doesn't touch Razorpay credentials; it prepares
+Next go-live step after Karma (`docs/karma_finalization_2026_10.md`). This pass prepares
 everything needed to actually deploy to Railway once the Founder is ready, using GitHub + Railway
 as the deployment path they named.
 
@@ -42,14 +40,12 @@ Postgres migration.
 | `QM_DB_PATH` | Yes, for data to survive redeploys | Point this at a path inside a Railway **Volume** (e.g. `/data/qumanity_prototype.db`) — without a Volume, every redeploy wipes the database. |
 | `QM_EARTH_ROOT` | Yes, for the 0_Earth folder-tree feature to keep working | Point this at a path inside the SAME (or another) Railway Volume, pre-populated with the current `0_Earth` tree (all 10 countries, `Qumanity_Master.json`, every registered user's folder) — without it, the app still runs, but every folder-tree write silently no-ops (soft-fails by design, per `folder_connector.py`), so no new user ever gets a `BORN_HERE`/`LIVING_HERE` folder. This is the single easiest thing to forget before a real launch. |
 | `QM_ADMIN_PRIVATE_IDS` | Yes, to use any `/api/admin/*` route (visibility overrides, election-cycle config) | Comma-separated list of Private IDs allowed admin access — currently unset even in local dev. |
-| `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | Not yet — the Founder is still setting these up | Until set, donations fall back to the simulated instant-credit path (see `docs/qoins_payment_2026_10.md`) — safe default, but real money won't move until these are set. |
 | `PORT` | No — Railway sets this automatically | Already read by both the Procfile and `app.py`'s own fallback. |
 | `QM_HOST` / `QM_DEBUG` / `QM_TEST_PIN` / `QM_DEV_SHOW_OTP` | No — leave unset | Dev-only conveniences; their defaults are already safe in a production environment (`QM_DEBUG` auto-disables off-localhost; the others default to disabled). |
 
 ## Explicitly not done in this pass
 
 - **No Postgres migration** — per the Founder's own decision, this launch stays on SQLite.
-- **No Razorpay live/test keys set or touched** — the Founder is doing this themselves.
 - **No actual Railway project created, no domain DNS touched** — those need the Founder's own
   Railway/registrar accounts; this pass only prepares the application-level code and config so
   that work, once started, has everything it needs.

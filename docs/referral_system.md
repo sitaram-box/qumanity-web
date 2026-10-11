@@ -13,12 +13,12 @@ The volunteer publishes the code/link on WhatsApp or social media. When someone 
 
 ## Registration flow (donation ON)
 1. New user B fills the registration form, switches the donation toggle on, picks an amount and types A's code.
-2. The live split shows on screen ([donation_distribution.md](donation_distribution.md)).
+2. The live split shows on screen ([qoins_earn_reference.md](qoins_earn_reference.md)).
 3. B pays A **cash**, in person.
 4. **Cash verification (built):** A types **their own 5-digit PIN** into the registration form to confirm the cash was received. The account is created either way, but the donation is only applied if the PIN matches; if it does not, B is registered as if no referral code was given (donation lost, not blocked).
    - Online payment (UPI/QR/webhook) is **not built** — no payment provider is connected yet.
 5. Credits: the 8 location wallets and A are credited **immediately**; B's own share is **locked** until B's first council vote.
-6. No donation: B is registered free; the ₹1 Qoin is still split 10 ways ([donation_distribution.md](donation_distribution.md)).
+6. No donation: B is registered free; the ₹1 Qoin is still split 10 ways ([qoins_earn_reference.md](qoins_earn_reference.md)).
 
 ## Rules
 - One code use per new account; a volunteer cannot refer themselves.

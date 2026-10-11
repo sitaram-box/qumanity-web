@@ -28,4 +28,4 @@ At the end: **elevate** (score ≥ lift) · **freeze** (positive but below) · *
 - **Tehsil → Earth:** the level below elects **8** (Fire, Earth, Air, Water × male/female). Electors are the council members of the child groups.
 - **Minimum residents before elections start:** Village 100 · Tehsil 1,000 · District 10,000 · State 100,000 · Zone 100,000 · Country 1,000,000 · Continent 1,000,000 · Earth 10,000,000.
 - A leader serves **only their sign's month**, then is released and may stand again or stand for the next council up: [qpunch_council.md](qpunch_council.md).
-- A new user's first council vote **unlocks** their registration Qoins ([donation_distribution.md](donation_distribution.md)).
+- A new user's first council vote **unlocks** their registration Qoins ([qoins_earn_reference.md](qoins_earn_reference.md)).

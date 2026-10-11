@@ -616,7 +616,7 @@
 
 /* ---- left "Groups" drawer: places and village groups tucked behind a button, board spans to the statistics ---- */
 .qm-explorer-col.dr {
-  position: fixed; left: 0; top: 0; bottom: var(--pm-h, 72px); z-index: 130; width: min(360px, 92vw); padding: 0 0 20px; overflow-y: auto;
+  position: fixed; left: 0; top: 0; bottom: var(--pm-h, 0px); z-index: 130; width: min(360px, 92vw); padding: 0 0 20px; overflow-y: auto;
   border-radius: 0 18px 18px 0; transform: translateX(-104%); transition: transform 0.25s ease; background: var(--qm-panel-bg); border-color: rgba(201, 150, 12, 0.35);
   box-shadow: 18px 0 50px rgba(10, 25, 41, 0.25); visibility: hidden;
 }

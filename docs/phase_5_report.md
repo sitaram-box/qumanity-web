@@ -11,7 +11,7 @@ of `lunar_calendar.py` / `cycle_middleware.py` / `pipeline_core.py` / `archive_w
 2. **`QM_ADMIN_EMAIL` convention**: none exists, and no email-sending capability (`smtplib`,
    `sendgrid`, any SMTP) exists anywhere in this codebase. Rather than inventing a new email
    integration nobody asked for, "admin email" is a `print()`-logged stub — matching the
-   project's own established pattern for an unconnected provider (simulated Razorpay mode, OTP's
+   project's own established pattern for an unconnected provider (OTP's
    `QM_DEV_SHOW_OTP`). The real, usable notification is the `admin_notifications` row.
 3. **Simulation scale**: proceeded with your recommendation — 3 users, 9 cycles, ~50 rows/cycle.
 

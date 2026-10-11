@@ -643,55 +643,6 @@
     });
   }
 
-  var donateBtn = document.getElementById("qm-wallet-donate-btn");
-  var donateModal = document.getElementById("wallet-donate-modal");
-  var donateForm = document.getElementById("wallet-donate-form");
-  var donateCancel = document.getElementById("wallet-donate-cancel");
-  var donateError = document.getElementById("wallet-donate-error");
-  var donateSuccess = document.getElementById("wallet-donate-success");
-
-  if (donateBtn) {
-    donateBtn.addEventListener("click", function () {
-      donateError.hidden = true;
-      donateSuccess.hidden = true;
-      donateModal.hidden = false;
-    });
-    donateCancel.addEventListener("click", function () { donateModal.hidden = true; });
-
-    donateForm.addEventListener("submit", function (e) {
-      e.preventDefault();
-      donateError.hidden = true;
-      donateSuccess.hidden = true;
-      var amount = Number(document.getElementById("donate-amount").value);
-
-      fetch("/api/payment/order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          purpose: "donation",
-          amount_rupees: amount,
-          referrer_private_id: document.getElementById("donate-referrer").value.trim(),
-        }),
-      })
-        .then(function (res) { return res.json().then(function (body) { return { ok: res.ok, body: body }; }); })
-        .then(function (result) {
-          if (!result.ok) throw new Error(result.body.error || "Could not start payment");
-          QMPayments.payWithRazorpay(result.body, "Donate ₹" + amount, function (credited) {
-            donateSuccess.textContent = "Donated ₹" + credited.amount_rupees + " — Qoins credited.";
-            donateSuccess.hidden = false;
-            loadWallet();
-          }, function (err) {
-            donateError.textContent = err.message;
-            donateError.hidden = false;
-          });
-        })
-        .catch(function (err) {
-          donateError.textContent = err.message;
-          donateError.hidden = false;
-        });
-    });
-  }
-
   // ---- Village Council Elections (Public → Village sub-tab) ----
   var electionsCard = document.getElementById("qm-elections-card");
   var lastElectionEligibility = null;

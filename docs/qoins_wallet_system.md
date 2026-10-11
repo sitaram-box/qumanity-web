@@ -48,7 +48,7 @@ A wallet stores an **amount**. It is shown as the **fewest Qoins, highest value 
 **Paying (debit):** the wallet total drops by exactly the price and the rest is shown again as the fewest Qoins (`qoin_core.debit_plan`). "1 minute audio costs 1 Qoin of value 2" therefore means "₹2 from the wallet".
 
 ## 4. Where Qoins come from
-1. **Registration** — free (1 Qoin minted) or donated: [donation_distribution.md](donation_distribution.md).
+1. **Registration** — free (1 Qoin minted): [qoins_earn_reference.md](qoins_earn_reference.md).
 2. **Independent top-up** (no referrer) — the table in that file.
 3. **Post rewards** — [post_rewards.md](post_rewards.md).
 4. Later: other Karma types.

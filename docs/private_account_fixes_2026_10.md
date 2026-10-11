@@ -1,7 +1,7 @@
 # Private Account fixes (2026-10-04)
 
 First slice of a much larger 10-part request (locations table, Vedic chart, election history,
-scoreboard, GitHub+Railway deploy, i18n, tutorial, referral/registration fee, Razorpay payments,
+scoreboard, GitHub+Railway deploy, i18n, tutorial, referral/registration fee,
 Postgres migration, a full civic-tech voting/declaration system, weekly statements with account
 tracking) — the Founder picked **Private Account fixes** as what to build first; the rest stays
 scoped-but-deferred (see "Deferred" below).
@@ -102,11 +102,8 @@ get there:
 - **GitHub + Railway deployment, Postgres migration**: *"Yes please migrate and deploy now after you
   complete all the required changes... First finish remaining editing/updating work."* — i.e. after
   the remaining feature backlog (scoreboard, tutorial, i18n, and whatever else), not before.
-- **Razorpay real-money payments**: the Founder has a registered Razorpay account (SITA Foundation)
-  with approval to transact — so this becomes a REAL integration when built, not a design-only
-  mockup. Scope: real-money Razorpay flows are **India only**; the other 9 Sub-continent countries
-  keep Qoins as a pure internal point system with no currency conversion. The system should be able
-  to convert a registration fee or other India payment into a Qoin count automatically.
+- **Payments**: dropped (2026-10). Qumanity has no payment processor; Qoins are earned, never
+  purchased (see `docs/qoins_earn_reference.md`).
 - **Multi-language (i18n)**: not started.
 - **The separate "civic-tech" voting/declaration system** (candidate duties/rights declarations, an
   oath, a performance dashboard with evidence tracking) is a different, much larger system than the

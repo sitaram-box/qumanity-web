@@ -58,7 +58,7 @@ The app shows the tour once after the first sign-in (skippable, and it can be re
 
 ## Routes the app uses
 - **Locations:** `/api/world-data`, `/api/subcontinent`, `/api/subcontinent/districts`, `/api/india-villages/<tehsil or district id>`
-- **Registration helpers:** `/api/zodiac/preview`, `/api/registration/donation-preview`
+- **Registration helpers:** `/api/zodiac/preview`
 - **Board:** `/api/board/<level>`, `/api/board/post`, `/api/board/vote`, `/api/board/comment`, `/api/board/removed`
 - **Council and sub-groups:** `/api/qpunch/<level>`, `/api/qpunch/volunteer`, `/api/subgroups…`, `/api/chat/<id>`
 - **People:**
@@ -105,13 +105,9 @@ Every month belongs to one sun sign. The election for that sign runs in 4 weeks:
 ## Website changes of Oct 2026 that the app follows (synced 2026-10-06)
 
 - **Server:** release builds talk to `https://qumanity.in` (Railway); `expo start` builds still default to the Mac on the same Wi-Fi. The sign-in screen can override either.
-- **Donations are real money now** (`payment_core.py`). `POST /api/wallet/donate` is gone. Use `POST /api/payment/order {amount_rupees, purpose: "donation"|"registration"}`, then:
-  - mode `simulated` (no Razorpay keys on the server): call `POST /api/payment/verify {local_order_id}` straight away;
-  - mode `razorpay`: the app opens Razorpay Checkout in a WebView (`components/Payment.tsx`), then sends `POST /api/payment/verify {local_order_id, razorpay_payment_id, razorpay_order_id, razorpay_signature}`.
-  - Qoins are credited only after verify, from the amount stored on the order. An order can't be credited twice.
+- **No payments (removed 2026-10):** `/api/payment/order`, `/api/payment/verify` and `/api/registration/donation-preview` are gone, along with the app's Razorpay WebView. Qoins are earned through civic activity, never purchased (see `docs/qoins_earn_reference.md`).
 - **Registration:** no referral code or volunteer PIN any more. The only referrer is the member doing an assisted registration.
-  - A self-registration with a donation gets back `donation_pending_amount` and pays it right away with `purpose: "registration"`.
-  - Assisted registrations are always free.
+  - Registration is always free; there is no fee or payment step.
 - **Hidden results:** `/api/election-sentiment/...` returns `{visible:false, reason}` until 2028 (or until the Founder opens it). Perception GETs return `pro_count/anti_count: null`, `results_visible:false` and `results_reason`. Voting still works.
 - **New endpoints the app uses:**
   - `GET /api/me/kundali`: Moon-based Vedic chart SVG, planet table, house strength, elements and dasha. **New website route, added 2026-10-06.**

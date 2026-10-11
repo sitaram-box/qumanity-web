@@ -563,27 +563,3 @@
 .qm-idbox { margin: 4px 0 8px; padding: 14px 18px; border-radius: 12px; text-align: center; background: rgba(255, 210, 74, 0.12); border: 1px dashed rgba(201, 150, 12, 0.5); }
 .qm-idbox code { font: 700 1.7rem "Fraunces", Georgia, serif; letter-spacing: 0.18em; color: var(--qm-gold-text); }
 
-/* ---- Registration donation panel (optional, off by default) ---- */
-.qm-donate-panel { margin-top: 4px; padding: 16px 18px; border-radius: 12px; background: rgba(255, 138, 31, 0.07); border: 1px solid rgba(201, 150, 12, 0.3); }
-.qm-donate-toggle { display: flex; align-items: center; gap: 12px; cursor: pointer; font-size: 0.92rem; color: var(--qm-text); }
-.qm-donate-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
-.qm-donate-toggle em { color: var(--qm-text-dim); font-style: normal; font-size: 0.8rem; }
-.qm-donate-switch { position: relative; flex: 0 0 auto; width: 42px; height: 24px; border-radius: 999px; background: rgba(10, 25, 41, 0.18); transition: background 0.2s; }
-.qm-donate-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(10,25,41,0.3); }
-.qm-donate-toggle input:checked + .qm-donate-switch { background: linear-gradient(120deg, #ff8a1f, #ffd24a); }
-.qm-donate-toggle input:checked + .qm-donate-switch::after { transform: translateX(18px); }
-.qm-donate-why { margin: 10px 0 0 54px; font-size: 0.8rem; color: var(--qm-text-dim); }
-.qm-donate-why ul { margin: 4px 0 0; padding-left: 18px; }
-.qm-donate-why li { margin: 2px 0; }
-.qm-donate-body { margin-top: 14px; padding-top: 14px; border-top: 1px dashed rgba(201, 150, 12, 0.3); }
-.qm-donate-body[hidden] { display: none; }
-.qm-donate-amounts { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.qm-donate-amounts button {
-  min-width: 46px; padding: 8px 10px; border-radius: 10px; cursor: pointer; font-weight: 700;
-  border: 1px solid var(--qm-input-border); background: var(--qm-input-bg); color: var(--qm-text); font-family: inherit;
-}
-.qm-donate-amounts button:hover { border-color: var(--qm-saffron); }
-.qm-donate-amounts button.is-active { background: linear-gradient(120deg, #ff8a1f, #ffd24a); color: #1a1205; border-color: transparent; }
-.qm-donate-preview { margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: var(--qm-input-bg); }
-.qm-donate-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 0.84rem; color: var(--qm-text); }
-.qm-donate-row b { color: var(--qm-gold-text); }
