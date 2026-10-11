@@ -1,5 +1,24 @@
 # India location ID fix (2026-09-28)
 
+## Incident: 2026-10-11 Production DB Never Seeded
+
+**Summary**: Separately from the scheme-mismatch incident below, production (qumanity.in) was
+found running on an essentially empty database (2 users, 0 villages, 0 posts) -- the Railway
+volume at `/data` never received `Qumanity_Master.json`, and `scripts/import_india_villages.py`
+had a hardcoded Mac-only path to it, so the village import could never have succeeded inside the
+container even if it had been run.
+
+**Fix**: `scripts/import_india_villages.py` now resolves both the Master.json path and the DB
+path from env vars (`MASTER_JSON_PATH`, `QM_DB_PATH`) with environment-appropriate fallbacks, so
+the same script runs unmodified on Mac dev or inside the Railway container. Added `--dry-run`
+(count only, no writes), `--verify` (post-import sanity check against
+`subcontinent_districts.json`, PASS/FAIL), and progress logging every 100,000 villages. Added
+`scripts/deploy_data_to_railway.sh`, a one-command operator helper that uploads Master.json to
+the volume and runs the import+verify inside the container -- idempotent, safe to re-run.
+`GET /healthz` now also reports `village_count`/`posts_count`/`master_json_present`/`boot_time`
+and returns `"status": "degraded"` (still HTTP 200) whenever `user_count` or `village_count` is
+zero, so an unseeded production DB is visible before a real user hits it.
+
 ## Incident: 2026-10-11 Village Dropdown Empty (P0)
 
 **Summary**: A prior session re-ran the retired SITAXML-based import script, silently

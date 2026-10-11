@@ -136,6 +136,7 @@ def _user_languages(user):
 
 
 app = Flask(__name__)
+_BOOT_TIME = dt.datetime.now(dt.timezone.utc).isoformat()
 # Prototype-only secret key — override via QM_SECRET_KEY for any real deployment. Refuses to boot
 # with the insecure default on Railway (every Railway deploy sets RAILWAY_ENVIRONMENT) rather than
 # silently shipping sessions signed with a key anyone can read in this file.
@@ -2679,30 +2680,66 @@ def api_lunar_phase():
     })
 
 
+def resolve_master_json_path_if_present():
+    """Same candidate list as scripts/import_india_villages.py's resolve_master_json_path(),
+    but returns None instead of exiting -- this runs inside the request handler, not a
+    one-shot script, so it must never call sys.exit()."""
+    candidates = []
+    env = os.environ.get("MASTER_JSON_PATH")
+    if env:
+        candidates.append(Path(env).expanduser())
+    candidates += [
+        Path("/data/Qumanity_Master.json"),
+        Path(__file__).resolve().parent / "Qumanity_Master.json",
+        Path("~/Desktop/0_Earth/Qumanity_Master.json").expanduser(),
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return None
+
+
 @app.route("/healthz")
 def healthz():
-    """Unauthenticated health/boot-state check (2026-10-05 Railway boot-crash fix) -- for Railway's
-    own healthcheck and for debugging live DB state without shell access to the Volume. Reports no
-    user data beyond a row count."""
+    """Unauthenticated health/boot-state check (2026-10-05 Railway boot-crash fix; extended
+    2026-10-11 after production shipped with an empty DB -- see docs/india_location_fix.md's
+    "Incident: 2026-10-11 Production DB Never Seeded" section) -- for Railway's own healthcheck
+    and for an operator to confirm the DB is actually seeded without shell access to the Volume.
+    Reports no user data beyond row counts. "degraded" (not "error") when the schema is fine but
+    empty -- that's a seeding problem, not a crash, so this still returns 200."""
     db_path = os.environ.get("QM_DB_PATH", str(Path(__file__).resolve().parent / "qumanity_prototype.db"))
     db_exists = Path(db_path).exists()
-    has_users_table = False
-    user_count = None
+    schema_ready = False
+    user_count = village_count = posts_count = None
     if db_exists:
         try:
             conn = get_db()
-            has_users_table = bool(conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'").fetchone())
-            if has_users_table:
+            schema_ready = bool(conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'").fetchone())
+            if schema_ready:
                 user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+                village_count = conn.execute("SELECT COUNT(*) FROM india_villages").fetchone()[0]
+                posts_count = conn.execute("SELECT COUNT(*) FROM board_posts").fetchone()[0]
             conn.close()
         except Exception as e:
             return jsonify({"status": "error", "error": str(e)}), 500
+
+    master_json_present = False
+    try:
+        master_json_present = resolve_master_json_path_if_present() is not None
+    except Exception:
+        pass
+
+    degraded = not db_exists or not schema_ready or not user_count or not village_count
     return jsonify({
-        "status": "ok",
+        "status": "degraded" if degraded else "ok",
         "db_path": db_path,
         "db_exists": db_exists,
-        "has_users_table": has_users_table,
+        "schema_ready": schema_ready,
         "user_count": user_count,
+        "village_count": village_count,
+        "posts_count": posts_count,
+        "master_json_present": master_json_present,
+        "boot_time": _BOOT_TIME,
     })
 
 
