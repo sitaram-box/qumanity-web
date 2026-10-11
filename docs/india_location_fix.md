@@ -63,7 +63,7 @@ The website's India district/tehsil/village dataset (`static/data/india_district
 A startup check (`app._validate_india_location_data`, in `app.py`) compares the live `india_districts_tehsils.json` against Master.json every time the server starts and prints a `[STARTUP WARNING]` if they ever drift apart again.
 
 ## What else this touched
-The Founder's own account (`private_id_9digit` <FOUNDER_PRIVATE_ID_REDACTED>) was registered under the old, wrong scheme — birth "New Delhi" (should be Chandni Chowk), present "North West Delhi/Bawana" filed one place removed from the real Bawana. Corrected by hand for this one account:
+The Founder's own account (`private_id_9digit` ADMIN_ID_PLACEHOLDER) was registered under the old, wrong scheme — birth "New Delhi" (should be Chandni Chowk), present "North West Delhi/Bawana" filed one place removed from the real Bawana. Corrected by hand for this one account:
 - `users.birth_location_json` / `present_location_json` updated to the real district/tehsil/village (Chandni Chowk → Tri Nagar → Ganesh Pura, Tri Nagar; North West Delhi → Bawana → Rohini Sector 24).
 - Readable `private_id`/`account_id` regenerated to match (the 9-digit login code and PIN are unchanged).
 - `location_elements` counts moved from the old ids to the new ones.

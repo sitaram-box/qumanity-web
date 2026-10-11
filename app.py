@@ -273,9 +273,13 @@ def location_select_demo():
 
 
 @app.route("/kundali/<int:user_id>")
+@login_required
 def kundali_view(user_id):
-    """A user's private kundali view — revisitable after registration,
-    since there's no login/session system yet to land on a dashboard."""
+    """A member's private kundali view. Access rule: a member may only view their own
+    chart -- any other user_id is refused with 403, since this page also shows the
+    member's name."""
+    if user_id != session["user_id"]:
+        return jsonify({"error": "Forbidden"}), 403
     conn = get_db()
     user = conn.execute("SELECT name FROM users WHERE id = ?", (user_id,)).fetchone()
     conn.close()
@@ -2552,7 +2556,12 @@ def _validate_password(password: str) -> str | None:
 
 
 @app.route("/api/user/zodiac/<int:user_id>")
+@login_required
 def api_user_zodiac(user_id):
+    """Access rule: a member may only fetch their own full chart -- any other user_id
+    is refused with 403."""
+    if user_id != session["user_id"]:
+        return jsonify({"error": "Forbidden"}), 403
     conn = get_db()
     row = conn.execute("SELECT * FROM user_zodiac WHERE user_id = ?", (user_id,)).fetchone()
     dob_row = conn.execute("SELECT dob FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -2583,7 +2592,12 @@ def api_me_kundali():
 
 
 @app.route("/api/user/kundali/summary/<int:user_id>")
+@login_required
 def api_user_kundali_summary(user_id):
+    """Access rule: a member may only fetch their own chart summary -- any other
+    user_id is refused with 403."""
+    if user_id != session["user_id"]:
+        return jsonify({"error": "Forbidden"}), 403
     conn = get_db()
     row = conn.execute(
         "SELECT sun_sign, sun_element, moon_sign, moon_nakshatra, ascendant_sign, kundali_summary "
@@ -3383,7 +3397,13 @@ def api_admin_pipeline_health():
 
 
 @app.route("/api/admin/sync-folders", methods=["POST"])
+@login_required
 def api_admin_sync_folders():
+    """Admin-only: triggers a full DB -> folder export on demand. Gated like every other
+    /api/admin/* route, since an unauthenticated caller could otherwise force a disk write
+    at will."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
     conn = get_db()
     result = folder_sync.sync_database_to_folders(conn)
     conn.close()

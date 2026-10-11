@@ -58,3 +58,7 @@ node_modules/
 Poems/
 docs/marquee_poems_archive/*
 !docs/marquee_poems_archive/README.md
+
+# Demo-account credentials (186 real Private IDs + the shared demo PIN) --
+# 2026-10-11 pre-public-repo audit. Kept locally for reference; never pushed.
+docs/DEMO_ACCOUNTS.md

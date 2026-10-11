@@ -45,7 +45,7 @@ python3 tools/simulate_lunar_year.py     -> OVERALL: ALL CHECKS PASSED
 3. **Scheduler env var** — `railway variables` confirmed `QM_DISABLE_SCHEDULER` is **not** set, so
    the scheduler registers automatically. Confirmed in the boot log:
    `[scheduler] lunar pipeline daily tick registered for 00:00 Asia/Kolkata`.
-4. **Admin gate** — `QM_ADMIN_PRIVATE_IDS=<FOUNDER_PRIVATE_ID_REDACTED>` confirmed via `railway variables`, untouched
+4. **Admin gate** — `QM_ADMIN_PRIVATE_IDS=ADMIN_ID_PLACEHOLDER` confirmed via `railway variables`, untouched
    throughout (Safety Rule 4). `QM_SECRET_KEY` confirmed already set to a real secret, also
    untouched (Safety Rule 5).
 
@@ -75,7 +75,7 @@ python3 tools/simulate_lunar_year.py     -> OVERALL: ALL CHECKS PASSED
 ## Admin-only DB upload
 
 - Built locally via `tools/seed_admin_only.py` (already part of the Phase 2.5 deliverables) —
-  `Seeded 1 user ('Rohit Mudgal', private_id_9digit=<FOUNDER_PRIVATE_ID_REDACTED>), 1 zodiac row, 1 elemental profile
+  `Seeded 1 user ('Rohit Mudgal', private_id_9digit=ADMIN_ID_PLACEHOLDER), 1 zodiac row, 1 elemental profile
   row, 1 account_id row, 1 wallet row, 39 zodiac/nakshatra reference rows -- no demo users.`
 - Uploaded via `railway volume files --volume web-volume upload ./admin_only_deploy.db
   /data/qumanity_prototype.db --overwrite`.
@@ -110,7 +110,7 @@ pipeline_bootstrap: [{'id': 1, 'year_1_start_amavasya': '2026-10-10T21:20:07+05:
 cycle_state_count: 1
 active_cycle: [{'cycle_id': 'Bhadrapada_2026', 'status': 'active'}]
 transfer_log_count: 0
-users: [{'id': 24, 'name': 'Rohit Mudgal', 'private_id_9digit': '<FOUNDER_PRIVATE_ID_REDACTED>'}]
+users: [{'id': 24, 'name': 'Rohit Mudgal', 'private_id_9digit': 'ADMIN_ID_PLACEHOLDER'}]
 ```
 
 Every value matches the pre-deployment safety check's expectations exactly.
@@ -122,7 +122,7 @@ into production with the Founder's real credentials is outside what this session
 (the "test your own app" allowance only covers localhost/dev builds, not a deployed production
 site):
 
-1. **`GET /api/admin/pipeline/health`** after logging in as `<FOUNDER_PRIVATE_ID_REDACTED>` in your browser. Based on
+1. **`GET /api/admin/pipeline/health`** after logging in as `ADMIN_ID_PLACEHOLDER` in your browser. Based on
    the SSH-verified DB state above, it should report `pipeline_active: false`,
    `current_cycle_id: "Bhadrapada_2026"`, `kp_day: null`, `last_transfer: null`, and
    `next_scheduled_action` pointing at the 2027-04-07 Year 2 start.

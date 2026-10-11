@@ -8,7 +8,7 @@
 | **PIN** | **5 digits** chosen at registration; replaces the password |
 | **Sign-in** | 9-digit Private ID + 5-digit PIN |
 | **Lock-out** | 5 wrong PINs lock that ID for 15 minutes |
-| **Readable ID** | the older form built from name, gender, age, zodiac and birth place (e.g. `<FOUNDER_READABLE_ID_REDACTED>`). It stays in the database as a reference and is **never shown to the user**; only group admins may reveal it |
+| **Readable ID** | the older form built from name, gender, age, zodiac and birth place (e.g. `<FOUNDER_READABLE_ID>`). It stays in the database as a reference and is **never shown to the user**; only group admins may reveal it |
 | **Account ID** | public, changes with the present location (see the app plan §4) |
 
 ## Registration
@@ -18,9 +18,11 @@ Step 1 asks for a PIN (twice) instead of a password. At the end the system gener
 The Private ID is **masked** (`•••••••••`). "Show" asks for the PIN again, reveals it for 30 seconds, then hides it.
 
 ## Founder / admin
-The Founder's readable ID `<FOUNDER_READABLE_ID_REDACTED>` maps to the code `<FOUNDER_PRIVATE_ID_REDACTED>`; the PIN is known only to the Founder (stored hashed). Admin rights are given by the setting `QM_ADMIN_PRIVATE_IDS` (the 9-digit code), currently `<FOUNDER_PRIVATE_ID_REDACTED>`. Demo users are ordinary users.
+The Founder's readable ID `<FOUNDER_READABLE_ID>` maps to the code `ADMIN_ID_PLACEHOLDER`; the PIN is known only to the Founder (stored hashed). Admin rights are given by the setting `QM_ADMIN_PRIVATE_IDS` (the 9-digit code), currently `ADMIN_ID_PLACEHOLDER`. Demo users are ordinary users.
+
+The Founder's readable ID and its legacy form are redacted from this public document. Operators set them via `QM_FOUNDER_READABLE_ID`.
 
 ## Existing users
-`scripts/migrate_private_codes.py` gives every existing user a code and the development PIN `12345` (see `DEMO_ACCOUNTS.md`).
+`scripts/_retired/migrate_private_codes.py` gave every existing user a code and the development PIN `12345` (see `DEMO_ACCOUNTS.md`) -- retired now that it's already run; see the warning at the top of that script before ever re-running it.
 
 Code: `id_generator.generate_private_code`, `/login`, `/api/auth/register`, `/api/user/private-code`.

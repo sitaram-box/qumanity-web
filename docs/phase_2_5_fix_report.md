@@ -30,7 +30,7 @@ nothing ever ran that on the Volume.
   says so explicitly). The seed script does **not** set `role = 'founder'` as the original prompt
   sketched — that column doesn't exist and shouldn't be invented for this fix.
 - Confirmed the Admin's real `private_id` in the local DB is
-  `<FOUNDER_READABLE_ID_LEGACY_REDACTED>` — **not** `<FOUNDER_READABLE_ID_REDACTED>` as stated in the
+  `<FOUNDER_READABLE_ID_LEGACY>` — **not** `<FOUNDER_READABLE_ID>` as stated in the
   prompt's context. Rather than hand-typing a (wrong) private_id into a new seed row, the seed
   script copies the Admin's real, already-correct row instead — see "Design change" below.
 
@@ -39,7 +39,7 @@ nothing ever ran that on the Volume.
 The prompt's sketch for `tools/seed_admin_only.py` was to re-run the full registration pipeline
 (zodiac calculation, kundali generation, `id_generator`) to construct a new Admin row from
 scratch. That's riskier than it needs to be: `id_generator` and the zodiac/kundali computation are
-not guaranteed to reproduce the exact same `private_id_9digit` (`<FOUNDER_PRIVATE_ID_REDACTED>`) a second time, and
+not guaranteed to reproduce the exact same `private_id_9digit` (`ADMIN_ID_PLACEHOLDER`) a second time, and
 there is already a real, fully-correct Admin row sitting in the local DB (user id 24, "Rohit
 Mudgal") with real `user_zodiac` / `user_elemental_profile` / `account_ids` / `wallets` rows
 already attached.
@@ -81,7 +81,7 @@ python3 tools/seed_admin_only.py --db-path ./admin_only.db
 ```
 Builds the full schema into a fresh file (reusing the exact same functions `ensure_database_ready()`
 uses, so it can never drift out of sync with the real schema), then copies the real Admin row
-(`private_id_9digit=<FOUNDER_PRIVATE_ID_REDACTED>` by default, `--private-id` to override) and its `user_zodiac` /
+(`private_id_9digit=ADMIN_ID_PLACEHOLDER` by default, `--private-id` to override) and its `user_zodiac` /
 `user_elemental_profile` / `account_ids` / `wallets` rows from `--source-db` (default: the local
 dev DB). Refuses to overwrite an existing `--db-path` unless `--force` is passed.
 
@@ -120,15 +120,15 @@ OK, existing local DB still boots clean
 **The seed script:**
 ```
 $ python3 tools/seed_admin_only.py --db-path /tmp/admin_only_test.db
-Seeded 1 user ('Rohit Mudgal', private_id_9digit=<FOUNDER_PRIVATE_ID_REDACTED>), 1 zodiac row, 1 elemental profile row,
+Seeded 1 user ('Rohit Mudgal', private_id_9digit=ADMIN_ID_PLACEHOLDER), 1 zodiac row, 1 elemental profile row,
 1 account_id row, 1 wallet row, 39 zodiac/nakshatra reference rows -- no demo users.
 Admin-only DB ready at /tmp/admin_only_test.db
 
 $ sqlite3 /tmp/admin_only_test.db "SELECT private_id_9digit, name FROM users;"
-<FOUNDER_PRIVATE_ID_REDACTED>|Rohit Mudgal
+ADMIN_ID_PLACEHOLDER|Rohit Mudgal
 ```
 (No `role` column exists in this schema — see "What was verified" above — so this differs from the
-originally-expected `<FOUNDER_PRIVATE_ID_REDACTED>|founder` output; admin access on Railway is, and remains, controlled
+originally-expected `ADMIN_ID_PLACEHOLDER|founder` output; admin access on Railway is, and remains, controlled
 by `QM_ADMIN_PRIVATE_IDS`, not a stored role.)
 
 **Booting the real app against that Admin-only DB:**

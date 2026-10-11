@@ -6,7 +6,7 @@ This COPIES the Admin's real, already-verified row (and its real user_zodiac /
 user_elemental_profile / account_ids / wallets rows) from an existing source DB, rather than
 regenerating them through the normal registration pipeline. Regenerating would run the zodiac/
 kundali calculation and id_generator fresh, which is not guaranteed to reproduce the exact same
-private_id (<FOUNDER_PRIVATE_ID_REDACTED>) -- copying the real, already-correct row is strictly safer.
+private_id -- copying the real, already-correct row is strictly safer.
 
 Schema is applied the same way app.py's own ensure_database_ready() does -- db/schema.sql, the
 zodiac reference-data seed, founder/visibility/recovery's tables, every other *_core module's
@@ -14,8 +14,8 @@ tables, and the Phase 2 migrations -- by reusing those same functions, so a DB t
 produces boots identically to a real one and never drifts out of sync with the real schema.
 
 Usage:
-    python3 tools/seed_admin_only.py --db-path ./admin_only.db
-    python3 tools/seed_admin_only.py --db-path ./admin_only.db --source-db ./qumanity_prototype.db --private-id <FOUNDER_PRIVATE_ID_REDACTED>
+    python3 tools/seed_admin_only.py --db-path ./admin_only.db --private-id <your admin's 9-digit private_id_9digit>
+    python3 tools/seed_admin_only.py --db-path ./admin_only.db --source-db ./qumanity_prototype.db --private-id <...>
 
 Idempotent in spirit: refuses to overwrite an existing --db-path unless --force is passed, so a
 re-run never silently duplicates anything.
@@ -120,7 +120,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--db-path", required=True, help="Target DB file to create")
     ap.add_argument("--source-db", default=str(ROOT / "qumanity_prototype.db"), help="Existing DB to copy the Admin account from (default: local dev DB)")
-    ap.add_argument("--private-id", default="<FOUNDER_PRIVATE_ID_REDACTED>", help="The Admin's private_id_9digit to copy (default: the Founder's own)")
+    ap.add_argument("--private-id", required=True, help="The Admin's private_id_9digit to copy -- no default (was a hardcoded real Private ID; always pass this explicitly now)")
     ap.add_argument("--force", action="store_true", help="Overwrite --db-path if it already exists")
     args = ap.parse_args()
 
