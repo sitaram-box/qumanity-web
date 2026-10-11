@@ -32,7 +32,7 @@ import folder_connector
 import lunar_calendar
 import pipeline_core
 
-EARTH_ROOT = Path(os.environ.get("QM_EARTH_ROOT", "/Users/macmudgal/Desktop/0_Earth"))
+EARTH_ROOT = Path(os.environ.get("QM_EARTH_ROOT", Path(__file__).resolve().parent / "0_Earth"))
 BACKUPS_DIR = EARTH_ROOT / ".backups"
 
 # file name -> list of tables whose earth-level rows (for whichever location/user they belong to)

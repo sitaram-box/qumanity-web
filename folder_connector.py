@@ -1,6 +1,7 @@
 """Writes each newly-registered user into the REAL geographic folder tree
-at /Users/macmudgal/Desktop/0_Earth/Continents/ (separate from and outside
-this project — see README's "Nested folder integration" section).
+at QM_EARTH_ROOT/Continents/ (default: ./0_Earth next to this file; override via the
+QM_EARTH_ROOT env var -- separate from and outside this project otherwise — see README's
+"Nested folder integration" section).
 
 That tree already exists on disk (built from Qumanity_Master.json): fully
 scaffolded for India down to village level (5 zones / 37 states / 547
@@ -34,7 +35,7 @@ import json
 import os
 from pathlib import Path
 
-EARTH_ROOT = Path(os.environ.get("QM_EARTH_ROOT", "/Users/macmudgal/Desktop/0_Earth"))
+EARTH_ROOT = Path(os.environ.get("QM_EARTH_ROOT", Path(__file__).resolve().parent / "0_Earth"))
 CONTINENTS_ROOT = EARTH_ROOT / "Continents"
 
 _ZONE_LEVEL = ("zone", "Zones")

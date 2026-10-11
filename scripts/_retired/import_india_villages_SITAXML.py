@@ -17,12 +17,18 @@ via GET /api/india-villages/<tehsil_id> instead.
 Run once (or whenever SITAXML.xml changes):
     python3 scripts/import_india_villages.py
 """
+import os
 import sqlite3
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-SRC = "/Users/macmudgal/Desktop/Windows Data/sita foundation/SITA Project Data/SITAXML.xml"
+# SITAXML_SOURCE_PATH overrides this (2026-10-11, removing a hardcoded single-Mac path) --
+# moot in practice, since this script refuses to run at all without --i-know-this-is-retired.
+SRC = os.environ.get(
+    "SITAXML_SOURCE_PATH",
+    str(Path.home() / "Desktop" / "Windows Data" / "sita foundation" / "SITA Project Data" / "SITAXML.xml"),
+)
 DB_PATH = Path(__file__).resolve().parent.parent.parent / "qumanity_prototype.db"
 BATCH_SIZE = 5000
 

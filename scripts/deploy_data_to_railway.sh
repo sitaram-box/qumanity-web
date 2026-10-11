@@ -87,8 +87,12 @@ echo "[5/7] Uploading Master.json to the Railway volume ($RAILWAY_VOLUME:$REMOTE
 railway volume files upload "$MASTER_JSON_LOCAL" "$REMOTE_MASTER_JSON_PATH" --volume "$RAILWAY_VOLUME" --overwrite
 
 # --- 6. Run the import (+ verify) inside the container -----------------------------------
-echo "[6/7] Running the village import inside the container (git pull first, so the container has this script's latest version)..."
-if ! railway ssh "cd /app && git pull && python3 scripts/import_india_villages.py --verify"; then
+echo "[6/7] Running the village import inside the container..."
+# No `git pull` here: the container has no git installed, and wouldn't need it anyway --
+# the deployed image (built from whatever's on origin/main when Railway last auto-deployed)
+# is the source of truth for the code running inside it. If scripts/import_india_villages.py
+# has changed since that deploy, push first and let Railway redeploy before re-running this.
+if ! railway ssh "cd /app && python3 scripts/import_india_villages.py --verify"; then
   echo "ERROR: Import/verify failed inside the container. See the output above." >&2
   exit 1
 fi

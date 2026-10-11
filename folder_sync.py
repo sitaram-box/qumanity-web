@@ -8,7 +8,7 @@ read-only export, safe to delete and regenerate at any time via
 sync_database_to_folders().
 
 Per-user folders are written live, at registration time, into the real
-/Users/macmudgal/Desktop/0_Earth/ tree by folder_connector.py -- this
+QM_EARTH_ROOT tree (see folder_connector.py) by folder_connector.py -- this
 module used to also batch-export a per-user JSON here (into a separate,
 project-local folder_export/Earth/ tree, keyed by slugified location
 *names*), but that became a second, conflicting copy of the same data once

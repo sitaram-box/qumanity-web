@@ -10,10 +10,16 @@ lat/lng (for plotting) and its zone's color (per the brief's Central
 visibility against the globe's own dark background).
 """
 import json
+import os
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
-SRC = "/Users/macmudgal/Desktop/updated_SITAXML.xml"
-OUT = "/Users/macmudgal/Desktop/Qumanity_DPG/static/data/india_states.json"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+# SITAXML_SOURCE_PATH overrides this -- the maintainer's own machine is the only place this raw
+# census-derived source file normally lives; everyone else must set the env var (2026-10-11,
+# removing a hardcoded path that only existed on one developer's Mac).
+SRC = os.environ.get("SITAXML_SOURCE_PATH", str(Path.home() / "Desktop" / "updated_SITAXML.xml"))
+OUT = str(REPO_ROOT / "static" / "data" / "india_states.json")
 
 CENTROIDS = {
     "CS.CH": (30.7, 76.8), "CS.DL": (28.6, 77.2), "CS.JK": (33.8, 76.6),

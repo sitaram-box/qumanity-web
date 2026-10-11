@@ -5,14 +5,22 @@ SITAXML.xml (<Global_Continent id="O_AS"><Global_Country id="O_AS_IND">)
 and global_core.py's ISO alpha-3 country codes.
 """
 import json
+import os
 import re
 import sys
+from pathlib import Path
 
 import openpyxl
 import pycountry
 
-SRC = "/Users/macmudgal/Desktop/Windows Data/sita foundation/SITA Project Data/O राम - World Data.xlsx"
-OUT = "/Users/macmudgal/Desktop/Qumanity_DPG/static/data/global_countries.json"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+# WORLD_DATA_SOURCE_PATH overrides this -- the maintainer's own machine is the only place this
+# raw source spreadsheet normally lives (2026-10-11, removing a hardcoded single-Mac path).
+SRC = os.environ.get(
+    "WORLD_DATA_SOURCE_PATH",
+    str(Path.home() / "Desktop" / "Windows Data" / "sita foundation" / "SITA Project Data" / "O राम - World Data.xlsx"),
+)
+OUT = str(REPO_ROOT / "static" / "data" / "global_countries.json")
 
 # SITAXML / global_core.py continent codes (2-letter), matches the 7-continent
 # marker set already plotted on the prototype globe.

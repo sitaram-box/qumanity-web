@@ -3524,7 +3524,7 @@ def _validate_india_location_data():
     (the source of truth, per the 2026-09-28 fix -- see docs/india_location_fix.md). Only warns;
     never blocks startup, since a stale copy is a data problem to fix, not a reason to go down."""
     try:
-        master_path = Path(os.environ.get("QM_EARTH_ROOT", "/Users/macmudgal/Desktop/0_Earth")) / "Qumanity_Master.json"
+        master_path = Path(os.environ.get("QM_EARTH_ROOT", Path(__file__).resolve().parent / "0_Earth")) / "Qumanity_Master.json"
         if not master_path.exists():
             return
         master = json.loads(master_path.read_text(encoding="utf-8"))
@@ -3622,10 +3622,39 @@ def ensure_database_ready() -> None:
     print(f"[boot] database ready at {os.environ.get('QM_DB_PATH', '<local default: qumanity_prototype.db>')}")
 
 
+def _validate_subcontinent_country_list():
+    """Startup check (2026-10-11, added after the Present Location country-dropdown P0): the
+    registration wizard's Present Location step offers only the 10 Indian Sub-continent
+    countries (SUBCONTINENT_COUNTRY_IDS), filtered client-side out of Asia's full country list
+    in static/data/global_countries.json (WORLD_DATA_FILE). If that file's Asia entry is ever
+    missing one of the 10, or Asia itself goes missing, the Present Country dropdown would
+    silently render fewer countries (or none) -- warn loudly instead of discovering it from a
+    blocked registration."""
+    try:
+        world = _load_json(WORLD_DATA_FILE)
+        asia = next((c for c in world.get("continents", []) if c.get("code") == "AS"), None)
+        if asia is None:
+            print("[boot] WARNING: global_countries.json has no Asia continent -- the Present "
+                  "Location country dropdown will be empty.")
+            return
+        asia_country_ids = {c["id"] for c in asia.get("countries", [])}
+        missing = [cid for cid in SUBCONTINENT_COUNTRY_IDS if cid not in asia_country_ids]
+        if missing:
+            print(f"[boot] WARNING: {len(missing)} of the 10 Indian Sub-continent countries are "
+                  f"missing from global_countries.json's Asia entry: {missing}. The Present "
+                  f"Location country dropdown will be missing these.")
+        else:
+            print(f"[boot] Present Location country list OK: all {len(SUBCONTINENT_COUNTRY_IDS)} "
+                  f"Sub-continent countries present.")
+    except Exception as e:
+        print(f"[boot] WARNING: could not validate the Present Location country list: {e}")
+
+
 ensure_database_ready()
 _ensure_user_columns()
 _validate_india_location_data()
 _validate_india_villages_loaded()
+_validate_subcontinent_country_list()
 
 # Runs on import, not just under `python app.py` -- a production deploy runs this module under
 # gunicorn (see Procfile), which never executes the `__main__` block below, so the daily DB->folder

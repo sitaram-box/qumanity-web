@@ -17,6 +17,7 @@ Idempotent: safe to re-run after the master is recompiled.
     python3 scripts/build_subcontinent_data.py
 """
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -27,7 +28,30 @@ from shapely.ops import unary_union
 
 BASE = Path(__file__).resolve().parent.parent
 DATA = BASE / "static" / "data"
-MASTER = Path("/Users/macmudgal/Desktop/0_Earth/Qumanity_Master.json")
+
+
+def _resolve_master_json() -> Path:
+    """Same MASTER_JSON_PATH env var + fallback order as scripts/import_india_villages.py
+    (2026-10-11, removing a hardcoded single-developer-Mac path)."""
+    candidates = []
+    env = os.environ.get("MASTER_JSON_PATH")
+    if env:
+        candidates.append(Path(env).expanduser())
+    candidates += [
+        Path("/data/Qumanity_Master.json"),
+        BASE / "Qumanity_Master.json",
+        Path("~/Desktop/0_Earth/Qumanity_Master.json").expanduser(),
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    print("ERROR: Qumanity_Master.json not found. Tried:")
+    for c in candidates:
+        print(f"  {c}")
+    sys.exit(1)
+
+
+MASTER = _resolve_master_json()
 DB = BASE / "qumanity_prototype.db"
 
 # code -> (country id, display order)

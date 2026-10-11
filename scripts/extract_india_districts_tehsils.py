@@ -21,10 +21,19 @@ its real labels (District/Tehsil) rather than fabricating a Lok
 Sabha/Vidhan Sabha correspondence the source doesn't contain.
 """
 import json
+import os
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
-SRC = "/Users/macmudgal/Desktop/Windows Data/sita foundation/SITA Project Data/SITAXML.xml"
-OUT = "/Users/macmudgal/Desktop/Qumanity_DPG/static/data/india_districts_tehsils.json"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+# SITAXML_SOURCE_PATH overrides this -- see scripts/extract_india_states.py's own note; this
+# script is also superseded by Qumanity_Master.json as the authoritative India source (see
+# docs/india_location_fix.md) and is kept only for historical reference.
+SRC = os.environ.get(
+    "SITAXML_SOURCE_PATH",
+    str(Path.home() / "Desktop" / "Windows Data" / "sita foundation" / "SITA Project Data" / "SITAXML.xml"),
+)
+OUT = str(REPO_ROOT / "static" / "data" / "india_districts_tehsils.json")
 
 
 def main():
