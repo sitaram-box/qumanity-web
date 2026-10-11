@@ -11,15 +11,17 @@ data can be swapped for the real backend later without changing the
 frontend contract.
 """
 
+import csv
 import datetime as dt
 import functools
+import io
 import json
 import os
 import re
 import sys
 from pathlib import Path
 
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -1485,16 +1487,15 @@ def api_qoins_config():
     loc = json.loads(user["present_location_json"])
     code, symbol, name = qoin_core.currency_for((loc.get("country") or {}).get("code"))
     return jsonify({"currency": code, "symbol": symbol, "currency_name": name, "denominations": qoin_core.DENOMINATIONS,
-                    "max_donation": qoin_core.MAX_DONATION, "village_prices": qoin_core.VILLAGE_PRICES, "paid_prices": qoin_core.PAID_PRICES})
+                    "village_prices": qoin_core.VILLAGE_PRICES, "paid_prices": qoin_core.PAID_PRICES})
 
 
 @app.route("/api/qoins/preview")
 def api_qoins_preview():
-    """?amount=289 -> the Qoins that amount becomes, and (for donations) the top-up split."""
+    """?amount=289 -> the Qoins that amount becomes."""
     try:
         amount = int(request.args.get("amount", ""))
-        return jsonify({"amount": amount, "qoins": qoin_core.to_qoins(amount),
-                        "topup": qoin_core.topup_split(amount) if amount >= 1 else None})
+        return jsonify({"amount": amount, "qoins": qoin_core.to_qoins(amount)})
     except ValueError as e:
         return jsonify({"error": str(e) or "Enter a whole number"}), 400
 
@@ -2236,6 +2237,59 @@ def api_continent_stats(continent_id):
 _LOCATION_STATS_LEVELS = ("continent", "country", "zone", "state", "district", "tehsil", "village")
 
 
+def _suppress_small_count(value):
+    """Small-count suppression: a person-count of 1-4 is returned as the string "<5"
+    instead of a number, so no breakdown (gender/age/element/sign/total) can ever
+    isolate a group of fewer than 5 people. A true 0 is left as 0 (nobody to
+    re-identify, and the dashboard's empty-state check relies on it staying a real
+    0). Not applied to karma_total/qoins_wallet_balance below -- those are point/
+    currency sums, not person counts, so they don't carry the same re-identification
+    risk that this rule exists to prevent."""
+    return "<5" if isinstance(value, int) and 0 < value < 5 else value
+
+
+def _location_stats_payload(conn, level, location_id, basis):
+    """Shared aggregation behind both /api/location/stats/<level>/<id> (JSON) and its
+    .csv sibling below -- same query, same small-count suppression (see
+    _suppress_small_count), same fields, just two different response formats."""
+    column = "present_location_json" if basis == "present" else "birth_location_json"
+    rows = conn.execute(
+        f"""SELECT u.id, u.gender, u.dob, z.sun_sign, z.sun_element
+           FROM users u JOIN user_zodiac z ON z.user_id = u.id
+           WHERE json_extract(u.{column}, ?) = ?""",
+        ("$." + level + ".id", location_id),
+    ).fetchall()
+    stats = elemental_core.registered_user_stats_from_rows(rows)
+
+    user_ids = [row["id"] for row in rows]
+    karma_total = 0
+    qoins_wallet_balance = 0
+    if user_ids:
+        placeholders = ",".join("?" for _ in user_ids)
+        karma_total = conn.execute(
+            f"SELECT COALESCE(SUM(points), 0) AS total FROM karma_entries WHERE user_id IN ({placeholders})",
+            user_ids,
+        ).fetchone()["total"]
+        qoins_wallet_balance = conn.execute(
+            f"SELECT COALESCE(SUM(balance_qoins), 0) AS total FROM wallets "
+            f"WHERE owner_type = 'user' AND owner_id IN ({placeholders})",
+            [str(uid) for uid in user_ids],
+        ).fetchone()["total"]
+
+    return {
+        "level": level,
+        "location_id": location_id,
+        "basis": basis,
+        "total_humans": _suppress_small_count(stats["total_humans"]),
+        "gender": {k: _suppress_small_count(v) for k, v in stats["gender"].items()},
+        "age_bands": [{**band, "count": _suppress_small_count(band["count"])} for band in stats["age_bands"]],
+        "elements": {k: _suppress_small_count(v) for k, v in stats["elements"].items()},
+        "signs": {k: _suppress_small_count(v) for k, v in stats["signs"].items()},
+        "karma_total": karma_total,
+        "qoins_wallet_balance": qoins_wallet_balance,
+    }
+
+
 @app.route("/api/location/stats/<level>/<path:location_id>")
 def api_location_stats(level, location_id):
     """Same registered-user demographics as /api/country/stats and
@@ -2245,20 +2299,62 @@ def api_location_stats(level, location_id):
     default present -- the dashboard's Global/Public tabs need present-
     location stats, which /api/country/stats and /api/continent/stats have
     never covered; those two routes are untouched, still birth-only, still
-    used by the homepage and registration wizard)."""
+    used by the homepage and registration wizard). Every person-count field
+    (total_humans, gender, age_bands, elements, signs) has small-count
+    suppression applied -- see _suppress_small_count."""
     if level not in _LOCATION_STATS_LEVELS:
         return jsonify({"error": "Unknown level: " + level}), 404
     basis = request.args.get("basis", "present")
-    column = "present_location_json" if basis == "present" else "birth_location_json"
     conn = get_db()
-    rows = conn.execute(
-        f"""SELECT u.gender, u.dob, z.sun_sign, z.sun_element
-           FROM users u JOIN user_zodiac z ON z.user_id = u.id
-           WHERE json_extract(u.{column}, ?) = ?""",
-        ("$." + level + ".id", location_id),
-    ).fetchall()
+    payload = _location_stats_payload(conn, level, location_id, basis)
     conn.close()
-    return jsonify(elemental_core.registered_user_stats_from_rows(rows))
+    return jsonify(payload)
+
+
+@app.route("/api/location/stats/<level>/<path:location_id>.csv")
+def api_location_stats_csv(level, location_id):
+    """CSV sibling of /api/location/stats/<level>/<id> -- same ?basis=birth|present
+    option, same underlying aggregation and small-count suppression (a person-count
+    of 1-4 renders as the literal string "<5", never a number -- see
+    _suppress_small_count), just a metric,value CSV instead of JSON. Never exposes
+    per-user rows, IDs, names, contact details, birth dates, or individual locations:
+    the only SQL query involved (_location_stats_payload) selects gender/dob/sun_sign/
+    sun_element for aggregation and immediately discards the underlying rows."""
+    if level not in _LOCATION_STATS_LEVELS:
+        return jsonify({"error": "Unknown level: " + level}), 404
+    basis = request.args.get("basis", "present")
+    conn = get_db()
+    payload = _location_stats_payload(conn, level, location_id, basis)
+    conn.close()
+
+    rows = [
+        ("level", payload["level"]),
+        ("location_id", payload["location_id"]),
+        ("basis", payload["basis"]),
+        ("total_members", payload["total_humans"]),
+        ("gender.male", payload["gender"]["male"]),
+        ("gender.female", payload["gender"]["female"]),
+        ("gender.both", payload["gender"]["both"]),
+    ]
+    age_label_by_code = {"A1": "0-24", "A2": "25-49", "A3": "50-75", "A4": "76+"}
+    for band in payload["age_bands"]:
+        rows.append(("age." + age_label_by_code[band["code"]], band["count"]))
+    for element_name, count in payload["elements"].items():
+        rows.append(("element." + element_name.lower(), count))
+    for sign_name, count in payload["signs"].items():
+        rows.append(("sun_sign." + sign_name, count))
+    rows.append(("karma_total", payload["karma_total"]))
+    rows.append(("qoins_wallet_balance", payload["qoins_wallet_balance"]))
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(("metric", "value"))
+    writer.writerows(rows)
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=qumanity_stats_{level}_{location_id}.csv"},
+    )
 
 
 @app.route("/api/location/members/village/<path:village_id>")
@@ -2493,8 +2589,6 @@ def api_auth_register():
     # still minted and shared 10 paise at a time (see wallet_core.apply_free_registration).
     # the connection above was already closed once folder_connector had the user's data; reopen for this.
     conn = get_db()
-    donation_error = None
-    donation_breakdown = None
     # There is no referral code to type in any more -- the only way to be credited as a
     # referrer is to BE the logged-in member doing the registering (helper_user_id, "Register a
     # new member"); their Account ID is recorded automatically, nothing for either party to enter.
@@ -2502,16 +2596,14 @@ def api_auth_register():
     board_core.ensure_sub_tables(conn)
     try:
         wallet_core.apply_free_registration(conn, user_id, present_location, referrer_user_id)
-        donation_breakdown = {"kind": "free", "location_share_per_tier": 0, "self_share": 0, "referrer_share": 0}
     except ValueError as e:
-        donation_error = str(e)
+        print(f"[registration] free Qoin mint failed for user_id={user_id}: {e}")
     conn.close()
 
     if helper_user_id:
         # The helper stays signed in as themself; the new member signs in later with their own ID + PIN.
         return jsonify({
             "user_id": user_id, "private_code": private_code, "token": None, "assisted": True,
-            "donation": donation_breakdown, "donation_error": donation_error,
             "account_id": account_id, "zodiac": zodiac_row, "redirect": url_for("register"),
         }), 201
 
@@ -2526,7 +2618,6 @@ def api_auth_register():
         "user_id": user_id,
         "private_code": private_code,
         "token": app_token,
-        "donation": donation_breakdown, "donation_error": donation_error,
         "account_id": account_id,
         "zodiac": zodiac_row,
         "kundali": kundali,
