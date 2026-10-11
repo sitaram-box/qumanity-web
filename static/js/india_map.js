@@ -114,7 +114,8 @@
       districtSelectedLayer = target;
       if (target) {
         target.setStyle(districtSelectedStyle());
-        leafletMap.fitBounds(target.getBounds(), { padding: [30, 30], maxZoom: 11 });
+        // No fitBounds/zoom here (Item: Public Account map must never zoom) -- the map
+        // stays at its default country-level view for every selection level.
       }
     }
 
@@ -147,6 +148,23 @@
       return { fillColor: "#FFD700", fillOpacity: 0.95, color: "#FFFFFF", weight: 2, opacity: 1 };
     }
 
+    // Selecting a specific state must highlight ONLY that one feature -- clearing every
+    // other layer back to its un-tinted base style first, not just the single previously
+    // -selected layer. Without this, a state picked inside an already zone-filtered zone
+    // left every *other* state in that zone still gold from the earlier zone-level tint
+    // (setZoneFilter's styleFor()), so Bihar's own East Zone siblings stayed highlighted
+    // alongside it. State selection now always supersedes the zone tint entirely.
+    function selectSingleState(layer) {
+      if (geoLayer) {
+        geoLayer.eachLayer(function (l) {
+          if (l !== layer) l.setStyle(baseStyle(l.feature));
+        });
+      }
+      selectedLayer = layer;
+      selectedProps = layer.feature.properties;
+      layer.setStyle(selectedStyle());
+    }
+
     function onEachFeature(feature, layer) {
       layer.bindTooltip(feature.properties.name, { sticky: true, className: "qm-state-tooltip" });
       layer.on("mouseover", function () {
@@ -161,16 +179,16 @@
       });
       layer.on("click", function () {
         if (!isSelectable(feature)) return;
-        if (selectedLayer) selectedLayer.setStyle(styleFor(selectedLayer.feature));
-        selectedLayer = layer;
-        selectedProps = feature.properties;
-        layer.setStyle(selectedStyle());
-        leafletMap.fitBounds(layer.getBounds(), { padding: [40, 40], maxZoom: 9 });
+        selectSingleState(layer);
+        // No fitBounds/zoom here (Item: Public Account map must never zoom) -- the map
+        // stays at its default country-level view for every selection level.
         showDistrictsForState(feature.properties.qm_state_id);
         renderConfirmBar();
       });
     }
 
+    // Kept its original name (register.js calls this in 3 places) even though it no longer
+    // zooms -- it still finds-and-selects the state matching stateId, exactly, via ===.
     function zoomToState(stateId) {
       if (!geoLayer) return;
       var target = null;
@@ -178,11 +196,7 @@
         if (layer.feature.properties.qm_state_id === stateId) target = layer;
       });
       if (!target) return;
-      if (selectedLayer && selectedLayer !== target) selectedLayer.setStyle(styleFor(selectedLayer.feature));
-      selectedLayer = target;
-      selectedProps = target.feature.properties;
-      target.setStyle(selectedStyle());
-      leafletMap.fitBounds(target.getBounds(), { padding: [40, 40], maxZoom: 9 });
+      selectSingleState(target);
       showDistrictsForState(stateId);
     }
 

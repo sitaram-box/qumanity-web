@@ -77,8 +77,6 @@
 }
 .qm-target-pill:disabled, .qm-target-pill.is-locked { opacity: 0.45; cursor: not-allowed; }
 
-.qm-public-account-cta { margin: 4px 0 20px; }
-
 /* Item 14a: Global Account section headers stand out against the light body */
 #screen-global .qm-panel-subhead { color: #2A3441; font-size: 0.78rem; font-weight: 700; }
 #screen-global .qm-dropdown-field select {

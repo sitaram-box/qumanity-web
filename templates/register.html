@@ -188,6 +188,7 @@
           <div class="qm-dropdown-row" id="global-present-row">
             <h3 class="qm-panel-subhead">Present Location</h3>
             <button type="button" class="qm-wizard-edit-link" id="edit-birth-country-link" hidden>← Edit Birth Location</button>
+            <p class="qm-timeline-note" id="present-country-hint" hidden>Birth location confirmed. Now select your Present Location country to continue.</p>
             <label class="qm-dropdown-field"><span>Continent</span>
               <select id="present-continent-select"><option value="">Select a continent…</option></select>
             </label>
@@ -196,10 +197,6 @@
             </label>
           </div>
         </div>
-      </div>
-
-      <div class="qm-public-account-cta" id="public-account-cta" hidden>
-        <button type="button" class="qm-btn qm-btn-primary" id="public-account-btn">Public Account Registration for the Indian Sub-continent →</button>
       </div>
 
       <p class="qm-summary-error" id="global-form-error" hidden></p>
@@ -292,7 +289,7 @@
       <p class="qm-summary-error" id="public-form-error" hidden></p>
       <div class="qm-summary-actions">
         <button type="button" class="qm-btn qm-btn-ghost" id="public-back-btn">← Back</button>
-        <button type="button" class="qm-btn qm-btn-primary" id="public-next-btn">Next →</button>
+        <button type="button" class="qm-btn qm-btn-primary" id="public-next-btn" disabled>Next →</button>
       </div>
     </section>
 

@@ -472,6 +472,7 @@
       state.presentLocation = loc;
       document.getElementById("selected-present-location").textContent = entry.continent.name + " → " + entry.country.name;
       presentCountrySelect.value = entry.country.id;
+      presentCountryHint.hidden = true;
     }
     QMSearchableSelect.refreshAll();
     updatePublicAccountEligibility();
@@ -503,13 +504,13 @@
     if (entry) applyLocationSelection("present", entry);
   });
 
-  // The present location is always in the Sub-continent (enforced above), so
-  // once it is set the Public account step is available.
+  // The present location is always in the Sub-continent (enforced above), so once it's set
+  // the Public Account step becomes where "Next" leads. A single "Next ->" button always
+  // sits bottom-right next to "<- Back" (Item: button rename/reposition, 2026-10-11) --
+  // previously a separate long-labelled CTA replaced "Next" entirely when eligible, which
+  // broke the consistent Back-left/Next-right pairing used on every other step.
   function updatePublicAccountEligibility() {
-    var eligible = !!(state.presentLocation && QMSubcontinent.isMember(state.presentLocation.country.code));
-    document.getElementById("public-account-cta").hidden = !eligible;
-    document.getElementById("global-next-btn").hidden = eligible;
-    return eligible;
+    return !!(state.presentLocation && QMSubcontinent.isMember(state.presentLocation.country.code));
   }
 
   // Birth Location (Item 14d) must be confirmed before Present Location
@@ -519,12 +520,18 @@
   var confirmBirthCountryBtn = document.getElementById("confirm-birth-country-btn");
   var birthCountryConfirmedNote = document.getElementById("birth-country-confirmed-note");
   var editBirthCountryLink = document.getElementById("edit-birth-country-link");
+  var presentCountryHint = document.getElementById("present-country-hint");
 
   function updateConfirmBirthCountryButtonState() {
     confirmBirthCountryBtn.disabled = !state.birthLocation;
   }
   function setPresentCountryLocked(locked) {
     presentCountrySelect.disabled = locked;
+    // Setting .disabled directly on the native <select> fires no event, so the
+    // QMSearchableSelect wrapper around it (the actual clickable control the user sees)
+    // never learns its disabled state changed and stays stuck un-clickable even after
+    // this unlocks -- explicitly refresh it to sync (Item 9 registration P0, 2026-10-11).
+    QMSearchableSelect.refresh(presentCountrySelect);
     targetPresentBtn.disabled = locked;
     targetPresentBtn.classList.toggle("is-locked", locked);
   }
@@ -537,6 +544,7 @@
     birthCountryConfirmedNote.hidden = false;
     editBirthCountryLink.hidden = false;
     setPresentCountryLocked(false);
+    presentCountryHint.hidden = !!state.presentLocation;
     setGlobalTarget("present");
   });
   editBirthCountryLink.addEventListener("click", function () {
@@ -546,6 +554,7 @@
     confirmBirthCountryBtn.hidden = false;
     birthCountryConfirmedNote.hidden = true;
     editBirthCountryLink.hidden = true;
+    presentCountryHint.hidden = true;
     setPresentCountryLocked(true);
     setGlobalTarget("birth");
   });
@@ -567,9 +576,6 @@
   }
 
   document.getElementById("global-back-btn").addEventListener("click", function () { goToStep("private"); });
-  document.getElementById("public-account-btn").addEventListener("click", function () {
-    if (requireBothLocations()) goToStep("public");
-  });
   document.getElementById("global-next-btn").addEventListener("click", function () {
     if (!requireBothLocations()) return;
     goToStep(updatePublicAccountEligibility() ? "public" : "review");
@@ -776,10 +782,14 @@
     return parts.filter(function (p, i) { return i === 0 || p !== parts[i - 1]; });
   }
 
+  function updatePublicNextButtonState() {
+    document.getElementById("public-next-btn").disabled = !state.presentPublic.state;
+  }
   function recordPublicSelection(target, partial) {
     var bucket = target === "birth" ? state.birthPublic : state.presentPublic;
     Object.assign(bucket, partial);
     updatePublicSummary(target);
+    if (target === "present") updatePublicNextButtonState();
   }
   function updatePublicSummary(target) {
     var bucket = target === "birth" ? state.birthPublic : state.presentPublic;
