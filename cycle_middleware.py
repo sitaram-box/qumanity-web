@@ -51,7 +51,6 @@ STAMPED_TABLES = {
     "account_ids": "created_at",
     "people_requests": "created_at",
     "account_id_requests": "created_at",
-    "payment_orders": "created_at",
     "country_sentiment": "created_at",
     "zone_sentiment": "created_at",
     "app_reviews": "created_at",

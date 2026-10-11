@@ -191,7 +191,6 @@ _FIXED_LEVEL_SQL = {
     "account_ids": ("village", "SELECT json_extract(present_location_json,'$.village.id') FROM account_ids WHERE cycle_id=? AND pipeline_level=?"),
     "people_requests": ("village", "SELECT json_extract(u.present_location_json,'$.village.id') FROM people_requests t JOIN users u ON u.id=t.from_user_id WHERE t.cycle_id=? AND t.pipeline_level=?"),
     "account_id_requests": ("village", "SELECT json_extract(present_location_json,'$.village.id') FROM account_id_requests WHERE cycle_id=? AND pipeline_level=?"),
-    "payment_orders": ("village", "SELECT json_extract(present_location_json,'$.village.id') FROM payment_orders WHERE cycle_id=? AND pipeline_level=?"),
     "country_sentiment": ("country", "SELECT country_id FROM country_sentiment WHERE cycle_id=? AND pipeline_level=?"),
     "zone_sentiment": ("zone", "SELECT zone_id FROM zone_sentiment WHERE cycle_id=? AND pipeline_level=?"),
     "app_reviews": ("village", "SELECT json_extract(u.present_location_json,'$.village.id') FROM app_reviews t JOIN users u ON u.id=t.user_id WHERE t.cycle_id=? AND t.pipeline_level=?"),
@@ -279,7 +278,7 @@ def _source_ids_for(resolved: dict[str, list[tuple[str, str]]], to_level: str, l
 _FRIENDLY_ALIASES = {
     "posts": "board_posts", "votes": "board_votes", "comments": "board_comments",
     "wallet_transactions": "wallet_transactions", "karma_entries": "karma_entries",
-    "payment_orders": "payment_orders", "reviews": "app_reviews",
+    "reviews": "app_reviews",
 }
 _CHAT_MESSAGE_TABLES = ("board_messages", "personal_messages", "private_messages")
 _GROUP_JOIN_TABLES = ("subgroup_members", "personal_group_members")

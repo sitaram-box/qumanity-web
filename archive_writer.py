@@ -47,7 +47,6 @@ _ARCHIVE_FILES = {
     "collective_karma.json": ["collective_karma_log"],
     "reviews.json": ["app_reviews"],
     "business_ratings.json": ["business_ratings"],
-    "payment_orders.json": ["payment_orders"],
     "sentiment.json": ["country_sentiment", "zone_sentiment"],
     "group_activity.json": ["subgroups", "personal_groups", "private_chats", "subgroup_members", "personal_group_members"],
     "profile_changes.json": ["profile_change_requests"],
@@ -85,7 +84,6 @@ _ROWS_SQL = {
     "account_ids": ("village", "SELECT t.*, t.rowid AS _rowid, json_extract(t.present_location_json,'$.village.id') AS _loc_id, t.user_id AS _uid FROM account_ids t WHERE t.cycle_id=? AND t.pipeline_level='earth'", None),
     "people_requests": ("village", "SELECT t.*, t.rowid AS _rowid, json_extract(u.present_location_json,'$.village.id') AS _loc_id, t.from_user_id AS _uid FROM people_requests t JOIN users u ON u.id=t.from_user_id WHERE t.cycle_id=? AND t.pipeline_level='earth'", None),
     "account_id_requests": ("village", "SELECT t.*, t.rowid AS _rowid, json_extract(t.present_location_json,'$.village.id') AS _loc_id, t.user_id AS _uid FROM account_id_requests t WHERE t.cycle_id=? AND t.pipeline_level='earth'", None),
-    "payment_orders": ("village", "SELECT t.*, t.rowid AS _rowid, json_extract(t.present_location_json,'$.village.id') AS _loc_id, t.user_id AS _uid FROM payment_orders t WHERE t.cycle_id=? AND t.pipeline_level='earth'", None),
     "country_sentiment": ("country", "SELECT t.*, t.rowid AS _rowid, t.country_id AS _loc_id, t.user_id AS _uid FROM country_sentiment t WHERE t.cycle_id=? AND t.pipeline_level='earth'", None),
     "zone_sentiment": ("zone", "SELECT t.*, t.rowid AS _rowid, t.zone_id AS _loc_id, t.user_id AS _uid FROM zone_sentiment t WHERE t.cycle_id=? AND t.pipeline_level='earth'", None),
     "app_reviews": ("village", "SELECT t.*, t.rowid AS _rowid, json_extract(u.present_location_json,'$.village.id') AS _loc_id, t.user_id AS _uid FROM app_reviews t JOIN users u ON u.id=t.user_id WHERE t.cycle_id=? AND t.pipeline_level='earth'", None),
@@ -351,7 +349,7 @@ def write_user_archive(conn, user_id: int, cycle_id: str, entries: list, dry_run
             if p.exists():
                 p.rename(final_dir / my_name)
         # everything else (elections, group_activity, profile_changes, volunteers, sentiment,
-        # business_ratings, collective_karma, account_activity, payment_orders) keeps its name --
+        # business_ratings, collective_karma, account_activity) keeps its name --
         # already personal-scoped by virtue of being filtered to this one user's rows.
         with open(final_dir / "cycle_summary.json", "w", encoding="utf-8") as f:
             json.dump({**summary, "record_counts": result["record_counts"]}, f, indent=2, ensure_ascii=False)

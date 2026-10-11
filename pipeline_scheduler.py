@@ -63,7 +63,7 @@ def ensure_tables(conn) -> None:
 # QM_ADMIN_EMAIL / smtplib / any email-sending code exists anywhere in the codebase. Rather than
 # inventing a new SMTP integration nobody asked for, admin "email" is a print()-logged stub here,
 # matching the project's own established pattern for an unconnected provider (see
-# payment_core.py's simulated Razorpay mode, OTP's QM_DEV_SHOW_OTP) -- the REAL, usable
+# OTP's QM_DEV_SHOW_OTP) -- the REAL, usable
 # notification is the admin_notifications row, readable via the admin API.
 
 def _notify(conn, event_type: str, message: str) -> None:

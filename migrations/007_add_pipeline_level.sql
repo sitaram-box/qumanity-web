@@ -72,10 +72,6 @@ ALTER TABLE account_id_requests ADD COLUMN pipeline_level VARCHAR(20) NOT NULL D
 CREATE INDEX IF NOT EXISTS idx_account_id_requests_pipeline_level ON account_id_requests(pipeline_level);
 CREATE INDEX IF NOT EXISTS idx_account_id_requests_cycle_pipeline ON account_id_requests(cycle_id, pipeline_level);
 
-ALTER TABLE payment_orders ADD COLUMN pipeline_level VARCHAR(20) NOT NULL DEFAULT 'village';
-CREATE INDEX IF NOT EXISTS idx_payment_orders_pipeline_level ON payment_orders(pipeline_level);
-CREATE INDEX IF NOT EXISTS idx_payment_orders_cycle_pipeline ON payment_orders(cycle_id, pipeline_level);
-
 ALTER TABLE country_sentiment ADD COLUMN pipeline_level VARCHAR(20) NOT NULL DEFAULT 'country';
 CREATE INDEX IF NOT EXISTS idx_country_sentiment_pipeline_level ON country_sentiment(pipeline_level);
 CREATE INDEX IF NOT EXISTS idx_country_sentiment_cycle_pipeline ON country_sentiment(cycle_id, pipeline_level);

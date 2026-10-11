@@ -34,7 +34,6 @@ def _ensure_source_tables(conn) -> None:
     import board_core
     import election_core
     import karma_core
-    import payment_core
     import perception_core
     import reactions_core
     import review_core
@@ -45,7 +44,6 @@ def _ensure_source_tables(conn) -> None:
     social_core.ensure_tables(conn)
     social_core.ensure_account_request_table(conn)
     karma_core.ensure_tables(conn)
-    payment_core.ensure_tables(conn)
     perception_core.ensure_tables(conn)
     review_core.ensure_tables(conn)
     reactions_core.ensure_tables(conn)

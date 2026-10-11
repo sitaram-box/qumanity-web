@@ -53,9 +53,6 @@ CREATE INDEX IF NOT EXISTS idx_people_requests_cycle ON people_requests(cycle_id
 ALTER TABLE account_id_requests ADD COLUMN cycle_id VARCHAR(50);
 CREATE INDEX IF NOT EXISTS idx_account_id_requests_cycle ON account_id_requests(cycle_id);
 
-ALTER TABLE payment_orders ADD COLUMN cycle_id VARCHAR(50);
-CREATE INDEX IF NOT EXISTS idx_payment_orders_cycle ON payment_orders(cycle_id);
-
 ALTER TABLE country_sentiment ADD COLUMN cycle_id VARCHAR(50);
 CREATE INDEX IF NOT EXISTS idx_country_sentiment_cycle ON country_sentiment(cycle_id);
 

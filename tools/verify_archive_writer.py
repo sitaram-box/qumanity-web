@@ -138,8 +138,6 @@ def _seed_activity(conn, uids: list[int], cycle_id: str) -> int:
 
     conn.execute("INSERT INTO app_reviews (user_id,rating,text,allow_public,source,created_at,cycle_id,pipeline_level) VALUES (?, 5, 'Great app', 0, 'app', ?, ?, 'village')", (uids[0], now, cycle_id)); n += 1
 
-    pcur = conn.execute("INSERT INTO payment_orders (user_id,purpose,amount_rupees,present_location_json,status,created_at,cycle_id,pipeline_level) VALUES (?, 'donation', 10, ?, 'paid', ?, ?, 'village')", (uids[0], loc_json, now, cycle_id)); n += 1
-
     conn.execute("INSERT INTO profile_change_requests (user_id,fields_json,reason,created_at,cycle_id,pipeline_level) VALUES (?, '{}', 'test', ?, ?, 'village')", (uids[0], now, cycle_id)); n += 1
 
     conn.execute("INSERT INTO volunteers (user_id,level,group_id,kind,skill,created_at,cycle_id,pipeline_level) VALUES (?, 'village', ?, 'volunteer', 'testing', ?, ?, 'village')", (uids[1], VILLAGE_ID, now, cycle_id)); n += 1
