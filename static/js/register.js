@@ -644,16 +644,16 @@
     setActivePublicTab("present");
   });
 
-  // Birth Location must be fully filled (all 5 dropdowns, or the village
-  // fallback) and explicitly confirmed before Present Location unlocks --
-  // no more auto-advancing on just Zone+State. If birth isn't applicable at
-  // all (location outside the Sub-continent), Present is unlocked from the
-  // start (see publicBirthApplicable below).
+  // Birth Location must be fully filled (all 5 dropdowns) and explicitly
+  // confirmed before Present Location unlocks -- no more auto-advancing on
+  // just Zone+State. If birth isn't applicable at all (location outside the
+  // Sub-continent), Present is unlocked from the start (see
+  // publicBirthApplicable below).
   var birthLocationConfirmed = false;
   var confirmBirthBtn = document.getElementById("confirm-birth-location-btn");
   var birthConfirmedNote = document.getElementById("birth-location-confirmed-note");
   var editBirthLocationLink = document.getElementById("edit-birth-location-link");
-  var birthDropdownEls = ["birth-zone-select", "birth-state-select", "birth-district-select", "birth-tehsil-select", "birth-village-select", "birth-village-other-input"]
+  var birthDropdownEls = ["birth-zone-select", "birth-state-select", "birth-district-select", "birth-tehsil-select", "birth-village-select"]
     .map(function (id) { return document.getElementById(id); });
 
   function updateConfirmBirthButtonState() {
@@ -793,12 +793,9 @@
     el.textContent = dedupe(parts).join(" → ");
   }
 
-  var VILLAGE_NOT_LISTED = "__NOT_LISTED__";
-
   function populateVillageDropdown(select, tehsilId) {
     select.innerHTML = '<option value="">' + ph(select, "village") + '</option>';
     select.disabled = true;
-    hideVillageOtherField(select);
     QMSearchableSelect.refresh(select);
     if (!tehsilId) return;
     fetch("/api/india-villages/" + encodeURIComponent(tehsilId))
@@ -809,28 +806,10 @@
           opt.value = v.id; opt.textContent = v.name;
           select.appendChild(opt);
         });
-        // Always offered last, even when the list above is full — a resident's
-        // village can be missing or mislabeled even when the tehsil otherwise
-        // has data (and ~16% of tehsils have none at all in the source).
-        var notListed = document.createElement("option");
-        notListed.value = VILLAGE_NOT_LISTED;
-        notListed.textContent = "Can't find my Village in the list";
-        select.appendChild(notListed);
         select.disabled = false;
         QMSearchableSelect.refresh(select);
       })
       .catch(function (err) { console.error("Failed to load villages", err); });
-  }
-
-  function villageOtherField(select) {
-    return document.getElementById(select.id.replace("-select", "-other-field"));
-  }
-  function villageOtherInput(select) {
-    return document.getElementById(select.id.replace("-select", "-other-input"));
-  }
-  function hideVillageOtherField(select) {
-    var field = villageOtherField(select);
-    if (field) { field.hidden = true; villageOtherInput(select).value = ""; }
   }
 
   function applyPublicStateSelection(target, stateProps) {
@@ -903,21 +882,7 @@
       if (target === "birth") updateConfirmBirthButtonState();
     });
     villageSelect.addEventListener("change", function () {
-      if (villageSelect.value === VILLAGE_NOT_LISTED) {
-        villageOtherField(villageSelect).hidden = false;
-        villageOtherInput(villageSelect).focus();
-        recordPublicSelection(target, { village: null });
-        if (target === "birth") updateConfirmBirthButtonState();
-        return;
-      }
-      hideVillageOtherField(villageSelect);
       var village = villageSelect.value ? { id: villageSelect.value, name: villageSelect.options[villageSelect.selectedIndex].textContent } : null;
-      recordPublicSelection(target, { village: village });
-      if (target === "birth") updateConfirmBirthButtonState();
-    });
-    villageOtherInput(villageSelect).addEventListener("input", function () {
-      var text = villageOtherInput(villageSelect).value.trim();
-      var village = text ? { id: "PENDING", name: text, pending_assignment: true } : null;
       recordPublicSelection(target, { village: village });
       if (target === "birth") updateConfirmBirthButtonState();
     });
@@ -1109,7 +1074,6 @@
       language: state.form.language, email: state.form.email, phone: state.form.phone, pin: state.form.pin,
       birth_location: buildLocationPayload(state.birthLocation, state.birthPublic),
       present_location: buildLocationPayload(state.presentLocation, state.presentPublic),
-      donation_amount: donateState.amount,
       assisted: hasHelper,
     };
 
@@ -1127,7 +1091,6 @@
         document.getElementById("review-account-id").textContent = result.body.account_id;
         document.getElementById("review-submit-actions").hidden = true;
         document.getElementById("review-result").hidden = false;
-        if (result.body.donation_pending_amount > 0) payRegistrationDonation(result.body.donation_pending_amount);
       })
       .catch(function (err) {
         errorEl.textContent = "Could not complete registration: " + err.message;
@@ -1138,32 +1101,6 @@
         reviewSubmitBtn.textContent = "Submit →";
       });
   });
-
-  // The new member is now logged in (self-registration only -- an assisted signup never reaches
-  // here with a pending amount, see app.py's donation_pending_amount). Pays for the registration-
-  // time donation they picked, now that a real payment can be verified against a live session.
-  function payRegistrationDonation(amountRupees) {
-    var statusEl = document.getElementById("review-donation-status");
-    statusEl.hidden = false;
-    statusEl.textContent = "Completing your ₹" + amountRupees + " donation…";
-    fetch("/api/payment/order", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ purpose: "registration", amount_rupees: amountRupees }),
-    })
-      .then(function (res) { return res.json().then(function (body) { return { ok: res.ok, body: body }; }); })
-      .then(function (result) {
-        if (!result.ok) throw new Error(result.body.error || "Could not start payment");
-        QMPayments.payWithRazorpay(result.body, "Registration donation ₹" + amountRupees, function (credited) {
-          statusEl.textContent = "✅ Donated ₹" + credited.amount_rupees + " — Qoins credited.";
-        }, function (err) {
-          statusEl.textContent = "⚠️ Donation not completed: " + err.message + " — you can still donate later from your dashboard.";
-        });
-      })
-      .catch(function (err) {
-        statusEl.textContent = "⚠️ Donation not completed: " + err.message + " — you can still donate later from your dashboard.";
-      });
-  }
 
   document.getElementById("review-copy-private-btn").addEventListener("click", function () {
     if (state.registeredResult) copyToClipboard(state.registeredResult.private_code);
@@ -1176,63 +1113,10 @@
     window.location.href = (state.registeredResult && state.registeredResult.redirect) || "/dashboard";
   });
 
-  // ==================== Registration Fee (optional) ====================
   // There is no referral code to type any more -- "is there a referrer" is simply "is this an
   // assisted registration" (?assist=1, a logged-in member registering someone else); see
   // api_auth_register's helper_user_id, which records that member's own Account ID automatically.
-  var donateState = { amount: 0 };
-  var donateToggleEl = document.getElementById("donate-toggle");
-  var donateBody = document.querySelector(".qm-donate-body");
-  var donateAmounts = document.getElementById("donate-amounts");
-  var donateCustom = document.getElementById("donate-custom");
-  var donatePreview = document.getElementById("donate-preview");
-  var donatePreviewTimer = null;
   var hasHelper = new URLSearchParams(location.search).get("assist") === "1";
-
-  if (donateToggleEl) {
-    donateToggleEl.addEventListener("change", function () {
-      donateBody.hidden = !donateToggleEl.checked;
-      if (!donateToggleEl.checked) { donateState.amount = 0; refreshDonatePreview(); }
-    });
-    donateAmounts.addEventListener("click", function (e) {
-      var b = e.target.closest("[data-amt]"); if (!b) return;
-      donateCustom.value = ""; setDonateAmount(parseInt(b.getAttribute("data-amt"), 10));
-      Array.prototype.forEach.call(donateAmounts.querySelectorAll("button"), function (x) { x.classList.toggle("is-active", x === b); });
-    });
-    donateCustom.addEventListener("input", function () {
-      Array.prototype.forEach.call(donateAmounts.querySelectorAll("button"), function (x) { x.classList.remove("is-active"); });
-      setDonateAmount(Math.max(0, Math.min(200, parseInt(donateCustom.value, 10) || 0)));
-    });
-  }
-
-  function setDonateAmount(n) {
-    donateState.amount = n;
-    refreshDonatePreview();
-  }
-
-  var DONATE_ICON = { earth: "🌍", continent: "🌎", country: "🌏", zone: "🗺️", state: "🏛️", district: "🏙️", tehsil: "🏘️", village: "🌳", referrer: "🤝", new_user: "🎁", village_wallet: "🌳" };
-  function refreshDonatePreview() {
-    clearTimeout(donatePreviewTimer);
-    donatePreviewTimer = setTimeout(function () {
-      fetch("/api/registration/donation-preview?amount=" + donateState.amount + "&referrer=" + (hasHelper ? "1" : "0"))
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-          donatePreview.innerHTML = "";
-          if (!d.rows) return;
-          var unit = d.unit === "paisa" ? "p" : "₹";
-          d.rows.forEach(function (row) {
-            if (!row[1]) return;
-            var key = row[0] === "village" && d.unit === "rupees" && !hasHelper ? "village_wallet" : row[0];
-            var div = document.createElement("div"); div.className = "qm-donate-row";
-            var label = key === "new_user" ? "You" : key === "referrer" ? "Referrer (volunteer)" : key === "village_wallet" ? "Village" : key.charAt(0).toUpperCase() + key.slice(1);
-            div.innerHTML = "<span>" + (DONATE_ICON[key] || "•") + " " + label + "</span><b>" + unit + row[1] + "</b>";
-            donatePreview.appendChild(div);
-          });
-          if (d.note) { var n = document.createElement("p"); n.className = "qm-timeline-note"; n.textContent = d.note; donatePreview.appendChild(n); }
-        })
-        .catch(function () {});
-    }, 150);
-  }
 
   // ---- "Register New Member" assisted flow: a logged-in member is filling this in for someone else ----
   if (new URLSearchParams(location.search).get("assist") === "1") {

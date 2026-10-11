@@ -136,34 +136,9 @@
           </aside>
         </div>
 
-        <div class="qm-donate-panel">
-          {% if helper %}
-          <p class="qm-timeline-note qm-registered-by">🧑‍🤝‍🧑 You are being registered by: <strong>{{ helper.name }}</strong> <small>(Account ID: {{ helper.account_id }})</small></p>
-          {% endif %}
-          <label class="qm-donate-toggle">
-            <input type="checkbox" id="donate-toggle" />
-            <span class="qm-donate-switch" aria-hidden="true"></span>
-            <span>💰 Registration Fee <em>(optional)</em></span>
-          </label>
-          <div class="qm-donate-why">
-            <p>A Registration Fee isn't required — a free account works exactly the same. If you do pay one:</p>
-            <ul>
-              <li>{% if helper %}most of it supports {{ helper.name }}, who registered you{% else %}most of it comes back to your own wallet{% endif %}</li>
-              <li>a share reaches every level from your Village up to Earth</li>
-              <li>a share always comes back to you as Qoins in your own wallet</li>
-            </ul>
-          </div>
-          <div class="qm-donate-body" hidden>
-            <div class="qm-donate-amounts" id="donate-amounts">
-              <button type="button" data-amt="1">1</button><button type="button" data-amt="2">2</button>
-              <button type="button" data-amt="5">5</button><button type="button" data-amt="10">10</button>
-              <button type="button" data-amt="20">20</button><button type="button" data-amt="50">50</button>
-              <button type="button" data-amt="100">100</button><button type="button" data-amt="200">200</button>
-            </div>
-            <label class="qm-field"><span>Or enter any amount (max 200)</span><input type="number" id="donate-custom" min="1" max="200" placeholder="e.g. 36" /></label>
-            <div class="qm-donate-preview" id="donate-preview"></div>
-          </div>
-        </div>
+        {% if helper %}
+        <p class="qm-timeline-note qm-registered-by">🧑‍🤝‍🧑 You are being registered by: <strong>{{ helper.name }}</strong> <small>(Account ID: {{ helper.account_id }})</small></p>
+        {% endif %}
 
         <p class="qm-summary-error" id="private-form-error" hidden></p>
         <p class="qm-consent-line">By continuing, you agree to Qumanity's <a href="#">Privacy Policy</a> and <a href="#">Terms of Service</a>.</p>
@@ -282,9 +257,6 @@
               <label class="qm-dropdown-field"><span>Village</span>
                 <select id="birth-village-select" disabled><option value="">Select a village…</option></select>
               </label>
-              <label class="qm-dropdown-field" id="birth-village-other-field" hidden><span>Describe your village/area</span>
-                <input type="text" id="birth-village-other-input" maxlength="200" placeholder="e.g. near the water tank, behind the market" />
-              </label>
               <button type="button" class="qm-btn qm-btn-primary" id="confirm-birth-location-btn" disabled>Confirm Birth Location →</button>
               <p class="qm-timeline-note" id="birth-location-confirmed-note" hidden>✓ Birth location confirmed.</p>
             </div>
@@ -311,9 +283,6 @@
               </label>
               <label class="qm-dropdown-field"><span>Village</span>
                 <select id="present-village-select" disabled><option value="">Select a village…</option></select>
-              </label>
-              <label class="qm-dropdown-field" id="present-village-other-field" hidden><span>Describe your village/area</span>
-                <input type="text" id="present-village-other-input" maxlength="200" placeholder="e.g. near the water tank, behind the market" />
               </label>
             </div>
           </div>
@@ -359,7 +328,6 @@
         <p class="qm-idbox"><code id="review-private-id"></code></p>
         <p><strong>Account ID:</strong> <code id="review-account-id"></code></p>
         <p class="qm-kundali-note">⚠️ Save this ID now. You need it together with your 5-character PIN to sign in, and Qumanity cannot recover it.</p>
-        <p class="qm-timeline-note" id="review-donation-status" hidden></p>
         <div class="qm-summary-actions">
           <button type="button" class="qm-btn qm-btn-ghost" id="review-copy-private-btn">📋 Copy Private ID</button>
           <button type="button" class="qm-btn qm-btn-ghost" id="review-copy-account-btn">📋 Copy Account ID</button>
@@ -379,6 +347,7 @@
 
   <footer class="qm-footer">
     <p>Registration is open worldwide. A present location in the Indian Sub-continent additionally unlocks a Public Account.</p>
+    <p><a href="https://github.com/sitaram-box/qumanity-web" style="color:inherit">Licensed under AGPL-3.0</a></p>
   </footer>
 
   <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
@@ -390,8 +359,6 @@
   <script src="{{ url_for('static', filename='js/subcontinent_map.js') }}"></script>
   <script src="{{ url_for('static', filename='js/searchable_select.js') }}"></script>
   <script src="{{ url_for('static', filename='js/time_picker.js') }}"></script>
-  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-  <script src="{{ url_for('static', filename='js/payments.js') }}"></script>
   <script src="{{ url_for('static', filename='js/register.js') }}"></script>
   <script src="{{ url_for('static', filename='js/logo_nav.js') }}"></script>
   {% include '_poems_marquee.html' %}

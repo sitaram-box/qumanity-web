@@ -40,7 +40,6 @@ import reports_core
 import board_core
 import karma_core
 import notify_core
-import payment_core
 import perception_core
 import qoin_core
 import reactions_core
@@ -800,31 +799,6 @@ def api_subgroup_chat(sg_id):
         return jsonify(board_core.chat_messages(conn, user["id"], sg_id, _is_admin()))
     finally:
         conn.close()
-
-
-@app.route("/api/registration/donation-preview")
-def api_donation_preview():
-    """?amount=&referrer=1 -> the live distribution shown on the registration donation panel."""
-    try:
-        amount = int(request.args.get("amount", "0"))
-    except ValueError:
-        return jsonify({"error": "amount must be a whole number"}), 400
-    amount = max(0, min(amount, qoin_core.MAX_DONATION))
-    has_referrer = request.args.get("referrer") in ("1", "true", "yes")
-    if amount == 0:
-        share = 10
-        rows = [("earth", share), ("continent", share), ("country", share), ("zone", share), ("state", share),
-                ("district", share), ("tehsil", share), ("village", share),
-                ("referrer", share if has_referrer else 0), ("new_user", share + (0 if has_referrer else share))]
-        return jsonify({"amount": 0, "unit": "paisa", "rows": rows, "note": "A free account still mints ₹1 of Qoins, shared 10 paise at a time."})
-    if has_referrer:
-        split = wallet_core.calculate_donation_distribution(amount, True)
-        rows = [(t, split["location_share_per_tier"]) for t in wallet_core.LOCATION_TIERS] + \
-               [("referrer", split["referrer_share"]), ("new_user", split["self_share"])]
-        return jsonify({"amount": amount, "unit": "rupees", "rows": rows})
-    topup = qoin_core.topup_split(amount)
-    return jsonify({"amount": amount, "unit": "rupees", "rows": [("new_user", topup["own"]), ("village", topup["village"])],
-                    "qoins": {"new_user": topup["own_qoins"], "village": topup["village_qoins"]}})
 
 
 @app.route("/api/referrer/apply", methods=["POST"])
@@ -2009,6 +1983,19 @@ def _move_born_here_folder(conn, user_id, old_location, new_location, element):
 
 
 # ---- Poems marquee (bottom bar on every page) ----
+# Marquee shows verses from Tulsidas's Vinay Patrika. Original
+# text is public domain, but the Hindi translation by Hanuman
+# Prasad Poddar (d. 1971) remains under copyright until the end of 2031 (expires 1 January 2032).
+# Disabled pending a cleanly-licensed or work-for-hire replacement.
+# See docs/marquee_poems_archive/README.md for re-enablement steps.
+QM_MARQUEE_ENABLED = os.environ.get("QM_MARQUEE_ENABLED", "false").strip().lower() in ("1", "true", "yes")  # default False; flip to True when poems are cleanly licensed
+
+
+@app.context_processor
+def _marquee_flag():
+    return {"marquee_enabled": QM_MARQUEE_ENABLED}
+
+
 # One JSON file per language in Poems/, each a list of {id, marker, text} with the
 # same ids in the same order. To add a translation, drop its file in Poems/ and add
 # an entry here: code -> (file name, label shown on the language toggle).
@@ -2035,6 +2022,8 @@ def _poem_languages():
 
 @app.route("/api/poems/meta")
 def api_poems_meta():
+    if not QM_MARQUEE_ENABLED:
+        return jsonify({"error": "Poems marquee is disabled"}), 404
     langs = _poem_languages()
     if not langs:
         return jsonify({"error": "No poems available"}), 404
@@ -2058,6 +2047,8 @@ def api_poems_meta():
 @app.route("/api/poems/<lang>/<int:index>")
 def api_poem(lang, index):
     """One poem by 0-based position (the same position is the same poem in every language)."""
+    if not QM_MARQUEE_ENABLED:
+        return jsonify({"error": "Poems marquee is disabled"}), 404
     poems = _poems(lang)
     if not poems or not 0 <= index < len(poems):
         return jsonify({"error": "Poem not found"}), 404
@@ -2492,46 +2483,30 @@ def api_auth_register():
     except OSError as e:
         print(f"[folder_connector] could not write user folder for {private_id}: {e}")
 
-    # ---- optional registration-time donation (0-200, per qoin_core / wallet_core.apply_registration_donation) ----
+    # ---- free registration Qoin mint (wallet_core.apply_free_registration) ----
+    # Registration is always free; there is no fee or payment step. A single ₹1-reference Qoin is
+    # still minted and shared 10 paise at a time (see wallet_core.apply_free_registration).
     # the connection above was already closed once folder_connector had the user's data; reopen for this.
     conn = get_db()
     donation_error = None
     donation_breakdown = None
-    donation_pending_amount = 0
-    try:
-        donation_amount = int(data.get("donation_amount") or 0)
-    except (TypeError, ValueError):
-        donation_amount = 0
-    donation_amount = max(0, min(donation_amount, qoin_core.MAX_DONATION))
     # There is no referral code to type in any more -- the only way to be credited as a
     # referrer is to BE the logged-in member doing the registering (helper_user_id, "Register a
     # new member"); their Account ID is recorded automatically, nothing for either party to enter.
     referrer_user_id = helper_user_id
     board_core.ensure_sub_tables(conn)
-    if donation_amount <= 0 or helper_user_id:
-        # Free registration (no money at all) -- always safe to credit immediately. An assisted
-        # signup with a requested donation (helper_user_id + amount > 0) is forced free here too:
-        # the new member has no live session in THIS response to pay with, and real-money paths
-        # must always go through a verified payment (see /api/payment/order + /api/payment/verify
-        # below), never a client-reported amount. Paid registration donations for assisted signups
-        # aren't wired yet -- the new member can Donate for real from their own dashboard instead.
-        try:
-            donation_breakdown = wallet_core.apply_registration_donation(conn, user_id, present_location, 0, referrer_user_id)
-        except ValueError as e:
-            donation_error = str(e)
-    else:
-        # A real donation (self-registration, no helper) -- credit nothing yet. The client pays via
-        # /api/payment/order + /api/payment/verify (purpose="registration") right after this
-        # response, once session["user_id"] below makes them a logged-in member; only a verified
-        # payment ever credits Qoins.
-        donation_pending_amount = donation_amount
+    try:
+        wallet_core.apply_free_registration(conn, user_id, present_location, referrer_user_id)
+        donation_breakdown = {"kind": "free", "location_share_per_tier": 0, "self_share": 0, "referrer_share": 0}
+    except ValueError as e:
+        donation_error = str(e)
     conn.close()
 
     if helper_user_id:
         # The helper stays signed in as themself; the new member signs in later with their own ID + PIN.
         return jsonify({
             "user_id": user_id, "private_code": private_code, "token": None, "assisted": True,
-            "donation": donation_breakdown, "donation_error": donation_error, "donation_pending_amount": donation_pending_amount,
+            "donation": donation_breakdown, "donation_error": donation_error,
             "account_id": account_id, "zodiac": zodiac_row, "redirect": url_for("register"),
         }), 201
 
@@ -2546,7 +2521,7 @@ def api_auth_register():
         "user_id": user_id,
         "private_code": private_code,
         "token": app_token,
-        "donation": donation_breakdown, "donation_error": donation_error, "donation_pending_amount": donation_pending_amount,
+        "donation": donation_breakdown, "donation_error": donation_error,
         "account_id": account_id,
         "zodiac": zodiac_row,
         "kundali": kundali,
@@ -2769,82 +2744,6 @@ def api_wallet_location_balance(location_type, location_id):
     balance = wallet_core.wallet_balance(conn, location_type, location_id)
     conn.close()
     return jsonify({"location_type": location_type, "location_id": location_id, "balance_qoins": balance})
-
-
-def _resolve_referrer(conn, user, referrer_private_id: str):
-    referrer_private_id = (referrer_private_id or "").strip()
-    if not referrer_private_id:
-        return None, None
-    referrer = conn.execute("SELECT id FROM users WHERE private_id_9digit = ?", (referrer_private_id,)).fetchone()
-    if not referrer:
-        return None, "Unknown referrer Private ID"
-    if referrer["id"] == user["id"]:
-        return None, "You can't refer yourself"
-    return referrer["id"], None
-
-
-@app.route("/api/payment/order", methods=["POST"])
-@login_required
-def api_payment_order():
-    """Step 1 of a real donation: create a Razorpay order (or, if RAZORPAY_KEY_ID/SECRET aren't
-    set yet, the same dev-mode 'simulated' instant-credit path the old /api/wallet/donate always
-    used) -- see payment_core.create_order. Nothing is credited here."""
-    data = request.get_json(force=True) or {}
-    try:
-        amount_rupees = int(data.get("amount_rupees"))
-    except (TypeError, ValueError):
-        return jsonify({"error": "amount_rupees must be an integer"}), 400
-    purpose = data.get("purpose") or "donation"
-
-    conn = get_db()
-    user = _current_user_row(conn)
-    referrer_user_id, ref_error = _resolve_referrer(conn, user, data.get("referrer_private_id"))
-    if ref_error:
-        conn.close()
-        return jsonify({"error": ref_error}), 400
-    try:
-        order = payment_core.create_order(
-            conn, user["id"], purpose, amount_rupees, json.loads(user["present_location_json"]), referrer_user_id
-        )
-    except ValueError as e:
-        conn.close()
-        return jsonify({"error": str(e)}), 400
-    conn.close()
-    return jsonify(order)
-
-
-@app.route("/api/payment/verify", methods=["POST"])
-@login_required
-def api_payment_verify():
-    """Step 2: verify the Razorpay payment (or, in simulated dev mode, just mark it paid) and THEN
-    credit Qoins using the order's own stored amount/purpose/referrer/location -- never anything
-    re-sent by the client at this step."""
-    data = request.get_json(force=True) or {}
-    conn = get_db()
-    try:
-        local_order_id = int(data.get("local_order_id"))
-    except (TypeError, ValueError):
-        conn.close()
-        return jsonify({"error": "local_order_id must be an integer"}), 400
-    try:
-        order = payment_core.verify_payment(
-            conn, local_order_id, session["user_id"],
-            data.get("razorpay_payment_id"), data.get("razorpay_order_id"), data.get("razorpay_signature"),
-        )
-        present_location = json.loads(order["present_location_json"])
-        if order["purpose"] == "registration":
-            split = wallet_core.apply_registration_donation(
-                conn, order["user_id"], present_location, order["amount_rupees"], order["referrer_user_id"]
-            )
-        else:
-            split = wallet_core.apply_donation(
-                conn, order["user_id"], present_location, order["amount_rupees"], order["referrer_user_id"]
-            )
-    except ValueError as e:
-        conn.close()
-        return jsonify({"error": str(e)}), 400
-    conn.close()
-    return jsonify({"status": "credited", "amount_rupees": order["amount_rupees"], "distribution": split})
 
 
 # ---- Village elections API (piloted on election_core.PILOT_VILLAGE_ID) ----
@@ -3499,6 +3398,23 @@ def _validate_india_location_data():
         print(f"[STARTUP WARNING] Could not validate India location data against Qumanity_Master.json: {e}")
 
 
+def _validate_india_villages_loaded():
+    """Startup check (2026-10-11, added after the village-dropdown P0): india_villages
+    silently diverging or going empty doesn't crash anything -- registration just shows an
+    empty Village dropdown, which is only visible to a human watching the website, not to
+    anything that would fail a health check. Make that failure mode loud in the logs instead."""
+    try:
+        with get_db() as conn:
+            village_count = conn.execute("SELECT COUNT(*) FROM india_villages").fetchone()[0]
+        if village_count == 0:
+            print("[boot] CRITICAL: india_villages table is empty -- registration will fail. "
+                  "Re-import required: python3 scripts/import_india_villages.py")
+        else:
+            print(f"[boot] india_villages loaded: {village_count} rows")
+    except Exception as e:
+        print(f"[boot] CRITICAL: could not check india_villages: {e}")
+
+
 def ensure_database_ready() -> None:
     """Startup safety net (2026-10-05): a brand-new Railway Volume has no DB file at all, so the
     very first thing to touch it used to be _ensure_user_columns() trying to ALTER a `users` table
@@ -3547,6 +3463,7 @@ def ensure_database_ready() -> None:
 ensure_database_ready()
 _ensure_user_columns()
 _validate_india_location_data()
+_validate_india_villages_loaded()
 
 # Runs on import, not just under `python app.py` -- a production deploy runs this module under
 # gunicorn (see Procfile), which never executes the `__main__` block below, so the daily DB->folder

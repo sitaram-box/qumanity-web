@@ -97,9 +97,20 @@
       if (el) el.scrollIntoView({ block: "nearest" });
     }
 
+    var RENDER_CAP = 100;
+
     function renderOptions() {
       optionsList.innerHTML = "";
-      filtered.forEach(function (o, i) {
+      if (!filtered.length) {
+        var empty = document.createElement("div");
+        empty.className = "qm-ss-empty";
+        empty.textContent = "No matches";
+        optionsList.appendChild(empty);
+        resultsCount.textContent = "";
+        return;
+      }
+      var shown = filtered.slice(0, RENDER_CAP);
+      shown.forEach(function (o, i) {
         var item = document.createElement("div");
         item.className = "qm-ss-option"
           + (o.value === selectEl.value ? " selected" : "")
@@ -111,7 +122,9 @@
         });
         optionsList.appendChild(item);
       });
-      resultsCount.textContent = filtered.length + (filtered.length === 1 ? " option" : " options");
+      resultsCount.textContent = filtered.length > RENDER_CAP
+        ? "Showing " + RENDER_CAP + " of " + filtered.length + ". Type more to narrow."
+        : filtered.length + (filtered.length === 1 ? " option" : " options");
     }
 
     function filterOptions(term) {
@@ -151,12 +164,12 @@
     searchInput.addEventListener("input", function () {
       var term = searchInput.value;
       clearTimeout(searchTimer);
-      searchTimer = setTimeout(function () { filterOptions(term); }, 200);
+      searchTimer = setTimeout(function () { filterOptions(term); }, 150);
     });
     searchInput.addEventListener("keydown", function (e) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        highlightIndex = Math.min(highlightIndex + 1, filtered.length - 1);
+        highlightIndex = Math.min(highlightIndex + 1, Math.min(filtered.length, RENDER_CAP) - 1);
         renderOptions();
         scrollHighlightedIntoView();
       } else if (e.key === "ArrowUp") {

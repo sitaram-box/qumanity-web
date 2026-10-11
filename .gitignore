@@ -53,3 +53,8 @@ htmlcov/
 node_modules/
 
 
+# Marquee poems: Poddar Hindi translations are in copyright until 1 Jan 2032.
+# Kept off the public repo; see docs/marquee_poems_archive/README.md.
+Poems/
+docs/marquee_poems_archive/*
+!docs/marquee_poems_archive/README.md
