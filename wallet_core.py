@@ -7,27 +7,11 @@ plain integer balance. The old prototype broke every wallet into an
 encrypted list of denominated "coins" (₹2000/500/.../1); nothing in this
 pass's scope needs that, so it's deliberately not carried over.
 
-Donation-split rules are ported from the product notes (Qbox-Notes.txt,
-"Please write cursor prompt to edit the logic of referrals system and qoins
-distribution", ~lines 3340-3398), simplified to whole-Qoin arithmetic:
-
-- With a referrer: up to ₹10, split 40/60 self/referrer (the notes' own
-  ₹1/₹2 examples used 50/50 and its ₹5/₹10 examples used 60/40 — genuinely
-  inconsistent in the source; 60/40 is applied uniformly above ₹2 since
-  that's what most of the worked examples show). From ₹11 up, a per-tier
-  amount (₹1/₹2/₹5/₹10 depending on the bracket) is credited to EACH of the
-  8 location tiers first, then the remainder splits 60/40 self/referrer.
-  Donations are capped at ₹200 per the notes ("maximum amount of donation
-  is 200 only per member").
-- Without a referrer: 80% of the amount splits evenly across the 8 location
-  tiers, the remaining 20% goes to the donor's own (locked) share.
-
-In both cases the donor's own share is credited as *locked* — held out of
-their wallet balance until they cast their first election vote (see
-`unlock_user_share`, called from election_core.cast_vote), matching the
-notes: "the amount credit for new user-B only after completing first Karma
-Action... the moment new user participate in election... Voting first time
-will activate reward qoins."
+Qoins are earned, never purchased: there is no payment or donation path. The only mint at
+registration is the free one (`apply_free_registration`): a single ₹1-reference Qoin shared 10
+paise at a time across the location tiers, the referrer and the new member. The new member's own
+share is credited as *locked* -- held out of their wallet balance until they cast their first
+election vote (see `unlock_user_share`, called from election_core.cast_vote).
 """
 
 from __future__ import annotations
@@ -38,8 +22,6 @@ import cycle_middleware
 import elemental_core
 
 LOCATION_TIERS = ("earth", "continent", "country", "zone", "state", "district", "tehsil", "village")
-
-MAX_DONATION_RUPEES = 200
 
 
 def _ensure_paisa_column(conn):
@@ -132,90 +114,6 @@ def _credit(conn, owner_type: str, owner_id: str, amount_qoins: int, reason: str
             "UPDATE wallets SET balance_qoins = balance_qoins + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (amount_qoins, wallet_id),
         )
-
-
-def calculate_donation_distribution(amount_rupees: int, has_referrer: bool) -> dict:
-    """Returns {"location_share_per_tier", "self_share", "referrer_share"} —
-    all non-negative ints, and location_share_per_tier * 8 + self_share +
-    referrer_share == amount_rupees exactly (any rounding remainder from the
-    60/40 or 80/20 split is folded into self_share)."""
-    if amount_rupees <= 0 or amount_rupees > MAX_DONATION_RUPEES:
-        raise ValueError(f"Donation must be between ₹1 and ₹{MAX_DONATION_RUPEES}")
-
-    if not has_referrer:
-        location_total = round(amount_rupees * 0.8)
-        per_tier = location_total // 8
-        self_share = amount_rupees - per_tier * 8
-        return {"location_share_per_tier": per_tier, "self_share": self_share, "referrer_share": 0}
-
-    if amount_rupees <= 2:
-        referrer_share = amount_rupees // 2
-        return {"location_share_per_tier": 0, "self_share": amount_rupees - referrer_share, "referrer_share": referrer_share}
-    if amount_rupees <= 10:
-        referrer_share = round(amount_rupees * 0.6)
-        return {"location_share_per_tier": 0, "self_share": amount_rupees - referrer_share, "referrer_share": referrer_share}
-
-    if amount_rupees <= 20:
-        per_tier = 1
-    elif amount_rupees <= 50:
-        per_tier = 2
-    elif amount_rupees <= 100:
-        per_tier = 5
-    else:
-        per_tier = 10
-    remainder = amount_rupees - per_tier * 8
-    referrer_share = round(remainder * 0.6)
-    self_share = remainder - referrer_share
-    return {"location_share_per_tier": per_tier, "self_share": self_share, "referrer_share": referrer_share}
-
-
-def apply_donation(conn, user_id: int, present_location: dict, amount_rupees: int,
-                    referrer_user_id: int | None) -> dict:
-    """Credits the split from calculate_donation_distribution to the donor's
-    (locked) wallet, the referrer's wallet (if any), and every location tier
-    from Earth down to wherever present_location reaches. Returns the
-    breakdown for the confirmation UI."""
-    has_referrer = referrer_user_id is not None
-    split = calculate_donation_distribution(amount_rupees, has_referrer)
-
-    _credit(conn, "user", str(user_id), split["self_share"], "donation_self",
-            locked=True, related_user_id=user_id)
-
-    if has_referrer and split["referrer_share"]:
-        _credit(conn, "user", str(referrer_user_id), split["referrer_share"], "donation_referrer",
-                related_user_id=user_id)
-
-    if split["location_share_per_tier"]:
-        for location_id, location_type in elemental_core.location_levels_for(present_location):
-            _credit(conn, location_type, location_id, split["location_share_per_tier"], "donation_location",
-                    related_user_id=user_id)
-
-    conn.commit()
-    return split
-
-
-def apply_registration_donation(conn, user_id: int, present_location: dict, amount_rupees: int, referrer_user_id: int | None) -> dict:
-    """The registration-time donation, in the three shapes the founder confirmed (2026-09-27):
-      - ₹0 (free): 1 Qoin split 10 paise to each of 10 shares (apply_free_registration).
-      - with a referrer: the bracket table (calculate_donation_distribution / apply_donation) --
-        per-tier location shares (₹0 below ₹11) + referrer + self.
-      - no referrer, donation > 0 (an independent visitor topping up their own new wallet): the
-        qoin_core "own wallet / own village wallet" table -- no other location tiers, no referrer.
-    Returns a breakdown dict shaped for the registration confirmation screen."""
-    import qoin_core
-    if amount_rupees <= 0:
-        apply_free_registration(conn, user_id, present_location, referrer_user_id)
-        return {"kind": "free", "location_share_per_tier": 0, "self_share": 0, "referrer_share": 0}
-    if referrer_user_id is not None:
-        split = apply_donation(conn, user_id, present_location, amount_rupees, referrer_user_id)
-        return {"kind": "referred", **split}
-    topup = qoin_core.topup_split(amount_rupees)
-    _credit(conn, "user", str(user_id), topup["own"], "registration_topup_self", locked=True, related_user_id=user_id)
-    village = (present_location.get("village") or {})
-    if village.get("id") and topup["village"]:
-        _credit(conn, "village", village["id"], topup["village"], "registration_topup_village", related_user_id=user_id)
-    conn.commit()
-    return {"kind": "independent", "self_share": topup["own"], "village_share": topup["village"], "referrer_share": 0}
 
 
 def has_locked_share(conn, user_id: int) -> bool:
