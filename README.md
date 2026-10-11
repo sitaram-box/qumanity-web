@@ -347,3 +347,7 @@ one I could independently verify (the Aug 2 2027 total solar eclipse).
 3. Swap the static JSON files for a real `location.db` import (SITAXML +
    World Data), or point straight at the existing platform's
    `global_core.py` / `/api/locations/children` API.
+
+## License
+
+Qumanity is licensed under the GNU Affero General Public License v3.0. See LICENSE for details.
