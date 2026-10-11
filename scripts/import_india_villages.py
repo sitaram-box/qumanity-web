@@ -7,15 +7,17 @@ per-tehsil on demand via GET /api/india-villages/<tehsil_id> instead.
 IMPORTANT (2026-10-11 correction): this script previously imported from a SITAXML.xml
 source whose district/tehsil ids were independently numbered from Qumanity_Master.json's
 own tree -- the same ID format (e.g. "CS.DL.3.4") pointed at a DIFFERENT real place in
-each source (SITAXML's CS.DL.3.4 was "Rithala"; Master.json's CS.DL.3.4 is "Bawana").
-`static/data/india_districts_tehsils.json` (what the registration dropdowns actually
-serve for Zone/State/District/Tehsil) is generated from Master.json, so a
-SITAXML-sourced `india_villages` table silently returned either the WRONG tehsil's
-villages or none at all for any tehsil whose number didn't happen to collide --
-see docs/india_location_fix.md (the original 2026-09-28 fix, which this script had
-regressed) and docs/village_dropdown_p0_fix.md (this correction). Master.json is now
-the single source for every India level from Zone down to Village -- do not reintroduce
-a SITAXML-sourced import here again.
+each source (SITAXML's CS.DL.3.4 is "Patel Nagar"; Master.json's CS.DL.3.4 is "Bawana").
+`static/data/india_districts_tehsils.json` and `static/data/subcontinent_districts.json`
+(what the registration dropdowns actually serve for Zone/State/District/Tehsil) are
+generated from Master.json, so a SITAXML-sourced `india_villages` table silently returned
+either the WRONG tehsil's villages or none at all for any tehsil whose number didn't
+happen to collide -- see docs/india_location_fix.md (the original 2026-09-28 fix, and
+its "Incident: 2026-10-11" section covering this regression and its fix). Master.json is
+now the single source for every India level from Zone down to Village -- do not
+reintroduce a SITAXML-sourced import here again. The retired SITAXML version lives at
+scripts/_retired/import_india_villages_SITAXML.py, guarded behind a flag it refuses to
+run without.
 
 Run once (or whenever Qumanity_Master.json's India tree changes):
     python3 scripts/import_india_villages.py

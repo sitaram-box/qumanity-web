@@ -1,5 +1,38 @@
 # India location ID fix (2026-09-28)
 
+## Incident: 2026-10-11 Village Dropdown Empty (P0)
+
+**Summary**: A prior session re-ran the retired SITAXML-based import script, silently
+reintroducing a scheme mismatch that had been fixed on 2026-09-28. Registration was blocked --
+the Village dropdown showed zero options for most tehsils (and wrong villages for others), because
+`india_villages` had been repopulated with SITAXML's own district/tehsil numbering, which assigns
+the same dotted IDs (e.g. `CS.DL.3.4`) to different real places than `Qumanity_Master.json` does.
+A second, independent instance of the same class of bug was found while re-verifying through the
+real registration UI (not just the database): `static/data/subcontinent_districts.json` --  a
+separate file the registration page's own dropdowns actually fetch via `/api/subcontinent/districts`
+-- had never been updated when `india_districts_tehsils.json` got fixed on 2026-09-28, so its India
+portion was still 100% SITAXML-numbered.
+
+**Fix**:
+- (a) `scripts/import_india_villages.py` rewritten to source from `Qumanity_Master.json` directly
+  (635,622 villages re-imported; tehsil-id overlap with the website's own district data went from
+  ~50% to 100%).
+- (b) `static/data/subcontinent_districts.json`'s India portion (all 37 states) replaced with the
+  already-correct data from `india_districts_tehsils.json`.
+- (c) The retired SITAXML-based script moved to `scripts/_retired/import_india_villages_SITAXML.py`,
+  with a warning header and a `--i-know-this-is-retired` guard flag it refuses to run without.
+- (d) `app.py`'s `_validate_india_villages_loaded()` (startup check) now also compares every
+  `tehsil_id` in `india_villages` against `subcontinent_districts.json` and logs a `[boot] WARNING`
+  if any are missing -- the scheme-mismatch failure mode is now loud in the logs instead of silent.
+- (e) The "Can't find my Village in the list" fallback (added as a workaround for the empty-list
+  symptom) was removed entirely, including its `PENDING`/`pending_assignment` location-JSON path --
+  zero existing users had a `PENDING` village, so no data migration was needed.
+
+**Rule for future sessions: ALWAYS source India location data from `Qumanity_Master.json`. NEVER
+from `SITAXML.xml`.** If `india_villages` or any India district/tehsil dataset ever needs
+re-importing, use `scripts/import_india_villages.py` (the Master.json version) -- never the
+retired script in `scripts/_retired/`, and never re-derive from `SITAXML.xml` directly.
+
 ## The bug
 The website's India district/tehsil/village dataset (`static/data/india_districts_tehsils.json` + the `india_villages` SQLite table) was imported separately from a SITAXML source (`scripts/import_india_villages.py`), independently of `Qumanity_Master.json`. Both systems used the same dotted-ID convention (`CS.DL.5.4`) but assigned it to **different real places** — the website called `CS.DL.5.4` "Bawana"; Master.json calls it "Kondli". Since the *physical* `0_Earth` folder tree is built from Master.json, a Bawana resident's account was actually filed in the folder Master.json calls Kondli.
 

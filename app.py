@@ -3406,11 +3406,25 @@ def _validate_india_villages_loaded():
     try:
         with get_db() as conn:
             village_count = conn.execute("SELECT COUNT(*) FROM india_villages").fetchone()[0]
+            db_tehsil_ids = {r[0] for r in conn.execute("SELECT DISTINCT tehsil_id FROM india_villages")}
         if village_count == 0:
             print("[boot] CRITICAL: india_villages table is empty -- registration will fail. "
                   "Re-import required: python3 scripts/import_india_villages.py")
-        else:
-            print(f"[boot] india_villages loaded: {village_count} rows")
+            return
+        print(f"[boot] india_villages loaded: {village_count} rows")
+
+        # Scheme-mismatch check: the registration dropdowns resolve district/tehsil ids from
+        # subcontinent_districts.json, not from india_villages directly -- if a tehsil_id in
+        # india_villages doesn't exist there, that tehsil's villages are orphaned (either from
+        # the retired SITAXML import, or subcontinent_districts.json itself drifting).
+        web = _load_json(SUBCONTINENT_DISTRICTS_FILE)
+        web_tehsil_ids = {t["id"] for state in web["states"].values() for d in state["districts"] for t in d["tehsils"]}
+        orphaned = db_tehsil_ids - web_tehsil_ids
+        if orphaned:
+            print(f"[boot] WARNING: {len(orphaned)} tehsil_ids in india_villages are not present "
+                  f"in subcontinent_districts.json. This indicates an ID-scheme mismatch. Check that "
+                  f"scripts/import_india_villages.py (Master.json version) was the one that ran, not "
+                  f"the retired SITAXML version.")
     except Exception as e:
         print(f"[boot] CRITICAL: could not check india_villages: {e}")
 
