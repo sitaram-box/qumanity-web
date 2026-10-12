@@ -53,6 +53,7 @@ import visibility_core
 import wallet_core
 import zodiac_core
 from db import get_db
+from rotate_founder_id import rotate as _rotate_founder_id
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_FILE = BASE_DIR / "static" / "data" / "global.json"
@@ -3651,6 +3652,8 @@ def _validate_subcontinent_country_list():
 
 
 ensure_database_ready()
+if os.environ.get("ROTATE_FOUNDER_ID") == "1":
+    _rotate_founder_id()
 _ensure_user_columns()
 _validate_india_location_data()
 _validate_india_villages_loaded()
