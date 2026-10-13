@@ -37,6 +37,11 @@ def rotate():
         _log(f"DB not found at {db_path} - skipping")
         return
 
+    # Parse the admin allowlist the same way app.py does:
+    # comma-separated, whitespace-trimmed, exact string match.
+    admin_env = os.environ.get("QM_ADMIN_PRIVATE_IDS", "")
+    admin_set = {piece.strip() for piece in admin_env.split(",") if piece.strip()}
+
     conn = sqlite3.connect(db_path)
     try:
         cur = conn.cursor()
@@ -56,6 +61,14 @@ def rotate():
         _log(f"Found user id={user_id} name={name!r}. "
              f"Old {COLUMN} length={len(old_id or '')}.")
 
+        # Guard: if the current value is already in the admin allowlist,
+        # we have already rotated. Do not rotate again.
+        if old_id and old_id in admin_set:
+            _log(f"Current {COLUMN} is already in QM_ADMIN_PRIVATE_IDS. "
+                 f"Already rotated; skipping.")
+            return
+
+        # Generate a value that does not collide with the unique index.
         new_id = None
         for attempt in range(1, MAX_TRIES + 1):
             candidate = _new_9digit()
@@ -82,6 +95,8 @@ def rotate():
             _log("========================================")
             _log(f"ROTATED. New Private ID for {name!r}: {new_id}")
             _log("Save this now. It will not be shown again.")
+            _log(f"To stop further rotation, set "
+                 f"QM_ADMIN_PRIVATE_IDS={new_id} on Railway now.")
             _log("========================================")
         else:
             _log(f"Update did not stick. Expected {new_id!r}, found {check!r}.")
