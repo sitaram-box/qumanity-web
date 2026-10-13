@@ -84,3 +84,65 @@ def summary(conn, user_id: int) -> dict:
         "pending_requests": pending_requests,
         "total": unread_private + unread_groups + pending_requests,
     }
+
+
+def recent_items(conn, user_id: int, limit: int = 5) -> list[dict]:
+    """The `limit` most recent unread items across private chats, group chats and pending
+    people-requests, newest first -- the same three sources `summary()` counts, just surfaced
+    as titled rows instead of a number. Title convention matches `my_chats()`/`my_groups()`
+    elsewhere (the chat's own name if set, else the other person's/group's name -- no
+    hide_identity masking here, same as the rest of the Personal tab)."""
+    ensure_tables(conn)
+
+    private_rows = conn.execute(
+        """SELECT c.id AS chat_id, c.name AS chat_name,
+                  CASE WHEN c.user_lo = ? THEN c.user_hi ELSE c.user_lo END AS other_id,
+                  (SELECT MAX(created_at) FROM private_messages WHERE chat_id = c.id) AS last_msg,
+                  (SELECT last_read_at FROM chat_read_state WHERE user_id = ? AND kind = 'private' AND chat_id = c.id) AS last_read
+           FROM private_chats c WHERE c.user_lo = ? OR c.user_hi = ?""",
+        (user_id, user_id, user_id, user_id),
+    ).fetchall()
+
+    group_rows = conn.execute(
+        """SELECT pg.id AS chat_id, pg.name AS chat_name,
+                  (SELECT MAX(created_at) FROM personal_messages WHERE group_id = pg.id) AS last_msg,
+                  (SELECT last_read_at FROM chat_read_state WHERE user_id = ? AND kind = 'group' AND chat_id = pg.id) AS last_read
+           FROM personal_groups pg
+           WHERE pg.owner_user_id = ?
+              OR pg.id IN (SELECT group_id FROM personal_group_members WHERE user_id = ? AND status = 'approved')""",
+        (user_id, user_id, user_id),
+    ).fetchall()
+
+    def is_unread(r):
+        return bool(r["last_msg"]) and (not r["last_read"] or r["last_msg"] > r["last_read"])
+
+    items = []
+    for r in private_rows:
+        if not is_unread(r):
+            continue
+        other = conn.execute("SELECT name FROM users WHERE id = ?", (r["other_id"],)).fetchone()
+        other_name = other["name"] if other else "Unknown"
+        items.append({
+            "kind": "private", "id": r["chat_id"], "title": r["chat_name"] or other_name,
+            "created_at": r["last_msg"], "meta": {"with": other_name},
+        })
+    for r in group_rows:
+        if not is_unread(r):
+            continue
+        items.append({
+            "kind": "group", "id": r["chat_id"], "title": r["chat_name"],
+            "created_at": r["last_msg"], "meta": {},
+        })
+    for r in conn.execute(
+        """SELECT pr.id, pr.created_at, pr.first_message, u.name AS from_name
+           FROM people_requests pr JOIN users u ON u.id = pr.from_user_id
+           WHERE pr.to_user_id = ? AND pr.status IN ('pending', 'waiting')""",
+        (user_id,),
+    ):
+        items.append({
+            "kind": "request", "id": r["id"], "title": r["from_name"],
+            "created_at": r["created_at"], "meta": {"first_message": r["first_message"]},
+        })
+
+    items.sort(key=lambda it: it["created_at"] or "", reverse=True)
+    return items[:limit]

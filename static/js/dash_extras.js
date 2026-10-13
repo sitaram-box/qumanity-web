@@ -72,39 +72,40 @@
       .catch(openLogoutConfirm); // don't trap the user behind a failed save either
   });
 
-  // ---- Notification bell: unread Personal-timeline chats + pending people-requests ----
-  var notifBtn = $("notif-btn"), notifBadge = $("notif-badge");
+  // ---- Unified notification bell (Commit 5): one bell, one dropdown, two sections --
+  // Announcements (unread council broadcasts) and Notifications (unread personal chats +
+  // pending people-requests). Badge = sum of both counts, from the same two polled endpoints
+  // as before (no new polling). The ?with_items=1 fetch and the announcements-recent fetch are
+  // both lazy: only made when the dropdown is opened, never on the 30s badge poll.
+  var notifBtn = $("notif-btn"), notifBadge = $("notif-badge"), notifMenu = $("notif-menu"), notifWrap = $("notif-wrap");
+  var notifAnnounceList = $("notif-announce-list"), notifPersonalList = $("notif-personal-list");
+  var notifAnnounceViewAll = $("notif-announce-viewall"), notifPersonalViewAll = $("notif-personal-viewall");
   if (notifBtn) {
-    function refreshNotifs() {
-      api("/api/notifications/summary").then(function (d) {
-        if (d.total > 0) { notifBadge.textContent = d.total > 99 ? "99+" : d.total; notifBadge.hidden = false; }
-        else { notifBadge.hidden = true; }
-      }).catch(function () {});
-    }
-    notifBtn.addEventListener("click", function () {
-      var personalTab = document.querySelector('.qm-dash-tab[data-tab="personal"]');
-      if (personalTab) personalTab.click();
-      setTimeout(refreshNotifs, 1000); // opening Personal usually reads something; re-check shortly after
-    });
-    refreshNotifs();
-    setInterval(refreshNotifs, 30000);
-  }
+    var lastAnnounceTotal = 0, lastPersonalTotal = 0;
 
-  // ---- Item 8: Announcements megaphone — separate from the bell above on purpose (unread
-  // council broadcasts, not personal chats/requests); dropdown + click-through-marks-read ----
-  var annBtn = $("announce-bell-btn"), annBadge = $("announce-bell-badge"), annMenu = $("announce-bell-menu"), annWrap = $("announce-bell-wrap");
-  if (annBtn) {
-    function refreshAnnounceBadge() {
-      api("/api/announcements/unread-count").then(function (d) {
-        if (d.total > 0) { annBadge.textContent = d.total > 99 ? "99+" : d.total; annBadge.hidden = false; }
-        else { annBadge.hidden = true; }
-      }).catch(function () {});
+    function jumpToTab(tabName) {
+      var tabBtn = document.querySelector('.qm-dash-tab[data-tab="' + tabName + '"]');
+      if (tabBtn) tabBtn.click();
     }
-    function closeAnnounceMenu() { annMenu.hidden = true; annBtn.setAttribute("aria-expanded", "false"); }
-    function renderAnnounceMenu(items) {
-      annMenu.innerHTML = "";
+
+    function paintBadge() {
+      var total = lastAnnounceTotal + lastPersonalTotal;
+      if (total > 0) { notifBadge.textContent = total > 99 ? "99+" : total; notifBadge.hidden = false; }
+      else { notifBadge.hidden = true; }
+    }
+    function refreshAnnounceCount() {
+      api("/api/announcements/unread-count").then(function (d) { lastAnnounceTotal = d.total; paintBadge(); }).catch(function () {});
+    }
+    function refreshPersonalCount() {
+      api("/api/notifications/summary").then(function (d) { lastPersonalTotal = d.total; paintBadge(); }).catch(function () {});
+    }
+
+    function closeMenu() { notifMenu.hidden = true; notifBtn.setAttribute("aria-expanded", "false"); }
+
+    function renderAnnounceSection(items) {
+      notifAnnounceList.innerHTML = "";
       if (!items.length) {
-        var li = el("li", "", "No unread announcements"); li.style.padding = "9px 12px"; annMenu.appendChild(li);
+        var li = el("li", "", "No unread announcements"); li.style.padding = "9px 12px"; notifAnnounceList.appendChild(li);
         return;
       }
       items.forEach(function (a) {
@@ -114,29 +115,70 @@
         b.firstChild.textContent = (a.title ? a.title + " — " : "") + a.body.slice(0, 60) + (a.body.length > 60 ? "…" : "");
         b.addEventListener("click", function () {
           api("/api/announcements/" + a.id + "/read", {}).then(function () {
-            closeAnnounceMenu();
-            refreshAnnounceBadge();
+            closeMenu();
+            refreshAnnounceCount();
             var targetTab = (a.location_level === "continent" || a.location_level === "country" || a.location_level === "earth") ? "global" : "public";
-            var tabBtn = document.querySelector('.qm-dash-tab[data-tab="' + targetTab + '"]');
-            if (tabBtn) tabBtn.click();
+            jumpToTab(targetTab);
           }).catch(function () {});
         });
-        li.appendChild(b); annMenu.appendChild(li);
+        li.appendChild(b); notifAnnounceList.appendChild(li);
       });
     }
-    annBtn.addEventListener("click", function (e) {
+
+    function renderPersonalSection(items) {
+      notifPersonalList.innerHTML = "";
+      if (!items.length) {
+        var li = el("li", "", "Nothing new"); li.style.padding = "9px 12px"; notifPersonalList.appendChild(li);
+        return;
+      }
+      items.forEach(function (it) {
+        var li = el("li");
+        var b = document.createElement("button"); b.type = "button"; b.textContent = it.title || "Unknown";
+        b.addEventListener("click", function () {
+          var after = function () { closeMenu(); jumpToTab("personal"); setTimeout(refreshPersonalCount, 1000); };
+          if (it.kind === "private" || it.kind === "group") {
+            api("/api/notifications/mark-read", { kind: it.kind, id: it.id }).then(after).catch(after);
+          } else {
+            after(); // pending people-request: no read-state to mark, just surface it
+          }
+        });
+        li.appendChild(b); notifPersonalList.appendChild(li);
+      });
+    }
+
+    notifBtn.addEventListener("click", function (e) {
       e.stopPropagation();
-      var opening = annMenu.hidden;
-      closeAnnounceMenu();
+      var opening = notifMenu.hidden;
+      closeMenu();
       if (opening) {
-        annMenu.hidden = false; annBtn.setAttribute("aria-expanded", "true");
-        api("/api/announcements/unread-recent?limit=5").then(function (d) { renderAnnounceMenu(d.announcements); }).catch(function () { renderAnnounceMenu([]); });
+        notifMenu.hidden = false; notifBtn.setAttribute("aria-expanded", "true");
+        api("/api/announcements/unread-recent?limit=5").then(function (d) { renderAnnounceSection(d.announcements); }).catch(function () { renderAnnounceSection([]); });
+        api("/api/notifications/summary?with_items=1").then(function (d) { renderPersonalSection(d.items || []); }).catch(function () { renderPersonalSection([]); });
       }
     });
-    document.addEventListener("click", function (e) { if (!annWrap.contains(e.target)) closeAnnounceMenu(); });
-    document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeAnnounceMenu(); });
-    refreshAnnounceBadge();
-    setInterval(refreshAnnounceBadge, 30000);
+    if (notifPersonalViewAll) notifPersonalViewAll.addEventListener("click", function () { closeMenu(); jumpToTab("personal"); });
+    if (notifAnnounceViewAll) notifAnnounceViewAll.addEventListener("click", function () {
+      closeMenu();
+      var modal = $("announce-viewall-modal"), listEl = $("announce-viewall-list"), emptyEl = $("announce-viewall-empty");
+      if (!modal) return;
+      listEl.innerHTML = ""; emptyEl.hidden = true;
+      modal.hidden = false;
+      api("/api/announcements/unread-recent?limit=20").then(function (d) {
+        emptyEl.hidden = d.announcements.length > 0;
+        d.announcements.forEach(function (a) {
+          var li = el("li", "qm-announce-item");
+          if (a.title) li.appendChild(el("b", "", a.title));
+          li.appendChild(el("p", "", a.body));
+          listEl.appendChild(li);
+        });
+      }).catch(function () { emptyEl.hidden = false; emptyEl.textContent = "Could not load announcements right now."; });
+    });
+    document.addEventListener("click", function (e) { if (!notifWrap.contains(e.target)) closeMenu(); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeMenu(); });
+
+    refreshAnnounceCount();
+    refreshPersonalCount();
+    setInterval(function () { refreshAnnounceCount(); refreshPersonalCount(); }, 30000);
   }
 
   // ---- Public search ID + past Account IDs ----

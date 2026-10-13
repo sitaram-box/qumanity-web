@@ -1292,6 +1292,8 @@ def api_notifications_summary():
             if guide["action"]:
                 result["election"] = {"sign": cycle["zodiac_sign"], "week": guide["week"], "action": guide["action"], "text": guide["text"]}
                 result["total"] += 1
+        if request.args.get("with_items") == "1":
+            result["items"] = notify_core.recent_items(conn, session["user_id"], limit=5)
     finally:
         conn.close()
     return jsonify(result)

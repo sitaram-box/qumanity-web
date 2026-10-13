@@ -749,7 +749,10 @@
 .qm-announce-dropdown li { padding: 0; }
 .qm-announce-dropdown button { width: 100%; text-align: left; padding: 9px 12px; border: 0; background: transparent; color: var(--qm-text); cursor: pointer; font: 500 0.85rem "Inter", system-ui, sans-serif; }
 .qm-announce-dropdown button:hover { background: rgba(255, 153, 51, 0.12); }
-.qm-announce-bell span[aria-hidden] { font-size: 0.95rem; }
+.qm-notif-dropdown { display: flex; flex-direction: column; gap: 10px; }
+.qm-notif-section-title { margin: 0; padding: 0 12px; font: 700 0.72rem "Inter", system-ui, sans-serif; letter-spacing: 0.04em; text-transform: uppercase; color: var(--qm-text-dim); }
+.qm-notif-section .qm-announce-dropdown { min-width: 0; max-width: none; }
+.qm-notif-viewall { margin: 2px 12px 4px; width: calc(100% - 24px); }
 #qm-dg-stats-announce-viewall, #qm-dp-stats-announce-viewall, #qm-dg-stats-announce-new, #qm-dp-stats-announce-new { margin-top: 6px; width: 100%; }
 
 /* ---- Item 9: Citizen Report (FIR) ---- */

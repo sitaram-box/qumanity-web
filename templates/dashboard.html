@@ -23,16 +23,23 @@
         <button type="button" class="dq-dot dq-dot-lang" id="ui-lang-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Language" title="Change language"></button>
         <ul class="dq-menu" id="ui-lang-menu" role="listbox" hidden></ul>
       </div>
-      <button type="button" class="dq-dot dq-dot-icon" id="notif-btn" aria-label="Notifications" title="New messages and requests">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 00-6 6v3.5L4 16h16l-2-3.5V9a6 6 0 00-6-6z"/><path d="M9.5 19a2.5 2.5 0 005 0"/></svg>
-        <span class="dq-badge" id="notif-badge" hidden>0</span>
-      </button>
-      <div class="dq-pop" id="announce-bell-wrap">
-        <button type="button" class="dq-dot dq-dot-icon qm-announce-bell" id="announce-bell-btn" aria-haspopup="true" aria-expanded="false" aria-label="Council announcements" title="Council announcements">
-          <span aria-hidden="true">📣</span>
-          <span class="dq-badge" id="announce-bell-badge" hidden>0</span>
+      <div class="dq-pop" id="notif-wrap">
+        <button type="button" class="dq-dot dq-dot-icon" id="notif-btn" aria-haspopup="true" aria-expanded="false" aria-label="Notifications" title="New messages and requests">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 00-6 6v3.5L4 16h16l-2-3.5V9a6 6 0 00-6-6z"/><path d="M9.5 19a2.5 2.5 0 005 0"/></svg>
+          <span class="dq-badge" id="notif-badge" hidden>0</span>
         </button>
-        <ul class="dq-menu qm-announce-dropdown" id="announce-bell-menu" hidden></ul>
+        <div class="dq-menu qm-notif-dropdown" id="notif-menu" hidden>
+          <div class="qm-notif-section">
+            <p class="qm-notif-section-title">Announcements</p>
+            <ul class="qm-announce-dropdown" id="notif-announce-list"></ul>
+            <button type="button" class="qm-btn qm-btn-ghost qm-notif-viewall" id="notif-announce-viewall">View all</button>
+          </div>
+          <div class="qm-notif-section">
+            <p class="qm-notif-section-title">Notifications</p>
+            <ul class="qm-announce-dropdown" id="notif-personal-list"></ul>
+            <button type="button" class="qm-btn qm-btn-ghost qm-notif-viewall" id="notif-personal-viewall">View all</button>
+          </div>
+        </div>
       </div>
       <button type="button" class="dq-dot dq-dot-icon" id="timebox-btn" aria-label="Time, weather and Vedic calendar" title="Time · weather · Vedic calendar">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
