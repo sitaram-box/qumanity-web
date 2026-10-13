@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/india_map.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}" />
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
@@ -39,7 +40,6 @@
           <button type="button" class="hm-lang-btn" id="home-lang-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Language" title="Language">🌐</button>
           <ul class="dq-menu" id="home-lang-menu" role="listbox" hidden></ul>
         </div>
-        <a class="hm-btn hm-btn-ghost" href="{{ url_for('login') }}" data-i18n="login">Login</a>
         <a class="hm-btn hm-btn-primary" href="{{ url_for('register') }}" data-i18n="register">Register</a>
         <button class="hm-burger" id="hm-burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="hm-links"><span></span><span></span><span></span></button>
       </div>
@@ -71,10 +71,36 @@
           </ul>
         </div>
 
-        <!-- Hero right column: the sign-in box (Commit 4) goes here. The interactive globe moved
+        <!-- Hero right column: inline sign-in -- the only sign-in entry point on the site (the
+             nav/footer "Login" links are gone). Reuses /login's own field markup, validation and
+             POST /login call almost verbatim; see home_signin.js. The interactive globe moved
              down into Live Stats (#live), where it visualizes the same data that section shows --
              see earth.js's lazy-loaded initGlobe(). -->
-        <div class="hm-signin-wrap" id="hm-signin-slot"></div>
+        <div class="hm-signin-wrap" id="hm-signin-slot">
+          <div class="hm-panel hm-glass hm-signin-panel">
+            <h3 class="hm-signin-title">Sign in to Qumanity</h3>
+            <form id="hm-login-form" class="qm-form" novalidate>
+              <label class="qm-field">
+                <span>🔢 9-digit Private ID</span>
+                <input type="text" id="hm-field-private-id" required inputmode="numeric" pattern="[0-9]{9}" maxlength="9" autocomplete="off" autocorrect="off" autocapitalize="off" placeholder="e.g. 583294017" />
+              </label>
+              <label class="qm-field">
+                <span>🔑 5-character PIN</span>
+                <input type="password" id="hm-field-pin" required pattern="(?=.*[A-Za-z0-9])[A-Za-z0-9!@#$%^&amp;*()_+\-=\[\]{}|;:'&quot;,.&lt;&gt;/?]{5}" maxlength="5" autocomplete="current-password" placeholder="•••••" />
+              </label>
+              <button type="submit" class="qm-btn qm-btn-primary qm-form-submit">Sign in →</button>
+            </form>
+            <p class="qm-summary-error" id="hm-login-error" hidden></p>
+            <div class="hm-signin-actions">
+              <a class="hm-btn hm-btn-ghost" href="{{ url_for('register') }}">Register / Create new account</a>
+              <button type="button" class="hm-signin-forgot-btn" id="hm-forgot-btn" aria-expanded="false">Forgot Private ID or PIN?</button>
+              <div class="hm-signin-forgot-links" id="hm-forgot-links" hidden>
+                <a href="{{ url_for('forgot_pin_page') }}">Forgot your PIN?</a>
+                <a href="{{ url_for('recover_id_page') }}">Forgot your Private ID?</a>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="hm-marquee" aria-label="Ways to contribute">
@@ -260,7 +286,7 @@
         <p>Quantum + Humanity. A nested, transparent ledger of Space, Time and Consciousness — for humanity, harmony &amp; peace.</p>
       </div>
       <div><h4>Explore</h4><a href="{{ url_for('about') }}#why">Vision</a><a href="{{ url_for('about') }}#triune">How it works</a><a href="{{ url_for('about') }}#punch">Governance</a><a href="{{ url_for('about') }}#qoins">Qoins</a><a href="{{ url_for('about') }}#roadmap">Roadmap</a></div>
-      <div><h4>Account</h4><a href="{{ url_for('register') }}">Register</a><a href="{{ url_for('login') }}">Login</a><a href="{{ url_for('elements_dashboard') }}">Elements</a></div>
+      <div><h4>Account</h4><a href="{{ url_for('register') }}">Register</a><a href="#hm-signin-slot">Sign in</a><a href="{{ url_for('elements_dashboard') }}">Elements</a></div>
       <div><h4>Learn more</h4><a href="{{ url_for('about') }}">About Qumanity</a><a href="{{ url_for('about') }}#faq">Questions &amp; answers</a><a href="{{ url_for('about') }}#people">About the Founder</a></div>
     </div>
     <div class="hm-wrap hm-foot-base">
@@ -278,6 +304,7 @@
   <script src="{{ url_for('static', filename='js/india_map.js') }}"></script>
   <script src="{{ url_for('static', filename='js/earth.js') }}"></script>
   <script src="{{ url_for('static', filename='js/home.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/home_signin.js') }}"></script>
   <script src="{{ url_for('static', filename='js/scoreboard.js') }}"></script>
   <script src="{{ url_for('static', filename='js/home_i18n.js') }}"></script>
   <script src="{{ url_for('static', filename='js/logo_nav.js') }}"></script>
