@@ -155,6 +155,12 @@ body.hm {
 .hm-float-c { right: 6%; bottom: -16px; animation-delay: -4s; }
 @keyframes hm-bob { to { transform: translateY(-10px); } }
 
+/* Hero sign-in slot (content added in a later commit) */
+.hm-signin-wrap { min-height: 320px; }
+
+/* Globe's static placeholder (narrow screens, or while three.js loads) */
+.hm-globe-static { display: block; width: 100%; height: clamp(360px, 46vw, 560px); border-radius: 24px; object-fit: cover; }
+
 /* Marquee */
 .hm-marquee { position: relative; overflow: hidden; padding: 16px 0; border-top: 1px solid var(--hm-line); background: rgba(5, 11, 20, 0.5); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
 .hm-marquee-track { display: flex; gap: 14px; width: max-content; animation: hm-scroll 42s linear infinite; }
@@ -222,6 +228,12 @@ body.hm {
 .hm-sb-total b { display: block; font-family: var(--hm-display); font-size: clamp(2.6rem, 6vw, 4.4rem); line-height: 1; background: var(--hm-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hm-sb-total span { display: block; margin-top: 8px; font-size: 0.85rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--hm-dim); }
 .hm-sb-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+.hm-sb-details summary { cursor: pointer; list-style: none; padding: 16px 20px; border-radius: 16px; background: var(--hm-panel); border: 1px solid var(--hm-line); font-size: 0.95rem; color: var(--hm-dim); }
+.hm-sb-details summary::-webkit-details-marker { display: none; }
+.hm-sb-details summary .hm-kicker { margin: 0 8px 0 0; }
+.hm-sb-details summary::after { content: "▾"; float: right; color: var(--hm-gold); }
+.hm-sb-details[open] summary::after { content: "▴"; }
+.hm-sb-details .hm-sb-body { padding-top: 18px; }
 .hm-sb-col h3 { margin: 0 0 14px; font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--hm-saffron); }
 .hm-sb-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .hm-sb-row { }
@@ -405,6 +417,9 @@ body.hm {
 .hm-final .hm-wrap { position: relative; }
 .hm-final h2 { margin: 0 0 14px; font-family: var(--hm-display); font-weight: 600; font-size: clamp(2rem, 4.6vw, 3.4rem); line-height: 1.1; letter-spacing: -0.02em; }
 .hm-final p { margin: 0 0 28px; font-size: 1.1rem; color: #b9c8db; }
+.hm-final-quote { max-width: 760px; margin: 0 auto 32px; font-family: var(--hm-display); font-style: italic; font-size: clamp(1.1rem, 2.2vw, 1.4rem); line-height: 1.4; color: #fff4d6; }
+.hm-final-quote cite { display: block; margin-top: 12px; font-family: inherit; font-style: normal; font-size: 0.85rem; color: var(--hm-dim); }
+.hm-final-quote cite b { color: var(--hm-gold); }
 .hm-vasu { margin-top: 34px !important; margin-bottom: 0 !important; font-size: 1.05rem !important; color: var(--hm-gold) !important; letter-spacing: 0.06em; }
 
 /* ---------- Footer ---------- */

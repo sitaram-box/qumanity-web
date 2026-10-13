@@ -9,6 +9,15 @@
  * countries picked from the Country dropdown. India is the one country that
  * swaps the globe for its dedicated zone/state map (QMIndiaMap); the thumbnail
  * returns to the Sub-continent globe.
+ *
+ * The globe itself (everything using THREE.*, via QMEarthGlobe) is lazy:
+ * - On screens narrower than 640px, it never loads at all -- a static image
+ *   (#qm-globe-placeholder) is shown instead, and three.js/earcut are never
+ *   fetched.
+ * - On wider screens, three.js + earcut are fetched, and the globe created,
+ *   only once the Live Stats section (#live) scrolls into view.
+ * None of this affects the stats panel (tabs, country dropdown, stat loading)
+ * below, which is wired up immediately regardless of the globe's state.
  */
 (function () {
   "use strict";
@@ -23,6 +32,9 @@
   var breadcrumb = document.getElementById("qm-breadcrumb");
   var countryIndiaMapEl = document.getElementById("qm-country-india-map");
   var ddCountry = document.getElementById("qm-dd-country");
+  var liveSection = document.getElementById("live");
+  var globePlaceholder = document.getElementById("qm-globe-placeholder");
+  var globeLiveChip = document.getElementById("qm-globe-live-chip");
 
   var tabSub = document.getElementById("qm-tab-sub");
   var tabCountry = document.getElementById("qm-tab-country");
@@ -37,21 +49,95 @@
   // ---- State ----
   var worldData = null;
   var indiaMap = null;
+  var globe = null; // null until initGlobe() runs (desktop only, lazily)
 
-  var globe = QMEarthGlobe.create(canvas, QMSubcontinent.globeOptions({
-    tooltipEl: tooltip,
-    // The hero stage is squarer than the registration one -- stand back a bit so Afghanistan and Maldives fit.
-    lockRegion: Object.assign({}, QMSubcontinent.LOCK, { distance: 11.6, minDistance: 9, maxDistance: 13.5 }),
-    onCountryPick: handleGlobePick,
-  }));
+  // ==================== Globe (lazy, desktop only) ====================
+
+  function loadScriptOnce(src) {
+    return new Promise(function (resolve, reject) {
+      var existing = document.querySelector('script[src="' + src + '"]');
+      if (existing) { resolve(); return; }
+      var s = document.createElement("script");
+      s.src = src;
+      s.onload = function () { resolve(); };
+      s.onerror = function () { reject(new Error("Failed to load " + src)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function ensureThree() {
+    if (window.THREE) return Promise.resolve();
+    return loadScriptOnce("https://unpkg.com/three@0.160.0/build/three.min.js")
+      .then(function () { return loadScriptOnce("https://unpkg.com/earcut@2.2.4/dist/earcut.min.js"); });
+  }
+
+  function initGlobe() {
+    if (globe) return; // already initialized
+
+    globe = QMEarthGlobe.create(canvas, QMSubcontinent.globeOptions({
+      tooltipEl: tooltip,
+      // The hero stage is squarer than the registration one -- stand back a bit so Afghanistan and Maldives fit.
+      lockRegion: Object.assign({}, QMSubcontinent.LOCK, { distance: 11.6, minDistance: 9, maxDistance: 13.5 }),
+      onCountryPick: handleGlobePick,
+    }));
+    globe.resize();
+
+    QMSubcontinent.loadData().then(function (data) { QMSubcontinent.apply(globe, data); })
+      .catch(function (err) { console.error("Failed to load Sub-continent map", err); });
+
+    resetBtn.addEventListener("click", function () {
+      globe.resetView();
+      setBreadcrumb(null);
+      showMapLevel("earth");
+      switchTab("sub");
+    });
+  }
+
+  function handleGlobePick(feature) {
+    if (feature && feature.properties.qm_country_id === "SUBCONTINENT") switchTab("sub");
+  }
+
+  function showStaticPlaceholder() {
+    if (globePlaceholder) globePlaceholder.hidden = false;
+    if (earthSlot) earthSlot.hidden = true;
+    if (globeLiveChip) globeLiveChip.hidden = true;
+  }
+
+  (function setUpGlobeLoading() {
+    var isNarrow = window.matchMedia("(max-width: 639px)").matches;
+    if (isNarrow) {
+      showStaticPlaceholder();
+      return; // never fetch three.js/earcut, never init the globe, on narrow screens
+    }
+    if (!liveSection || !("IntersectionObserver" in window)) {
+      // No section to observe, or no IntersectionObserver support -- load right away rather than
+      // never showing a globe at all.
+      ensureThree().then(initGlobe).catch(function (e) { console.error("Globe failed to load", e); showStaticPlaceholder(); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          io.disconnect();
+          ensureThree().then(initGlobe).catch(function (e) { console.error("Globe failed to load", e); showStaticPlaceholder(); });
+        }
+      });
+    }, { rootMargin: "200px" });
+    io.observe(liveSection);
+  })();
 
   // ---- Map level: the Sub-continent globe, or India's own state map ----
   function showMapLevel(level) {
     earthSlot.hidden = level !== "earth";
     countrySlot.hidden = level !== "india";
     earthThumb.hidden = level === "earth";
-    if (level === "earth") globe.resize();
-    else if (indiaMap) indiaMap.resize();
+    if (level === "earth") {
+      if (globe) globe.resize();
+      else if (globePlaceholder) globePlaceholder.hidden = false; // narrow screens: no globe, show the static image
+    } else if (level === "india") {
+      if (globePlaceholder) globePlaceholder.hidden = true; // don't show the placeholder behind the India map
+      if (indiaMap) indiaMap.resize();
+    }
   }
   earthThumb.addEventListener("click", function () {
     showMapLevel("earth");
@@ -63,7 +149,8 @@
     breadcrumb.textContent = countryName ? QMSubcontinent.NAME + " › " + countryName : QMSubcontinent.NAME;
   }
 
-  // ---- Tabs ----
+  // ==================== Stats panel (tabs, country dropdown) -- unconditional ====================
+
   function switchTab(name) {
     tabSub.classList.toggle("is-active", name === "sub");
     tabCountry.classList.toggle("is-active", name === "country");
@@ -73,7 +160,6 @@
   tabSub.addEventListener("click", function () { switchTab("sub"); });
   tabCountry.addEventListener("click", function () { switchTab("country"); });
 
-  // ---- Stats rendering ----
   // Proportional bar rows (label · bar · count) instead of a plain list.
   function renderStatRows(container, pairs) {
     container.innerHTML = "";
@@ -186,20 +272,7 @@
     showCountryStats(country);
   });
 
-  function handleGlobePick(feature) {
-    if (feature && feature.properties.qm_country_id === "SUBCONTINENT") switchTab("sub");
-  }
-
-  resetBtn.addEventListener("click", function () {
-    globe.resetView();
-    setBreadcrumb(null);
-    showMapLevel("earth");
-    switchTab("sub");
-  });
-
   // ---- Data ----
-  QMSubcontinent.loadData().then(function (data) { QMSubcontinent.apply(globe, data); })
-    .catch(function (err) { console.error("Failed to load Sub-continent map", err); });
   fetch("/api/world-data").then(function (r) { return r.json(); }).then(function (data) {
     worldData = data;
     populateCountryDropdown();
