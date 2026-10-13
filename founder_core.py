@@ -199,11 +199,23 @@ def _seed_if_empty(conn) -> None:
 
 
 def _founder_account_id(conn) -> str:
-    """The live Account ID of whichever member currently has hide_identity set -- substituted into
-    `full_text`'s {founder_account_id} placeholder at read time (never baked into the stored text
-    itself, so it always reflects the real, current, searchable ID)."""
-    row = conn.execute("SELECT account_id FROM users WHERE hide_identity = 1 ORDER BY id LIMIT 1").fetchone()
-    return row["account_id"] if row else "(not yet set — see users.hide_identity)"
+    """The live 12-digit Account Search ID (account_ids.search_code, not users.account_id -- the
+    message says "12-digit", and search_code is the field that is actually 12 digits) of whichever
+    member currently has hide_identity set -- substituted into `full_text`'s {founder_account_id}
+    placeholder at read time (never baked into the stored text itself, so it always reflects the
+    real, current, searchable ID). Formatted as four groups of four digits in parentheses, e.g.
+    "(5863 0510 8292)", matching how the dashboard already displays this same field
+    (dash_extras.js's pv-search-code)."""
+    row = conn.execute(
+        """SELECT a.search_code FROM users u JOIN account_ids a ON a.user_id = u.id
+           WHERE u.hide_identity = 1 AND a.is_current = 1 AND a.search_code IS NOT NULL
+           ORDER BY u.id LIMIT 1"""
+    ).fetchone()
+    if not row:
+        return "(not yet set — see users.hide_identity)"
+    code = row["search_code"]
+    grouped = " ".join(code[i:i + 4] for i in range(0, len(code), 4))
+    return f"({grouped})"
 
 
 def get_message(conn, language: str = "en") -> dict | None:
