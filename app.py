@@ -228,7 +228,7 @@ def register():
 def about():
     """About Qumanity (Quantum + Humanity): vision, architecture, identity,
     timelines, Qoins, Quantum Punch governance, status and roadmap -- written
-    from the SITA Foundation manuscripts and briefs."""
+    from Qumanity's founding manuscripts and briefs."""
     return render_template("about.html")
 
 

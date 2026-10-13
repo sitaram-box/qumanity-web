@@ -139,12 +139,12 @@ def main():
         "CS.DL.5.4.1E", village_lookup("CS.DL.5.4.1E"),
     )
     admin_result = register(
-        client, name="Rohit Mudgal", gender="male", dob="1990-07-30", tob="07:05",
+        client, name="Admin Demo", gender="male", dob="1990-07-30", tob="07:05",
         language="Hindi", password=ADMIN_PASSWORD,
         birth_location=admin_birth, present_location=admin_present,
     )
     print(f"Admin created: {admin_result['private_id']}")
-    credential_rows.append(("Admin", "Rohit Mudgal", admin_result["private_id"], admin_result["account_id"], ADMIN_PASSWORD))
+    credential_rows.append(("Admin", "Admin Demo", admin_result["private_id"], admin_result["account_id"], ADMIN_PASSWORD))
     client.get("/logout")
 
     # ---- 5 demo users per state (185 total), sequential numbering ----
