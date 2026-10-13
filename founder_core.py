@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS founder_messages (
     published_at TEXT,
     is_active INTEGER NOT NULL DEFAULT 1
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_founder_messages_language
+    ON founder_messages(language);
 """
 
 PREVIEW_EN = (
@@ -61,15 +63,12 @@ So here is what I am actually asking, plainly and warmly: register. Claim your p
 def ensure_tables(conn) -> None:
     conn.executescript(SCHEMA)
     conn.commit()
-    _seed_if_empty(conn)
+    _seed_or_refresh(conn)
 
 
-def _seed_if_empty(conn) -> None:
-    existing = conn.execute("SELECT 1 FROM founder_messages WHERE language = 'en' LIMIT 1").fetchone()
-    if existing:
-        return
+def _seed_or_refresh(conn) -> None:
     conn.execute(
-        """INSERT INTO founder_messages (title, preview_text, full_text, language, published_at, is_active)
+        """INSERT OR REPLACE INTO founder_messages (title, preview_text, full_text, language, published_at, is_active)
            VALUES (?, ?, ?, 'en', ?, 1)""",
         ("Founder's Message", PREVIEW_EN, FULL_TEXT_EN, dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")),
     )
