@@ -1,5 +1,12 @@
 # Qumanity — Global Timeline, Registration & Kundali (standalone prototype)
 
+Copyright (C) 2026 Rohit Mudgal (individual).
+Qumanity Lok LLP is in registration. The IP will be
+assigned to the LLP once it is registered.
+
+Qumanity is licensed under the GNU Affero General Public
+License v3.0. See LICENSE for details.
+
 Homepage: a rotatable 3D Earth with **real continent shapes and country
 borders** (not dots) — click a country directly on the globe to select it,
 or use the "Search countries" fallback for tiny/hard-to-click nations.
