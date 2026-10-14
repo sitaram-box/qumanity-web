@@ -1,6 +1,6 @@
 # Qumanity architecture
 
-This describes the qumanity-web repository as of 11 October 2026. It is written for a developer who has not seen the code before. For setup see `docs/INSTALL.md` (planned), for the routes see `docs/API.md`, and for the tables see `docs/DATA_MODEL.md`.
+This describes the qumanity-web repository as of 11 October 2026, updated 14 October 2026. It is written for a developer who has not seen the code before. For setup see `docs/INSTALL.md`, for the routes see `docs/API.md`, and for the tables see `docs/DATA_MODEL.md`.
 
 ## Components
 
@@ -63,7 +63,7 @@ Every Python module at the repository root.
 | `review_core.py` | App tour status and the one-time member rating |
 | `logout_review_core.py` | Optional rating on logout, once per lunar cycle |
 | `recovery_core.py` | Forgotten PIN (one-time code) and forgotten Private ID (admin-reviewed) |
-| `founder_core.py` | The Founder's Message on the homepage, in 13 languages |
+| `founder_core.py` | The Founder's Message on the homepage, in English only |
 | `cycle_middleware.py` | Stamps every activity row with the current lunar `cycle_id` |
 | `pipeline_core.py` | Aggregates a cycle's activity and transfers it up one level (Village to Earth) |
 | `pipeline_scheduler.py` | Daily job that runs the pipeline on the lunar schedule, with a Year-1 bootstrap gate |

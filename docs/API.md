@@ -1,6 +1,6 @@
 # Qumanity API reference
 
-Every JSON route in qumanity-web's `app.py`, read from the code on 11 October 2026: 148 routes under `/api`. The website and the phone app call the same routes. `docs/phone_app_api.md` describes only the routes the phone app uses; this file covers all of them.
+Every JSON route in qumanity-web's `app.py`, read from the code on 11 October 2026 and updated on 14 October 2026: 149 routes under `/api`. The website and the phone app call the same routes. `docs/phone_app_api.md` describes only the routes the phone app uses; this file covers all of them.
 
 ## Conventions
 
@@ -13,26 +13,29 @@ Every JSON route in qumanity-web's `app.py`, read from the code on 11 October 20
 
 | Access | Meaning | Routes |
 |---|---|---|
-| Public | No sign-in needed | 39 |
-| Member | Signed-in member (`login_required`) | 68 |
+| Public | No sign-in needed | 37 |
+| Member | Signed-in member (`login_required`) | 70 |
 | Council or admin | Signed in, and an elected council member of the location (or the administrator) | 5 |
-| Admin | Signed in, and the member's Private ID is listed in `QM_ADMIN_PRIVATE_IDS`; anyone else gets 403 | 36 |
+| Admin | Signed in, and the member's Private ID is listed in `QM_ADMIN_PRIVATE_IDS`; anyone else gets 403 | 37 |
 
 Parameters list the query-string keys and JSON body keys the route reads. Response fields list the top-level keys of the JSON the route returns directly; "(built by a helper)" means the response object is assembled in a `*_core.py` module.
 
-## Access problems found while writing this reference
+## Access problems
 
-Routes marked ⚠ below. These are code gaps, recorded in Documents 07 and 10.
+One route still exposes member data without sign-in. It is marked ⚠ below and recorded in Document 07 (action 3) and Document 10 (10.2 row 3).
 
 | Route | Problem |
 |---|---|
-| `POST /api/admin/sync-folders` | Has no sign-in or admin check, despite its path. Anyone can trigger a full database-to-folder sync. |
-| `GET /api/user/zodiac/<int:user_id>` | Public. Returns any member's full birth chart, planetary positions and Moon-based analysis by numeric user ID. IDs are sequential, so every member's chart can be listed. |
-| `GET /api/user/kundali/summary/<int:user_id>` | Public. Returns any member's sun, moon and ascendant signs, nakshatra and kundali summary by user ID. |
-| `GET /kundali/<int:user_id>` (page) | Public. Shows the member's name with their chart. |
-| `GET /api/location/members/village/<path:village_id>` | Public. Lists names, gender and age category of a village's members (already Document 07, action 3). |
+| `GET /api/location/members/village/<path:village_id>` | Public. Lists names, gender and age category of a village's members. |
 
-Leftovers from the removed payment code: `/api/auth/register` still returns `donation` and `donation_error`, `/api/qoins/config` returns `max_donation`, and `/api/qoins/preview` returns a donation `topup` split. They carry no payment, but should be removed with the rest of the Razorpay code.
+Closed on 14 October 2026:
+
+| Route | Fix |
+|---|---|
+| `POST /api/admin/sync-folders` | Now requires sign-in and an admin check |
+| `GET /api/user/zodiac/<int:user_id>` | Now requires sign-in; returns 403 unless the ID is the signed-in member's own |
+| `GET /api/user/kundali/summary/<int:user_id>` | Same |
+| `GET /kundali/<int:user_id>` (page) | Same |
 
 ## Routes
 
@@ -51,7 +54,7 @@ Leftovers from the removed payment code: `/api/auth/register` still returns `don
 | POST | `/api/onboarding/tour` | Member |  | (built by a helper) |
 | GET/POST | `/api/profile/personal-details` | Member | body: `daughters_count`, `has_children`, `relationship_status`, `sons_count`, `work_profile`, `work_profile_other` | `status`, `relationship_status`, `has_children` |
 | POST | `/api/dashboard/edit-request` | Member | body: `reason` | `status` |
-| POST | `/api/auth/register` | Public | body: `assisted`, `birth_location`, `client`, `dob`, `email`, `gender`, `helper_pin`, `helper_private_id`, `language`, `name`, `phone`, `pin`, `present_location`, `tob` | `user_id`, `private_code`, `token`, `assisted`, `donation`, `donation_error` |
+| POST | `/api/auth/register` | Public | body: `assisted`, `birth_location`, `client`, `dob`, `email`, `gender`, `helper_pin`, `helper_private_id`, `language`, `name`, `phone`, `pin`, `present_location`, `tob` | `user_id`, `private_code`, `token`, `assisted` |
 
 ### Location data and statistics
 
@@ -69,7 +72,8 @@ Leftovers from the removed payment code: `/api/auth/register` still returns `don
 | GET | `/api/india-villages/<path:tehsil_id>` | Public |  | `tehsil_id`, `villages` |
 | GET | `/api/country/stats/<path:country_id>` | Public |  | (built by a helper) |
 | GET | `/api/continent/stats/<path:continent_id>` | Public |  | (built by a helper) |
-| GET | `/api/location/stats/<level>/<path:location_id>` | Public | query: `basis` | (built by a helper) |
+| GET | `/api/location/stats/<level>/<path:location_id>` | Public | query: `basis` | `level`, `location_id`, `basis`, `total_humans`, `gender`, `age_bands`, `elements`, `signs`, `karma_total`, `qoins_wallet_balance` (counts from 1 to 4 shown as `"<5"`) |
+| GET | `/api/location/stats/<level>/<path:location_id>.csv` | Public | query: `basis` | CSV with `metric,value` rows: the same fields and suppression |
 | GET | `/api/location/members/village/<path:village_id>` | Public ⚠ |  | `members` |
 | GET | `/api/earth/stats` | Public |  | (built by a helper) |
 | GET | `/api/location/elements/<path:location_id>` | Public | query: `type` | `location_id`, `location_type` |
@@ -80,9 +84,9 @@ Leftovers from the removed payment code: `/api/auth/register` still returns `don
 | Method | Path | Access | Parameters | Response fields |
 |---|---|---|---|---|
 | GET | `/api/timebox` | Member |  | (built by a helper) |
-| GET | `/api/user/zodiac/<int:user_id>` | Public ⚠ |  | (built by a helper) |
+| GET | `/api/user/zodiac/<int:user_id>` | Member (own ID only) |  | (built by a helper) |
 | GET | `/api/me/kundali` | Member |  | (built by a helper) |
-| GET | `/api/user/kundali/summary/<int:user_id>` | Public ⚠ |  | (built by a helper) |
+| GET | `/api/user/kundali/summary/<int:user_id>` | Member (own ID only) |  | (built by a helper) |
 | GET | `/api/zodiac/signs` | Public |  | (built by a helper) |
 | GET | `/api/zodiac/current` | Public |  | `date`, `sign`, `element` |
 | GET | `/api/zodiac/preview` | Public | query: `dob` | `sign`, `element`, `age_code`, `age_name` |
@@ -102,8 +106,8 @@ Leftovers from the removed payment code: `/api/auth/register` still returns `don
 |---|---|---|---|---|
 | GET | `/api/wallet/history` | Member |  | (built by a helper) |
 | GET | `/api/wallet/history/<location_type>/<path:location_id>` | Member |  | (built by a helper) |
-| GET | `/api/qoins/config` | Member |  | `currency`, `symbol`, `currency_name`, `denominations`, `max_donation` |
-| GET | `/api/qoins/preview` | Public | query: `amount` | `amount`, `qoins`, `topup` |
+| GET | `/api/qoins/config` | Member |  | `currency`, `symbol`, `currency_name`, `denominations`, `village_prices`, `paid_prices` |
+| GET | `/api/qoins/preview` | Public | query: `amount` | `amount`, `qoins` |
 | GET | `/api/wallet/balance` | Member |  | `balance_qoins`, `has_locked_share`, `transactions` |
 | GET | `/api/wallet/balance/<location_type>/<path:location_id>` | Public |  | `location_type`, `location_id`, `balance_qoins` |
 
@@ -242,4 +246,4 @@ Leftovers from the removed payment code: `/api/auth/register` still returns `don
 | POST | `/api/admin/pipeline/bootstrap/reset` | Admin | body: `confirm` | `confirm` |
 | POST | `/api/admin/pipeline/tick` | Admin | body: `simulate_date` | (built by a helper) |
 | GET | `/api/admin/pipeline/health` | Admin |  | (built by a helper) |
-| POST | `/api/admin/sync-folders` | Public ⚠ |  | (built by a helper) |
+| POST | `/api/admin/sync-folders` | Admin |  | (built by a helper) |
