@@ -169,8 +169,12 @@ body.hm {
   .hm-signin-panel { max-width: none; margin-left: 0; }
 }
 
-/* Globe's static placeholder (narrow screens, or while three.js loads) */
-.hm-globe-static { display: block; width: 100%; height: clamp(360px, 46vw, 560px); border-radius: 24px; object-fit: cover; }
+/* Globe's static placeholder (narrow screens, or while three.js loads). `display: block` must stay
+   scoped to :not([hidden]) -- an unscoped class rule beats the UA's [hidden]{display:none} on
+   specificity ties by source order, which was why the placeholder stayed visible under the globe
+   on desktop even with its `hidden` attribute set correctly by earth.js. */
+.hm-globe-static:not([hidden]) { display: block; }
+.hm-globe-static { width: 100%; height: clamp(360px, 46vw, 560px); border-radius: 24px; object-fit: cover; }
 
 /* Marquee */
 .hm-marquee { position: relative; overflow: hidden; padding: 16px 0; border-top: 1px solid var(--hm-line); background: rgba(5, 11, 20, 0.5); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }

@@ -1,5 +1,9 @@
 # Founder's Message: full translation into all 12 languages (2026-10-05)
 
+**Superseded 2026-10-14:** the Founder's Message was reverted to English-only (translations
+removed, per-page language switcher removed, seed script deleted). This doc is kept as a
+historical record of the 2026-10-05 decision only.
+
 Follows up on `docs/founders_message_2026_10.md`, which explicitly deferred this: *"The full
 ~1,500-word letter itself is still English-only."* The Founder reported the homepage language
 picker didn't carry over to `/founders-message`, and asked for a language switcher there plus a
@@ -21,8 +25,8 @@ real translated copy of the full letter in every language, not just the homepage
    - the closing three lines (जय श्री राम / Jai Hind / Jai Humanity) unchanged in every language —
      a deliberate choice, not an oversight: this is a fixed, nationwide patriotic closing, not
      ordinary prose to localize.
-   Seeded via a new one-off script, `scripts/seed_founder_message_i18n.py` (safe to re-run — it
-   UPSERTs by language), into the existing `founder_messages` table `founder_core.py` already had
+   Seeded via a new one-off per-language seed script (safe to re-run — it
+   UPSERTs by language; deleted 2026-10-14, see the superseded note above), into the existing `founder_messages` table `founder_core.py` already had
    ready for exactly this (`language` column, previously only an `'en'` row existed).
 
 2. **A language switcher on `/founders-message` itself** (`static/js/founders_message_i18n.js`,

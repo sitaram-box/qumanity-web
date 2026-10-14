@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="{{ message.language if message else 'en' }}" {{ 'dir="rtl"' | safe if message and message.language == 'ur' }}>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -21,10 +21,6 @@
       <p>Quantum + Humanity</p>
     </div>
     <nav class="qm-header-actions">
-      <div class="dq-pop" id="home-lang-wrap">
-        <button type="button" class="hm-lang-btn" id="home-lang-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Language" title="Language">🌐</button>
-        <ul class="dq-menu" id="home-lang-menu" role="listbox" hidden></ul>
-      </div>
       <a class="qm-btn qm-btn-ghost" href="{{ url_for('index') }}">← Home</a>
     </nav>
   </header>
@@ -46,6 +42,5 @@
     {% endif %}
   </main>
 
-  <script src="{{ url_for('static', filename='js/founders_message_i18n.js') }}"></script>
 </body>
 </html>

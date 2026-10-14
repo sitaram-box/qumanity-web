@@ -3,16 +3,19 @@ Message") and its own page. Stored in the database (not hardcoded in a template)
 updated or replaced later without a code change -- matches the Founder's own "Option B: CMS-driven"
 preference.
 
-This text (2026-10-13) replaces the earlier (2026-10-04) version. It was rewritten as a first-person
-story -- the spark at 21 in 2011, Teknomealer, Mozotek and ABAUT, e-mealer's turn toward the street,
-the i-naa pivot, and Qumanity from 2016 onward -- ending with a direct ask to register and take part.
-It deliberately keeps no name, no entity name, and no closing invocation, consistent with the
-message's own stated choice to stay anonymous ("I am not going to tell you my name"). All 13
-languages (English + 12 translations) are seeded, each independently translated to preserve the same
-voice and the same images (the wedding hall, the tea vendor, etc.) rather than being machine-literal.
-`{founder_account_id}` is substituted at read time by `get_message()` with the live Account ID of
-whichever user currently holds `users.hide_identity = 1` -- see social_core.display_identity() for
-why that account's name is never shown here or anywhere else a stranger could find it."""
+This text (2026-10-13, closing section added 2026-10-14) was rewritten as a first-person story --
+the spark at 21 in 2011, Teknomealer, Mozotek and ABAUT, e-mealer's turn toward the street, the i-naa
+pivot, and Qumanity from 2016 onward -- ending with a direct ask to register and take part, then a
+closing that explains why the founder's name stays private and gives the one way back to him: his
+Account Search ID on the platform. It deliberately keeps no name, no entity name, and no closing
+invocation, consistent with the message's own stated choice to stay anonymous ("I am not going to
+tell you my name").
+
+English only (2026-10-14): the 12 translations seeded by the now-deleted per-language seed script
+were removed, and `_seed_or_refresh()` writes only the 'en' row. `_founder_account_id()` below still computes the live
+Account Search ID dynamically (for a `{founder_account_id}` placeholder, if the closing is ever
+rewritten to use it again), but the current closing text has the ID written in directly, so that
+substitution is presently a no-op."""
 from __future__ import annotations
 
 import datetime as dt
@@ -57,7 +60,11 @@ It is ready enough now to need you.
 
 Every project I built before this depended on one person in one room, and that was always its limit. Qumanity cannot depend on one person, and it was never meant to. It only becomes real in the hands of millions of ordinary people who decide that their village, their skill, their vote, their voice, actually belongs somewhere permanent and fair.
 
-So here is what I am actually asking, plainly and warmly: register. Claim your place in the ledger. In the first week, you will see your own village's page for the first time, exactly as it exists today — who else is there, what they are raising their voice about, what is already being decided without you. Bring your village, your language, your craft, your vote. Teach someone. Plant something. Show up for an elder who is lonely. The work was never meant to end with the person who started it. It was always meant to end with every one of you beginning yours."""
+So here is what I am actually asking, plainly and warmly: register. Claim your place in the ledger. In the first week, you will see your own village's page for the first time, exactly as it exists today — who else is there, what they are raising their voice about, what is already being decided without you. Bring your village, your language, your craft, your vote. Teach someone. Plant something. Show up for an elder who is lonely. The work was never meant to end with the person who started it. It was always meant to end with every one of you beginning yours.
+
+I am keeping my name out of this for the same reason I started: a system built for fairness should not need you to trust a face, only to test whether it actually works. Qumanity was never meant to rest on one person's name, mine least of all. But I did promise you a way back to me, and I meant it. Register on Qumanity. Sign in. Then search the Account Search ID below — the same way you would look up anyone else on the platform — and you will find me. Send a message, a question, feedback, a partnership proposal, or simply tell me what is working and what is not. I read what reaches that ID myself.
+
+Qumanity Account Search ID: (5863 0510 8292)"""
 
 
 def ensure_tables(conn) -> None:

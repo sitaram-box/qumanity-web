@@ -113,17 +113,6 @@
       </div>
     </section>
 
-    <!-- ============ FOUNDER'S MESSAGE ============ -->
-    <section class="hm-section hm-founder-section" id="founder-message">
-      <div class="hm-wrap">
-        <div class="hm-panel hm-glass hm-founder-panel">
-          <h2 data-i18n="founder_msg_title">Founder's Message</h2>
-          <p class="hm-founder-preview" data-i18n="founder_preview">I have watched a mother skip her own meal so her child could eat, and a farmer stare at a drought-cracked field he can no longer afford to sow. I have watched a street dog flinch from every hand because not one of them has ever been kind. I am not writing to sell you anything. I am writing because I am done watching.</p>
-          <a class="hm-btn hm-btn-primary" href="{{ url_for('founders_message') }}" data-i18n="read_full_message">Read Full Message</a>
-        </div>
-      </div>
-    </section>
-
     <!-- ============ LIVE STATS ============ -->
     <section class="hm-section hm-live" id="live">
       <div class="hm-wrap hm-live-grid">
@@ -274,6 +263,17 @@
           <a class="hm-btn hm-btn-ghost hm-btn-lg" href="{{ url_for('about') }}">Read the full story</a>
         </div>
         <p class="hm-vasu">वसुधैव कुटुम्बकम् — the world is one family</p>
+      </div>
+    </section>
+
+    <!-- ============ FOUNDER'S MESSAGE (last block before the footer) ============ -->
+    <section class="hm-section hm-founder-section" id="founder-message">
+      <div class="hm-wrap">
+        <div class="hm-panel hm-glass hm-founder-panel">
+          <h2 data-i18n="founder_msg_title">Founder's Message</h2>
+          <p class="hm-founder-preview">I am not going to tell you my name. That was never the point of any of this, and by the end of this you will understand why — and how you can still reach me directly, if you want to.</p>
+          <a class="hm-btn hm-btn-primary" href="{{ url_for('founders_message') }}" data-i18n="read_full_message">Read Full Message</a>
+        </div>
       </div>
     </section>
   </main>
