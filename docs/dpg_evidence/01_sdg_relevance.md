@@ -1,7 +1,7 @@
 # Qumanity: Relevance to the UN Sustainable Development Goals
 
 **DPG Standard Indicator 1: Relevance to Sustainable Development Goals**
-Steward: SITA Foundation (Sekyor Intelligence Tantra Foundation), a not-for-profit company licensed under Section 8 of the Companies Act, 2013 (India).
+Current owner: Rohit Mudgal (individual). Legal entity Qumanity Lok LLP is in registration. The IP will be assigned to Qumanity Lok LLP once it is registered.
 Repositories: [qumanity-web](https://github.com/sitaram-box/qumanity-web) (Flask website and the single API backend) and [qumanity-app](https://github.com/sitaram-box/qumanity-app) (React Native / Expo phone app, a client of the same API).
 
 ## Contents
@@ -44,11 +44,11 @@ The five goals below are those suggested in the brief, and the review kept all f
 - **10.2:** By 2030, empower and promote the social, economic and political inclusion of all, irrespective of age, sex, disability, race, ethnicity, origin, religion or economic or other status.
 - **10.3:** Ensure equal opportunity and reduce inequalities of outcome, including by eliminating discriminatory laws, policies and practices and promoting appropriate legislation, policies and action in this regard.
 
-**How Qumanity advances these targets.** Registration is open to anyone and does not require payment. A member who registers without donating still receives one Qoin, the platform's community token. An existing member can register someone who lacks a device or literacy through assisted registration. The interface is translated into 12 Indian languages besides English, and each member chooses the language the interface uses (10.2). Leadership is spread rather than concentrated: each village runs one election cycle per zodiac sign and elects 24 leaders a year (12 signs × one man and one woman) (10.3).
+**How Qumanity advances these targets.** Registration is open to anyone and does not require payment. A member who registers without donating still receives one Qoin, the platform's community token. An existing member can register someone who lacks a device or literacy through assisted registration. The interface is available in 13 languages (English plus 12 Indian languages), and each member chooses the language the interface uses (10.2). The Founder's Message is currently in English only, with translations planned. Leadership is spread rather than concentrated: each village runs one election cycle per zodiac sign and elects 24 leaders a year (12 signs × one man and one woman) (10.3).
 
 **Concrete example.** A helper signs in and registers an elderly neighbour through assisted registration. The neighbour receives their own Private ID and PIN, and the helper is recorded as referrer. No payment is needed at any step.
 
-**Evidence:** [docs/donation_distribution.md](../donation_distribution.md), [docs/phone_app_api.md](../phone_app_api.md) (assisted registration), [docs/i18n_multilanguage_2026_10.md](../i18n_multilanguage_2026_10.md), [docs/zodiac_council_voting.md](../zodiac_council_voting.md).
+**Evidence:** [docs/qoins_earn_reference.md](../qoins_earn_reference.md), [docs/phone_app_api.md](../phone_app_api.md) (assisted registration), [docs/i18n_multilanguage_2026_10.md](../i18n_multilanguage_2026_10.md), [docs/zodiac_council_voting.md](../zodiac_council_voting.md).
 
 ## 4. SDG 11: Sustainable Cities and Communities
 
@@ -70,7 +70,7 @@ The five goals below are those suggested in the brief, and the review kept all f
 - **9.1:** Develop quality, reliable, sustainable and resilient infrastructure, including regional and transborder infrastructure, to support economic development and human well-being, with a focus on affordable and equitable access for all.
 - **9.c:** Significantly increase access to information and communications technology and strive to provide universal and affordable access to the Internet in least developed countries by 2020.
 
-**How Qumanity advances these targets.** Qumanity is shared digital civic infrastructure. One Flask backend serves both the website and the phone app through a single API, and the platform runs on a low-cost stack (SQLite, one server process), which keeps hosting costs affordable for a non-profit steward (9.1). Its location data covers the 10 countries of the Indian subcontinent, including UN-listed least developed countries such as Afghanistan and Myanmar. Participation needs only a phone with the app or a browser (9.c). While target 9.c's 2020 deadline has passed, its intent (universal and affordable ICT access) remains relevant and guides Qumanity's infrastructure choices.
+**How Qumanity advances these targets.** Qumanity is shared digital civic infrastructure. One Flask backend serves both the website and the phone app through a single API, and the platform runs on a low-cost stack (SQLite, one server process), which keeps hosting costs affordable for a small independent operator (9.1). Its location data covers the 10 countries of the Indian subcontinent, including UN-listed least developed countries such as Afghanistan and Myanmar. Participation needs only a phone with the app or a browser (9.c). While target 9.c's 2020 deadline has passed, its intent (universal and affordable ICT access) remains relevant and guides Qumanity's infrastructure choices.
 
 **Concrete example.** A member signs in on the phone app with their 9-digit Private ID and 5-digit PIN and uses the same account, wallet and boards as on the website. No email address is needed.
 
@@ -78,24 +78,23 @@ The five goals below are those suggested in the brief, and the review kept all f
 
 ## 6. SDG 17: Partnerships for the Goals
 
-**Targets addressed**
+**Target addressed**
 
-- **17.17:** Encourage and promote effective public, public-private and civil society partnerships, building on the experience and resourcing strategies of partnerships.
 - **17.18:** By 2020, enhance capacity-building support to developing countries, including for least developed countries and small island developing States, to increase significantly the availability of high-quality, timely and reliable data disaggregated by income, gender, age, race, ethnicity, migratory status, disability, geographic location and other characteristics relevant in national contexts.
 
-**How Qumanity advances these targets.** Each optional registration donation is split according to a published table among the eight location wallets of the new member's present-location chain (Village to Earth), the referrer and the new member. Location wallets are credited immediately and their balances are visible to everyone (17.17). For every location, Qumanity publishes counts of registered members broken down by gender and age band, without exposing individual records (17.18).
+**How Qumanity advances this target.** For every location from Village to Earth, Qumanity publishes aggregate statistics that anyone can read without signing in: the number of registered members, broken down by gender, four age bands, sun-sign element and sun sign, together with the location's collective karma score and the Qoin balance of its wallet. The data is disaggregated by gender, age and geographic location, three of the characteristics 17.18 names. The figures are counts only; no individual records are exposed (Document 06). Qumanity takes no payments: Qoins are earned through civic activity and are never bought.
 
-**Concrete example.** The public statistics endpoint (`/api/location/stats/<level>/<location_id>`, for example `/api/location/stats/district/<id>`) for any district or state returns total members, a gender breakdown and four age bands.
+**Concrete example.** `/api/location/stats/<level>/<location_id>` returns total members, a gender breakdown, four age bands, element counts and sign counts for any location, for example https://qumanity.in/api/location/stats/village/CS.DL.3.4.1A. `/api/karma/collective/<level>/<location_id>` and `/api/wallet/balance/<location_type>/<location_id>` return the location's collective karma and Qoin balance.
 
-**Evidence:** [docs/donation_distribution.md](../donation_distribution.md), [docs/transaction_history.md](../transaction_history.md), [docs/qoins_wallet_system.md](../qoins_wallet_system.md).
+**Evidence:** Document 06 (Mechanism for Extracting Non-PII Data), sections 6.2 and 6.6; [docs/qoins_earn_reference.md](../qoins_earn_reference.md) for how Qoins are earned.
 
 ## 7. Implementation status
 
-- **Running on the website:** registration, sign-in with Private ID and PIN, Collective Boards with vote-based escalation, Citizen Reports, announcements, karma, wallets and donation splits, public location statistics, and the 12-language interface.
+- **Running on the website:** registration, sign-in with Private ID and PIN, Collective Boards with vote-based escalation, Citizen Reports, announcements, karma, Qoin wallets (Qoins are earned only; payments were removed entirely), public location statistics, and the interface in 13 languages (English plus 12 Indian languages). The Founder's Message is currently in English only, with translations planned.
 - **Piloted:** zodiac council elections run in one pilot village (Rohini Sector 24, Delhi). Above village level, no elected councils exist yet, and Citizen Reports and announcements fall back to the Founder/Admin.
 - **Built, not yet active:** the lunar-cycle pipeline that moves records and aggregates level by level. By design it starts at Chaitra Navratri 2027, after a one-year bootstrap.
 - **Not built:** the distributed node network (PLNN) and kiosks described in the White Paper v4.0.
 
 ## 8. Summary
 
-Qumanity primarily advances SDG 16 (Peace, Justice and Strong Institutions), with supporting contributions to SDGs 10, 11, 9 and 17. Residents vote on local issues, which rise through eight location levels by score. Each elected council pair is one man and one woman. Citizen Reports carry a 10-day response deadline at every level. Aggregate statistics are public. These features target 16.6, 16.7 and 16.10 directly. The supporting goals rest on free and assisted registration in 13 languages (SDG 10), the same participation rules for rural and urban settlements (SDG 11), low-cost shared infrastructure serving web and mobile (SDG 9), and published donation splits and disaggregated location statistics (SDG 17).
+Qumanity primarily advances SDG 16 (Peace, Justice and Strong Institutions), with supporting contributions to SDGs 10, 11, 9 and 17. Residents vote on local issues, which rise through eight location levels by score. Each elected council pair is one man and one woman. Citizen Reports carry a 10-day response deadline at every level. Aggregate statistics are public. These features target 16.6, 16.7 and 16.10 directly. The supporting goals rest on free and assisted registration with an interface in 13 languages (English plus 12 Indian languages; the Founder's Message is currently in English only, with translations planned) (SDG 10), the same participation rules for rural and urban settlements (SDG 11), low-cost shared infrastructure serving web and mobile (SDG 9), and disaggregated public location statistics (SDG 17).
