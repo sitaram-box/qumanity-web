@@ -77,7 +77,7 @@ def _seed_or_refresh(conn) -> None:
     conn.execute(
         """INSERT OR REPLACE INTO founder_messages (title, preview_text, full_text, language, published_at, is_active)
            VALUES (?, ?, ?, 'en', ?, 1)""",
-        ("Founder's Message", PREVIEW_EN, FULL_TEXT_EN, dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")),
+        ("Qumanity Story", PREVIEW_EN, FULL_TEXT_EN, dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")),
     )
     conn.commit()
 
