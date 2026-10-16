@@ -6,7 +6,7 @@ currency; a Qoin is worth one of DENOMINATIONS only. A wallet stores an amount a
 """
 from __future__ import annotations
 
-DENOMINATIONS = (1, 2, 5, 10, 20, 50, 100, 200, 500)
+DENOMINATIONS = (1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000)
 MAX_DONATION = 200
 LEVELS = ("village", "tehsil", "district", "state", "zone", "country", "continent", "earth")
 
@@ -24,16 +24,25 @@ def currency_for(country_code: str):
     return CURRENCY.get((country_code or "").upper(), DEFAULT_CURRENCY)
 
 
-def to_qoins(amount: int) -> list[int]:
-    """Fewest Qoins, highest first. 289 -> [200, 50, 20, 10, 5, 2, 2]."""
+def to_qoins(amount: int, denominations: tuple[int, ...] | None = None) -> list[int]:
+    """Fewest Qoins, highest first. 289 -> [200, 50, 20, 10, 5, 2, 2]. `denominations` lets a
+    caller restrict the candidate set (wallet_core.split_qoin() breaks one Qoin into strictly
+    smaller pieces by passing only the denominations below it) -- defaults to the full canonical
+    list. Defensive: asserts the result actually sums back to the input, since a restricted or
+    future non-canonical denomination set could in principle leave a remainder the greedy pass
+    can't close (the full DENOMINATIONS list never does, by construction)."""
     amount = int(amount)
     if amount < 0:
         raise ValueError("Amount cannot be negative")
+    candidates = denominations if denominations is not None else DENOMINATIONS
     out = []
-    for d in sorted(DENOMINATIONS, reverse=True):
-        while amount >= d:
+    remaining = amount
+    for d in sorted(candidates, reverse=True):
+        while remaining >= d:
             out.append(d)
-            amount -= d
+            remaining -= d
+    if sum(out) != amount:
+        raise ValueError(f"to_qoins({amount}) could not represent the full amount with {candidates} -- got {out} (sums to {sum(out)})")
     return out
 
 
@@ -55,19 +64,52 @@ def topup_split(amount: int) -> dict:
     return {"own": own, "village": village, "own_qoins": to_qoins(own), "village_qoins": to_qoins(village)}
 
 
-# Reward when a positive-score post freezes at a level (value of the Qoin(s) credited to the author).
-FREEZE_REWARD = {"village": 1, "tehsil": 2, "district": 5, "state": 10, "zone": 20, "country": 50, "continent": 100}
-EARTH_WINNER = 500
-EARTH_PARTICIPANT = (100, 100)
+# Rupee reward range per level (2026-10-17 design): every positive-score post at a level, in a
+# given lunar cycle, is ranked against its peers at that same (level, cycle) and paid somewhere in
+# this range. The top tier (top_tier_count(n) posts, below) always earns the maximum; every rank
+# after that scales down linearly to the minimum, which only the single lowest-ranked positive
+# post actually receives. This REPLACES the old flat per-level FREEZE_REWARD/EARTH_WINNER/
+# EARTH_PARTICIPANT scheme (score-blind, and Earth's old winner-takes-500/participant-gets-200
+# special case) -- Earth is no longer special-cased; it just has the highest range, like every
+# other level.
+REWARD_RANGE_INR = {
+    "village": (1, 10), "tehsil": (10, 50), "district": (50, 100), "state": (100, 250),
+    "zone": (250, 500), "country": (500, 1000), "continent": (1000, 1500), "earth": (1500, 2000),
+}
 
 
-def post_reward(freeze_level: str, score: int, earth_winner: bool = False) -> list[int]:
-    """Qoin values credited to the author. Score <= 0 -> nothing (the post is removed to the author's Private timeline)."""
-    if score <= 0:
-        return []
-    if freeze_level == "earth":
-        return [EARTH_WINNER] if earth_winner else list(EARTH_PARTICIPANT)
-    return [FREEZE_REWARD[freeze_level]]
+def top_tier_count(n: int) -> int:
+    """How many of the `n` positive posts at a (level, cycle) earn the maximum reward (2026-10-17
+    variable top-tier rule, replacing an earlier fixed top-5). Flat at 1 for n <= 10. Above that,
+    divide by the largest power of ten strictly below n: the top tier grows from 1 up to 10 as n
+    climbs through a decade (11..100, 101..1000, ...), then resets to 1 the moment n crosses the
+    next power of ten -- a sawtooth, by design, not a bug: 99 -> 9, 100 -> 10, 101 -> 1."""
+    if n <= 10:
+        return 1
+    divisor = 1
+    while divisor * 10 < n:
+        divisor *= 10
+    return n // divisor
+
+
+def rank_reward_inr(rank: int, n: int, level: str) -> int:
+    """The rupee reward for the `rank`-th positive post (1 = highest score) out of `n` positive
+    posts settling at `level` in the same lunar cycle. The top `top_tier_count(n)` posts all earn
+    the level's maximum; every rank after that is spread linearly down to the minimum, which only
+    rank `n` (the single lowest-scoring positive post) receives exactly -- rank (k+1), the first
+    one below the top tier, is deliberately NOT pinned to the max; it starts the gradient one
+    step down. Computed with exact integer arithmetic throughout (never floats), floored: e.g. a
+    3-way split of Village's [1, 10] floors its middle value to 5, not a rounded-up 6."""
+    if not 1 <= rank <= n:
+        raise ValueError(f"rank {rank} out of range for n={n}")
+    min_inr, max_inr = REWARD_RANGE_INR[level]
+    k = top_tier_count(n)
+    if rank <= k:
+        return max_inr
+    position = rank - k            # 1..(n-k)
+    remaining = n - k
+    numerator = min_inr * remaining + (remaining - position) * (max_inr - min_inr)
+    return numerator // remaining
 
 
 # ---- what a post costs ----
