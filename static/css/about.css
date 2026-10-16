@@ -377,6 +377,37 @@ html { scroll-behavior: smooth; scroll-padding-top: 20px; }
 .ab-contact b { color: var(--qm-gold-text); font-weight: 600; }
 .ab-vasu { margin-top: 16px !important; font-size: 1.15rem !important; color: var(--qm-gold-text) !important; letter-spacing: 0.04em; }
 
+/* ---------- Stops (restructure, 2026-10-17) ---------- */
+.ab-content-stops { max-width: 900px; margin: 0 auto; padding: 40px var(--ab-gutter, clamp(20px, 3.2vw, 64px)) 80px; }
+.ab-stop-cta { margin-top: 18px; }
+.ab-stop-cta .qm-btn { text-decoration: none; }
+
+.ab-figure { margin: 22px auto; max-width: 380px; text-align: center; }
+.ab-figure img { width: 100%; height: auto; display: block; margin: 0 auto; }
+
+.ab-video-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 22px 0; }
+.ab-video-card { text-align: center; padding: 28px 18px; border: 2px dashed var(--qm-border); border-radius: 14px; background: var(--qm-panel-bg); }
+.ab-video-card .ab-ico { font-size: 2rem; margin-bottom: 10px; }
+.ab-video-card h4 { margin: 0 0 6px; font-size: 0.98rem; color: var(--qm-text); }
+.ab-video-card p { margin: 0 !important; font-size: 0.82rem !important; color: var(--qm-saffron) !important; font-weight: 700 !important; text-transform: uppercase; letter-spacing: 0.06em; }
+
+.ab-mark { display: block; margin: 8px auto 0; }
+
+.ab-collapse { margin: 22px 0 0; border-radius: 12px; border: 1px solid var(--qm-border); background: var(--qm-panel-bg); overflow: hidden; }
+.ab-collapse > summary { cursor: pointer; padding: 15px 52px 15px 18px; font-weight: 600; color: var(--qm-text); list-style: none; position: relative; }
+.ab-collapse > summary::-webkit-details-marker { display: none; }
+.ab-collapse > summary::after { content: "+"; position: absolute; right: 18px; top: 50%; transform: translateY(-50%); font-size: 1.4rem; color: var(--qm-saffron); transition: transform 0.2s; }
+.ab-collapse[open] > summary::after { transform: translateY(-50%) rotate(45deg); }
+.ab-collapse[open] { border-color: rgba(255, 153, 51, 0.5); }
+.ab-collapse-body { padding: 4px 20px 24px; }
+.ab-collapse-body .ab-section { padding: 8px 0 32px; }
+.ab-collapse-body .ab-section:last-child { padding-bottom: 8px; }
+
+@media (max-width: 760px) {
+  .ab-video-row { grid-template-columns: 1fr; }
+  .ab-content-stops { padding: 24px 16px 60px; }
+}
+
 /* ---------- Back to top ---------- */
 .ab-top {
   position: fixed; right: 22px; bottom: 22px; z-index: 50;

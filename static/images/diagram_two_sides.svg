@@ -1,0 +1,55 @@
+<svg viewBox="0 0 320 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="d2title d2desc">
+  <title id="d2title">The two sides of the coin</title>
+  <desc id="d2desc">A coin split into two halves: individual karma on one side, collective karma on the other, both at the same moment.</desc>
+  <text x="160" y="24" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" letter-spacing="1.5" fill="#C9900C">TWO SIDES OF ONE COIN</text>
+
+  <!-- Coin -->
+  <g>
+    <!-- left half: individual -->
+    <path d="M 160 60 A 100 100 0 0 0 160 260 Z" fill="#C9900C"/>
+    <!-- right half: collective -->
+    <path d="M 160 60 A 100 100 0 0 1 160 260 Z" fill="#E0631F"/>
+    <!-- rim -->
+    <circle cx="160" cy="160" r="100" fill="none" stroke="#1D2733" stroke-width="3"/>
+    <!-- centre divider -->
+    <line x1="160" y1="60" x2="160" y2="260" stroke="#1D2733" stroke-width="2.5"/>
+
+    <!-- milled-edge ticks around the rim -->
+    <g stroke="#1D2733" stroke-width="2">
+      <line x1="160" y1="60" x2="160" y2="52"/>
+      <line x1="160" y1="260" x2="160" y2="268"/>
+      <line x1="60" y1="160" x2="52" y2="160"/>
+      <line x1="260" y1="160" x2="268" y2="160"/>
+      <line x1="89" y1="89" x2="83" y2="83"/>
+      <line x1="231" y1="89" x2="237" y2="83"/>
+      <line x1="89" y1="231" x2="83" y2="237"/>
+      <line x1="231" y1="231" x2="237" y2="237"/>
+    </g>
+
+    <!-- left icon: one person -->
+    <g fill="#1D2733">
+      <circle cx="110" cy="140" r="14"/>
+      <path d="M 86 196 Q 110 160 134 196 Z"/>
+    </g>
+
+    <!-- right icon: three people (collective) -->
+    <g fill="#1D2733">
+      <circle cx="210" cy="132" r="11"/>
+      <path d="M 191 178 Q 210 150 229 178 Z"/>
+      <circle cx="185" cy="150" r="9"/>
+      <path d="M 170 186 Q 185 164 200 186 Z"/>
+      <circle cx="235" cy="150" r="9"/>
+      <path d="M 220 186 Q 235 164 250 186 Z"/>
+    </g>
+  </g>
+
+  <!-- labels under each half -->
+  <text x="14" y="292" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700" fill="#1D2733">Individual karma</text>
+  <text x="306" y="292" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700" fill="#1D2733">Collective karma</text>
+
+  <!-- caption -->
+  <text x="160" y="330" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#1D2733">
+    <tspan x="160" dy="0">Two sides of the same coin —</tspan>
+    <tspan x="160" dy="20">at the same point in time.</tspan>
+  </text>
+</svg>

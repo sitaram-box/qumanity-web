@@ -1,0 +1,45 @@
+<svg viewBox="0 0 320 516" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="d1title d1desc">
+  <title id="d1title">The eight levels</title>
+  <desc id="d1desc">Eight nested levels from Village to Earth, with decisions rising upward from the village.</desc>
+  <text x="160" y="26" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" letter-spacing="1.5" fill="#C9900C">THE EIGHT LEVELS</text>
+
+  <!-- Upward arrow shaft, behind the bars, on the left -->
+  <line x1="34" y1="432" x2="34" y2="64" stroke="#C9900C" stroke-width="5" stroke-linecap="round"/>
+  <polygon points="34,50 24,70 44,70" fill="#C9900C"/>
+
+  <!-- 8 bars, top = Earth, bottom = Village. bar_h=46, gap=8, start_y=58 -->
+  <!-- Earth -->
+  <rect x="58" y="58" width="246" height="46" rx="8" fill="#FFFFFF" stroke="#1D2733" stroke-width="2.5"/>
+  <text x="181" y="86" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#1D2733">Earth</text>
+
+  <!-- Continent -->
+  <rect x="58" y="112" width="246" height="46" rx="8" fill="#FFFFFF" stroke="#1D2733" stroke-width="2.5"/>
+  <text x="181" y="140" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#1D2733">Continent</text>
+
+  <!-- Country -->
+  <rect x="58" y="166" width="246" height="46" rx="8" fill="#FFFFFF" stroke="#1D2733" stroke-width="2.5"/>
+  <text x="181" y="194" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#1D2733">Country</text>
+
+  <!-- Zone -->
+  <rect x="58" y="220" width="246" height="46" rx="8" fill="#FFFFFF" stroke="#1D2733" stroke-width="2.5"/>
+  <text x="181" y="248" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#1D2733">Zone</text>
+
+  <!-- State -->
+  <rect x="58" y="274" width="246" height="46" rx="8" fill="#FFFFFF" stroke="#1D2733" stroke-width="2.5"/>
+  <text x="181" y="302" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#1D2733">State</text>
+
+  <!-- District -->
+  <rect x="58" y="328" width="246" height="46" rx="8" fill="#FFFFFF" stroke="#1D2733" stroke-width="2.5"/>
+  <text x="181" y="356" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#1D2733">District</text>
+
+  <!-- Tehsil -->
+  <rect x="58" y="382" width="246" height="46" rx="8" fill="#FFFFFF" stroke="#1D2733" stroke-width="2.5"/>
+  <text x="181" y="410" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#1D2733">Tehsil</text>
+
+  <!-- Village (highlighted, bottom = origin) -->
+  <rect x="58" y="436" width="246" height="46" rx="8" fill="#C9900C" stroke="#1D2733" stroke-width="2.5"/>
+  <text x="181" y="464" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#1D2733">Village</text>
+
+  <!-- Caption -->
+  <text x="160" y="498" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1D2733">Decisions rise from the village — they don't fall from above.</text>
+</svg>
