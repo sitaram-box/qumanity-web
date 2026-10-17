@@ -7,6 +7,8 @@ assigned to the LLP once it is registered.
 Qumanity is licensed under the GNU Affero General Public
 License v3.0. See LICENSE for details.
 
+For a step-by-step setup guide, see [docs/INSTALL.md](docs/INSTALL.md).
+
 Homepage: a rotatable 3D Earth with **real continent shapes and country
 borders** (not dots) — click a country directly on the globe to select it,
 or use the "Search countries" fallback for tiny/hard-to-click nations.
