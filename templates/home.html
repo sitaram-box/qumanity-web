@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Qumanity — Quantum + Humanity</title>
   <meta name="description" content="Qumanity — quantum plus humanity: a nested, transparent ledger of Space, Time and Consciousness. Verified identity, zodiac-rotating governance and an ethical Qoin economy, live across 10 countries of the Indian Sub-continent." />
-  <meta name="theme-color" content="#050b14" />
+  <meta name="theme-color" content="#0A1929" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}" />
@@ -40,7 +40,7 @@
           <button type="button" class="hm-lang-btn" id="home-lang-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Language" title="Language">🌐</button>
           <ul class="dq-menu" id="home-lang-menu" role="listbox" hidden></ul>
         </div>
-        <a class="hm-btn hm-btn-primary" href="{{ url_for('register') }}" data-i18n="register">Register</a>
+        <a class="qm-btn qm-btn-primary" href="{{ url_for('register') }}" data-i18n="register">Register</a>
         <button class="hm-burger" id="hm-burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="hm-links"><span></span><span></span><span></span></button>
       </div>
     </div>
@@ -50,35 +50,27 @@
 
     <!-- ============ HERO ============ -->
     <section class="hm-hero">
-      <div class="hm-aurora" aria-hidden="true"><i></i><i></i><i></i></div>
-      <div class="hm-hero-grid">
-        <div class="hm-hero-copy">
-          <p class="hm-chip"><span class="hm-chip-dot"></span> <span data-i18n="hero_chip">Quantum&nbsp;+&nbsp;Humanity</span></p>
-          <h1><span data-i18n="hero_title">The operating system for a conscious civilization.</span></h1>
-          <p class="hm-lead">
-            <span data-i18n="hero_lead">Qumanity is a nested, transparent ledger of Space, Time and Consciousness — where every
-            place has an address, every moment a rhythm, and every act of service a permanent record. Governance that
-            rotates with the cosmos. An economy that rewards contribution. A village that speaks to the planet.</span>
-          </p>
-          <div class="hm-cta-row">
-            <a class="hm-btn hm-btn-primary hm-btn-lg" href="{{ url_for('register') }}"><span data-i18n="hero_cta">Create your Qumanity account</span> <span aria-hidden="true">→</span></a>
-            <a class="hm-btn hm-btn-ghost hm-btn-lg" href="#live" data-i18n="hero_see_live">See it live</a>
-          </div>
-          <ul class="hm-trust">
-            <li><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/></svg>Stewarded by its founder</li>
-            <li><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Open &amp; auditable</li>
-            <li><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>Voluntary by design</li>
-          </ul>
+      <div class="hm-hero-glow" aria-hidden="true"></div>
+      <div class="hm-wrap hm-hero-inner">
+        <p class="hm-chip"><span class="hm-chip-dot"></span> <span data-i18n="hero_chip">Quantum&nbsp;+&nbsp;Humanity</span></p>
+        <h1><span data-i18n="hero_title">A fair account of every place, and everyone who calls it home.</span></h1>
+        <p class="hm-lead" data-i18n="hero_lead">Every village and every member has a verified place on one open record — where you live now, not just where you were born. Elections rotate by the zodiac calendar. Service is logged and, in time, rewarded. Nothing here needs to be re-verified, and nothing can quietly disappear.</p>
+        <div class="hm-cta-row hm-cta-center">
+          <a class="qm-btn qm-btn-primary qm-btn-lg" href="{{ url_for('register') }}"><span data-i18n="hero_cta">Create your account</span> <span aria-hidden="true">→</span></a>
+          <a class="qm-btn qm-btn-ghost qm-btn-lg" href="#live" data-i18n="hero_see_live">See who's here</a>
         </div>
+        <ul class="hm-trust">
+          <li><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/></svg>Built and stewarded by one founder</li>
+          <li><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Open &amp; auditable</li>
+          <li><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>Voluntary by design</li>
+        </ul>
 
-        <!-- Hero right column: inline sign-in -- the only sign-in entry point on the site (the
-             nav/footer "Login" links are gone). Reuses /login's own field markup, validation and
-             POST /login call almost verbatim; see home_signin.js. The interactive globe moved
-             down into Live Stats (#live), where it visualizes the same data that section shows --
-             see earth.js's lazy-loaded initGlobe(). -->
+        <!-- The homepage's only sign-in entry point (the nav/footer "Login" links are gone).
+             Reuses /login's own field markup, validation and POST /login call almost verbatim --
+             see home_signin.js. Element ids below are load-bearing; do not rename them. -->
         <div class="hm-signin-wrap" id="hm-signin-slot">
           <div class="hm-panel hm-glass hm-signin-panel">
-            <h3 class="hm-signin-title">Sign in to Qumanity</h3>
+            <h3 class="hm-signin-title">Already a member? Sign in</h3>
             <form id="hm-login-form" class="qm-form" novalidate>
               <label class="qm-field">
                 <span>🔢 9-digit Private ID</span>
@@ -92,7 +84,7 @@
             </form>
             <p class="qm-summary-error" id="hm-login-error" hidden></p>
             <div class="hm-signin-actions">
-              <a class="hm-btn hm-btn-ghost" href="{{ url_for('register') }}">Register / Create new account</a>
+              <a class="qm-btn qm-btn-ghost" href="{{ url_for('register') }}">New here? Register</a>
               <button type="button" class="hm-signin-forgot-btn" id="hm-forgot-btn" aria-expanded="false">Forgot Private ID or PIN?</button>
               <div class="hm-signin-forgot-links" id="hm-forgot-links" hidden>
                 <a href="{{ url_for('forgot_pin_page') }}">Forgot your PIN?</a>
@@ -113,52 +105,56 @@
       </div>
     </section>
 
-    <!-- ============ LIVE STATS ============ -->
-    <section class="hm-section hm-live" id="live">
-      <div class="hm-wrap hm-live-grid">
-        <div class="hm-live-copy">
-          <p class="hm-kicker">Live from Qumanity</p>
-          <h2>Who is here, right now.</h2>
-          <p class="hm-sub">
-            The Public Timeline is open across the Indian Sub-continent. Pick a country to see its registered humans by
-            gender, age, element and zodiac sign.
-          </p>
-          <p class="hm-fine">Live from Qumanity’s own data — not population or census figures.</p>
-          <div class="hm-countrylist" aria-hidden="true">
-            <span>India</span><span>Nepal</span><span>Bhutan</span><span>Bangladesh</span><span>Myanmar</span>
-            <span>Sri Lanka</span><span>Pakistan</span><span>Balochistan</span><span>Afghanistan</span><span>Maldives</span>
-          </div>
+    <!-- ============ THE PROBLEM, IN ONE LINE ============ -->
+    <section class="hm-section hm-problem">
+      <div class="hm-wrap">
+        <p class="hm-problem-line">Work goes unrecognized, voices go unheard, and the record of it quietly disappears.</p>
+      </div>
+    </section>
 
-          <!-- The interactive globe, moved here from the hero -- it visualizes the same registered-
-               member data this section shows. Lazy-loaded on scroll-into-view (desktop); on screens
-               under 640px it never loads three.js at all and shows the static image below instead --
-               see earth.js. -->
-          <div class="hm-globe-wrap" id="hm-globe-wrap">
-            <div class="hm-globe-glow" aria-hidden="true"></div>
-            <div class="hm-globe-card">
-              <div class="qm-earth-stage hm-stage" id="qm-zoom-stage">
-                <div class="qm-zoom-slot" id="qm-earth-slot">
-                  <canvas id="earth-canvas" aria-label="Interactive globe of the Indian Sub-continent"></canvas>
-                  <div class="qm-earth-controls"><button id="reset-view-btn" class="qm-btn qm-btn-ghost">Reset view</button></div>
-                  <div id="qm-breadcrumb" class="qm-breadcrumb">Indian Sub-continent</div>
-                  <div id="qm-tooltip" class="qm-tooltip" hidden></div>
-                </div>
-                <div class="qm-zoom-slot" id="qm-country-slot" hidden>
-                  <div id="qm-country-india-map"></div>
-                </div>
-                <div class="qm-zoom-nav">
-                  <button class="qm-zoom-thumb" id="qm-earth-thumb" type="button" title="Return to the Sub-continent map" hidden>🌏<span>Sub-continent</span></button>
-                </div>
+    <!-- ============ THE LIVE DATA (globe, stats panel, India Scoreboard) ============ -->
+    <section class="hm-section hm-live" id="live">
+      <div class="hm-wrap">
+        <p class="hm-kicker">Live from Qumanity</p>
+        <h2>Who is here, right now.</h2>
+        <p class="hm-sub">
+          The Public Timeline is open across the Indian Sub-continent. Pick a country to see its registered humans by
+          gender, age, element and zodiac sign.
+        </p>
+        <p class="hm-fine">Live from Qumanity’s own data — not population or census figures.</p>
+        <div class="hm-countrylist" aria-hidden="true">
+          <span>India</span><span>Nepal</span><span>Bhutan</span><span>Bangladesh</span><span>Myanmar</span>
+          <span>Sri Lanka</span><span>Pakistan</span><span>Balochistan</span><span>Afghanistan</span><span>Maldives</span>
+        </div>
+
+        <!-- The interactive globe -- a full-width moment on its own, above the stats panel rather than
+             squeezed beside it. Lazy-loaded on scroll-into-view (desktop); on screens under 640px it
+             never loads three.js at all and shows the static image below instead -- see earth.js. -->
+        <div class="hm-globe-wrap" id="hm-globe-wrap">
+          <div class="hm-globe-glow" aria-hidden="true"></div>
+          <div class="hm-globe-card">
+            <div class="qm-earth-stage hm-stage" id="qm-zoom-stage">
+              <div class="qm-zoom-slot" id="qm-earth-slot">
+                <canvas id="earth-canvas" aria-label="Interactive globe of the Indian Sub-continent"></canvas>
+                <div class="qm-earth-controls"><button id="reset-view-btn" class="qm-btn qm-btn-ghost">Reset view</button></div>
+                <div id="qm-breadcrumb" class="qm-breadcrumb">Indian Sub-continent</div>
+                <div id="qm-tooltip" class="qm-tooltip" hidden></div>
               </div>
-              <img class="hm-globe-static" id="qm-globe-placeholder" src="{{ url_for('static', filename='images/earth_texture.png') }}" alt="Map of the Earth" hidden />
-              <div class="hm-float hm-float-a"><b>10</b><span>countries</span></div>
-              <div class="hm-float hm-float-b"><b>700,000+</b><span>villages mapped</span></div>
-              <div class="hm-float hm-float-c" id="qm-globe-live-chip"><b><i class="hm-live-dot"></i> Live</b><span>drag to rotate</span></div>
+              <div class="qm-zoom-slot" id="qm-country-slot" hidden>
+                <div id="qm-country-india-map"></div>
+              </div>
+              <div class="qm-zoom-nav">
+                <button class="qm-zoom-thumb" id="qm-earth-thumb" type="button" title="Return to the Sub-continent map" hidden>🌏<span>Sub-continent</span></button>
+              </div>
             </div>
+            <img class="hm-globe-static" id="qm-globe-placeholder" src="{{ url_for('static', filename='images/earth_texture.png') }}" alt="Map of the Earth" hidden />
+            <div class="hm-float hm-float-a"><b data-count="10">10</b><span>countries</span></div>
+            <div class="hm-float hm-float-b"><b data-count="700000" data-suffix="+">700,000+</b><span>villages mapped</span></div>
+            <div class="hm-float hm-float-c" id="qm-globe-live-chip"><b><i class="hm-live-dot"></i> Live</b><span>drag to rotate</span></div>
           </div>
         </div>
 
-        <div class="hm-panel hm-glass" id="global-timeline-panel">
+        <div class="hm-panel hm-glass hm-stats-panel" id="global-timeline-panel">
           <div class="hm-tabs" role="tablist">
             <button class="hm-tab is-active" id="qm-tab-sub" type="button" role="tab">🌏 Sub-continent</button>
             <button class="hm-tab" id="qm-tab-country" type="button" role="tab">🏳️ Country</button>
@@ -194,86 +190,64 @@
             </div>
           </div>
         </div>
-      </div>
-    </section>
 
-    <!-- ============ INDIA SCOREBOARD (collapsible, under Live Stats) ============ -->
-    <section class="hm-section hm-sb-section" id="scoreboard">
-      <div class="hm-wrap">
-        <details class="hm-sb-details">
-          <summary><span class="hm-kicker">🇮🇳 India · Live Scoreboard</span> — every Zone and State, ranked</summary>
-          <div class="hm-sb-body">
-            <p class="hm-sub">Live member counts, ranked — tap any row to see that place on the Elemental Dashboard.</p>
-            <div class="hm-panel hm-glass hm-sb-panel">
-              <div class="hm-sb-total">
-                <b id="sb-total-count">0</b>
-                <span>Total Members in India</span>
-              </div>
-              <div class="hm-sb-cols">
-                <div class="hm-sb-col">
-                  <h3>🏆 Zones (Ranked)</h3>
-                  <ol class="hm-sb-list" id="sb-zones-list"></ol>
+        <!-- India Scoreboard -- a different view of the same data this section already shows, so it
+             lives here, not as a section of its own. Unchanged from its original behaviour. -->
+        <div class="hm-sb-wrap" id="scoreboard">
+          <details class="hm-sb-details">
+            <summary><span class="hm-kicker">🇮🇳 India · Live Scoreboard</span> — every Zone and State, ranked</summary>
+            <div class="hm-sb-body">
+              <p class="hm-sub">Live member counts, ranked — tap any row to see that place on the Elemental Dashboard.</p>
+              <div class="hm-panel hm-glass hm-sb-panel">
+                <div class="hm-sb-total">
+                  <b id="sb-total-count">0</b>
+                  <span>Total Members in India</span>
                 </div>
-                <div class="hm-sb-col">
-                  <h3>🏆 Top States</h3>
-                  <ol class="hm-sb-list" id="sb-states-list"></ol>
-                  <p class="hm-fine" id="sb-states-more" hidden></p>
+                <div class="hm-sb-cols">
+                  <div class="hm-sb-col">
+                    <h3>🏆 Zones (Ranked)</h3>
+                    <ol class="hm-sb-list" id="sb-zones-list"></ol>
+                  </div>
+                  <div class="hm-sb-col">
+                    <h3>🏆 Top States</h3>
+                    <ol class="hm-sb-list" id="sb-states-list"></ol>
+                    <p class="hm-fine" id="sb-states-more" hidden></p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </details>
-      </div>
-    </section>
-
-    <!-- ============ NUMBERS ============ -->
-    <section class="hm-numbers" aria-label="Qumanity in numbers">
-      <div class="hm-wrap">
-        <div class="hm-num"><b data-count="10">10</b><span>countries on the Public Timeline</span></div>
-        <div class="hm-num"><b data-count="700000" data-suffix="+">700,000+</b><span>villages in nested containers</span></div>
-        <div class="hm-num"><b data-count="4">4</b><span>Timelines of life</span></div>
-        <div class="hm-num"><b data-count="24">24</b><span>leaders per village, per year</span></div>
-        <div class="hm-num"><b data-count="3">3</b><span>ledgers: Space · Time · Consciousness</span></div>
-      </div>
-    </section>
-
-    <!-- ============ SERVICES (teaser only -- full module list on About) ============ -->
-    <section class="hm-section hm-alt" id="services">
-      <div class="hm-wrap">
-        <header class="hm-head">
-          <p class="hm-kicker">Everyday life</p>
-          <h2>Everything a community needs, on one ledger.</h2>
-          <p class="hm-sub">Nothing has to be re-verified and nothing can quietly vanish. <a href="{{ url_for('about') }}#services">See every module →</a></p>
-        </header>
-      </div>
-    </section>
-
-    <!-- ============ FINAL CTA ============ -->
-    <section class="hm-final">
-      <div class="hm-aurora hm-aurora-soft" aria-hidden="true"><i></i><i></i></div>
-      <div class="hm-wrap">
-        <h2>We are not building an app.<br />We are building an epoch.</h2>
-        <p>Thinkers, engineers, farmers, teachers, dreamers — there is a place for you here.</p>
-        <blockquote class="hm-final-quote">
-          “Qumanity is not a product. It is a promise — that technology can serve humanity, not exploit it.”
-          <cite>Stewarded by the founding team · Spiritual technology for planetary healing</cite>
-        </blockquote>
-        <div class="hm-cta-row hm-cta-center">
-          <a class="hm-btn hm-btn-primary hm-btn-lg" href="{{ url_for('register') }}">Create your account <span aria-hidden="true">→</span></a>
-          <a class="hm-btn hm-btn-ghost hm-btn-lg" href="{{ url_for('about') }}">Read the full story</a>
+          </details>
         </div>
-        <p class="hm-vasu">वसुधैव कुटुम्बकम् — the world is one family</p>
       </div>
     </section>
 
-    <!-- ============ FOUNDER'S MESSAGE (last block before the footer) ============ -->
+    <!-- ============ THE FOUNDER'S VOICE ============ -->
     <section class="hm-section hm-founder-section" id="founder-message">
       <div class="hm-wrap">
         <div class="hm-panel hm-glass hm-founder-panel">
+          <p class="hm-kicker">The founder's voice</p>
           <h2 data-i18n="founder_msg_title">Qumanity Story</h2>
           <p class="hm-founder-preview">This is the story of Qumanity — a story about an idea that started small and grew into something much bigger. All over the world, people often feel unseen: work goes unrecognized, voices go unheard, and the trust between people and the systems meant to serve them keeps quietly breaking down.</p>
-          <a class="hm-btn hm-btn-primary" href="{{ url_for('founders_message') }}" data-i18n="read_full_message">Read Full Message</a>
+          <a class="qm-btn qm-btn-primary" href="{{ url_for('founders_message') }}" data-i18n="read_full_message">Read Full Message</a>
         </div>
+      </div>
+    </section>
+
+    <!-- ============ THE INVITATION ============ -->
+    <section class="hm-final">
+      <div class="hm-final-glow" aria-hidden="true"></div>
+      <div class="hm-wrap">
+        <h2>There is a place for you here.</h2>
+        <p>Thinkers, engineers, farmers, teachers, dreamers — Qumanity is built one village, one member, at a time.</p>
+        <blockquote class="hm-final-quote">
+          “Qumanity is not a product. It is a promise — that technology can serve people, not use them.”
+          <cite>Stewarded by its founder</cite>
+        </blockquote>
+        <div class="hm-cta-row hm-cta-center">
+          <a class="qm-btn qm-btn-primary qm-btn-lg" href="{{ url_for('register') }}">Create your account <span aria-hidden="true">→</span></a>
+          <a class="qm-btn qm-btn-ghost qm-btn-lg" href="{{ url_for('about') }}">Read the full story</a>
+        </div>
+        <p class="hm-vasu">वसुधैव कुटुम्बकम् — the world is one family</p>
       </div>
     </section>
   </main>
@@ -283,9 +257,9 @@
     <div class="hm-wrap hm-foot-grid">
       <div>
         <a class="hm-brand" href="{{ url_for('index') }}"><img src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="" /><span>Qumanity</span></a>
-        <p>Quantum + Humanity. A nested, transparent ledger of Space, Time and Consciousness — for humanity, harmony &amp; peace.</p>
+        <p>Quantum + Humanity. One open record of people and places — kept honest, kept permanent.</p>
       </div>
-      <div><h4>Explore</h4><a href="{{ url_for('about') }}#why">Vision</a><a href="{{ url_for('about') }}#triune">How it works</a><a href="{{ url_for('about') }}#punch">Governance</a><a href="{{ url_for('about') }}#qoins">Qoins</a><a href="{{ url_for('about') }}#roadmap">Roadmap</a></div>
+      <div><h4>Explore</h4><a href="{{ url_for('about') }}#why">Vision</a><a href="{{ url_for('about') }}#triune">How it works</a><a href="{{ url_for('about') }}#punch">Governance</a><a href="{{ url_for('about') }}#qoins">Qoins</a><a href="{{ url_for('about') }}#roadmap">Roadmap</a><a href="{{ url_for('about') }}#services">Every module</a></div>
       <div><h4>Account</h4><a href="{{ url_for('register') }}">Register</a><a href="#hm-signin-slot">Sign in</a><a href="{{ url_for('elements_dashboard') }}">Elements</a></div>
       <div><h4>Learn more</h4><a href="{{ url_for('about') }}">About Qumanity</a><a href="{{ url_for('about') }}#faq">Questions &amp; answers</a><a href="{{ url_for('about') }}#people">About the Founder</a></div>
     </div>
