@@ -16,63 +16,29 @@
   var STEPS = [
     {
       key: "tabs", tab: null, selector: ".qm-dash-tabs",
-      title: "Four Timelines of your life on Qumanity",
-      body: "🌍 Global — Earth, your Continent and Country. 🏘️ Public — where you live now, Zone down to Village. ❤️ Personal — your Family, Friends and Business groups. 🔒 Private — your own profile, wallet and settings.",
+      title: "This is where it starts.",
+      body: "Four timelines of your life, side by side: Global, Public, Personal, Private. Everything else in Qumanity happens inside one of these four.",
     },
     {
-      key: "global", tab: "global", selector: "#global-root-tabs",
-      title: "Global: Earth → Continent → Country",
-      body: "Switch between the whole planet, your continent, and your own country. The map on the left follows whichever you pick.",
+      key: "board", tab: "public", selector: "#bd-public-board .bd-feed",
+      title: "Your village has a voice. This is it.",
+      body: "Post something, and your neighbours vote it up or down for seven days. A strong score carries it past the village, all the way up to Earth.",
     },
     {
-      key: "public", tab: "public", selector: "#public-root-tabs",
-      title: "Public: Zone → State → District → Tehsil → Village",
-      body: "These tiers are exactly the present location you chose when you registered — your own Zone, State, District, Tehsil and Village, nested inside each other.",
+      key: "reports", tab: "private", selector: "#qm-myreports-card",
+      title: "When something needs fixing, say so.",
+      body: "File a Citizen Report here when something needs the council's attention — they have ten days to reply, and you'll watch it happen right on this page. Council announcements reach you the same way, through the bell at the top of your screen.",
     },
     {
-      key: "personal", tab: "personal", selector: "#qm-dash-personal",
-      title: "Personal Account",
-      body: "The people you choose yourself: Family, Friends, Business and any Custom group you create. Separate from the location-based Global/Public timelines.",
+      key: "wallet", tab: "private", selector: "#qm-wallet-card",
+      title: "What you give, kept.",
+      body: "Qoins for the work you do, Karma for how your village sees you — both counted here, in your own ledger. Nothing in it is ever quietly rewritten.",
     },
     {
-      key: "private", tab: "private", selector: "#qm-dash-private .pv-hero",
-      title: "Private Account",
-      body: "Your own details page: identity, locations, zodiac, wallet, Karma and language — visible only to you.",
-    },
-    {
-      key: "language", tab: "private", selector: "#ui-lang-btn",
-      title: "Language switcher",
-      body: "Change the language shown across Qumanity any time, from here.",
-    },
-    {
-      key: "timebox", tab: "private", selector: "#timebox-btn",
-      title: "Time-box",
-      body: "The current time, weather and Vedic calendar for where you live.",
-    },
-    {
-      key: "voting", tab: "public", selector: "#qm-elections-card",
-      title: "Village Council Voting (Q-Punch)",
-      body: "When your zodiac sign's month comes around, stand as a candidate or vote here for your village's next leaders.",
-    },
-    {
-      key: "post", tab: "public", selector: "#bd-public-board .bd-compose",
-      title: "Post to the Collective Board",
-      body: "Share something with your group. Neighbours vote it up or down for 7 days — a strong score can lift it all the way up to Earth.",
-    },
-    {
-      key: "qpunch", tab: "public", selector: "#bd-public-board .bd-qp",
-      title: "Q-Punch council",
-      body: "See who leads this group's council seats, and register as a volunteer.",
-    },
-    {
-      key: "groups", tab: "public", selector: "#bd-public-board .bd-groups",
-      title: "Groups",
-      body: "Village societies and sub-groups meeting here.",
-    },
-    {
-      key: "stats", tab: "public", selector: "#qm-dp-stats-content",
-      title: "Statistics",
-      body: "Live member counts, gender, age, element and zodiac-sign breakdowns for wherever you're looking.",
+      key: "next", tab: "public", selector: "#bd-public-board",
+      title: "Now make it real.",
+      body: "Write your first post, cast a vote on someone else's, or file a report — whichever feels most like you today. This whole board is waiting for exactly that.",
+      nextLabel: "Let's go →",
     },
   ];
 
@@ -161,7 +127,7 @@
     skip.addEventListener("click", function () { endTour("skipped"); });
     actions.appendChild(skip);
     var next = document.createElement("button");
-    next.type = "button"; next.className = "qm-btn qm-btn-primary"; next.textContent = "Next →";
+    next.type = "button"; next.className = "qm-btn qm-btn-primary"; next.textContent = step.nextLabel || "Next →";
     next.addEventListener("click", function () { advance(); });
     actions.appendChild(next);
     popup.appendChild(actions);
