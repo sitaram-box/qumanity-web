@@ -229,6 +229,17 @@ def registered_user_stats_from_rows(rows) -> dict:
     }
 
 
+def _suppress_small_birth_count(value):
+    """Same rule as app.py's _suppress_small_count (1-4 -> "<5", 0 stays 0) -- duplicated here,
+    not imported, to avoid a circular import (app.py imports elemental_core, not the reverse).
+    Applied ONLY to birth_users (2026-10-17): a single person born in a small village would
+    otherwise be individually identifiable the same way an unsuppressed total_users would be.
+    total_users on this same endpoint is intentionally NOT suppressed here -- that's a separate,
+    already-tracked gap (docs/dpg_evidence/06_non_pii_data_extraction.md's own action item 5),
+    not something this change touches."""
+    return "<5" if isinstance(value, int) and 0 < value < 5 else value
+
+
 def location_elements_row_to_dict(row) -> dict:
     total = row["total_users"] or 0
     pct = lambda n: round(100 * n / total, 1) if total else 0.0
@@ -236,6 +247,7 @@ def location_elements_row_to_dict(row) -> dict:
         "location_id": row["location_id"],
         "location_type": row["location_type"],
         "total_users": total,
+        "birth_users": _suppress_small_birth_count(row["birth_users"] or 0),
         "fire_count": row["fire_count"], "fire_percentage": pct(row["fire_count"]),
         "earth_count": row["earth_count"], "earth_percentage": pct(row["earth_count"]),
         "air_count": row["air_count"], "air_percentage": pct(row["air_count"]),
