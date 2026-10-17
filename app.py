@@ -2186,7 +2186,8 @@ def api_subcontinent_districts():
 @app.route("/api/subcontinent/stats")
 def api_subcontinent_stats():
     """Registered-user demographics for everyone whose birth (default) or
-    present location is in one of the 9 Sub-continent countries."""
+    present location is in one of the 9 Sub-continent countries. Small-count
+    suppression applied -- see _suppress_registered_user_stats."""
     column = "present_location_json" if request.args.get("basis") == "present" else "birth_location_json"
     marks = ",".join("?" for _ in SUBCONTINENT_COUNTRY_IDS)
     conn = get_db()
@@ -2198,7 +2199,8 @@ def api_subcontinent_stats():
         SUBCONTINENT_COUNTRY_IDS,
     ).fetchall()
     conn.close()
-    return jsonify(elemental_core.registered_user_stats_from_rows(rows))
+    stats = elemental_core.registered_user_stats_from_rows(rows)
+    return jsonify(_suppress_registered_user_stats(stats))
 
 
 @app.route("/api/scoreboard/india")
@@ -2302,10 +2304,31 @@ def _suppress_small_count(value):
     return "<5" if isinstance(value, int) and 0 < value < 5 else value
 
 
+def _suppress_registered_user_stats(stats):
+    """Applies _suppress_small_count to every person-count field in a
+    registered_user_stats_from_rows()-shaped dict: total_humans, gender,
+    age_bands and elements/signs. Shared by _location_stats_payload and
+    /api/subcontinent/stats so the same five-field suppression isn't
+    copy-pasted a third time."""
+    return {
+        "total_humans": _suppress_small_count(stats["total_humans"]),
+        "gender": {k: _suppress_small_count(v) for k, v in stats["gender"].items()},
+        "age_bands": [{**band, "count": _suppress_small_count(band["count"])} for band in stats["age_bands"]],
+        "elements": {k: _suppress_small_count(v) for k, v in stats["elements"].items()},
+        "signs": {k: _suppress_small_count(v) for k, v in stats["signs"].items()},
+    }
+
+
 def _location_stats_payload(conn, level, location_id, basis):
     """Shared aggregation behind both /api/location/stats/<level>/<id> (JSON) and its
     .csv sibling below -- same query, same small-count suppression (see
-    _suppress_small_count), same fields, just two different response formats."""
+    _suppress_small_count), same fields, just two different response formats.
+
+    karma_total and qoins_wallet_balance are omitted entirely (not suppressed to "<5",
+    not nulled) whenever the raw, pre-suppression total_humans is between 1 and 4 --
+    a wallet's rupee balance is private (see the comment above api_wallet_balance), so
+    summing it for a 1-4-person location would reveal those few members' own money,
+    even though the person-count fields around it are suppressed."""
     column = "present_location_json" if basis == "present" else "birth_location_json"
     rows = conn.execute(
         f"""SELECT u.id, u.gender, u.dob, z.sun_sign, z.sun_element
@@ -2315,34 +2338,34 @@ def _location_stats_payload(conn, level, location_id, basis):
         ("$." + level + ".id", location_id),
     ).fetchall()
     stats = elemental_core.registered_user_stats_from_rows(rows)
+    raw_total_humans = stats["total_humans"]
 
-    user_ids = [row["id"] for row in rows]
-    karma_total = 0
-    qoins_wallet_balance = 0
-    if user_ids:
-        placeholders = ",".join("?" for _ in user_ids)
-        karma_total = conn.execute(
-            f"SELECT COALESCE(SUM(points), 0) AS total FROM karma_entries WHERE user_id IN ({placeholders})",
-            user_ids,
-        ).fetchone()["total"]
-        qoins_wallet_balance = conn.execute(
-            f"SELECT COALESCE(SUM(balance_qoins), 0) AS total FROM wallets "
-            f"WHERE owner_type = 'user' AND owner_id IN ({placeholders})",
-            [str(uid) for uid in user_ids],
-        ).fetchone()["total"]
-
-    return {
+    payload = {
         "level": level,
         "location_id": location_id,
         "basis": basis,
-        "total_humans": _suppress_small_count(stats["total_humans"]),
-        "gender": {k: _suppress_small_count(v) for k, v in stats["gender"].items()},
-        "age_bands": [{**band, "count": _suppress_small_count(band["count"])} for band in stats["age_bands"]],
-        "elements": {k: _suppress_small_count(v) for k, v in stats["elements"].items()},
-        "signs": {k: _suppress_small_count(v) for k, v in stats["signs"].items()},
-        "karma_total": karma_total,
-        "qoins_wallet_balance": qoins_wallet_balance,
+        **_suppress_registered_user_stats(stats),
     }
+
+    if not (0 < raw_total_humans < 5):
+        user_ids = [row["id"] for row in rows]
+        karma_total = 0
+        qoins_wallet_balance = 0
+        if user_ids:
+            placeholders = ",".join("?" for _ in user_ids)
+            karma_total = conn.execute(
+                f"SELECT COALESCE(SUM(points), 0) AS total FROM karma_entries WHERE user_id IN ({placeholders})",
+                user_ids,
+            ).fetchone()["total"]
+            qoins_wallet_balance = conn.execute(
+                f"SELECT COALESCE(SUM(balance_qoins), 0) AS total FROM wallets "
+                f"WHERE owner_type = 'user' AND owner_id IN ({placeholders})",
+                [str(uid) for uid in user_ids],
+            ).fetchone()["total"]
+        payload["karma_total"] = karma_total
+        payload["qoins_wallet_balance"] = qoins_wallet_balance
+
+    return payload
 
 
 @app.route("/api/location/stats/<level>/<path:location_id>")
@@ -2398,8 +2421,10 @@ def api_location_stats_csv(level, location_id):
         rows.append(("element." + element_name.lower(), count))
     for sign_name, count in payload["signs"].items():
         rows.append(("sun_sign." + sign_name, count))
-    rows.append(("karma_total", payload["karma_total"]))
-    rows.append(("qoins_wallet_balance", payload["qoins_wallet_balance"]))
+    if "karma_total" in payload:
+        rows.append(("karma_total", payload["karma_total"]))
+    if "qoins_wallet_balance" in payload:
+        rows.append(("qoins_wallet_balance", payload["qoins_wallet_balance"]))
 
     buf = io.StringIO()
     writer = csv.writer(buf)

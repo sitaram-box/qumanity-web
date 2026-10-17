@@ -229,30 +229,46 @@ def registered_user_stats_from_rows(rows) -> dict:
     }
 
 
-def _suppress_small_birth_count(value):
+def _suppress_small_count(value):
     """Same rule as app.py's _suppress_small_count (1-4 -> "<5", 0 stays 0) -- duplicated here,
     not imported, to avoid a circular import (app.py imports elemental_core, not the reverse).
-    Applied ONLY to birth_users (2026-10-17): a single person born in a small village would
-    otherwise be individually identifiable the same way an unsuppressed total_users would be.
-    total_users on this same endpoint is intentionally NOT suppressed here -- that's a separate,
-    already-tracked gap (docs/dpg_evidence/06_non_pii_data_extraction.md's own action item 5),
-    not something this change touches."""
+    Used for every person-count this module returns: total_users, birth_users, each element
+    count in location_elements_row_to_dict, and the zone/state/total_members counts in
+    india_scoreboard. The rule is identical regardless of which population is being counted."""
     return "<5" if isinstance(value, int) and 0 < value < 5 else value
 
 
 def location_elements_row_to_dict(row) -> dict:
     total = row["total_users"] or 0
     pct = lambda n: round(100 * n / total, 1) if total else 0.0
+
+    def suppressed_count_and_pct(raw_count):
+        """A count's percentage is nulled whenever the count itself is suppressed -- a
+        percentage computed from a small population re-identifies exactly as the count did
+        (e.g. "66.7%" in a 3-member village implies the total is 3 and the count is 2), so
+        suppressing the count but leaving its percentage would undo the suppression."""
+        count = raw_count or 0
+        percentage = pct(count)
+        if 0 < count < 5:
+            return "<5", None
+        return count, percentage
+
+    fire_count, fire_percentage = suppressed_count_and_pct(row["fire_count"])
+    earth_count, earth_percentage = suppressed_count_and_pct(row["earth_count"])
+    air_count, air_percentage = suppressed_count_and_pct(row["air_count"])
+    water_count, water_percentage = suppressed_count_and_pct(row["water_count"])
+    space_count, space_percentage = suppressed_count_and_pct(row["space_count"])
+
     return {
         "location_id": row["location_id"],
         "location_type": row["location_type"],
-        "total_users": total,
-        "birth_users": _suppress_small_birth_count(row["birth_users"] or 0),
-        "fire_count": row["fire_count"], "fire_percentage": pct(row["fire_count"]),
-        "earth_count": row["earth_count"], "earth_percentage": pct(row["earth_count"]),
-        "air_count": row["air_count"], "air_percentage": pct(row["air_count"]),
-        "water_count": row["water_count"], "water_percentage": pct(row["water_count"]),
-        "space_count": row["space_count"], "space_percentage": pct(row["space_count"]),
+        "total_users": _suppress_small_count(total),
+        "birth_users": _suppress_small_count(row["birth_users"] or 0),
+        "fire_count": fire_count, "fire_percentage": fire_percentage,
+        "earth_count": earth_count, "earth_percentage": earth_percentage,
+        "air_count": air_count, "air_percentage": air_percentage,
+        "water_count": water_count, "water_percentage": water_percentage,
+        "space_count": space_count, "space_percentage": space_percentage,
         "updated_at": row["updated_at"],
     }
 
@@ -262,7 +278,11 @@ def india_scoreboard(conn, india_states_data: dict, top_n: int = 10) -> dict:
     `total_users`, and the top `top_n` States ranked the same way -- all from
     `location_elements` (already kept current by `update_location_stats` on every
     registration), joined against `india_states.json`'s zone/state names for display. A
-    zone/state with no members yet is still listed, at 0."""
+    zone/state with no members yet is still listed, at 0.
+
+    Sorting, ranking and the total_members sum all use the raw counts -- small-count
+    suppression (_suppress_small_count) is applied only at the end, to the values actually
+    returned, so a suppressed "<5" string never has to be sorted or summed."""
     totals = {
         (r["location_type"], r["location_id"]): r["total_users"]
         for r in conn.execute("SELECT location_type, location_id, total_users FROM location_elements WHERE location_type IN ('zone', 'state')")
@@ -280,9 +300,16 @@ def india_scoreboard(conn, india_states_data: dict, top_n: int = 10) -> dict:
     for rank, s in enumerate(states, 1):
         s["rank"] = rank
     total_members = sum(z["total_users"] for z in zones)
+
+    top_states = states[:top_n]
+    for z in zones:
+        z["total_users"] = _suppress_small_count(z["total_users"])
+    for s in top_states:
+        s["total_users"] = _suppress_small_count(s["total_users"])
+
     return {
-        "total_members": total_members,
+        "total_members": _suppress_small_count(total_members),
         "zones": zones,
-        "states": states[:top_n],
+        "states": top_states,
         "states_total_count": len(states),
     }
