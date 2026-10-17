@@ -81,7 +81,13 @@ def active_window(conn, now: dt.datetime | None = None) -> dict | None:
 
 
 def _demo_voters(conn) -> list[int]:
-    return [r[0] for r in conn.execute("SELECT id FROM users WHERE is_demo = 1 AND is_removed = 0")]
+    """Scoped to the 50 named board-test accounts (scripts/seed_demo_voters.py), not every
+    is_demo=1 row -- is_demo alone also matches stray/manual demo accounts that were never
+    part of this testing cycle (e.g. users 25/26, 'Demo User'/'Demo Account'). Used by
+    monthly_post_job, weekly_vote_job and panel_data, so this one scope change covers all three."""
+    return [r[0] for r in conn.execute(
+        "SELECT id FROM users WHERE is_demo = 1 AND is_removed = 0 AND name LIKE 'Demo Voter %'"
+    )]
 
 
 def _random_vote(vote_distribution: dict) -> int:
