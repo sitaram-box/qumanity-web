@@ -2477,7 +2477,8 @@ def api_location_members(village_id):
 
 @app.route("/api/earth/stats")
 def api_earth_stats():
-    """Same registered-user demographics, Earth-wide (no location filter)."""
+    """Same registered-user demographics, Earth-wide (no location filter). Small-count
+    suppression applied -- see _suppress_registered_user_stats."""
     conn = get_db()
     rows = conn.execute(
         """SELECT u.gender, u.dob, z.sun_sign, z.sun_element
@@ -2485,7 +2486,8 @@ def api_earth_stats():
            WHERE u.is_demo = 0 AND u.is_removed = 0"""
     ).fetchall()
     conn.close()
-    return jsonify(elemental_core.registered_user_stats_from_rows(rows))
+    stats = elemental_core.registered_user_stats_from_rows(rows)
+    return jsonify(_suppress_registered_user_stats(stats))
 
 
 # ---- Zodiac / kundali / elemental API (Part 5 of the zodiac architecture brief) ----
