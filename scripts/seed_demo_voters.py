@@ -115,6 +115,18 @@ def create_users(n: int) -> list[dict]:
     conn = get_db()
     conn.executemany("UPDATE users SET is_demo = 1 WHERE id = ?", [(m["id"],) for m in new_made])
     conn.commit()
+    if new_made:
+        # Each registration call above incremented location_elements via update_location_stats()
+        # (it runs unconditionally at registration, before is_demo is ever set) -- undo that
+        # footprint now by rebuilding the table from only real (is_demo=0, is_removed=0) users,
+        # the same recompute scripts/backfill_location_elements.py uses. A full recompute (not a
+        # hand-computed decrement) means this stays correct even if location_elements had other,
+        # unrelated staleness, and is naturally idempotent: a re-run with no new demo users
+        # corrects nothing, since nothing new was added to undo.
+        import elemental_core
+        result = elemental_core.recompute_location_elements(conn)
+        print(f"location_elements rebuilt from {result['real_users_counted']} real user(s) -- "
+              f"{result['rows_before']} row(s) -> {result['rows_after']} row(s).")
     conn.close()
     return existing + new_made
 

@@ -106,6 +106,90 @@ def update_location_stats(conn, birth_location: dict, sun_element: str) -> None:
     conn.commit()
 
 
+def recompute_location_elements(conn, dry_run: bool = False) -> dict:
+    """Full, correct rebuild of location_elements (2026-10-17, corrected 2026-10-17 later the same
+    day): total_users counts PRESENT-location members only -- a user born in village A and living
+    in village B is a member of B, not A; A gets no total_users credit for them at all. birth_users
+    is separate, metadata-only -- "how many real users (is_demo=0, is_removed=0) were born here" --
+    never counted toward total_users, never driving membership/voting/participation (voting and
+    updates have always been present-location-only; this just makes the stored aggregate agree with
+    that, instead of silently tracking a different population). The elemental breakdown
+    (fire/earth/air/water_count) reflects present-location members too, for the same reason: those
+    are the location's actual members. A FIRST version of this function (committed nowhere, only
+    ever a local uncommitted diff) used birth_location for everything, which was the underlying bug
+    this corrects -- not update_location_stats() itself (still birth-location-keyed, unchanged,
+    since that increments at registration time for a different, still-valid purpose: "where did
+    this location's people come from," tracked independently of where they live now).
+
+    DELETEs every row and reinserts only locations with a nonzero total_users OR birth_users (a
+    location can have one without the other -- a birth-only location, like someone's home village
+    they no longer live in, still deserves a row with total_users=0, birth_users>0, not no row at
+    all). india_scoreboard()/location_elements_row_to_dict() already default a missing row's
+    total_users to 0, so dropping a location with neither population is still handled correctly by
+    every existing caller.
+
+    dry_run=True computes and returns everything exactly as a real run would, but rolls back
+    instead of committing -- the DB is left completely untouched. The returned "new_rows" dict IS
+    the would-be post-recompute state either way, so a caller never needs to re-query the table
+    after a dry run to see what WOULD have changed (it can't -- nothing changed)."""
+    import datetime as dt
+
+    present_rows = conn.execute(
+        """SELECT u.present_location_json, z.sun_element FROM users u
+           JOIN user_zodiac z ON z.user_id = u.id
+           WHERE u.is_demo = 0 AND u.is_removed = 0"""
+    ).fetchall()
+    birth_rows = conn.execute(
+        "SELECT birth_location_json FROM users WHERE is_demo = 0 AND is_removed = 0"
+    ).fetchall()
+
+    tallies: dict[tuple[str, str], dict[str, int]] = {}
+
+    def _bucket(key):
+        return tallies.setdefault(key, {"Fire": 0, "Earth": 0, "Air": 0, "Water": 0, "total": 0, "birth": 0})
+
+    for row in present_rows:
+        present_location = json.loads(row["present_location_json"])
+        sun_element = row["sun_element"]
+        for key in location_levels_for(present_location):
+            t = _bucket(key)
+            if sun_element in t:
+                t[sun_element] += 1
+            t["total"] += 1
+
+    for row in birth_rows:
+        birth_location = json.loads(row["birth_location_json"])
+        for key in location_levels_for(birth_location):
+            _bucket(key)["birth"] += 1
+
+    before_count = conn.execute("SELECT COUNT(*) FROM location_elements").fetchone()[0]
+    now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    conn.execute("DELETE FROM location_elements")
+    for (location_id, location_type), t in tallies.items():
+        conn.execute(
+            """INSERT INTO location_elements (location_id, location_type, fire_count, earth_count,
+                                               air_count, water_count, space_count, total_users,
+                                               birth_users, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)""",
+            (location_id, location_type, t["Fire"], t["Earth"], t["Air"], t["Water"], t["total"], t["birth"], now),
+        )
+    if dry_run:
+        conn.rollback()
+    else:
+        conn.commit()
+
+    return {
+        "real_users_counted": len(present_rows),
+        "rows_before": before_count,
+        "rows_after": len(tallies),
+        "new_rows": {
+            key: {"total_users": t["total"], "birth_users": t["birth"], "fire_count": t["Fire"],
+                  "earth_count": t["Earth"], "air_count": t["Air"], "water_count": t["Water"]}
+            for key, t in tallies.items()
+        },
+    }
+
+
 def registered_user_stats_from_rows(rows) -> dict:
     """Registered-user demographics for one location (country, continent,
     or the whole Earth — the caller decides via its SQL WHERE clause, this
