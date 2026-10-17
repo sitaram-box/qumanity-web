@@ -2193,7 +2193,8 @@ def api_subcontinent_stats():
     rows = conn.execute(
         f"""SELECT u.gender, u.dob, z.sun_sign, z.sun_element
            FROM users u JOIN user_zodiac z ON z.user_id = u.id
-           WHERE json_extract(u.{column}, '$.country.id') IN ({marks})""",
+           WHERE json_extract(u.{column}, '$.country.id') IN ({marks})
+             AND u.is_demo = 0 AND u.is_removed = 0""",
         SUBCONTINENT_COUNTRY_IDS,
     ).fetchall()
     conn.close()
@@ -2263,7 +2264,8 @@ def api_country_stats(country_id):
     rows = conn.execute(
         """SELECT u.gender, u.dob, z.sun_sign, z.sun_element
            FROM users u JOIN user_zodiac z ON z.user_id = u.id
-           WHERE json_extract(u.birth_location_json, '$.country.id') = ?""",
+           WHERE json_extract(u.birth_location_json, '$.country.id') = ?
+             AND u.is_demo = 0 AND u.is_removed = 0""",
         (country_id,),
     ).fetchall()
     conn.close()
@@ -2278,7 +2280,8 @@ def api_continent_stats(continent_id):
     rows = conn.execute(
         """SELECT u.gender, u.dob, z.sun_sign, z.sun_element
            FROM users u JOIN user_zodiac z ON z.user_id = u.id
-           WHERE json_extract(u.birth_location_json, '$.continent.id') = ?""",
+           WHERE json_extract(u.birth_location_json, '$.continent.id') = ?
+             AND u.is_demo = 0 AND u.is_removed = 0""",
         (continent_id,),
     ).fetchall()
     conn.close()
@@ -2307,7 +2310,8 @@ def _location_stats_payload(conn, level, location_id, basis):
     rows = conn.execute(
         f"""SELECT u.id, u.gender, u.dob, z.sun_sign, z.sun_element
            FROM users u JOIN user_zodiac z ON z.user_id = u.id
-           WHERE json_extract(u.{column}, ?) = ?""",
+           WHERE json_extract(u.{column}, ?) = ?
+             AND u.is_demo = 0 AND u.is_removed = 0""",
         ("$." + level + ".id", location_id),
     ).fetchall()
     stats = elemental_core.registered_user_stats_from_rows(rows)
@@ -2452,7 +2456,8 @@ def api_earth_stats():
     conn = get_db()
     rows = conn.execute(
         """SELECT u.gender, u.dob, z.sun_sign, z.sun_element
-           FROM users u JOIN user_zodiac z ON z.user_id = u.id"""
+           FROM users u JOIN user_zodiac z ON z.user_id = u.id
+           WHERE u.is_demo = 0 AND u.is_removed = 0"""
     ).fetchall()
     conn.close()
     return jsonify(elemental_core.registered_user_stats_from_rows(rows))
