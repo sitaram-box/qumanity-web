@@ -76,7 +76,7 @@ Closed on 14 October 2026:
 | GET | `/api/location/stats/<level>/<path:location_id>.csv` | Public | query: `basis` | CSV with `metric,value` rows: the same fields and suppression |
 | GET | `/api/location/members/village/<path:village_id>` | Public ⚠ |  | `members` |
 | GET | `/api/earth/stats` | Public |  | (built by a helper) |
-| GET | `/api/location/elements/<path:location_id>` | Public | query: `type` | `location_id`, `location_type` |
+| GET | `/api/location/elements/<path:location_id>` | Public | query: `type` | `location_id`, `location_type`, `total_users`, `birth_users`, `<element>_count`, `<element>_percentage` (counts from 1 to 4 shown as `"<5"`, with the matching percentage `null`) |
 | GET | `/api/global/elements` | Public |  | `earth`, `all_locations` |
 
 ### Astrology, lunar calendar and time
@@ -108,8 +108,8 @@ Closed on 14 October 2026:
 | GET | `/api/wallet/history/<location_type>/<path:location_id>` | Member |  | (built by a helper) |
 | GET | `/api/qoins/config` | Member |  | `currency`, `symbol`, `currency_name`, `denominations`, `village_prices`, `paid_prices` |
 | GET | `/api/qoins/preview` | Public | query: `amount` | `amount`, `qoins` |
-| GET | `/api/wallet/balance` | Member |  | `balance_qoins`, `has_locked_share`, `transactions` |
-| GET | `/api/wallet/balance/<location_type>/<path:location_id>` | Public |  | `location_type`, `location_id`, `balance_qoins` |
+| GET | `/api/wallet/balance` | Member |  | `balance_qoins`, `qoin_count`, `has_locked_share`, `transactions` |
+| GET | `/api/wallet/balance/<location_type>/<path:location_id>` | Public |  | `location_type`, `location_id`, `qoin_count`; also `balance_qoins` for that location's council or the administrator |
 
 ### Collective Boards, sub-groups and reactions
 

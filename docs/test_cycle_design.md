@@ -2,8 +2,8 @@
 
 Reference design for a one-year, automated demo-user testing cycle that exercises the
 Collective Board's post → vote → reward → freeze/elevate → recognition-star path end to end.
-**This document is a design reference, not yet implemented.** Nothing described here has been
-written to code; it is the basis for a future implementation pass once approved.
+**Implemented on 17 October 2026** (`test_cycle_scheduler.py`, migration 017). This document is
+the design reference.
 
 ---
 
@@ -304,9 +304,8 @@ principle as every other count in this design.
 
 ## 9. The seed script change
 
-`scripts/seed_demo_voters.py`'s `DEFAULT_N` changes from `20` to `50` (the script itself, proposed
-earlier in this task, has not yet been written to disk — this is a change to that still-pending
-proposal, not a diff against an existing file).
+`scripts/seed_demo_voters.py`'s `DEFAULT_N` is `50` (changed from the earlier `20` proposed in
+this document; the script is written and in the repository).
 
 After seeding, the script additionally creates the `testing_windows` row:
 ```python
@@ -360,9 +359,8 @@ test-post design: retirement never touches `board_votes`, never touches anything
 
 ## What this document does not cover
 
-Per the task rules, this is a design reference only — no migration file, no scheduler module, no
-UI changes, and no changes to `scripts/seed_demo_voters.py` have been written yet. The two
-pending-but-unwritten scripts from the earlier round (`seed_demo_voters.py`,
-`retire_demo_voters.py`) still need their own review before anything in this document builds on
-top of them. This document also does not touch the quantum-qualities work or the DPG evidence
-pack.
+Implemented on 17 October 2026: migration 017, `test_cycle_scheduler.py`, and
+`scripts/seed_demo_voters.py` (50 demo voters, `is_demo=1`). `scripts/retire_demo_voters.py`
+(§11's retirement path) is still unwritten — a demo user can be retired today only by hand,
+setting `is_removed=1` directly. This document also does not touch the quantum-qualities work or
+the DPG evidence pack.
