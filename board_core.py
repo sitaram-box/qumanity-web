@@ -100,15 +100,19 @@ def group_for(chain: list[dict], level: str):
     return next((g for g in chain if g["level"] == level), None)
 
 
-def _open_window(conn, author_id, chain, idx, content, origin_id, now):
+def _open_window(conn, author_id, chain, idx, content, origin_id, now, post_kind="member", is_demo_post=False):
+    """post_kind/is_demo_post are written in THIS SAME INSERT, never by a follow-up UPDATE --
+    is_test is computed from post_kind right here in SQL (1 only when post_kind='test'), so the
+    invariant is_test == (post_kind == 'test') holds from the instant the row exists; there is no
+    window, however small, where a test post could exist without its test flag set (2026-10-17)."""
     g = chain[idx]
     end = now + dt.timedelta(days=WINDOW_DAYS[g["level"]])
     cur = conn.execute(
         """INSERT INTO board_posts (author_id, level, group_id, group_name, content, status, score, voting_start, voting_end,
-                                    origin_post_id, chain_json, created_at, cycle_id)
-           VALUES (?, ?, ?, ?, ?, 'active', 0, ?, ?, ?, ?, ?, ?)""",
+                                    origin_post_id, chain_json, created_at, cycle_id, post_kind, is_test, is_demo_post)
+           VALUES (?, ?, ?, ?, ?, 'active', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (author_id, g["level"], g["id"], g["name"], content, _iso(now), _iso(end), origin_id, json.dumps(chain), _iso(now),
-         cycle_middleware.get_active_cycle_id(conn)),
+         cycle_middleware.get_active_cycle_id(conn), post_kind, 1 if post_kind == "test" else 0, 1 if is_demo_post else 0),
     )
     return cur.lastrowid
 
@@ -116,9 +120,14 @@ def _open_window(conn, author_id, chain, idx, content, origin_id, now):
 PAID_LEVELS = ("tehsil", "district", "state", "zone")  # text-only paid posting; Country/Continent/Earth are broadcast + voting only
 
 
-def create_post(conn, user_id, present_location, content, level="village", now=None):
+def create_post(conn, user_id, present_location, content, level="village", now=None, post_kind="member", is_demo_post=False):
     """Village posting is free. Tehsil→Zone posting is a paid text-only service (qoin_core.post_price);
-    the price is debited from the poster's wallet before the post opens for voting."""
+    the price is debited from the poster's wallet before the post opens for voting.
+
+    post_kind/is_demo_post (2026-10-17): 'member' (default, every existing caller) | 'test'
+    (Admin-tagged or scheduler-created -- see test_cycle_scheduler.py and the tagging route in
+    app.py). A real member never passes these; only the Admin's tagging route and the test-cycle
+    scheduler ever pass post_kind='test'."""
     import wallet_core
     now = now or dt.datetime.now(dt.timezone.utc)
     content = (content or "").strip()
@@ -142,9 +151,37 @@ def create_post(conn, user_id, present_location, content, level="village", now=N
         if balance < price:
             raise ValueError(f"Posting here costs {price} Qoins and your wallet has {balance}")
         wallet_core._credit(conn, "user", str(user_id), -price, f"Paid post at {LEVEL_LABEL[level]}")
-    pid = _open_window(conn, user_id, chain, idx, content, None, now)
+    pid = _open_window(conn, user_id, chain, idx, content, None, now, post_kind=post_kind, is_demo_post=is_demo_post)
     conn.commit()
     return pid
+
+
+def create_council_update(conn, user_id, present_location, content, level="village", now=None):
+    """A council update (2026-10-17, Path 2: independent of announcements_core.py) is never a
+    proposal -- no voting window is opened at all. status='published', a value settle()'s own
+    `WHERE status = 'active'` query never matches, so a council update is never picked up by
+    settle(), never freezes, never elevates, never gets a reward or a recognition star.
+    voting_start/voting_end are NOT NULL columns on board_posts with no meaning for this
+    post_kind -- set to `now` itself and never read for a council update."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    content = (content or "").strip()
+    if not content:
+        raise ValueError("Write something to post")
+    if len(content) > MAX_POST_CHARS:
+        raise ValueError(f"Posts can be at most {MAX_POST_CHARS} characters")
+    chain = chain_of(present_location)
+    g = group_for(chain, level)
+    if not g:
+        raise ValueError("You have no group at this level")
+    cur = conn.execute(
+        """INSERT INTO board_posts (author_id, level, group_id, group_name, content, status, score, voting_start, voting_end,
+                                    origin_post_id, chain_json, created_at, cycle_id, post_kind, is_test, is_demo_post)
+           VALUES (?, ?, ?, ?, ?, 'published', 0, ?, ?, NULL, ?, ?, ?, 'council_update', 0, 0)""",
+        (user_id, g["level"], g["id"], g["name"], content, _iso(now), _iso(now), json.dumps(chain), _iso(now),
+         cycle_middleware.get_active_cycle_id(conn)),
+    )
+    conn.commit()
+    return cur.lastrowid
 
 
 def settle(conn, now=None):
@@ -183,7 +220,8 @@ def settle(conn, now=None):
         for p in posts:
             if p["score"] < 0:
                 conn.execute("UPDATE board_posts SET status='removed' WHERE id=?", (p["id"],))
-                _penalty_karma(conn, p, level)
+                if p["post_kind"] != "test":
+                    _penalty_karma(conn, p, level)
             elif p["score"] == 0:
                 # Zero-score posts freeze (2026-10-17 change, was 'removed'): a neutral, visible,
                 # permanent record -- no reward, no recognition star, no karma either way.
@@ -195,25 +233,39 @@ def settle(conn, now=None):
             rank = i + 1
             reward_inr = qoin_core.rank_reward_inr(rank, n, level)
             label = f"Post cleared {LEVEL_LABEL[level]} (rank {rank}/{n}, score {p['score']:+d})"
-            wallet_core.credit_qoins(
-                conn, "user", str(p["author_id"]), reward_inr, label,
-                rupee_value=reward_inr, related_post_id=p["id"],
-            )
-            if level == "village":
-                karma_core.add_individual_karma(conn, p["author_id"], "noncommercial", reward_inr, label)
+            if p["post_kind"] == "test":
+                # Decision 2 (2026-10-17, docs/test_cycle_design.md): a test post's reward is
+                # computed and displayed (the frozen test record in board.js), but the real
+                # wallet is never credited, no karma is written, and no recognition star is
+                # written. Stored directly on the post -- there is no wallet_transactions row
+                # for a test post to look the reward back up from (no credit_qoins() call means
+                # no row at all).
+                conn.execute("UPDATE board_posts SET test_reward_inr = ? WHERE id = ?", (reward_inr, p["id"]))
             else:
-                karma_core.bump_collective_karma(conn, p["group_id"], level, reward_inr, label)
-            conn.execute(
-                """INSERT INTO recognition_stars (post_id, author_id, level, location_id, score, created_at, cycle_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (p["id"], p["author_id"], level, p["group_id"], p["score"], _iso(now), cycle_id),
-            )
+                wallet_core.credit_qoins(
+                    conn, "user", str(p["author_id"]), reward_inr, label,
+                    rupee_value=reward_inr, related_post_id=p["id"],
+                )
+                if level == "village":
+                    karma_core.add_individual_karma(conn, p["author_id"], "noncommercial", reward_inr, label)
+                else:
+                    karma_core.bump_collective_karma(conn, p["group_id"], level, reward_inr, label)
+                conn.execute(
+                    """INSERT INTO recognition_stars (post_id, author_id, level, location_id, score, created_at, cycle_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (p["id"], p["author_id"], level, p["group_id"], p["score"], _iso(now), cycle_id),
+                )
 
             chain = json.loads(p["chain_json"])
             idx = next((j for j, g in enumerate(chain) if g["level"] == level), None)
             nxt = idx + 1 if idx is not None and idx + 1 < len(chain) else None
             if p["score"] >= THRESHOLD[level] and nxt is not None:
-                new_id = _open_window(conn, p["author_id"], chain, nxt, p["content"], p["id"], _parse(p["voting_end"]))
+                # post_kind/is_demo_post MUST travel with the post as it elevates (2026-10-17) --
+                # without this, a test post's next-level post silently reverts to post_kind=
+                # 'member' (the default), immediately visible to real members, votable by
+                # anyone, and real-rewarded, defeating the entire point of testing elevation.
+                new_id = _open_window(conn, p["author_id"], chain, nxt, p["content"], p["id"], _parse(p["voting_end"]),
+                                       post_kind=p["post_kind"], is_demo_post=bool(p["is_demo_post"]))
                 conn.execute("UPDATE board_posts SET status='elevated', elevated_to=? WHERE id=?", (new_id, p["id"]))
             else:
                 conn.execute("UPDATE board_posts SET status='frozen' WHERE id=?", (p["id"],))
@@ -254,13 +306,23 @@ def cast_vote(conn, user_id, present_location, post_id, value, now=None):
     post = conn.execute("SELECT * FROM board_posts WHERE id = ?", (post_id,)).fetchone()
     if not post:
         raise LookupError("Post not found")
+    # Server-side, not just the UI hiding vote buttons (2026-10-17): a council update is never a
+    # proposal, so it is never open for voting, regardless of its status. 'test' posts are NOT
+    # rejected here -- they are voted on by demo users (and optionally the Admin) exactly like a
+    # member post; only council_update is excluded. Checked BEFORE the status/voting_end check
+    # below so the error is specific ("not open for voting"), not the generic "voting has closed"
+    # a real member post gets once its own window ends.
+    if post["post_kind"] == "council_update":
+        raise ValueError("This post is not open for voting")
     if post["status"] != "active" or _parse(post["voting_end"]) <= now:
         raise PermissionError("Voting has closed on this post")
     if not _is_resident(chain_of(present_location), post):
         raise PermissionError("Only people living in this group can vote")
     old = conn.execute("SELECT value FROM board_votes WHERE post_id=? AND user_id=?", (post_id, user_id)).fetchone()
-    conn.execute("INSERT OR REPLACE INTO board_votes (post_id, user_id, value, cycle_id) VALUES (?, ?, ?, ?)",
-                (post_id, user_id, value, cycle_middleware.get_active_cycle_id(conn)))
+    conn.execute(
+        "INSERT OR REPLACE INTO board_votes (post_id, user_id, value, cycle_id, voted_at) VALUES (?, ?, ?, ?, ?)",
+        (post_id, user_id, value, cycle_middleware.get_active_cycle_id(conn), _iso(now)),
+    )
     conn.execute("UPDATE board_posts SET score = score + ? WHERE id = ?", (value - (old["value"] if old else 0), post_id))
     conn.commit()
     return conn.execute("SELECT score FROM board_posts WHERE id=?", (post_id,)).fetchone()["score"]
@@ -286,7 +348,7 @@ def add_comment(conn, user_id, present_location, post_id, text, now=None):
     conn.commit()
 
 
-def board_view(conn, user_id, present_location, level, now=None):
+def board_view(conn, user_id, present_location, level, now=None, is_admin=False):
     now = now or dt.datetime.now(dt.timezone.utc)
     settle(conn, now)
     chain = chain_of(present_location)
@@ -294,10 +356,11 @@ def board_view(conn, user_id, present_location, level, now=None):
     if not g:
         return None
     if level == "earth":
-        member_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        member_count = conn.execute("SELECT COUNT(*) FROM users WHERE is_demo = 0 AND is_removed = 0").fetchone()[0]
     else:
         member_count = conn.execute(
-            f"SELECT COUNT(*) FROM users WHERE json_extract(present_location_json, '$.{level}.id') = ?", (g["id"],)
+            f"SELECT COUNT(*) FROM users WHERE json_extract(present_location_json, '$.{level}.id') = ? "
+            "AND is_demo = 0 AND is_removed = 0", (g["id"],)
         ).fetchone()[0]
     import wallet_core
     # Visibility rule (2026-10-17): a board's own header shows this location's COLLECTIVE wallet
@@ -313,13 +376,39 @@ def board_view(conn, user_id, present_location, level, now=None):
             (g["id"], level),
         )
     ]
+    # Visibility rule (2026-10-17, design doc Section 7): hide an is_test=1 post from everyone
+    # except the Admin and demo viewers WHILE it's active; once it's frozen/elevated, p.status !=
+    # 'active' alone makes it visible to everyone, same query, no second query needed.
+    is_demo_viewer = bool(conn.execute("SELECT is_demo FROM users WHERE id = ?", (user_id,)).fetchone()[0])
     rows = conn.execute(
         """SELECT p.*, u.name AS author_name, v.value AS my_vote FROM board_posts p
            JOIN users u ON u.id = p.author_id
            LEFT JOIN board_votes v ON v.post_id = p.id AND v.user_id = ?
-           WHERE p.group_id = ? AND p.level = ? AND p.status != 'removed' ORDER BY p.created_at DESC, p.id DESC LIMIT 100""",
-        (user_id, g["id"], level),
+           WHERE p.group_id = ? AND p.level = ? AND p.status != 'removed'
+             AND (p.is_test = 0 OR p.status != 'active' OR ? = 1 OR ? = 1)
+           ORDER BY p.created_at DESC, p.id DESC LIMIT 100""",
+        (user_id, g["id"], level, int(is_admin), int(is_demo_viewer)),
     ).fetchall()
+    # reaction_counts batch-fetched once for every council_update post in this result set --
+    # reactions_core.counts_for() is already batch-shaped, same call board_core.py's own
+    # chat_messages() uses for message reactions.
+    import reactions_core
+    council_update_ids = [p["id"] for p in rows if p["post_kind"] == "council_update"]
+    reaction_counts = reactions_core.counts_for(conn, "board_post", council_update_ids, user_id) if council_update_ids else {}
+    # Demo-voter counts for every test post in this result set, batch-fetched once (design doc
+    # Section 2c equivalent: the frozen test record's "voted by N demo users" note). Counted LIVE
+    # from board_votes, never a frozen snapshot -- Decision 3 (retire_demo_voters.py never
+    # touches board_votes) already guarantees this stays correct even after demo voters retire.
+    test_ids = [p["id"] for p in rows if p["post_kind"] == "test"]
+    demo_voter_counts: dict[int, int] = {}
+    if test_ids:
+        qmarks = ",".join("?" * len(test_ids))
+        for r in conn.execute(
+            f"""SELECT v.post_id, COUNT(*) AS n FROM board_votes v JOIN users u ON u.id = v.user_id
+                WHERE v.post_id IN ({qmarks}) AND u.is_demo = 1 GROUP BY v.post_id""",
+            test_ids,
+        ):
+            demo_voter_counts[r["post_id"]] = r["n"]
     posts = []
     for p in rows:
         active = p["status"] == "active"
@@ -335,12 +424,24 @@ def board_view(conn, user_id, present_location, level, now=None):
         if p["elevated_to"]:
             e = conn.execute("SELECT level FROM board_posts WHERE id=?", (p["elevated_to"],)).fetchone()
             nxt = LEVEL_LABEL[e["level"]] if e else None
-        posts.append({
+        post_dict = {
             "id": p["id"], "author": p["author_name"], "mine": p["author_id"] == user_id, "content": p["content"], "status": p["status"],
             "score": p["score"], "my_vote": p["my_vote"], "created_at": p["created_at"], "voting_end": p["voting_end"],
             "threshold": THRESHOLD[level], "window_days": WINDOW_DAYS[level], "origin": origin, "elevated_to": nxt, "comments": comments,
-            "can_vote": active, "can_comment": not active,
-        })
+            "can_vote": active and p["post_kind"] == "member", "can_comment": not active, "post_kind": p["post_kind"],
+            "is_demo_post": bool(p["is_demo_post"]),
+        }
+        if p["post_kind"] == "council_update":
+            post_dict["reactions"] = reaction_counts.get(p["id"])
+        elif p["post_kind"] == "test" and p["status"] in ("frozen", "elevated"):
+            # The frozen test record (design doc Section 3 / Section 8's "test -- not credited"
+            # note) -- only once voting has actually closed; an active test post has no final
+            # score or reward to show yet.
+            post_dict["test_record"] = {
+                "voting_start": p["created_at"], "voting_end": p["voting_end"], "final_score": p["score"],
+                "reward_inr": p["test_reward_inr"], "demo_voter_count": demo_voter_counts.get(p["id"], 0),
+            }
+        posts.append(post_dict)
     post_price = None if level not in PAID_LEVELS else qoin_core.post_price(level, "text")
     currency_code, currency_symbol, currency_name = qoin_core.currency_for((present_location.get("country") or {}).get("code"))
     return {

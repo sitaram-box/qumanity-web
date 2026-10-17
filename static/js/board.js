@@ -213,6 +213,11 @@
     var level = root.getAttribute("data-level");
     var titleEl = root.querySelector(".bd-title"), subEl = root.querySelector(".bd-sub"), feed = root.querySelector(".bd-feed");
     var form = root.querySelector(".bd-compose"), ta = form.querySelector("textarea"), note = root.querySelector(".bd-note");
+    // Admin-only "Mark as test" toggle (2026-10-17) -- the markup lives in dashboard.html
+    // (file 6); guarded with `if` everywhere below so this file works unchanged whether or not
+    // that markup has landed yet.
+    var testToggleBox = form.querySelector(".bd-test-toggle");
+    var testToggle = testToggleBox ? testToggleBox.querySelector("input") : null;
     var chat = null;                       // {id, name} while a village sub-group chat is open
     var view = "live";                     // "live" (default) or "frozen" — each fills the whole board
     var toggle = root.querySelector(".bd-toggle"), foot = root.querySelector(".bd-foot"), lastView = null;
@@ -249,6 +254,7 @@
       if (level === "country" || level === "state") loadSentiment(level, v.group_id); else if (sentimentBox) sentimentBox.hidden = true;
       form.hidden = !(v.can_post || v.can_pay_post);
       reportBtn.hidden = !v.can_post;
+      if (testToggleBox) testToggleBox.hidden = !v.is_admin;
       if (v.can_post) {
         ta.placeholder = "Post to your village — it is voted on for 7 days…";
         form.querySelector("button").textContent = "Post";
@@ -390,15 +396,65 @@
       }).catch(function () { sentimentBox.hidden = true; });
     }
 
+    // post_kind badge text (2026-10-17) -- exact strings per the four combinations; 'member'
+    // posts get no badge at all (function returns null, caller skips appending anything).
+    function postBadge(p) {
+      if (p.post_kind === "council_update") return "Council Update";
+      if (p.post_kind === "test") return p.is_demo_post ? "Demo · Test" : "Admin · Test";
+      return null;
+    }
+
+    // The frozen test record (design doc Section 3/8): only ever rendered once a test post has
+    // actually settled (p.test_record is only present on the payload for frozen/elevated test
+    // posts -- board_core.py never attaches it to an active one). "Frozen" uses voting_end as the
+    // settle moment, since there is no separate frozen_at column -- settle() runs lazily (any
+    // board read, plus the weekly cron), usually very soon after voting_end, but not pinned to
+    // the exact instant; this is an approximation, not a precise timestamp.
+    function testRecordBlock(tr) {
+      var box = el("div", "bd-test-record");
+      box.appendChild(el("div", "bd-test-record-row", "Voting window: " + ago(tr.voting_start) + " → " + ago(tr.voting_end)));
+      box.appendChild(el("div", "bd-test-record-row", "Final score " + fmt(tr.final_score)));
+      box.appendChild(el("div", "bd-test-record-row", tr.reward_inr != null
+        ? ("Reward: ₹" + tr.reward_inr.toLocaleString() + " (test — not credited)")
+        : "No reward earned"));
+      box.appendChild(el("div", "bd-test-record-row",
+        "Voted by " + tr.demo_voter_count + " demo user" + (tr.demo_voter_count === 1 ? "" : "s") + " for testing purposes"));
+      box.appendChild(el("div", "bd-test-record-row", "Frozen " + ago(tr.voting_end)));
+      return box;
+    }
+
     function bubble(p, v, rank) {
       var b = el("article", "bd-post" + (p.mine ? " is-mine" : "") + " is-" + p.status);
       var head = el("div", "bd-post-head");
       if (rank === 0 && p.score > 0) head.appendChild(el("span", "bd-crown", "🏆"));
       head.appendChild(el("span", "bd-avatar", (p.author || "?").charAt(0)));
-      head.appendChild(el("b", "", p.author)); head.appendChild(el("small", "", ago(p.created_at)));
+      head.appendChild(el("b", "", p.author));
+      var badge = postBadge(p);
+      if (badge) head.appendChild(el("span", "bd-badge bd-badge-" + p.post_kind, badge));
+      head.appendChild(el("small", "", ago(p.created_at)));
       b.appendChild(head);
       if (p.origin) b.appendChild(el("div", "bd-origin", "⬆️ Elevated from " + p.origin.level + " · final score " + fmt(p.origin.score)));
       b.appendChild(el("p", "bd-text", p.content));
+
+      if (p.post_kind === "council_update") {
+        // No vote buttons, no score/countdown line -- a council update is never a proposal.
+        // Thumbs up/down + counts instead, via the existing generic reaction route (scope=
+        // "board_post"); clicking the already-selected one clears the reaction (same toggle
+        // behaviour as reactions_core.set_reaction's own None-clears contract).
+        var reactBar = el("div", "bd-reactions");
+        [["agree", "👍"], ["disagree", "👎"]].forEach(function (x) {
+          var count = (p.reactions && p.reactions[x[0]]) || 0;
+          var mine = p.reactions && p.reactions.mine === x[0];
+          var btn = el("button", "bd-react" + (mine ? " is-on" : ""), x[1] + " " + count);
+          btn.type = "button";
+          btn.addEventListener("click", function () {
+            api("/api/reactions/board_post/" + p.id, { reaction: mine ? null : x[0] }).then(load).catch(function (e) { alert(e.message); });
+          });
+          reactBar.appendChild(btn);
+        });
+        b.appendChild(reactBar);
+        return b;
+      }
 
       var meta = el("div", "bd-meta");
       var status = p.status === "active" ? "🗳️ Voting · " + left(p.voting_end)
@@ -409,6 +465,8 @@
       b.appendChild(meta);
       var bar = el("div", "bd-bar"), fill = el("i"); fill.style.width = Math.max(0, Math.min(100, Math.round(100 * p.score / p.threshold))) + "%";
       bar.appendChild(fill); b.appendChild(bar);
+
+      if (p.test_record) b.appendChild(testRecordBlock(p.test_record));
 
       if (p.can_vote) {
         var votes = el("div", "bd-votes");
@@ -464,8 +522,10 @@
     form.addEventListener("submit", function (e) {
       e.preventDefault();
       if (!chat && lastView && lastView.can_pay_post && !window.confirm(priceLine(lastView) + " — from your wallet. Continue?")) return;
-      var req = chat ? api("/api/chat/" + chat.id, { text: ta.value }) : api("/api/board/post", { content: ta.value, level: level });
-      req.then(function () { ta.value = ""; load(); }).catch(function (er) { alert(er.message); });
+      var postBody = { content: ta.value, level: level };
+      if (!chat && testToggle && testToggle.checked) postBody.is_test = true;
+      var req = chat ? api("/api/chat/" + chat.id, { text: ta.value }) : api("/api/board/post", postBody);
+      req.then(function () { ta.value = ""; if (testToggle) testToggle.checked = false; load(); }).catch(function (er) { alert(er.message); });
     });
     toggle.addEventListener("click", function () { view = view === "live" ? "frozen" : "live"; if (lastView) render(lastView); feed.scrollTop = 0; });
     self.setChat = function (c) { chat = c; return load(); };

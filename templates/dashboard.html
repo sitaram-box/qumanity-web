@@ -173,6 +173,27 @@
           <p class="qm-dash-empty">No activity yet — activity logging isn't built yet.</p>
         </article>
 
+        {% if is_admin %}
+        <article class="pv-card pv-card-wide" id="qm-testcycle-card">
+          <h3><span class="pv-ico">🧪</span> Post Testing cycle <small class="pv-hint">Admin only — docs/test_cycle_design.md</small></h3>
+          <div id="qm-testcycle-empty" class="qm-dash-empty" hidden>No testing window has been created yet.</div>
+          <div id="qm-testcycle-body" hidden>
+            <p class="qm-testcycle-row">Testing window: <b id="qm-testcycle-window-start"></b> → <b id="qm-testcycle-window-end"></b></p>
+            <p class="qm-testcycle-row">Status: <b id="qm-testcycle-status"></b></p>
+            <p class="qm-testcycle-row">Demo users: <b id="qm-testcycle-count"></b></p>
+            <p class="qm-testcycle-row">Vote distribution: <b id="qm-testcycle-dist"></b></p>
+            <p class="qm-testcycle-row">Posts created this month: <b id="qm-testcycle-posts"></b></p>
+            <p class="qm-testcycle-row">Votes cast this month: <b id="qm-testcycle-votes"></b></p>
+          </div>
+          <div class="qm-testcycle-actions">
+            <button type="button" class="qm-btn qm-btn-primary" id="qm-testcycle-renew-btn" hidden>Renew for another year</button>
+            <button type="button" class="qm-btn qm-btn-ghost" id="qm-testcycle-stop-btn" hidden>Stop testing now</button>
+            <button type="button" class="qm-btn qm-btn-primary" id="qm-testcycle-start-btn" hidden>Start a new test period</button>
+          </div>
+          <p class="qm-timeline-note" id="qm-testcycle-error" hidden></p>
+        </article>
+        {% endif %}
+
         <details class="pv-card pv-card-wide pv-settings">
           <summary><span class="pv-ico">⚙️</span> <span data-i18n="settings">Settings</span> <small class="pv-hint">Language, PIN, sign out</small></summary>
           <div class="pv-settings-body">
@@ -295,6 +316,7 @@
       <div class="bd-foot"><button type="button" class="bd-toggle" title="Switch between live voting and frozen posts">❄️ <span>Frozen posts</span></button></div>
       <form class="bd-compose" hidden>
         <textarea rows="2" maxlength="1000" placeholder="Post to your village — it is voted on for 7 days…" required></textarea>
+        <label class="bd-test-toggle" hidden><input type="checkbox"> 🧪 Mark as test</label>
         <button type="submit" class="qm-btn qm-btn-primary">Post</button>
         <button type="button" class="qm-btn qm-btn-ghost bd-report-btn" hidden>🚨 Report</button>
       </form>

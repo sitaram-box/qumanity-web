@@ -1,7 +1,16 @@
 """Shared message reactions -- Agree / Disagree / Read -- for group chats (village sub-groups and
-Personal groups). Deliberately separate from post voting (+1/0/-1): these never change a score or
-elevate anything, they just show how many of a group's members have weighed in or seen a message.
-One reaction per person per message; picking a new one replaces the old, and it can be cleared.
+Personal groups), and (2026-10-17) for Council Update board posts (scope 'board_post', message_id
+= the board_posts.id) -- a council update is never voted on, so Agree/Disagree is the only signal
+a member can leave on one; rendered as thumbs up/down in static/js/board.js, which hardcodes its
+own emoji rather than importing this module's EMOJI dict (EMOJI is otherwise unused). Reactions
+are deliberately separate from post voting (+1/0/-1): they never change a score or elevate
+anything, they just show how many of a group's members have weighed in or seen a message/post.
+One reaction per person per item; picking a new one replaces the old, and it can be cleared.
+
+Every function here is intentionally scope-agnostic -- the only place 'board_post' is enforced as
+a valid scope (alongside 'subgroup'/'personal') is the route whitelist in app.py's
+api_set_reaction(), plus one additional check there specific to 'board_post': the target id must
+actually be a council_update post, since that's the only post_kind that ever displays reactions.
 """
 from __future__ import annotations
 
@@ -12,7 +21,7 @@ EMOJI = {"agree": "\U0001F44D", "disagree": "\U0001F44E", "read": "\U0001F441️
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS message_reactions (
-    scope TEXT NOT NULL,        -- 'subgroup' (board_messages) | 'personal' (personal_messages)
+    scope TEXT NOT NULL,        -- 'subgroup' (board_messages) | 'personal' (personal_messages) | 'board_post' (council_update board_posts, 2026-10-17)
     message_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
     reaction TEXT NOT NULL,

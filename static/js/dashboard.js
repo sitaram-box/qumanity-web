@@ -811,4 +811,69 @@
         .catch(function (err) { alert(err.message); });
     });
   }
+
+  // ---- Post Testing cycle admin panel (2026-10-17, docs/test_cycle_design.md) -- the markup
+  // only exists in the page at all when is_admin was true at render time (dashboard.html's own
+  // {% if is_admin %} gate), so every element here guards with `if (!el) return` exactly like
+  // the wallet/karma loaders above -- a non-admin viewer's page simply has none of these ids.
+  var testCycleCard = document.getElementById("qm-testcycle-card");
+
+  function loadTestCycle() {
+    if (!testCycleCard) return;
+    fetch("/api/admin/test-cycle/panel")
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var w = data.window;
+        var empty = document.getElementById("qm-testcycle-empty");
+        var body = document.getElementById("qm-testcycle-body");
+        var renewBtn = document.getElementById("qm-testcycle-renew-btn");
+        var stopBtn = document.getElementById("qm-testcycle-stop-btn");
+        var startBtn = document.getElementById("qm-testcycle-start-btn");
+        empty.hidden = !!w;
+        body.hidden = !w;
+        renewBtn.hidden = !w || w.status !== "active";
+        stopBtn.hidden = !w || w.status !== "active";
+        startBtn.hidden = !!w && w.status === "active";
+        if (!w) return;
+        document.getElementById("qm-testcycle-status").textContent = w.status;
+        document.getElementById("qm-testcycle-count").textContent = w.demo_user_count;
+        document.getElementById("qm-testcycle-posts").textContent = data.posts_this_month;
+        document.getElementById("qm-testcycle-votes").textContent = data.votes_this_month;
+        try {
+          var start = new Date(w.start_date), end = new Date(w.end_date);
+          document.getElementById("qm-testcycle-window-start").textContent = start.toLocaleDateString();
+          document.getElementById("qm-testcycle-window-end").textContent = end.toLocaleDateString();
+        } catch (e) { /* malformed date -- leave blank rather than crash the whole panel */ }
+        try {
+          var dist = JSON.parse(w.vote_distribution);
+          document.getElementById("qm-testcycle-dist").textContent =
+            Object.keys(dist).map(function (k) { return Math.round(dist[k] * 100) + "% " + k; }).join(", ");
+        } catch (e) { document.getElementById("qm-testcycle-dist").textContent = w.vote_distribution; }
+      })
+      .catch(function (err) { console.error("Failed to load test cycle panel", err); });
+  }
+  loadTestCycle();
+
+  function testCycleAction(url, confirmMsg) {
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    var errEl = document.getElementById("qm-testcycle-error");
+    fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+      .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
+      .then(function (result) {
+        if (!result.ok) throw new Error(result.body.error || "Could not complete that action");
+        errEl.hidden = true;
+        loadTestCycle();
+      })
+      .catch(function (err) { errEl.textContent = err.message; errEl.hidden = false; });
+  }
+  if (testCycleCard) {
+    var renewBtnEl = document.getElementById("qm-testcycle-renew-btn");
+    var stopBtnEl = document.getElementById("qm-testcycle-stop-btn");
+    var startBtnEl = document.getElementById("qm-testcycle-start-btn");
+    if (renewBtnEl) renewBtnEl.addEventListener("click", function () { testCycleAction("/api/admin/test-cycle/renew"); });
+    if (stopBtnEl) stopBtnEl.addEventListener("click", function () {
+      testCycleAction("/api/admin/test-cycle/stop", "Stop the active Post Testing window? Demo users are not retired by this.");
+    });
+    if (startBtnEl) startBtnEl.addEventListener("click", function () { testCycleAction("/api/admin/test-cycle/start"); });
+  }
 })();

@@ -29,6 +29,7 @@ import cycle_middleware
 import election_core
 import pipeline_core
 import pipeline_scheduler
+import test_cycle_scheduler
 import elemental_core
 import folder_connector
 import folder_sync
@@ -457,7 +458,7 @@ def api_board(level):
     if level not in board_core.LEVELS:
         return jsonify({"error": "Unknown level"}), 404
     conn, user, loc = _board_user()
-    view = board_core.board_view(conn, user["id"], loc, level)
+    view = board_core.board_view(conn, user["id"], loc, level, is_admin=_is_admin())
     if view is not None:
         can_publish = announcements_core.can_publish_announcement(conn, user["id"], view["group_id"], view["level"], _is_admin())
         view["can_publish_announcement"] = can_publish
@@ -466,6 +467,10 @@ def api_board(level):
         # location" is identical logic for both features at village level, and both fall back
         # to the same admin-only gate everywhere else (docs/reports_design.md §2).
         view["can_view_report_inbox"] = can_publish
+        # Drives static/js/board.js's Admin-only "Mark as test" checkbox (file 5) -- the client's
+        # own is_admin flag is display-only; the real gate is api_board_post()'s own _is_admin()
+        # check, which never trusts anything the client sends.
+        view["is_admin"] = _is_admin()
     conn.close()
     if view is None:
         return jsonify({"error": "You have no group at this level"}), 404
@@ -697,7 +702,36 @@ def api_report_escalate(report_id):
 def api_board_post():
     data = request.get_json(silent=True) or {}
     conn, user, loc = _board_user()
-    pid = board_core.create_post(conn, user["id"], loc, data.get("content"), data.get("level", "village"))
+    # Admin-only test tag (2026-10-17, docs/test_cycle_design.md): the client-sent is_test value
+    # is never trusted directly -- it only reaches create_post() at all when _is_admin() is also
+    # true, same pattern as every other is_admin-gated parameter in this codebase.
+    is_test = _is_admin() and bool(data.get("is_test"))
+    post_kind = "test" if is_test else "member"
+    pid = board_core.create_post(conn, user["id"], loc, data.get("content"), data.get("level", "village"), post_kind=post_kind)
+    conn.close()
+    return jsonify({"id": pid}), 201
+
+
+@app.route("/api/board/council-update", methods=["POST"])
+@login_required
+@_board_error
+def api_board_council_update():
+    """A council member (or the Admin, as the universal fallback -- same rule as
+    announcements_core.py) posts an update directly to the board feed, post_kind='council_update'.
+    Deliberately NOT routed through announcements_core.py (Path 2, 2026-10-17 decision): the bell
+    announcement system and this board feed are independent -- a council member who wants both a
+    bell notification and a board post performs two separate actions."""
+    data = request.get_json(silent=True) or {}
+    conn, user, loc = _board_user()
+    level = data.get("level", "village")
+    g = board_core.group_for(board_core.chain_of(loc), level)
+    if not g:
+        conn.close()
+        return jsonify({"error": "You have no group at this level"}), 404
+    if not (_is_admin() or announcements_core.is_council_member(conn, user["id"], g["id"], level)):
+        conn.close()
+        return jsonify({"error": "Only a council member (or the Admin) can post a council update"}), 403
+    pid = board_core.create_council_update(conn, user["id"], loc, data.get("content"), level=level)
     conn.close()
     return jsonify({"id": pid}), 201
 
@@ -863,10 +897,19 @@ def api_referrer_decide(app_id):
 @login_required
 @_board_error
 def api_set_reaction(scope, message_id):
-    if scope not in ("subgroup", "personal"):
+    if scope not in ("subgroup", "personal", "board_post"):
         return jsonify({"error": "Unknown scope"}), 404
     conn = get_db()
     try:
+        # board_post is the one scope where "the target exists and is the right kind" isn't
+        # already guaranteed by the caller (subgroup/personal message ids come from UI state that
+        # can't name the wrong thing) -- a council_update is the only post_kind that ever displays
+        # reactions (board_view()), so validate it here rather than let reaction rows silently
+        # accumulate on a post that can never show them.
+        if scope == "board_post":
+            post = conn.execute("SELECT post_kind FROM board_posts WHERE id = ?", (message_id,)).fetchone()
+            if not post or post["post_kind"] != "council_update":
+                return jsonify({"error": "Reactions are only accepted on council updates"}), 400
         reactions_core.set_reaction(conn, scope, message_id, session["user_id"], (request.get_json(silent=True) or {}).get("reaction"))
     finally:
         conn.close()
@@ -897,9 +940,12 @@ def api_qpunch(level):
         conn.close()
         return jsonify({"error": "You have no group at this level"}), 404
     if level == "earth":
-        residents = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        residents = conn.execute("SELECT COUNT(*) FROM users WHERE is_demo = 0 AND is_removed = 0").fetchone()[0]
     else:
-        residents = conn.execute(f"SELECT COUNT(*) FROM users WHERE json_extract(present_location_json, '$.{level}.id') = ?", (g["id"],)).fetchone()[0]
+        residents = conn.execute(
+            f"SELECT COUNT(*) FROM users WHERE json_extract(present_location_json, '$.{level}.id') = ? "
+            "AND is_demo = 0 AND is_removed = 0", (g["id"],)
+        ).fetchone()[0]
     vols = conn.execute("SELECT COUNT(*) FROM volunteers WHERE level = ? AND group_id = ? AND kind = 'volunteer'", (level, g["id"])).fetchone()[0]
     agents = conn.execute("SELECT COUNT(*) FROM volunteers WHERE level = ? AND group_id = ? AND kind = 'agent'", (level, g["id"])).fetchone()[0]
     mine = conn.execute("SELECT 1 FROM volunteers WHERE user_id = ? AND level = ? AND group_id = ? AND kind = 'volunteer'", (user["id"], level, g["id"])).fetchone()
@@ -1548,7 +1594,10 @@ def dashboard():
         session.pop("user_id", None)
         return redirect(url_for("login"))
     all_langs = [l for g in ("common", "indian", "subcontinent") for l in _load_json(LANGUAGES_FILE)[g]]
-    return render_template("dashboard.html", profile=profile, all_languages=all_langs)
+    # Gates the Test Cycle admin panel's markup at render time (2026-10-17) -- its DATA still
+    # comes from /api/admin/test-cycle/panel (which re-checks _is_admin() itself), this only
+    # decides whether the empty shell exists in the page at all for a non-admin viewer.
+    return render_template("dashboard.html", profile=profile, all_languages=all_langs, is_admin=_is_admin())
 
 
 @app.route("/api/me")
@@ -2372,7 +2421,8 @@ def api_location_members(village_id):
     social_core.display_identity) -- that's the whole point of the setting."""
     conn = get_db()
     rows = conn.execute(
-        "SELECT id, name, gender, dob, hide_identity, account_id FROM users WHERE json_extract(present_location_json, '$.village.id') = ?",
+        "SELECT id, name, gender, dob, hide_identity, account_id FROM users "
+        "WHERE json_extract(present_location_json, '$.village.id') = ? AND is_demo = 0 AND is_removed = 0",
         (village_id,),
     ).fetchall()
     viewer_id = session.get("user_id")
@@ -3440,6 +3490,73 @@ def api_admin_pipeline_archive_status(cycle_id):
     return jsonify(result)
 
 
+# ---- Post Testing cycle admin API (2026-10-17, docs/test_cycle_design.md) -----------------------
+# Thin wrappers only -- test_cycle_scheduler.py owns testing_windows and all its read/write
+# functions, same layering as every other *_core.py module in this file.
+
+@app.route("/api/admin/test-cycle/panel")
+@login_required
+def api_admin_test_cycle_panel():
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    result = test_cycle_scheduler.panel_data(conn)
+    conn.close()
+    return jsonify(result)
+
+
+@app.route("/api/admin/test-cycle/start", methods=["POST"])
+@login_required
+def api_admin_test_cycle_start():
+    """Layer 1 of the two-layer defence (the admin panel only shows this button when panel_data()
+    reports no active window) is a UI convenience; Layer 2 -- the one that actually matters -- is
+    start_window()'s own independent re-check, which runs regardless of what this route's caller
+    believes."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    data = request.get_json(silent=True) or {}
+    demo_user_count = int(data.get("demo_user_count", 50))
+    vote_distribution = data.get("vote_distribution") or {"+1": 0.5, "0": 0.3, "-1": 0.2}
+    conn = get_db()
+    try:
+        window = test_cycle_scheduler.start_window(conn, demo_user_count, vote_distribution)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify(window)
+
+
+@app.route("/api/admin/test-cycle/renew", methods=["POST"])
+@login_required
+def api_admin_test_cycle_renew():
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    try:
+        window = test_cycle_scheduler.renew_window(conn)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify(window)
+
+
+@app.route("/api/admin/test-cycle/stop", methods=["POST"])
+@login_required
+def api_admin_test_cycle_stop():
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    try:
+        window = test_cycle_scheduler.stop_window(conn)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify(window)
+
+
 # ---- Phase 5: bootstrap + cron automation admin endpoints (manual overrides for testing and
 # emergency use -- see pipeline_scheduler.py / docs/phase_5_report.md) ----
 
@@ -3697,6 +3814,11 @@ _start_scheduler()
 with get_db() as _bootstrap_conn:
     pipeline_scheduler.init_bootstrap(_bootstrap_conn)
 pipeline_scheduler.init_scheduler(app)
+
+# Post Testing cycle (2026-10-17, docs/test_cycle_design.md): a SEPARATE BackgroundScheduler
+# instance from the lunar pipeline's own, above -- entirely independent and independently
+# removable once the test year is over.
+test_cycle_scheduler.init_scheduler(app)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
