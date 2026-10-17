@@ -666,6 +666,12 @@
 .pv-hintline { margin: 2px 0 0; }
 .bd-foot { display: flex; justify-content: flex-end; padding: 8px 12px 0; background: #FBF9F4; }
 .bd-foot[hidden] { display: none; }
+.bd-stars { padding: 10px 14px 12px; background: #FBF9F4; border-top: 1px solid rgba(201, 150, 12, 0.15); }
+.bd-stars[hidden] { display: none; }
+.bd-stars-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; max-height: 140px; overflow-y: auto; }
+.bd-star-row { display: flex; align-items: center; gap: 8px; font-size: 0.86rem; color: var(--qm-text); }
+.bd-star-ico { font-size: 0.95rem; }
+.bd-star-row small { color: var(--qm-text-dim); margin-left: auto; white-space: nowrap; }
 .bd-toggle { padding: 7px 16px; border-radius: 10px; cursor: pointer; background: #FFF3E0; color: #B8860B; border: 2px solid #ff9933; font: 700 0.82rem "Inter", system-ui, sans-serif; transition: background 0.2s, color 0.2s; }
 .bd-toggle:hover { background: #ff9933; color: #fff; }
 .bd-crown { font-size: 1rem; }

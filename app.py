@@ -2868,16 +2868,36 @@ def _is_admin() -> bool:
 
 
 # ---- Karma Qoins wallet API ----
+# Visibility rule (2026-10-17): the NUMBER of Qoins a wallet holds is public. The rupee VALUE
+# (balance_qoins, 1 Qoin = ₹1 today) is private -- visible only to the wallet's own owner, a
+# collective wallet's current council members, or an admin. A private-view caller gets the public
+# qoin_count too (it's a strict superset of what they're entitled to); a public caller never gets
+# balance_qoins at all -- not hidden client-side, simply never put in the response.
 
 @app.route("/api/wallet/balance")
 @login_required
 def api_wallet_balance():
     conn = get_db()
     balance = wallet_core.wallet_balance(conn, "user", str(session["user_id"]))
+    qoin_count = wallet_core.public_wallet_view(conn, "user", str(session["user_id"]))["qoin_count"]
     transactions = wallet_core.wallet_transactions(conn, "user", str(session["user_id"]))
     has_locked = wallet_core.has_locked_share(conn, session["user_id"])
     conn.close()
-    return jsonify({"balance_qoins": balance, "has_locked_share": has_locked, "transactions": transactions})
+    return jsonify({"balance_qoins": balance, "qoin_count": qoin_count, "has_locked_share": has_locked, "transactions": transactions})
+
+
+def _can_see_collective_wallet_value(conn, location_type, location_id) -> bool:
+    """Private-view access to a COLLECTIVE wallet's rupee value: an admin, or (today) a village's
+    own currently-serving council member -- reports_core.is_holder_council carries exactly this
+    same "only village has real elected data yet" gap already established for Citizen Reports and
+    announcements. No session at all (an anonymous caller) is never private-view."""
+    if not session.get("user_id"):
+        return False
+    is_admin = _is_admin()
+    if is_admin:
+        return True
+    import reports_core
+    return reports_core.is_holder_council(conn, session["user_id"], location_type, location_id, is_admin)
 
 
 @app.route("/api/wallet/balance/<location_type>/<path:location_id>")
@@ -2885,9 +2905,13 @@ def api_wallet_location_balance(location_type, location_id):
     if location_type not in wallet_core.LOCATION_TIERS:
         return jsonify({"error": "Unknown location_type: " + location_type}), 404
     conn = get_db()
-    balance = wallet_core.wallet_balance(conn, location_type, location_id)
+    qoin_count = wallet_core.public_wallet_view(conn, location_type, location_id)["qoin_count"]
+    if _can_see_collective_wallet_value(conn, location_type, location_id):
+        balance = wallet_core.wallet_balance(conn, location_type, location_id)
+        conn.close()
+        return jsonify({"location_type": location_type, "location_id": location_id, "qoin_count": qoin_count, "balance_qoins": balance})
     conn.close()
-    return jsonify({"location_type": location_type, "location_id": location_id, "balance_qoins": balance})
+    return jsonify({"location_type": location_type, "location_id": location_id, "qoin_count": qoin_count})
 
 
 # ---- Village elections API (piloted on election_core.PILOT_VILLAGE_ID) ----

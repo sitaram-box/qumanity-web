@@ -148,69 +148,98 @@ def create_post(conn, user_id, present_location, content, level="village", now=N
 
 
 def settle(conn, now=None):
-    """Close every voting window that is due: elevate, freeze or remove.
-    Earth is special: among the posts freezing at Earth in this same pass, whoever has the
-    highest score is the "winner" (₹500); every other positive score gets the participant
-    reward (100+100)."""
+    """Close every voting window that is due: elevate, freeze or remove -- then, independently of
+    that, pay every POSITIVE-score post its rank-based reward for the level it just cleared
+    (2026-10-17 design). The two are separate questions: elevation depends on whether score
+    cleared THRESHOLD[level]; the reward depends only on the post's RANK among its positive peers
+    at the same (level, cycle) -- so a positive post that falls short of the elevation threshold
+    still earns a reward (somewhere between that level's min and max), it just doesn't climb
+    further. A post that elevates earns this level's reward too, then -- if it later clears a
+    higher level as well -- earns THAT level's reward separately when ITS window closes; rewards
+    are cumulative across levels, one wallet_transactions row per level actually cleared.
+
+    Ranking is done among whichever positive posts at a given (level, cycle_id) happen to be
+    `due` in this SAME settle() call -- posts at the same level/cycle created on different days
+    have different voting_end dates (WINDOW_DAYS is fixed per level, counted from each post's own
+    creation), so a post can in principle be ranked only against whichever peers' windows close
+    at the same moment, not necessarily every positive post that cycle will ever produce at that
+    level. This matches how settle() already runs today (opportunistically, on any read, plus the
+    daily cron tick) rather than at a true per-cycle-per-level boundary event; a stricter
+    cycle-complete batching would need a new scheduled trigger per level, out of this task's scope.
+
+    Earth is no longer special-cased: REWARD_RANGE_INR gives it the highest range, like every
+    other level, instead of a separate winner/participant split."""
+    import karma_core
+    import wallet_core
+
     now = now or dt.datetime.now(dt.timezone.utc)
     due = conn.execute("SELECT * FROM board_posts WHERE status = 'active' AND voting_end <= ?", (_iso(now),)).fetchall()
-    earth_frozen = []
+
+    groups: dict[tuple, list] = {}
     for p in due:
-        level, score = p["level"], p["score"]
-        chain = json.loads(p["chain_json"])
-        idx = next((i for i, g in enumerate(chain) if g["level"] == level), None)
-        nxt = idx + 1 if idx is not None and idx + 1 < len(chain) else None
-        if score >= THRESHOLD[level] and nxt is not None:
-            new_id = _open_window(conn, p["author_id"], chain, nxt, p["content"], p["id"], _parse(p["voting_end"]))
-            conn.execute("UPDATE board_posts SET status='elevated', elevated_to=? WHERE id=?", (new_id, p["id"]))
-        elif score > 0:
-            conn.execute("UPDATE board_posts SET status='frozen' WHERE id=?", (p["id"],))
-            if level == "earth":
-                earth_frozen.append(p)
+        groups.setdefault((p["level"], p["cycle_id"]), []).append(p)
+
+    for (level, cycle_id), posts in groups.items():
+        for p in posts:
+            if p["score"] < 0:
+                conn.execute("UPDATE board_posts SET status='removed' WHERE id=?", (p["id"],))
+                _penalty_karma(conn, p, level)
+            elif p["score"] == 0:
+                # Zero-score posts freeze (2026-10-17 change, was 'removed'): a neutral, visible,
+                # permanent record -- no reward, no recognition star, no karma either way.
+                conn.execute("UPDATE board_posts SET status='frozen' WHERE id=?", (p["id"],))
+
+        positive = sorted((p for p in posts if p["score"] > 0), key=lambda p: p["score"], reverse=True)
+        n = len(positive)
+        for i, p in enumerate(positive):
+            rank = i + 1
+            reward_inr = qoin_core.rank_reward_inr(rank, n, level)
+            label = f"Post cleared {LEVEL_LABEL[level]} (rank {rank}/{n}, score {p['score']:+d})"
+            wallet_core.credit_qoins(
+                conn, "user", str(p["author_id"]), reward_inr, label,
+                rupee_value=reward_inr, related_post_id=p["id"],
+            )
+            if level == "village":
+                karma_core.add_individual_karma(conn, p["author_id"], "noncommercial", reward_inr, label)
             else:
-                _reward_author(conn, p, level, score)
-        else:
-            conn.execute("UPDATE board_posts SET status='removed' WHERE id=?", (p["id"],))
-    if earth_frozen:
-        winner_score = max(p["score"] for p in earth_frozen)
-        for p in earth_frozen:
-            _reward_author(conn, p, "earth", p["score"], earth_winner=(p["score"] == winner_score))
+                karma_core.bump_collective_karma(conn, p["group_id"], level, reward_inr, label)
+            conn.execute(
+                """INSERT INTO recognition_stars (post_id, author_id, level, location_id, score, created_at, cycle_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (p["id"], p["author_id"], level, p["group_id"], p["score"], _iso(now), cycle_id),
+            )
+
+            chain = json.loads(p["chain_json"])
+            idx = next((j for j, g in enumerate(chain) if g["level"] == level), None)
+            nxt = idx + 1 if idx is not None and idx + 1 < len(chain) else None
+            if p["score"] >= THRESHOLD[level] and nxt is not None:
+                new_id = _open_window(conn, p["author_id"], chain, nxt, p["content"], p["id"], _parse(p["voting_end"]))
+                conn.execute("UPDATE board_posts SET status='elevated', elevated_to=? WHERE id=?", (new_id, p["id"]))
+            else:
+                conn.execute("UPDATE board_posts SET status='frozen' WHERE id=?", (p["id"],))
+
     if due:
         conn.commit()
     return len(due)
 
 
-def _reward_author(conn, post, level, score, earth_winner=False):
-    """A post that freezes with a positive score pays its author Qoins by the level it reached
-    (qoin_core.post_reward). At Earth, the highest-scoring post in the same settle() pass wins ₹500;
-    every other positive-score Earth post gets the 100+100 participant reward."""
-    import wallet_core
-    amount = sum(qoin_core.post_reward(level, score, earth_winner=earth_winner))
-    if amount:
-        label = f"Post frozen at Earth ({'winner' if earth_winner else 'participant'}, score {score:+d})" if level == "earth" \
-            else f"Post frozen at {LEVEL_LABEL[level]} (score {score:+d})"
-        wallet_core._credit(conn, "user", str(post["author_id"]), amount, label)
-    _reward_karma(conn, post, level, score)
+# Karma is separate from the Qoins above (2026-09-29), and the penalty below is new (2026-10-17):
+# a positive post's reward and karma both scale with its RANK-based reward_inr -- Village credits
+# the author's own INDIVIDUAL karma (it's their own work); every other level credits COLLECTIVE
+# karma to the location it cleared (it now represents that wider group's recognised action). A
+# negative-score post, wherever it happens, costs the AUTHOR individual "penalty" karma -- always
+# individual, regardless of level, since it's a personal accountability signal, not a location's.
+# The penalty magnitude (-1) is a placeholder pending a real spec for how harshly to weigh it;
+# flagged for the user to adjust.
+PENALTY_KARMA_POINTS = -1
 
 
-# Karma is separate from the Qoins above (2026-09-29): a Village-level post freezing positively is
-# the author's OWN good work (individual, non-commercial karma); once a post has risen past the
-# village it represents that wider group's recognised action, so it credits COLLECTIVE karma to
-# the location it froze at, not to the individual author. Reuses qoin_core's own reward scale as a
-# simple, already-tuned "bigger reach -> bigger recognition" curve -- these are karma points, never
-# Qoins, and karma is never auto-converted to or from Qoins.
-def _reward_karma(conn, post, level, score):
+def _penalty_karma(conn, post, level):
     import karma_core
-
-    if level == "village":
-        points = qoin_core.FREEZE_REWARD["village"]
-        karma_core.add_individual_karma(conn, post["author_id"], "noncommercial", points, f"Post frozen at Village (score {score:+d})")
-    elif level == "earth":
-        karma_core.bump_collective_karma(conn, "EARTH", "earth", qoin_core.EARTH_PARTICIPANT[0], f"Post frozen at Earth (score {score:+d})")
-    else:
-        points = qoin_core.FREEZE_REWARD.get(level, 0)
-        if points:
-            karma_core.bump_collective_karma(conn, post["group_id"], level, points, f"Post frozen at {LEVEL_LABEL[level]} (score {score:+d})")
+    karma_core.add_individual_karma(
+        conn, post["author_id"], "penalty", PENALTY_KARMA_POINTS,
+        f"Post removed at {LEVEL_LABEL[level]} (score {post['score']:+d})",
+    )
 
 
 def _is_resident(chain, post):
@@ -271,7 +300,19 @@ def board_view(conn, user_id, present_location, level, now=None):
             f"SELECT COUNT(*) FROM users WHERE json_extract(present_location_json, '$.{level}.id') = ?", (g["id"],)
         ).fetchone()[0]
     import wallet_core
-    qoins = wallet_core.wallet_balance(conn, level, g["id"])
+    # Visibility rule (2026-10-17): a board's own header shows this location's COLLECTIVE wallet
+    # to every viewer, so it must be the public qoin_count, never the private rupee balance --
+    # that stays behind /api/wallet/balance/<level>/<id>, gated to council/admin in app.py.
+    qoins = wallet_core.public_wallet_view(conn, level, g["id"])["qoin_count"]
+    stars = [
+        {"post_id": s["post_id"], "author": s["author_name"], "score": s["score"], "at": s["created_at"]}
+        for s in conn.execute(
+            """SELECT rs.post_id, rs.score, rs.created_at, u.name AS author_name FROM recognition_stars rs
+               JOIN users u ON u.id = rs.author_id
+               WHERE rs.location_id = ? AND rs.level = ? ORDER BY rs.id DESC LIMIT 25""",
+            (g["id"], level),
+        )
+    ]
     rows = conn.execute(
         """SELECT p.*, u.name AS author_name, v.value AS my_vote FROM board_posts p
            JOIN users u ON u.id = p.author_id
@@ -311,7 +352,7 @@ def board_view(conn, user_id, present_location, level, now=None):
         "post_price": post_price,
         "post_price_qoins": None if post_price is None else qoin_core.to_qoins(post_price),
         "currency": currency_code, "currency_symbol": currency_symbol, "currency_name": currency_name,
-        "threshold": THRESHOLD[level], "window_days": WINDOW_DAYS[level], "posts": posts,
+        "threshold": THRESHOLD[level], "window_days": WINDOW_DAYS[level], "posts": posts, "stars": stars,
         "next": next((LEVEL_LABEL[c["level"]] for c in chain[chain.index(g) + 1: chain.index(g) + 2]), None),
     }
 

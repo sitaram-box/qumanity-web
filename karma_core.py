@@ -28,7 +28,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS karma_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
-    kind TEXT NOT NULL,             -- 'commercial' | 'noncommercial'
+    kind TEXT NOT NULL,             -- 'commercial' | 'noncommercial' | 'penalty' (negative-score board post, 2026-10-17)
     points INTEGER NOT NULL,
     reason TEXT NOT NULL,
     from_user_id INTEGER,           -- the rater, for a 'commercial' entry; NULL otherwise
@@ -85,7 +85,7 @@ def _now() -> str:
 # ---- Individual karma ----
 
 def add_individual_karma(conn, user_id: int, kind: str, points: int, reason: str, from_user_id: int | None = None) -> None:
-    if kind not in ("commercial", "noncommercial"):
+    if kind not in ("commercial", "noncommercial", "penalty"):
         raise ValueError("Unknown karma kind")
     ensure_tables(conn)
     conn.execute(

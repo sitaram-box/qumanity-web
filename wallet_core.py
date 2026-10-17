@@ -116,6 +116,158 @@ def _credit(conn, owner_type: str, owner_id: str, amount_qoins: int, reason: str
         )
 
 
+# ---- Persisted, denominated Qoins (2026-10-17) ----------------------------------------------
+# Everything above this point (balance_qoins as a plain integer, _credit() writing only a net
+# wallet_transactions delta) is UNCHANGED and keeps working exactly as before -- balance_qoins
+# remains the maintained cache every existing reader (dashboard, pipeline_core, the free-
+# registration split) already relies on. What follows is additive: a `qoins` table of physical,
+# denominated Qoins kept IN SYNC with that same cache, for callers (board_core's reward path)
+# that need to reason about actual Qoins, not just a balance.
+#
+# Rebalancing is LAZY throughout (Decision 1, 2026-10-17): a wallet holds exactly the Qoins it
+# was credited with. Qoins are only split or merged at the moment a specific operation (a debit
+# that can't be made exactly from what's already held) needs it -- never automatically, and never
+# just because a smaller representation would be possible. merge_qoins() exists as an explicit,
+# separately-invoked operation for exactly that reason: consolidation is a choice, not a default.
+
+def _now_iso() -> str:
+    return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+
+
+def public_wallet_view(conn, owner_type: str, owner_id: str) -> dict:
+    """The ONLY thing a non-owner may ever be shown: how many physical Qoins a wallet holds.
+    Never the rupee value -- that stays behind wallet_balance()/weekly_history(), which callers
+    must gate to the owner, the collective wallet's own council members, or an admin (same
+    pattern as reports_core.mask_identity()). A wallet with no qoins rows yet (nothing credited
+    through the new path) correctly reports 0, independent of any legacy balance_qoins value."""
+    row = conn.execute("SELECT id FROM wallets WHERE owner_type = ? AND owner_id = ?", (owner_type, owner_id)).fetchone()
+    if not row:
+        return {"qoin_count": 0}
+    count = conn.execute("SELECT COUNT(*) FROM qoins WHERE wallet_id = ?", (row["id"],)).fetchone()[0]
+    return {"qoin_count": count}
+
+
+def credit_qoins(conn, owner_type: str, owner_id: str, amount: int, reason: str,
+                  rupee_value: int | None = None, related_post_id: int | None = None,
+                  related_user_id: int | None = None) -> list[int]:
+    """Credits `amount` Qoins to a wallet as a freshly-minted physical breakdown (via
+    qoin_core.to_qoins), ADDED to whatever the wallet already holds -- lazy, no rebalance of
+    existing rows. Also updates the balance_qoins cache and writes a wallet_transactions row
+    carrying the originating rupee value and post, if any. Returns the denominations inserted."""
+    import qoin_core
+    if amount == 0:
+        return []
+    wallet_id = ensure_wallet(conn, owner_type, owner_id)
+    now = _now_iso()
+    denoms = qoin_core.to_qoins(amount)
+    for d in denoms:
+        conn.execute("INSERT INTO qoins (wallet_id, denomination, created_at) VALUES (?, ?, ?)", (wallet_id, d, now))
+    conn.execute(
+        """INSERT INTO wallet_transactions (wallet_id, amount_qoins, reason, locked, related_user_id, rupee_value, related_post_id, cycle_id)
+           VALUES (?, ?, ?, 0, ?, ?, ?, ?)""",
+        (wallet_id, amount, reason, related_user_id, rupee_value, related_post_id, cycle_middleware.get_active_cycle_id(conn)),
+    )
+    conn.execute(
+        "UPDATE wallets SET balance_qoins = balance_qoins + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (amount, wallet_id),
+    )
+    return denoms
+
+
+def debit_qoins(conn, owner_type: str, owner_id: str, amount: int, reason: str,
+                 related_post_id: int | None = None, related_user_id: int | None = None) -> list[int]:
+    """Removes `amount` worth of Qoins from a wallet. Lazy: first tries to assemble the exact
+    amount from the wallet's EXISTING physical Qoins (greedy, largest-first over what's actually
+    held) -- no rebalance at all if today's holdings already happen to cover it exactly. Only when
+    that can't land on an exact match does it fall back to a full rebalance of THIS ONE wallet
+    (delete everything, re-materialize the paid-out amount and the remainder separately via
+    qoin_core.to_qoins) -- still "split only when required", just a coarser fallback than a
+    minimal single-Qoin split, since nothing in this task exercises a real spend/debit path yet
+    (no caller uses this function today -- it's provided for the next task that needs one).
+    Returns the denominations removed (what was "paid")."""
+    import qoin_core
+    if amount == 0:
+        return []
+    wallet_id = ensure_wallet(conn, owner_type, owner_id)
+    rows = conn.execute(
+        "SELECT id, denomination FROM qoins WHERE wallet_id = ? ORDER BY denomination DESC", (wallet_id,)
+    ).fetchall()
+    total = sum(r["denomination"] for r in rows)
+    if amount > total:
+        raise ValueError("Not enough Qoins")
+
+    remaining = amount
+    to_remove_ids = []
+    paid_denoms = []
+    for r in rows:
+        if r["denomination"] <= remaining:
+            to_remove_ids.append(r["id"])
+            paid_denoms.append(r["denomination"])
+            remaining -= r["denomination"]
+            if remaining == 0:
+                break
+
+    now = _now_iso()
+    if remaining == 0:
+        for qid in to_remove_ids:
+            conn.execute("DELETE FROM qoins WHERE id = ?", (qid,))
+    else:
+        # Fallback: a full rebalance of this one wallet, triggered only because this specific
+        # debit couldn't be made from what it already holds -- not a system-wide eager policy.
+        conn.execute("DELETE FROM qoins WHERE wallet_id = ?", (wallet_id,))
+        paid_denoms = qoin_core.to_qoins(amount)
+        for d in qoin_core.to_qoins(total - amount):
+            conn.execute("INSERT INTO qoins (wallet_id, denomination, created_at) VALUES (?, ?, ?)", (wallet_id, d, now))
+
+    conn.execute(
+        """INSERT INTO wallet_transactions (wallet_id, amount_qoins, reason, locked, related_user_id, related_post_id, cycle_id)
+           VALUES (?, ?, ?, 0, ?, ?, ?)""",
+        (wallet_id, -amount, reason, related_user_id, related_post_id, cycle_middleware.get_active_cycle_id(conn)),
+    )
+    conn.execute(
+        "UPDATE wallets SET balance_qoins = balance_qoins - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (amount, wallet_id),
+    )
+    return paid_denoms
+
+
+def split_qoin(conn, qoin_id: int) -> list[int]:
+    """Explicit operation, never called automatically: breaks ONE physical Qoin into the fewest
+    strictly-smaller Qoins of the same total value (e.g. a 500 -> 200+200+100). Used by
+    debit_qoins()'s fallback path conceptually, but exposed here as its own callable operation
+    too, per Decision 1 ("an explicit operation, not a default")."""
+    import qoin_core
+    row = conn.execute("SELECT wallet_id, denomination FROM qoins WHERE id = ?", (qoin_id,)).fetchone()
+    if not row:
+        raise LookupError("Qoin not found")
+    smaller = tuple(d for d in qoin_core.DENOMINATIONS if d < row["denomination"])
+    if not smaller:
+        raise ValueError("This is already the smallest denomination -- nothing to split it into")
+    pieces = qoin_core.to_qoins(row["denomination"], denominations=smaller)
+    now = _now_iso()
+    conn.execute("DELETE FROM qoins WHERE id = ?", (qoin_id,))
+    for d in pieces:
+        conn.execute("INSERT INTO qoins (wallet_id, denomination, created_at) VALUES (?, ?, ?)", (row["wallet_id"], d, now))
+    return pieces
+
+
+def merge_qoins(conn, owner_type: str, owner_id: str) -> list[int]:
+    """Explicit operation, never called automatically (Decision 1): rebalances a wallet's entire
+    physical Qoin set into the fewest possible Qoins representing the same total, via
+    qoin_core.to_qoins(). Only runs when something deliberately asks a wallet to consolidate --
+    credit_qoins()/debit_qoins() never call this themselves."""
+    import qoin_core
+    wallet_id = ensure_wallet(conn, owner_type, owner_id)
+    rows = conn.execute("SELECT denomination FROM qoins WHERE wallet_id = ?", (wallet_id,)).fetchall()
+    total = sum(r["denomination"] for r in rows)
+    conn.execute("DELETE FROM qoins WHERE wallet_id = ?", (wallet_id,))
+    now = _now_iso()
+    denoms = qoin_core.to_qoins(total)
+    for d in denoms:
+        conn.execute("INSERT INTO qoins (wallet_id, denomination, created_at) VALUES (?, ?, ?)", (wallet_id, d, now))
+    return denoms
+
+
 def has_locked_share(conn, user_id: int) -> bool:
     row = conn.execute(
         """SELECT 1 FROM wallet_transactions wt

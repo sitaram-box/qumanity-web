@@ -276,6 +276,30 @@
       }
       renderAnnouncements(v);
       renderReportInbox(v);
+      renderStars(v);
+    }
+
+    // ---- Recognition stars (2026-10-17): a permanent, independent record of every positively-
+    // recognised post at this location -- written once at freeze/elevate time, so it keeps
+    // showing here even after the lunar pipeline eventually archives the post itself. No reward
+    // flows from a star; it is recognition only, separate from the author's own Qoin credit. ----
+    var starsBox = root.querySelector(".bd-stars");
+    function renderStars(v) {
+      if (!starsBox) return;
+      var stars = v.stars || [];
+      starsBox.innerHTML = "";
+      if (!stars.length) { starsBox.hidden = true; return; }
+      starsBox.hidden = false;
+      starsBox.appendChild(section("⭐ Recognised", stars.length + " star" + (stars.length === 1 ? "" : "s")));
+      var list = el("div", "bd-stars-list");
+      stars.forEach(function (s) {
+        var row = el("div", "bd-star-row");
+        row.appendChild(el("span", "bd-star-ico", "⭐"));
+        row.appendChild(el("b", "", s.author));
+        row.appendChild(el("small", "", "score " + fmt(s.score) + " · " + ago(s.at)));
+        list.appendChild(row);
+      });
+      starsBox.appendChild(list);
     }
 
     // ---- Item 8: Announcements -- pinned banner (this panel) + right-sidebar card ----
