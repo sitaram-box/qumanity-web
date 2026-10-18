@@ -27,6 +27,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 import cycle_middleware
 import election_core
+import email_core
 import pipeline_core
 import pipeline_scheduler
 import test_cycle_scheduler
@@ -2684,6 +2685,14 @@ def api_auth_register():
         print(f"[registration] free Qoin mint failed for user_id={user_id}: {e}")
     conn.close()
 
+    # Admin notification email (2026-10-18) -- notification-only, masked ID, never the real one
+    # (see email_core.py's module docstring for why). A silent no-op if SMTP isn't configured;
+    # any genuine send failure is caught here so a mail outage can never break registration.
+    try:
+        email_core.send_registration_notification(data["name"], _flatten_location_chain(present_location), private_code)
+    except Exception as e:
+        print(f"[email_core] registration notification failed for user_id={user_id}: {e}")
+
     if helper_user_id:
         # The helper stays signed in as themself; the new member signs in later with their own ID + PIN.
         return jsonify({
@@ -2947,6 +2956,19 @@ def _is_admin() -> bool:
     user = _current_user_row(conn)
     conn.close()
     return bool(user and user["private_id_9digit"] in allowed)
+
+
+def _flatten_location_chain(location: dict) -> str:
+    """A present/birth location dict -> a human-readable chain, most-specific first, e.g.
+    "Rohini Sector 24, Bawana, Delhi" -- only the tiers the location actually has. Shared by the
+    registration email (email_core.send_registration_notification) and the admin export CSV's
+    Location column, so the two always describe a member's location the same way."""
+    parts = []
+    for tier in ("village", "tehsil", "district", "state", "zone", "country", "continent"):
+        name = (location.get(tier) or {}).get("name")
+        if name:
+            parts.append(name)
+    return ", ".join(parts)
 
 
 # ---- Karma Qoins wallet API ----
