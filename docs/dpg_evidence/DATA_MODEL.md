@@ -8,7 +8,7 @@ There is no manual migration step. On every start, `ensure_database_ready()` in 
 1. Applies `db/schema.sql`, the base tables for members, zodiac, locations, wallets and elections.
 2. Seeds the zodiac reference data.
 3. Creates each `*_core.py` module's own tables.
-4. Runs the files in `migrations/` (001–003 and 007–014; numbers 004–006 are unused) through `tools/run_migrations.py`.
+4. Runs the files in `migrations/` (001–003, 007–018; numbers 004–006 are unused) through `tools/run_migrations.py`.
 5. Adds late columns to `users` (`_ensure_user_columns`).
 
 | Migration | Change |
@@ -20,18 +20,22 @@ There is no manual migration step. On every start, `ensure_database_ready()` in 
 | 012 | Announcements |
 | 013 | Citizen Reports |
 | 014 | Drops `payment_orders` if empty (Razorpay removed) |
+| 015 | `qoins` (physical denominated Qoins), `recognition_stars` |
+| 016 | `users.is_demo`, `users.is_removed` |
+| 017 | `board_posts.post_kind`/`is_test`/`is_demo_post`/`test_reward_inr`, `board_votes.voted_at`, `testing_windows` |
+| 018 | `location_elements.birth_users` |
 
 Most activity tables carry `cycle_id` (the lunar cycle the row was written in) and `pipeline_level` (how far up the Village-to-Earth pipeline it has moved).
 
 ## Tables
 
-64 application tables, listed from the local development database on 11 October 2026. PK is the primary key and FK a declared foreign key. Many user references (`user_id`, `author_id` and so on) point to `users.id` by convention without a declared FK.
+67 application tables, listed from the local development database on 11 October 2026, updated 17 October 2026. PK is the primary key and FK a declared foreign key. Many user references (`user_id`, `author_id` and so on) point to `users.id` by convention without a declared FK.
 
 ### Identity and sign-in
 
 | Table | PK | Key references | Holds |
 |---|---|---|---|
-| `users` | `id` | | Member: name, gender, birth date and time, birth and present location (JSON), languages, Private ID, PIN hash, optional email and phone, profile fields, referrer, `hide_identity` |
+| `users` | `id` | | Member: name, gender, birth date and time, birth and present location (JSON), languages, Private ID, PIN hash, optional email and phone, profile fields, referrer, `hide_identity`, `is_demo`, `is_removed` |
 | `account_ids` | `id` | `user_id` | Account IDs and search codes per location |
 | `user_onboarding` | `user_id` | | App tour and review prompt status |
 | `otp_requests` | `id` | `user_id` | One-time codes for PIN reset (hashed) |
@@ -47,7 +51,7 @@ Most activity tables carry `cycle_id` (the lunar cycle the row was written in) a
 | `nakshatras` | `id` | FK `zodiac_id` → `zodiac_signs` | Reference: the 27 nakshatras |
 | `user_zodiac` | `id` | FK `user_id` → `users` | Member's sun and moon sign, nakshatra, ascendant, birth chart |
 | `user_elemental_profile` | `id` | FK `user_id` → `users` | Member's elemental balance |
-| `location_elements` | `id` | `location_id` | Element counts per location |
+| `location_elements` | `id` | `location_id` | Element counts per location. `total_users` is PRESENT-location real members only (`is_demo=0, is_removed=0`) — this is the membership count. `birth_users` is separate, metadata-only: real users born here, never counted toward `total_users`, never driving membership or voting (see `docs/member_count_design.md`). |
 
 ### Location
 
@@ -59,13 +63,14 @@ Most activity tables carry `cycle_id` (the lunar cycle the row was written in) a
 
 | Table | PK | Key references | Holds |
 |---|---|---|---|
-| `board_posts` | `id` | `author_id`, `origin_post_id`, `elevated_to` | Posts, score, voting window, status (active, elevated, frozen, removed) |
-| `board_votes` | `post_id, user_id` | | One vote per member per post |
+| `board_posts` | `id` | `author_id`, `origin_post_id`, `elevated_to` | Posts, score, voting window, status (active, elevated, frozen, removed), `post_kind` (member, test, council_update), `is_test`, `is_demo_post`, `test_reward_inr` (a test post's computed-but-never-credited reward) |
+| `board_votes` | `post_id, user_id` | | One vote per member per post, `voted_at` |
 | `board_comments` | `id` | `post_id`, `user_id` | Comments |
 | `subgroups` | `id` | `village_id`, `created_by` | Village societies or RWAs |
 | `subgroup_members` | `subgroup_id, user_id` | | Membership and join status |
 | `board_messages` | `id` | `subgroup_id`, `user_id` | Sub-group chat |
 | `volunteers` | `user_id, level, group_id, kind` | | Q-Punch volunteers and agents |
+| `testing_windows` | `id` | | Feature-scoped testing windows (`feature`, start/end date, status, demo user count, vote distribution JSON) — `post_testing` is the only feature using this table so far |
 
 ### Personal social
 
@@ -102,6 +107,8 @@ Most activity tables carry `cycle_id` (the lunar cycle the row was written in) a
 |---|---|---|---|
 | `wallets` | `id` | `owner_type, owner_id` | One wallet per member and per location; Qoin balance |
 | `wallet_transactions` | `id` | FK `wallet_id` → `wallets`; FK `related_user_id` → `users` | Every Qoin movement with a reason |
+| `qoins` | `id` | FK `wallet_id` → `wallets` | One row per physical Qoin a wallet holds (its denomination) |
+| `recognition_stars` | `id` | `post_id`, `author_id` | Permanent record of a positively-recognised board post, independent of the post's own lifecycle |
 
 ### Referrals
 

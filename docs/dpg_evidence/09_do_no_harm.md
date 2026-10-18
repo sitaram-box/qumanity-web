@@ -35,9 +35,11 @@ Qumanity does not store, transmit, or process financial data. There is no paymen
 
 ## 9.4 Inappropriate and illegal content (9B)
 
-Members create content in three places: Collective Board posts, Citizen Reports and private messages.
+Members create content in Collective Board posts and comments, Citizen Reports, private messages and sub-group chats, and can react to messages and council updates. Councils also publish council updates.
 
-- **Collective Boards:** posts start at the village level and rise only if residents vote them up. When a post's voting window closes with a score of zero or less, it is marked removed and hidden from the board (`board_core.py`). Its author can still see it in their removed posts. This is community moderation by vote, but it acts only when the window closes, so a harmful post stays visible until then. Posts and messages are limited to 1,000 characters.
+- **Collective Boards:** posts start at the village level and rise only if residents vote them up. When a post's voting window closes with a negative score, it is marked removed and hidden from the board, and its author loses karma (`board_core.settle`). The author can still see it in their removed posts. A post that closes at exactly zero is frozen and stays visible, with no reward. This is community moderation by vote, but it acts only when the window closes, so a harmful post stays visible until then. Posts and messages are limited to 1,000 characters, and comments (allowed only once voting has closed) to 500.
+- **Council updates:** posted only by a location's council (or the administrator) and never voted on, so community-vote moderation does not apply to them. Members can react to them. Reporting tools (9.6 #1) will cover them too.
+- **Test content:** during the Post Testing cycle, demo accounts post labelled test messages. They are hidden from real members while voting is open, carry a "Demo · Test" badge afterwards, and never earn real Qoins or karma. No scheduler runs the 500 election-pilot demo accounts. The voting logic exists (`election_core.auto_vote`) and can be triggered manually by an admin via `POST /api/admin/election/auto-vote`. Nothing schedules it automatically. The automated election testing cycle is planned, not built.
 - **Citizen Reports:** these go only to the responsible council and have no public view. A council must respond within 10 days or the report escalates to the next level.
 - **Private messages:** these are seen only by the people in the chat.
 
@@ -57,7 +59,7 @@ Qumanity acts as an intermediary under the Information Technology Act, 2000 and 
 | 2 | No way to block a member | Add "Block": a blocked member cannot send requests or messages | Pending (code) |
 | 3 | No published community rules or grievance contact (IT Rules, 2021) | Publish community rules and name a grievance officer (founder@qumanity.in) with a response time | Pending |
 | 4 | Village member names are listed without sign-in (Document 07, action 3) | Require sign-in | Pending (code) |
-| 5 | Small-count statistics can single out individuals (Document 07, action 4) | Suppress counts below 5 | Done, 14 October 2026, for the location stats (JSON and CSV); the Earth, country and continent routes remain (Document 06, 6.5 #5) |
+| 5 | Small-count statistics can single out individuals (Document 07, action 4) | Suppress counts below 5 | Done, 14 October 2026, for the location stats (JSON and CSV); the country and continent routes remain (Document 06, 6.5 #5) |
 | 6 | No minimum age or parental consent (Document 07, action 5) | Set a minimum age or add parental consent | Pending |
 | 7 | Hidden identity has no member-facing switch | Let any member turn it on in Private account settings | Pending (code) |
 

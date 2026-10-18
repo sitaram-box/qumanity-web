@@ -1,13 +1,13 @@
 # Qumanity API reference
 
-Every JSON route in qumanity-web's `app.py`, read from the code on 11 October 2026 and updated on 14 October 2026: 149 routes under `/api`. The website and the phone app call the same routes. `docs/phone_app_api.md` describes only the routes the phone app uses; this file covers all of them.
+Every JSON route in qumanity-web's `app.py`, read from the code on 11 October 2026, updated 14 October 2026 and 17 October 2026: 154 routes under `/api`. The website and the phone app call the same routes. `docs/phone_app_api.md` describes only the routes the phone app uses; this file covers all of them.
 
 ## Conventions
 
 - **Base URL:** `https://qumanity.in` in production, `http://localhost:5000` locally.
 - **Format:** requests and responses are JSON (UTF-8). Errors return `{"error": "<message>"}` with a 4xx status.
 - **Signing in:** the website signs in through `/login` and keeps a signed session cookie. The phone app sends `Authorization: Bearer <token>`, the token returned by `/api/auth/register` or by `/login` when the app signs in. Tokens are signed with HMAC (`itsdangerous`), expire after 30 days, and stop working when the member changes their PIN. A valid token counts exactly like a session.
-- **Path IDs:** `<level>` is one of the location levels (village to earth). `<path:location_id>` is a dotted location ID such as `CS.DL.3.4.1A`.
+- **Path IDs:** `<level>` is one of the location levels (village to earth). `<path:location_id>` is a dotted location ID such as `CS.DL.3.4.1A`. `<scope>` on the reactions route is `subgroup`, `personal`, or `board_post` (the last accepted only when the target post is a council update).
 
 ## Access levels
 
@@ -15,8 +15,8 @@ Every JSON route in qumanity-web's `app.py`, read from the code on 11 October 20
 |---|---|---|
 | Public | No sign-in needed | 37 |
 | Member | Signed-in member (`login_required`) | 70 |
-| Council or admin | Signed in, and an elected council member of the location (or the administrator) | 5 |
-| Admin | Signed in, and the member's Private ID is listed in `QM_ADMIN_PRIVATE_IDS`; anyone else gets 403 | 37 |
+| Council or admin | Signed in, and an elected council member of the location (or the administrator) | 6 |
+| Admin | Signed in, and the member's Private ID is listed in `QM_ADMIN_PRIVATE_IDS`; anyone else gets 403 | 41 |
 
 Parameters list the query-string keys and JSON body keys the route reads. Response fields list the top-level keys of the JSON the route returns directly; "(built by a helper)" means the response object is assembled in a `*_core.py` module.
 
@@ -76,7 +76,7 @@ Closed on 14 October 2026:
 | GET | `/api/location/stats/<level>/<path:location_id>.csv` | Public | query: `basis` | CSV with `metric,value` rows: the same fields and suppression |
 | GET | `/api/location/members/village/<path:village_id>` | Public ⚠ |  | `members` |
 | GET | `/api/earth/stats` | Public |  | (built by a helper) |
-| GET | `/api/location/elements/<path:location_id>` | Public | query: `type` | `location_id`, `location_type` |
+| GET | `/api/location/elements/<path:location_id>` | Public | query: `type` | `location_id`, `location_type`, `total_users`, `birth_users`, `<element>_count`, `<element>_percentage` (counts from 1 to 4 shown as `"<5"`, with the matching percentage `null`) |
 | GET | `/api/global/elements` | Public |  | `earth`, `all_locations` |
 
 ### Astrology, lunar calendar and time
@@ -108,8 +108,8 @@ Closed on 14 October 2026:
 | GET | `/api/wallet/history/<location_type>/<path:location_id>` | Member |  | (built by a helper) |
 | GET | `/api/qoins/config` | Member |  | `currency`, `symbol`, `currency_name`, `denominations`, `village_prices`, `paid_prices` |
 | GET | `/api/qoins/preview` | Public | query: `amount` | `amount`, `qoins` |
-| GET | `/api/wallet/balance` | Member |  | `balance_qoins`, `has_locked_share`, `transactions` |
-| GET | `/api/wallet/balance/<location_type>/<path:location_id>` | Public |  | `location_type`, `location_id`, `balance_qoins` |
+| GET | `/api/wallet/balance` | Member |  | `balance_qoins`, `qoin_count`, `has_locked_share`, `transactions` |
+| GET | `/api/wallet/balance/<location_type>/<path:location_id>` | Public |  | `location_type`, `location_id`, `qoin_count`; also `balance_qoins` for that location's council or the administrator |
 
 ### Collective Boards, sub-groups and reactions
 
@@ -119,13 +119,14 @@ Closed on 14 October 2026:
 | POST | `/api/board/post` | Member | body: `content`, `level` | `id` |
 | POST | `/api/board/vote` | Member | body: `post_id`, `value` | `score` |
 | POST | `/api/board/comment` | Member | body: `post_id`, `text` | `status` |
+| POST | `/api/board/council-update` | Council or admin | body: `content`, `level` | `id` |
 | GET | `/api/board/removed` | Member |  | `posts` |
 | GET | `/api/subgroups` | Member |  | `village` |
 | POST | `/api/subgroups` | Admin | body: `admin_label`, `description`, `name` | `id` |
 | POST | `/api/subgroups/<int:sg_id>/join` | Member |  | `status` |
 | POST | `/api/subgroups/<int:sg_id>/decide` | Admin | body: `approve`, `user_id` | `status` |
 | GET/POST | `/api/chat/<int:sg_id>` | Member |  | `status` |
-| POST | `/api/reactions/<scope>/<int:message_id>` | Member |  | `status` |
+| POST | `/api/reactions/<scope>/<int:message_id>` | Member | body: `reaction` | `status` |
 
 ### People, personal groups, chats and referrals
 
@@ -247,3 +248,12 @@ Closed on 14 October 2026:
 | POST | `/api/admin/pipeline/tick` | Admin | body: `simulate_date` | (built by a helper) |
 | GET | `/api/admin/pipeline/health` | Admin |  | (built by a helper) |
 | POST | `/api/admin/sync-folders` | Admin |  | (built by a helper) |
+
+### Administration: Post Testing cycle
+
+| Method | Path | Access | Parameters | Response fields |
+|---|---|---|---|---|
+| GET | `/api/admin/test-cycle/panel` | Admin |  | `window`, `posts_this_month`, `votes_this_month` |
+| POST | `/api/admin/test-cycle/start` | Admin | body: `demo_user_count`, `vote_distribution` | (the new window row) |
+| POST | `/api/admin/test-cycle/renew` | Admin |  | (the updated window row) |
+| POST | `/api/admin/test-cycle/stop` | Admin |  | (the updated window row) |

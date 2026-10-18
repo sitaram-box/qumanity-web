@@ -46,14 +46,14 @@ AGPL-3.0 is on the OSI's list of approved licences.
 ## 2.4 License compliance plan
 
 - **LICENSE file.** The canonical, unmodified AGPL-3.0 text goes in a file named `LICENSE` at the root of both qumanity-web and qumanity-app. GitHub then detects it and shows "AGPL-3.0 license" on each repository page.
-- **Copyright and licence notice.** Each README states the licence and the copyright holder: "Copyright (C) 2026 Rohit Mudgal (individual). Qumanity is licensed under the GNU Affero General Public License v3.0." Status on 14 October 2026: not yet in either README (Document 10, 10.4 step 6). Contributors keep the copyright in their own contributions (below). The phone app's `package.json` gets `"license": "AGPL-3.0-only"`.
-- **Website footer.** The footer of qumanity.in shows "Licensed under AGPL-3.0" and links to the public source repository. The link is what section 13 asks of a network service, and it is the simplest way for any operator of a modified copy to comply. Today the footer markup is repeated in five templates (home, about, register, elements, kundali view), so each one needs the line.
+- **Copyright and licence notice.** Each README states the licence and the copyright holder: "Copyright (C) 2026 Rohit Mudgal (individual). Qumanity is licensed under the GNU Affero General Public License v3.0." Both READMEs carry this notice (qumanity-web 0301d1d, qumanity-app d1f386c). Contributors keep the copyright in their own contributions (below). The phone app's `mobile/package.json` declares `"license": "AGPL-3.0-only"`.
+- **Website footer.** The footer of qumanity.in shows "Licensed under AGPL-3.0" and links to the public source repository. The link is what section 13 asks of a network service, and it is the simplest way for any operator of a modified copy to comply. The line is in all five templates that carry a footer (home, about, register, elements, kundali view). The home footer's copyright line reads "© 2026 Rohit Mudgal" (45b2e4c).
 - **Contributors keep their copyright.** No Contributor License Agreement is required. Contributors keep the copyright in their contributions and license them to everyone under AGPL-3.0, the same licence the project uses ("inbound = outbound"). A short CONTRIBUTING file will say so, and will ask for a Developer Certificate of Origin sign-off (`Signed-off-by:` on each commit) as a lightweight record of each contributor's right to submit their code. One consequence is that relicensing the project later would require agreement from every contributor. The owner accepts this, because it is part of what makes the commitment to openness credible.
 - **No effect on user data.** The licence governs the source code only. It grants no rights over the personal data of registered members, including demo accounts. That data stays under Qumanity's privacy policy and India's Digital Personal Data Protection Act, 2023, covered in later indicators.
 
 ## 2.5 License text
 
-The `LICENSE` file will contain the canonical AGPL-3.0 text from gnu.org (661 lines, 34,523 bytes), unmodified. It is not repeated here.
+The `LICENSE` file in each repository contains the canonical AGPL-3.0 text from gnu.org (661 lines, 34,523 bytes), unmodified. It is not repeated here.
 
 ## 2.6 Third-party dependency licensing
 
@@ -85,15 +85,18 @@ Licences below were read from each package's published metadata (PyPI wheels and
 |---|---|
 | React, React Native, React Native Web | MIT |
 | Expo SDK and Expo Router, with the `expo-*` modules | MIT |
-| react-native-screens, react-native-safe-area-context, react-native-svg, react-native-webview | MIT |
+| react-native-screens, react-native-safe-area-context, react-native-svg | MIT |
 | TypeScript (development only) | Apache-2.0 |
 | vitest (development only) | MIT |
+| `functions/` and `tools/ops` (parked server tooling, not used by the app): firebase-admin, firebase-functions | Apache-2.0 |
+
+The parked Firebase tooling is scheduled for removal (Document 04, 4.6 #1).
 
 **pyswisseph check.** Version 2.10.3.2 declares "GNU Affero General Public License v3" in its package metadata and ships the full AGPL-3.0 text as `LICENSE.txt`. The Swiss Ephemeris C library it wraps is dual-licensed by Astrodienst: AGPL-3.0, or the paid Swiss Ephemeris Professional License. Qumanity uses it under AGPL-3.0. Qumanity calls only the built-in Moshier ephemeris (`FLG_MOSEPH`), so no separate ephemeris data files are distributed. pyswisseph is not GPL-2.0-only, so there is no incompatibility. AGPL-3.0 is the licence the combined program already needs.
 
 **pycountry check.** LGPL-2.1 is OSI-approved. Its section 3 allows it to be used under GPL v2 or any later version, which makes it compatible with an AGPL-3.0 program that imports it as a library.
 
-**External services.** Qumanity does not depend on any external proprietary service for its core functionality. Qoins — the platform's internal community currency — are earned through civic activity (karma, service, post elevation rewards, voting) rather than purchased. No payment processor, no card data, and no financial PII are handled by the platform.
+**External services.** Qumanity does not depend on any external proprietary service for its core functionality. Qoins — the platform's internal community currency — are earned through civic activity rather than purchased: rewards for positively voted posts, a share of the Qoin minted at each free registration, and the release of that share when a member first votes in an election. Converting karma and community service into Qoins is planned. No payment processor, no card data, and no financial PII are handled by the platform.
 
 No dependency introduces a proprietary or non-OSI licence.
 

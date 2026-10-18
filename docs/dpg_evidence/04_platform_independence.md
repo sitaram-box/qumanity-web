@@ -23,7 +23,7 @@ Qumanity is fully open-source from top to bottom. Every component in the technol
 
 ## 4.3 Technology stack
 
-Read from `requirements.txt`, `.python-version` and `mobile/package.json` on 11 October 2026. Licences are listed in Document 02, section 2.6.
+Read from `requirements.txt`, `.python-version` and `mobile/package.json` on 11 October 2026, re-checked 17 October 2026. Licences are listed in Document 02, section 2.6.
 
 | Layer | Components |
 |---|---|
@@ -52,7 +52,7 @@ None of the following is required by the software. Each can be swapped without c
 
 ## 4.5 Removed proprietary dependencies
 
-An earlier development prototype included an optional Razorpay payment integration for accepting voluntary donations from registered users. This integration was removed on 11 October 2026 to ensure that Qumanity has zero proprietary dependencies and handles no financial PII. Qoins — the platform's internal currency — are earned through civic activity (karma, service, post elevation rewards, voting) rather than purchased. Qoins carry a rupee reference value for user clarity, but no real-money transaction occurs within the platform.
+An earlier development prototype included an optional Razorpay payment integration for accepting voluntary donations from registered users. This integration was removed from the website and server on 11 October 2026 and from the phone app on 15 October 2026 to ensure that Qumanity has zero proprietary dependencies and handles no financial PII. Qoins — the platform's internal currency — are earned through civic activity rather than purchased: rewards for positively voted posts, a share of the Qoin minted at each free registration, and the release of that share when a member first votes in an election. Converting karma and community service into Qoins is planned. Qoins carry a rupee reference value for user clarity, but no real-money transaction occurs within the platform.
 
 Migration `014_drop_payment_orders.py` drops the old `payment_orders` table when it is empty, and otherwise leaves existing rows as historical data that nothing reads or writes. How Qoins are earned is described in `docs/qoins_earn_reference.md`.
 
@@ -60,8 +60,8 @@ Migration `014_drop_payment_orders.py` drops the old `payment_orders` table when
 
 | # | Action | Status |
 |---|---|---|
-| 1 | Remove the parked Firebase tooling in qumanity-app (`tools/ops`, which uses the proprietary Firebase Admin SDK, plus `firebase.json`, `.firebaserc` and `firebase/`). The phone app itself does not use Firebase at runtime. | Pending |
-| 2 | Push the payment-code removal in qumanity-app. It is done on the founder's machine, but the public repository still contains `mobile/src/components/Payment.tsx` and the Razorpay calls (checked 14 October 2026) | Pending: before submission |
+| 1 | Remove the parked Firebase tooling in qumanity-app: `functions/` (Cloud Functions), `tools/ops`, `firebase.json`, `.firebaserc` and `firebase/`. The SDKs are Apache-2.0, but they exist to call Google's proprietary Firebase service. The phone app itself does not use Firebase at runtime. | Pending |
+| 2 | Push the payment-code removal in qumanity-app | Done, 15 October 2026 (1689b23): `Payment.tsx` and every Razorpay call are gone from the public repository |
 | 3 | Optionally self-host the CDN scripts and fonts so the site works with no third-party requests | Optional |
 
 ## 4.7 Evidence for the application form

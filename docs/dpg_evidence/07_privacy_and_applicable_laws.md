@@ -59,10 +59,12 @@ Qumanity does not collect or process payment information. There is no payment pr
 - **Hidden identity:** the data model supports replacing a member's name with their Account ID and capping their visible location at State level wherever strangers can see them (`hide_identity`). There is no member-facing switch for it yet.
 - **Anonymous Citizen Reports:** a member can file a report anonymously. The council handling it sees "Anonymous Citizen"; only the platform administrator can see the real identity.
 - **No advertising, tracking or data sale:** the code contains no analytics or advertising SDK. Member data is not shared with third parties.
-- **Database files and demo account lists** are kept out of the public repositories (`.gitignore`). The demo account list was also scrubbed from git history.
+- **Database files** are kept out of the public repositories (`.gitignore`). The old demo account list (`DEMO_ACCOUNTS.md`) was also scrubbed from git history.
+- **Demo accounts:** `docs/ELECTION_PILOT.md` lists 500 demo Private IDs used for local election testing. These accounts are not present in the production database. No Private ID of a live account is published in the repository. The 50 board-test accounts share a PIN set in `scripts/seed_demo_voters.py`, but their Private IDs are not published. These are demo accounts. They contain no personal data, the testing scheduler casts their votes only on labelled test posts, and they are excluded from every public count. The platform does not otherwise restrict a signed-in demo account, so someone who also knew one of their Private IDs could post and vote as an ordinary member of the pilot village. Two stray demo accounts (users 25 and 26) were retired on 17 October 2026. They are flagged `is_demo=1` and `is_removed=1`, cannot sign in, and are excluded from every count.
 - **Founder's Private ID rotated:** as a precaution, the founder's own Private ID was replaced after an earlier ID had appeared in repository files. The old ID was removed from the files and from git history, and the new ID is not published.
 - **Birth charts are private:** a member's full chart (`/api/user/zodiac/<id>`, `/api/user/kundali/summary/<id>` and the `/kundali/<id>` page) requires sign-in and is returned only to that member.
 - **Admin routes:** every `/api/admin/` route requires sign-in and an admin Private ID.
+- **Wallet values are private:** anyone can see how many Qoins a wallet holds, but its rupee value is shown only to its owner, or for a location wallet, to that location's council and the administrator. Public statistics leave out members' karma and Qoin totals for any location with one to four members.
 
 ## 7.6 Gaps and actions
 
@@ -71,12 +73,13 @@ Qumanity does not collect or process payment information. There is no payment pr
 | 1 | The registration page says "you agree to Qumanity's Privacy Policy", but the link goes nowhere (`href="#"`) | Write and publish a privacy policy and terms of service at qumanity.in, and link them from registration in the website and app | Pending |
 | 2 | No way for a member to download or delete their own data (DPDP Act, sections 11 and 12) | Add "export my data" and "delete my account" to the Private account settings | Pending |
 | 3 | `/api/location/members/village/<id>` lists names, gender and age category of a village's members without sign-in | Require sign-in, or limit the list to members of that village | Pending (code) |
-| 4 | Aggregate stats for a small village can single out individuals (for example, the only woman aged 76+) | Suppress any count below 5, in both the JSON stats and the CSV export (Document 06, action 2) | Done, 14 October 2026, for `/api/location/stats` (JSON and CSV). The Earth, country and continent routes are not yet suppressed (Document 06, 6.5 #5) |
+| 4 | Aggregate stats for a small village can single out individuals (for example, the only woman aged 76+) | Suppress any count below 5, in both the JSON stats and the CSV export (Document 06, action 2) | Done, 14 October 2026, for `/api/location/stats` (JSON and CSV), and 17 October 2026 for the Earth, subcontinent, location-elements, global-elements and India-scoreboard routes (265a2f4, 57bafba). The country and continent routes are not yet suppressed (Document 06, 6.5 #5) |
 | 5 | Birth date and time are collected for every member. Under the DPDP Act a member under 18 is a child, and processing needs verifiable parental consent | Set a minimum age, or add a parental-consent step for under-18s | Pending |
 | 6 | No named contact for data requests and grievances | Name founder@qumanity.in as the grievance contact in the privacy policy | Pending |
 | 7 | Non-Indian members | Decide whether to restrict registration to India, or assess GDPR and other laws | Pending |
 | 8 | `/api/user/zodiac/<id>`, `/api/user/kundali/summary/<id>` and the `/kundali/<id>` page show any member's birth chart (and, on the page, name) without sign-in. User IDs are sequential, so every chart can be listed | Require sign-in and return a chart only to its owner; the app already uses `/api/me/kundali` | Done, 14 October 2026: all three require sign-in and return the chart only to its owner |
 | 9 | `POST /api/admin/sync-folders` has no sign-in or admin check | Add the admin check used by the other `/api/admin` routes | Done, 14 October 2026 |
+| 10 | `docs/ELECTION_PILOT.md` lists 500 demo Private IDs (not present in production), and the 50 live board-test accounts share a PIN set in `scripts/seed_demo_voters.py` | Disclose it (7.5 and Document 05, 5.2) | Disclosed. Tracked in Document 10, row 28 |
 
 ## 7.7 Evidence for the application form
 

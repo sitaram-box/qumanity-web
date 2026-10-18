@@ -31,7 +31,7 @@ Each row was checked against the qumanity-web code on 11 October 2026.
 | ISO 8601 | Dates and timestamps throughout (`date.isoformat()`; `dob` stored as `YYYY-MM-DD`) | Date and time format |
 | IANA Time Zone Database | Birth time is converted to UTC using the IANA zone for the birth location (`timezonefinder` with Python's `zoneinfo`, `zodiac_core.py`) | Time zones |
 | ISO 639-1 language codes | Interface translations named by code (`static/locales/hi.json`, `ta.json`, `ur.json` and so on) | Language identification |
-| WAI-ARIA 1.2 | `aria-label`, `aria-expanded`, `aria-modal` and other attributes in templates and scripts (161 attribute uses on 131 lines) | Accessibility for screen readers |
+| WAI-ARIA 1.2 | `aria-label`, `aria-expanded`, `aria-modal` and other attributes in templates and scripts | Accessibility for screen readers |
 | WCAG 2.1 (aspirational target) | UI design. Not yet audited. | Accessibility |
 
 HMAC-SHA256 was used only for Razorpay payment-signature checks and was removed with Razorpay. HMAC is still used, through itsdangerous, for signing tokens and cookies.
