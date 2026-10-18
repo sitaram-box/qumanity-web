@@ -21,7 +21,7 @@ import re
 import sys
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, Response, jsonify, redirect, render_template, request, send_file, session, url_for
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -1185,6 +1185,9 @@ def api_qmail_compose():
                     conn, attachment_kind, cur.lastrowid, session["user_id"],
                     attachment_file.filename, attachment_file.mimetype or "application/octet-stream", file_bytes,
                 )
+            except qmail_core.AttachmentTypeError as e:
+                conn.rollback()
+                return jsonify({"error": str(e)}), 400
             except ValueError as e:
                 conn.rollback()
                 return jsonify({"error": str(e)}), 413
@@ -1273,10 +1276,15 @@ def api_qmail_attachment_serve(attachment_id):
             return jsonify({"error": "Attachment not found"}), 404
     finally:
         conn.close()
-    return Response(
-        att["data"], mimetype=att["content_type"],
-        headers={"Content-Disposition": f'inline; filename="{att["filename"]}"'},
+    # Always a download, never rendered in place of the page, whatever type was stored -- and
+    # nosniff so the browser can't decide for itself that the bytes are HTML. send_file encodes
+    # the filename safely for the header.
+    res = send_file(
+        io.BytesIO(att["data"]), mimetype=att["content_type"],
+        as_attachment=True, download_name=att["filename"] or "attachment",
     )
+    res.headers["X-Content-Type-Options"] = "nosniff"
+    return res
 
 
 @app.route("/api/qmail/drafts")

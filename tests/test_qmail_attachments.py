@@ -275,6 +275,47 @@ check("the body comes back from the API byte-for-byte identical to what was sent
 
 print()
 print("=" * 70)
+print("Section 6: file-type allowlist on upload, and download-only serving")
+print("=" * 70)
+
+login(u1["private_code"])
+
+
+def compose_with(filename, data, content_type):
+    return client.post("/api/qmail/compose", data={
+        "to": status2["address"], "subject": f"type-{filename}", "body": "type check",
+        "attachment": (io.BytesIO(data), filename, content_type),
+    }, content_type="multipart/form-data")
+
+
+svg = b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+res = compose_with("drawing.svg", svg, "image/svg+xml")
+check("an .svg upload is rejected at save time with a clean 400", res.status_code == 400)
+res = compose_with("page.html", b"<script>alert(1)</script>", "text/html")
+check("an .html upload is rejected with 400", res.status_code == 400)
+res = compose_with("trick.png", b"<script>alert(1)</script>", "text/html")
+check("a .png name declared as text/html is rejected with 400 (extension and type disagree)",
+      res.status_code == 400)
+check("no rejected file entered the database, and no message was left behind either",
+      raw("SELECT COUNT(*) c FROM qmail_attachments WHERE filename IN ('drawing.svg', 'page.html', 'trick.png')")["c"] == 0
+      and raw("SELECT COUNT(*) c FROM qmail_messages WHERE subject IN "
+              "('type-drawing.svg', 'type-page.html', 'type-trick.png')")["c"] == 0)
+
+png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+res = compose_with("photo.png", png, "image/png")
+check("a .png upload declared as image/png succeeds (201)", res.status_code == 201)
+png_id = raw("SELECT id FROM qmail_attachments WHERE filename = 'photo.png'")["id"]
+login(u2["private_code"])
+res = client.get(f"/api/qmail/attachments/{png_id}")
+check("the .png is served (200) with its bytes intact", res.status_code == 200 and res.data == png)
+check("it is served with Content-Disposition: attachment, not inline",
+      res.headers.get("Content-Disposition", "").startswith("attachment"))
+check("it is served with X-Content-Type-Options: nosniff",
+      res.headers.get("X-Content-Type-Options") == "nosniff")
+check("it is served as image/png", res.mimetype == "image/png")
+
+print()
+print("=" * 70)
 if FAILS:
     print(f"{len(FAILS)} FAILURE(S):")
     for f in FAILS:

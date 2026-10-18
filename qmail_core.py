@@ -237,15 +237,63 @@ MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024  # 2 MB -- re-checked here against the DE
 # generous global cap, is still caught here, against the attachment's own actual length.
 
 
+# File-type allowlist (2026-10-18). Extension -> the content types a browser may declare for it;
+# the first one is what gets stored and served. Deliberately narrow and limited to types a browser
+# does not execute: svg, html/htm, js and xml are NOT here -- an SVG is a script-capable document
+# that merely looks like an image. Widening this list is a product decision, not a security one,
+# as long as every new type is non-renderable; the serve route's attachment disposition + nosniff
+# is the second layer either way.
+ALLOWED_ATTACHMENT_TYPES = {
+    "png": ("image/png",),
+    "jpg": ("image/jpeg", "image/pjpeg"),
+    "jpeg": ("image/jpeg", "image/pjpeg"),
+    "gif": ("image/gif",),
+    "webp": ("image/webp",),
+    "pdf": ("application/pdf",),
+    "txt": ("text/plain",),
+    "csv": ("text/csv", "application/csv", "application/vnd.ms-excel"),
+    "doc": ("application/msword",),
+    "docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document",),
+    "xls": ("application/vnd.ms-excel",),
+    "xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",),
+    "ppt": ("application/vnd.ms-powerpoint",),
+    "pptx": ("application/vnd.openxmlformats-officedocument.presentationml.presentation",),
+    "zip": ("application/zip", "application/x-zip-compressed"),
+}
+
+
+class AttachmentTypeError(ValueError):
+    """A file type outside ALLOWED_ATTACHMENT_TYPES, or an extension and declared content type
+    that disagree. A subclass of ValueError so existing callers still catch it; the compose route
+    checks for it first and returns 400 rather than the size limit's 413."""
+
+
+def allowed_attachment_type(filename: str, content_type: str) -> str:
+    """Returns the canonical content type to store, or raises AttachmentTypeError. Both the
+    extension and the declared type must be on the list AND agree with each other -- a file named
+    .png declared as text/html is rejected, not trusted on either half alone."""
+    ext = os.path.splitext(filename or "")[1].lower().lstrip(".")
+    allowed = ALLOWED_ATTACHMENT_TYPES.get(ext)
+    if not allowed:
+        raise AttachmentTypeError("This file type can't be attached")
+    declared = (content_type or "").split(";")[0].strip().lower()
+    if declared not in allowed:
+        raise AttachmentTypeError("The file's type doesn't match its extension")
+    return allowed[0]
+
+
 def save_attachment(conn, kind: str, message_id: int, uploader_user_id: int, filename: str,
                      content_type: str, data: bytes) -> int:
     """Stores one attachment for a just-created message (kind='member' -> qmail_messages.id,
     kind='council' -> qpunch_queue_messages.id). Raises ValueError if `data` exceeds
-    MAX_ATTACHMENT_BYTES -- the route turns that into a 413. Returns the new attachment's id."""
+    MAX_ATTACHMENT_BYTES -- the route turns that into a 413 -- and AttachmentTypeError (400) if
+    the file type isn't allowed, so a rejected file never enters the database. Returns the new
+    attachment's id."""
     if kind not in ("member", "council"):
         raise ValueError("Unknown attachment kind")
     if len(data) > MAX_ATTACHMENT_BYTES:
         raise ValueError(f"Attachment exceeds the {MAX_ATTACHMENT_BYTES // (1024 * 1024)} MB limit")
+    content_type = allowed_attachment_type(filename, content_type)
     cur = conn.execute(
         "INSERT INTO qmail_attachments (kind, message_id, uploader_user_id, filename, content_type, "
         "byte_size, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
