@@ -17,13 +17,20 @@
     personal: document.getElementById("qm-dash-personal"),
     public: document.getElementById("qm-dash-public"),
     global: document.getElementById("qm-dash-global"),
+    // qm-dash-admin only exists in the DOM at all for is_admin_panel_user -- `panels.admin` is
+    // null for every other viewer, so every loop over `panels` below guards with `if (panel)`.
+    admin: document.getElementById("qm-dash-admin"),
   };
 
   tabs.forEach(function (tab) {
     tab.addEventListener("click", function () {
       var name = tab.getAttribute("data-tab");
       tabs.forEach(function (t) { t.classList.toggle("is-active", t === tab); });
-      Object.keys(panels).forEach(function (key) { panels[key].hidden = key !== name; });
+      Object.keys(panels).forEach(function (key) {
+        var panel = panels[key];
+        if (panel) panel.hidden = key !== name;
+      });
+      if (name === "admin") loadAdminPanel();
     });
   });
 
@@ -940,5 +947,205 @@
       }
       window.location.href = "/api/admin/users/export.csv?" + meQueryString();
     });
+  }
+
+  // ---- Admin Panel (2026-10-18): a combined inbox over Citizen Reports, ID recovery requests,
+  // and general queries. The markup only exists in the DOM for is_admin_panel_user (dashboard.html's
+  // {% if %} gate), so loadAdminPanel() itself no-ops for everyone else -- same pattern as the
+  // Test Cycle / Member Export blocks above. Small local helpers (apEl/apApi/apAgo) rather than
+  // reaching into board.js's own IIFE-scoped el()/api()/ago(), which aren't visible here. ----
+  function apEl(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  function apApi(url, body) {
+    return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || "Something went wrong"); return j; }); });
+  }
+  function apAgo(iso) {
+    if (!iso) return "";
+    var s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return "just now";
+    if (s < 3600) return Math.floor(s / 60) + " min ago";
+    if (s < 86400) return Math.floor(s / 3600) + " h ago";
+    return Math.floor(s / 86400) + " d ago";
+  }
+
+  // Assigned inside the `if (apList)` block below, read by loadAdminPanel() at the bottom of this
+  // IIFE -- a plain outer `var` assignment, not a function declaration, so it's unaffected by
+  // strict mode's block-scoping of function declarations (apLoadFeed() itself IS declared inside
+  // that block and wouldn't be reachable from outside it directly).
+  var apRefreshFeed = null;
+  var apList = document.getElementById("ap-list");
+  if (apList) {
+    var apListEmpty = document.getElementById("ap-list-empty");
+    var apDetail = document.getElementById("ap-detail");
+    var apFilterBtns = Array.prototype.slice.call(document.querySelectorAll(".ap-filter"));
+    var apRefreshBtn = document.querySelector(".ap-refresh-btn");
+    var apCurrentFilter = "all";
+    var apItemsCache = [];
+
+    function apSourceLabel(source) {
+      return { report: "Citizen Report", id_recovery: "ID Recovery", query: "Query" }[source] || source;
+    }
+
+    function apRenderList() {
+      apList.innerHTML = "";
+      var filtered = apCurrentFilter === "all" ? apItemsCache : apItemsCache.filter(function (it) { return it.source === apCurrentFilter; });
+      apListEmpty.hidden = filtered.length !== 0;
+      filtered.forEach(function (it) {
+        var row = apEl("button", "ap-row");
+        row.type = "button";
+        row.appendChild(apEl("span", "ap-badge ap-badge-" + it.status, it.status));
+        row.appendChild(apEl("div", "ap-row-title", it.title || "(no subject)"));
+        row.appendChild(apEl("div", "ap-row-meta",
+          apSourceLabel(it.source) + " · " + (it.author || "Unknown") + (it.location ? " · " + it.location : "") + " · " + apAgo(it.created_at)));
+        row.addEventListener("click", function () { apOpenDetail(it); });
+        apList.appendChild(row);
+      });
+    }
+
+    function apLoadFeed() {
+      fetch("/api/admin/panel/feed")
+        .then(function (r) { return r.json(); })
+        .then(function (data) { apItemsCache = data.items || []; apRenderList(); })
+        .catch(function (err) { apList.innerHTML = ""; apList.appendChild(apEl("p", "qm-dash-empty", err.message)); });
+    }
+
+    apFilterBtns.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        apFilterBtns.forEach(function (b) { b.classList.toggle("is-active", b === btn); });
+        apCurrentFilter = btn.getAttribute("data-filter");
+        apRenderList();
+      });
+    });
+    if (apRefreshBtn) apRefreshBtn.addEventListener("click", apLoadFeed);
+
+    function apOpenDetail(item) {
+      apDetail.innerHTML = "";
+      apDetail.appendChild(apEl("p", "qm-dash-empty", "Loading…"));
+      if (item.source === "report") apOpenReport(item.id);
+      else if (item.source === "id_recovery") apOpenIdRecovery(item.id);
+      else if (item.source === "query") apOpenQuery(item.id);
+    }
+
+    function apOpenReport(id) {
+      fetch("/api/reports/" + id).then(function (r) { return r.json(); }).then(function (r) {
+        apDetail.innerHTML = "";
+        apDetail.appendChild(apEl("h3", "ap-detail-title", "Citizen Report #" + r.id));
+        apDetail.appendChild(apEl("p", "ap-detail-meta", (r.author_name || "Anonymous Citizen") + " · " + r.location_level + " " + r.location_id));
+        apDetail.appendChild(apEl("p", "ap-detail-body", r.body));
+        var updatesBox = apEl("div", "ap-updates");
+        (r.updates || []).forEach(function (u) {
+          var row = apEl("div", "ap-update-row");
+          row.appendChild(apEl("b", "", (u.author_name || u.author_role || "System") + " "));
+          row.appendChild(apEl("span", "", u.update_type + (u.message ? ": " + u.message : "") + " · " + apAgo(u.created_at)));
+          updatesBox.appendChild(row);
+        });
+        apDetail.appendChild(updatesBox);
+
+        var actions = apEl("div", "ap-actions");
+        var replyInput = document.createElement("input");
+        replyInput.type = "text"; replyInput.placeholder = "Add a comment…"; replyInput.className = "ap-reply-input";
+        actions.appendChild(replyInput);
+
+        function doUpdate(type) {
+          apApi("/api/reports/" + id + "/update", { update_type: type, message: replyInput.value })
+            .then(function () { apLoadFeed(); apOpenReport(id); })
+            .catch(function (e) { alert(e.message); });
+        }
+        [["comment", "Comment"], ["acknowledged", "Acknowledge"], ["resolved", "Resolve"], ["denied", "Deny"]].forEach(function (x) {
+          var btn = apEl("button", "qm-btn qm-btn-ghost", x[1]); btn.type = "button";
+          btn.addEventListener("click", function () { doUpdate(x[0]); });
+          actions.appendChild(btn);
+        });
+        var escBtn = apEl("button", "qm-btn qm-btn-primary", "Escalate"); escBtn.type = "button";
+        escBtn.addEventListener("click", function () {
+          apApi("/api/reports/" + id + "/escalate", {}).then(function () { apLoadFeed(); apOpenReport(id); }).catch(function (e) { alert(e.message); });
+        });
+        actions.appendChild(escBtn);
+        apDetail.appendChild(actions);
+      }).catch(function (e) { apDetail.innerHTML = ""; apDetail.appendChild(apEl("p", "qm-dash-empty", e.message)); });
+    }
+
+    function apOpenIdRecovery(id) {
+      fetch("/api/admin/recover-id").then(function (r) { return r.json(); }).then(function (data) {
+        var rq = (data.requests || []).filter(function (x) { return x.id === id; })[0];
+        apDetail.innerHTML = "";
+        if (!rq) { apDetail.appendChild(apEl("p", "qm-dash-empty", "Not found.")); return; }
+        apDetail.appendChild(apEl("h3", "ap-detail-title", "ID Recovery — " + rq.name));
+        apDetail.appendChild(apEl("p", "ap-detail-meta", "DOB " + rq.dob + " · status: " + rq.status));
+        apDetail.appendChild(apEl("p", "ap-detail-body", rq.note || "(no note)"));
+        apDetail.appendChild(apEl("p", "ap-detail-meta", "Contact: " + (rq.phone || rq.email || "—")));
+        apDetail.appendChild(apEl("p", "ap-detail-meta", "Mailing address: " + rq.mailing_address));
+
+        var actions = apEl("div", "ap-actions");
+        if (rq.candidate_user_id && rq.status !== "sent" && rq.status !== "rejected") {
+          var revealBtn = apEl("button", "qm-btn qm-btn-primary", "Approve & reveal ID"); revealBtn.type = "button";
+          revealBtn.addEventListener("click", function () {
+            if (!window.confirm("Reveal this member's real Private ID for the physical letter? This is logged.")) return;
+            apApi("/api/admin/recover-id/" + id + "/reveal", {}).then(function (res) {
+              return apApi("/api/admin/recover-id/" + id + "/decide", { status: "sent" }).then(function () {
+                alert("Private ID: " + res.private_code + "\n\nWrite this into the physical letter now. It will not be shown again here.");
+                apLoadFeed(); apOpenIdRecovery(id);
+              });
+            }).catch(function (e) { alert(e.message); });
+          });
+          actions.appendChild(revealBtn);
+        }
+        if (rq.status !== "sent" && rq.status !== "rejected") {
+          var rejectBtn = apEl("button", "qm-btn qm-btn-ghost", "Reject"); rejectBtn.type = "button";
+          rejectBtn.addEventListener("click", function () {
+            apApi("/api/admin/recover-id/" + id + "/decide", { status: "rejected" })
+              .then(function () { apLoadFeed(); apOpenIdRecovery(id); }).catch(function (e) { alert(e.message); });
+          });
+          actions.appendChild(rejectBtn);
+        }
+        apDetail.appendChild(actions);
+      }).catch(function (e) { apDetail.innerHTML = ""; apDetail.appendChild(apEl("p", "qm-dash-empty", e.message)); });
+    }
+
+    function apOpenQuery(id) {
+      fetch("/api/admin/queries/" + id).then(function (r) { return r.json(); }).then(function (q) {
+        apDetail.innerHTML = "";
+        apDetail.appendChild(apEl("h3", "ap-detail-title", q.subject));
+        apDetail.appendChild(apEl("p", "ap-detail-meta", "Category: " + q.category + " · status: " + q.status));
+        apDetail.appendChild(apEl("p", "ap-detail-body", q.body));
+        var repliesBox = apEl("div", "ap-updates");
+        (q.replies || []).forEach(function (r) {
+          var row = apEl("div", "ap-update-row");
+          row.appendChild(apEl("b", "", r.author_name + " "));
+          row.appendChild(apEl("span", "", r.message + " · " + apAgo(r.created_at)));
+          repliesBox.appendChild(row);
+        });
+        apDetail.appendChild(repliesBox);
+
+        var actions = apEl("div", "ap-actions");
+        var replyInput = document.createElement("input");
+        replyInput.type = "text"; replyInput.placeholder = "Write a reply…"; replyInput.className = "ap-reply-input";
+        actions.appendChild(replyInput);
+        var replyBtn = apEl("button", "qm-btn qm-btn-primary", "Reply"); replyBtn.type = "button";
+        replyBtn.addEventListener("click", function () {
+          if (!replyInput.value.trim()) return;
+          apApi("/api/admin/queries/" + id + "/reply", { message: replyInput.value })
+            .then(function () { apLoadFeed(); apOpenQuery(id); }).catch(function (e) { alert(e.message); });
+        });
+        actions.appendChild(replyBtn);
+        var closeBtn = apEl("button", "qm-btn qm-btn-ghost", "Close ticket"); closeBtn.type = "button";
+        closeBtn.addEventListener("click", function () {
+          apApi("/api/admin/queries/" + id + "/close", {}).then(function () { apLoadFeed(); apDetail.innerHTML = ""; }).catch(function (e) { alert(e.message); });
+        });
+        actions.appendChild(closeBtn);
+        apDetail.appendChild(actions);
+      }).catch(function (e) { apDetail.innerHTML = ""; apDetail.appendChild(apEl("p", "qm-dash-empty", e.message)); });
+    }
+
+    apRefreshFeed = apLoadFeed;
+  }
+
+  function loadAdminPanel() {
+    if (apRefreshFeed) apRefreshFeed();
   }
 })();

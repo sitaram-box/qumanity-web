@@ -706,6 +706,37 @@
 .bd-test-toggle { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--qm-text-dim); cursor: pointer; }
 .bd-test-toggle[hidden] { display: none; }
 .bd-test-toggle input { margin: 0; }
+
+/* ---- Admin Panel (2026-10-18): combined inbox over Citizen Reports, ID recovery, Queries ---- */
+.ap-shell { display: flex; flex-direction: column; gap: 10px; padding: 14px; height: 100%; }
+.ap-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ap-filter { padding: 6px 14px; border-radius: 999px; border: 1px solid var(--qm-input-border); background: var(--qm-panel-bg); color: var(--qm-text-dim); font: 600 0.8rem "Inter", system-ui, sans-serif; cursor: pointer; }
+.ap-filter:hover { border-color: #B8860B; color: var(--qm-text); }
+.ap-filter.is-active { background: linear-gradient(120deg, #ff8a1f, #ffd24a); color: #1a1205; border-color: transparent; }
+.ap-refresh-btn { margin-left: auto; padding: 6px 10px; }
+.ap-body { display: grid; grid-template-columns: minmax(220px, 320px) 1fr; gap: 14px; min-height: 420px; flex: 1; }
+.ap-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; border: 1px solid var(--qm-border); border-radius: 12px; padding: 8px; background: var(--qm-panel-bg); }
+.ap-row { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; text-align: left; padding: 8px 10px; border-radius: 10px; border: 1px solid transparent; background: transparent; cursor: pointer; font: inherit; }
+.ap-row:hover { background: rgba(201, 150, 12, 0.08); border-color: rgba(201, 150, 12, 0.25); }
+.ap-row-title { font-size: 0.88rem; color: var(--qm-text); font-weight: 600; }
+.ap-row-meta { font-size: 0.72rem; color: var(--qm-text-dim); }
+.ap-detail { border: 1px solid var(--qm-border); border-radius: 12px; padding: 16px; background: var(--qm-panel-bg); overflow-y: auto; }
+.ap-detail-title { margin: 0 0 6px; font-size: 1.05rem; color: var(--qm-gold-text); }
+.ap-detail-meta { margin: 0 0 4px; font-size: 0.8rem; color: var(--qm-text-dim); }
+.ap-detail-body { margin: 10px 0; font-size: 0.92rem; color: var(--qm-text); white-space: pre-wrap; }
+.ap-updates { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; padding: 10px; border-radius: 10px; background: rgba(10, 25, 41, 0.04); max-height: 220px; overflow-y: auto; }
+.ap-update-row { font-size: 0.84rem; color: var(--qm-text); }
+.ap-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+.ap-reply-input { flex: 1; min-width: 160px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--qm-input-border); background: var(--qm-input-bg); color: var(--qm-text); font: inherit; }
+.ap-badge { align-self: flex-start; padding: 2px 8px; border-radius: 999px; font: 700 0.65rem "Inter", system-ui, sans-serif; text-transform: capitalize; background: rgba(10, 25, 41, 0.08); color: var(--qm-text-dim); }
+.ap-badge-open, .ap-badge-pending { background: rgba(255, 138, 31, 0.16); color: #B8860B; }
+.ap-badge-answered, .ap-badge-matched, .ap-badge-in_progress { background: rgba(139, 123, 255, 0.16); color: #5a4bcf; }
+.ap-badge-escalated { background: rgba(220, 70, 70, 0.14); color: #c0392b; }
+@media (max-width: 760px) {
+  .ap-body { grid-template-columns: 1fr; }
+  .ap-list { max-height: 260px; }
+}
+
 .qp-ref { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(10, 25, 41, 0.12); }
 .qp-pending { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
 

@@ -170,6 +170,33 @@ def list_inbox(conn, location_level, location_id) -> list[dict]:
     return out
 
 
+def list_all_open(conn) -> list[dict]:
+    """Every non-terminal report, ANY location -- the Admin Panel's global feed (2026-10-18).
+    Unlike list_inbox() (scoped to one holder), this has no location filter: is_admin already
+    bypasses can_view()/is_holder_council() for every individual report (see those two
+    functions), so the Founder seeing every open report in one aggregated list is the same
+    access they already had one report at a time, not a new grant. Joins users directly for
+    author_name rather than reusing list_inbox()'s contract (which leaves a non-anonymous
+    report's name unresolved) -- a new function, so it doesn't change what list_inbox()'s own
+    existing callers already depend on."""
+    rows = conn.execute(
+        """SELECT r.*, u.name AS real_author_name FROM reports r
+           LEFT JOIN users u ON u.id = CAST(r.user_id AS INTEGER)
+           WHERE r.status NOT IN ('resolved', 'denied') ORDER BY r.sla_deadline ASC"""
+    ).fetchall()
+    out = []
+    for r in rows:
+        d = _row_to_dict(r)
+        d["body_preview"] = d["body"][:140]
+        if d["anonymous"]:
+            d["author_name"] = "Anonymous Citizen"
+            d.pop("user_id", None)
+        else:
+            d["author_name"] = r["real_author_name"] or "Unknown"
+        out.append(d)
+    return out
+
+
 def updates_for(conn, report_id) -> list[dict]:
     rows = conn.execute(
         """SELECT ru.*, u.name AS author_name FROM report_updates ru

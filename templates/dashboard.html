@@ -55,6 +55,9 @@
       <button class="qm-dash-tab" data-tab="public" type="button" data-i18n="tab_public" title="Where you live now: Zone down to Village">Public</button>
       <button class="qm-dash-tab" data-tab="personal" type="button" data-i18n="tab_personal" title="Your Family, Friends and Business groups">Personal</button>
       <button class="qm-dash-tab is-active" data-tab="private" type="button" data-i18n="tab_private" title="Your own profile, wallet and settings">Private</button>
+      {% if is_admin_panel_user %}
+      <button class="qm-dash-tab" data-tab="admin" type="button" title="Citizen Reports, ID recovery and member queries">🛡️ Admin</button>
+      {% endif %}
     </div>
 
     <section class="qm-dash-panel is-active" id="qm-dash-private">
@@ -281,6 +284,28 @@
         </details>
       </div>
     </section>
+
+    {% if is_admin_panel_user %}
+    <section class="qm-dash-panel" id="qm-dash-admin" hidden>
+      <div class="ap-shell">
+        <div class="ap-filters">
+          <button type="button" class="ap-filter is-active" data-filter="all">All</button>
+          <button type="button" class="ap-filter" data-filter="report">Citizen Reports</button>
+          <button type="button" class="ap-filter" data-filter="id_recovery">ID Recovery</button>
+          <button type="button" class="ap-filter" data-filter="query">Queries</button>
+          <button type="button" class="qm-btn qm-btn-ghost ap-refresh-btn" title="Refresh">🔄</button>
+        </div>
+        <div class="ap-body">
+          <div class="ap-list" id="ap-list">
+            <p class="qm-dash-empty" id="ap-list-empty" hidden>Nothing open right now.</p>
+          </div>
+          <div class="ap-detail" id="ap-detail">
+            <p class="qm-dash-empty" id="ap-detail-empty">Select an item from the list.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+    {% endif %}
 
     {% macro stat_block(prefix) %}
     <div id="{{ prefix }}-content" class="qm-stats-panel">

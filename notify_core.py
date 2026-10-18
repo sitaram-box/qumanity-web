@@ -36,7 +36,7 @@ def _now() -> str:
 
 
 def mark_read(conn, user_id: int, kind: str, chat_id: int) -> None:
-    if kind not in ("private", "group"):
+    if kind not in ("private", "group", "query"):  # 'query' = admin_queries.id (2026-10-18, Admin Panel replies)
         raise ValueError("Unknown chat kind")
     ensure_tables(conn)
     conn.execute(
@@ -68,11 +68,23 @@ def summary(conn, user_id: int) -> dict:
         (user_id, user_id, user_id),
     ).fetchall()
 
+    # Admin Panel reply (2026-10-18): unread means a reply NEWER than the asker's last-read mark
+    # -- not "the query itself is still open", since an unanswered query has nothing new to read
+    # yet. chat_id here is admin_queries.id, same high-water-mark pattern as private/group above.
+    query_rows = conn.execute(
+        """SELECT q.id AS chat_id,
+                  (SELECT MAX(created_at) FROM admin_query_replies WHERE query_id = q.id) AS last_msg,
+                  (SELECT last_read_at FROM chat_read_state WHERE user_id = ? AND kind = 'query' AND chat_id = q.id) AS last_read
+           FROM admin_queries q WHERE q.user_id = ?""",
+        (user_id, user_id),
+    ).fetchall()
+
     def is_unread(r):
         return bool(r["last_msg"]) and (not r["last_read"] or r["last_msg"] > r["last_read"])
 
     unread_private = sum(1 for r in private_rows if is_unread(r))
     unread_groups = sum(1 for r in group_rows if is_unread(r))
+    unread_queries = sum(1 for r in query_rows if is_unread(r))
     pending_requests = conn.execute(
         "SELECT COUNT(*) FROM people_requests WHERE to_user_id = ? AND status IN ('pending', 'waiting')", (user_id,)
     ).fetchone()[0]
@@ -81,8 +93,9 @@ def summary(conn, user_id: int) -> dict:
         "unread_chats": unread_private + unread_groups,
         "unread_private": unread_private,
         "unread_groups": unread_groups,
+        "unread_queries": unread_queries,
         "pending_requests": pending_requests,
-        "total": unread_private + unread_groups + pending_requests,
+        "total": unread_private + unread_groups + pending_requests + unread_queries,
     }
 
 
@@ -113,6 +126,14 @@ def recent_items(conn, user_id: int, limit: int = 5) -> list[dict]:
         (user_id, user_id, user_id),
     ).fetchall()
 
+    query_rows = conn.execute(
+        """SELECT q.id AS chat_id, q.subject AS chat_name,
+                  (SELECT MAX(created_at) FROM admin_query_replies WHERE query_id = q.id) AS last_msg,
+                  (SELECT last_read_at FROM chat_read_state WHERE user_id = ? AND kind = 'query' AND chat_id = q.id) AS last_read
+           FROM admin_queries q WHERE q.user_id = ?""",
+        (user_id, user_id),
+    ).fetchall()
+
     def is_unread(r):
         return bool(r["last_msg"]) and (not r["last_read"] or r["last_msg"] > r["last_read"])
 
@@ -131,6 +152,13 @@ def recent_items(conn, user_id: int, limit: int = 5) -> list[dict]:
             continue
         items.append({
             "kind": "group", "id": r["chat_id"], "title": r["chat_name"],
+            "created_at": r["last_msg"], "meta": {},
+        })
+    for r in query_rows:
+        if not is_unread(r):
+            continue
+        items.append({
+            "kind": "query", "id": r["chat_id"], "title": r["chat_name"],
             "created_at": r["last_msg"], "meta": {},
         })
     for r in conn.execute(

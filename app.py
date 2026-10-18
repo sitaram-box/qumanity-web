@@ -40,6 +40,7 @@ import kundali_analyser
 import lunar_core
 import logout_review_core
 import announcements_core
+import admin_queries_core
 import reports_core
 import board_core
 import karma_core
@@ -1526,6 +1527,94 @@ def api_recover_id_reveal(request_id):
     return jsonify({"private_code": code})
 
 
+# ---- Admin Panel (2026-10-18): a combined inbox over Citizen Reports, ID recovery requests, and
+# general queries. Gated by _is_admin_panel_user(), not _is_admin(), so the day a real Q-Punch
+# council role exists, only that one function changes. ----
+
+@app.route("/api/admin/panel/feed")
+@login_required
+def api_admin_panel_feed():
+    if not _is_admin_panel_user():
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    try:
+        reports = reports_core.list_all_open(conn)
+        id_recovery = [r for r in recovery_core.list_requests(conn) if r["status"] not in ("sent", "rejected")]
+        queries = admin_queries_core.list_open(conn)
+    finally:
+        conn.close()
+
+    items = []
+    for r in reports:
+        items.append({
+            "source": "report", "id": r["id"], "status": r["status"],
+            "title": r["body_preview"], "author": r.get("author_name") or "Anonymous Citizen",
+            "location": f"{r['location_level'].capitalize()} {r['location_id']}",
+            "created_at": r["created_at"],
+        })
+    for rq in id_recovery:
+        items.append({
+            "source": "id_recovery", "id": rq["id"], "status": rq["status"],
+            "title": f"ID recovery request", "author": rq["name"],
+            "location": None, "created_at": rq["created_at"],
+        })
+    for q in queries:
+        items.append({
+            "source": "query", "id": q["id"], "status": q["status"],
+            "title": q["subject"], "author": q["author_name"],
+            "location": None, "created_at": q["created_at"],
+        })
+    items.sort(key=lambda it: it["created_at"] or "", reverse=True)
+    return jsonify({"items": items})
+
+
+@app.route("/api/admin/queries/<int:query_id>")
+@login_required
+def api_admin_query_detail(query_id):
+    if not _is_admin_panel_user():
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    try:
+        query = admin_queries_core.get(conn, query_id)
+        if not query:
+            return jsonify({"error": "Query not found"}), 404
+        query["replies"] = admin_queries_core.replies_for(conn, query_id)
+    finally:
+        conn.close()
+    return jsonify(query)
+
+
+@app.route("/api/admin/queries/<int:query_id>/reply", methods=["POST"])
+@login_required
+def api_admin_query_reply(query_id):
+    if not _is_admin_panel_user():
+        return jsonify({"error": "Admin access required"}), 403
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        admin_queries_core.reply(conn, session["user_id"], query_id, data.get("message"))
+    except (ValueError, LookupError) as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/admin/queries/<int:query_id>/close", methods=["POST"])
+@login_required
+def api_admin_query_close(query_id):
+    if not _is_admin_panel_user():
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    try:
+        admin_queries_core.close(conn, query_id)
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
 @app.route("/api/qoins/config")
 @login_required
 def api_qoins_config():
@@ -1598,7 +1687,15 @@ def dashboard():
     # Gates the Test Cycle admin panel's markup at render time (2026-10-17) -- its DATA still
     # comes from /api/admin/test-cycle/panel (which re-checks _is_admin() itself), this only
     # decides whether the empty shell exists in the page at all for a non-admin viewer.
-    return render_template("dashboard.html", profile=profile, all_languages=all_langs, is_admin=_is_admin())
+    # is_admin_panel_user (2026-10-18) is DELIBERATELY a separate template variable from
+    # is_admin, even though they're identical today -- is_admin keeps meaning exactly "the
+    # Founder" for every existing use (the test-cycle checkbox, etc.); the new Admin tab is
+    # gated by the new, future-proof function (_is_admin_panel_user()) so a future Q-Punch
+    # council role only has to change in one place.
+    return render_template(
+        "dashboard.html", profile=profile, all_languages=all_langs,
+        is_admin=_is_admin(), is_admin_panel_user=_is_admin_panel_user(),
+    )
 
 
 @app.route("/api/me")
@@ -2964,6 +3061,19 @@ def _is_admin() -> bool:
     user = _current_user_row(conn)
     conn.close()
     return bool(user and user["private_id_9digit"] in allowed)
+
+
+def _is_admin_panel_user() -> bool:
+    """The Admin Panel's own gate (2026-10-18) -- additive to _is_admin(), never a replacement
+    for it. Today this is identical to _is_admin(): only the Founder has Admin Panel access,
+    since village is the only level with a real elected council (the same documented gap as
+    announcements_core.is_council_member() / reports_core.is_holder_council()). The moment a
+    real council role exists at any level, THIS function -- not every route that calls it -- is
+    where that access plugs in. When it does, a council member's access must stay scoped to
+    their own location: the panel's global, cross-location views (e.g.
+    reports_core.list_all_open()) stay Admin-only forever, never extended to a scoped council
+    member the way a single location's own report inbox already is via is_holder_council()."""
+    return _is_admin()
 
 
 def _flatten_location_chain(location: dict) -> str:
