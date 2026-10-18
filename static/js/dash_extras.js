@@ -524,4 +524,43 @@
       });
     }).catch(function () {});
   }
+
+  // ---- Qmail activation + address-change banner (2026-10-18) ----
+  var qmailInactive = $("qm-qmail-inactive"), qmailActive = $("qm-qmail-active");
+  if (qmailInactive && qmailActive) {
+    var qmailAddressEl = $("qm-qmail-address");
+    var qmailBanner = $("qm-qmail-changed-banner");
+    var qmailActivateBtn = $("qm-qmail-activate-btn");
+    var qmailUsernameInput = $("qm-qmail-username-input");
+    var qmailActivateErr = $("qm-qmail-activate-error");
+
+    function renderQmailStatus(d) {
+      qmailInactive.hidden = !!d.activated;
+      qmailActive.hidden = !d.activated;
+      if (!d.activated) return;
+      qmailAddressEl.textContent = d.address || "";
+      if (d.changed) {
+        var until = new Date(d.changed.forward_until).toLocaleDateString();
+        qmailBanner.textContent = "Your Qmail address changed to " + d.address + ". Your old address (" +
+          d.changed.old_address + ") still works until " + until + ".";
+        qmailBanner.hidden = false;
+      } else {
+        qmailBanner.hidden = true;
+      }
+    }
+
+    api("/api/qmail/status").then(renderQmailStatus).catch(function () {});
+
+    if (qmailActivateBtn) {
+      qmailActivateBtn.addEventListener("click", function () {
+        qmailActivateErr.hidden = true;
+        api("/api/qmail/activate", { username: qmailUsernameInput.value }).then(function (d) {
+          renderQmailStatus({ activated: true, address: d.address, changed: null });
+        }).catch(function (err) {
+          qmailActivateErr.textContent = err.message;
+          qmailActivateErr.hidden = false;
+        });
+      });
+    }
+  }
 })();

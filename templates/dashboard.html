@@ -97,6 +97,23 @@
           <div id="account-history-box" hidden></div>
         </article>
 
+        <article class="pv-card" id="qm-qmail-card">
+          <h3><span class="pv-ico">✉️</span> Qmail <small class="pv-hint">internal messaging only — not a real inbox; nothing from outside Qumanity reaches this address</small></h3>
+          <div id="qm-qmail-inactive">
+            <p class="pv-hint pv-hintline">Choose a username (8–15 characters: letters, numbers, dots, underscores or hyphens) to activate your Qumanity address.</p>
+            <div class="pv-field">
+              <label for="qm-qmail-username-input">Username</label>
+              <input type="text" id="qm-qmail-username-input" maxlength="15" placeholder="e.g. rohit.delhi" />
+            </div>
+            <button type="button" class="sg-btn" id="qm-qmail-activate-btn">Activate Qmail</button>
+            <p class="qm-timeline-note" id="qm-qmail-activate-error" hidden></p>
+          </div>
+          <div id="qm-qmail-active" hidden>
+            <div class="pv-field"><label>Your Qmail address</label><code id="qm-qmail-address"></code></div>
+          </div>
+          <p class="qm-timeline-note" id="qm-qmail-changed-banner" hidden></p>
+        </article>
+
         <article class="pv-card pv-card-wide">
           <h3><span class="pv-ico">📍</span> <span data-i18n="locations">Locations</span></h3>
           <table class="pv-loc-table">

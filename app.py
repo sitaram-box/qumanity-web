@@ -46,6 +46,7 @@ import board_core
 import karma_core
 import notify_core
 import perception_core
+import qmail_core
 import qoin_core
 import reactions_core
 import recovery_core
@@ -1074,6 +1075,160 @@ def api_admin_account_decide(request_id):
     finally:
         conn.close()
     return jsonify({"status": "ok"})
+
+
+# ---- Qmail (2026-10-18) -- internal messaging only. @qumanity.in is an addressing convention,
+# not a live mailbox: nothing here sends or receives real internet mail. See qmail_core.py.
+
+@app.route("/api/qmail/activate", methods=["POST"])
+@login_required
+@_board_error
+def api_qmail_activate():
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        full_address = qmail_core.activate(conn, session["user_id"], data.get("username", ""))
+    finally:
+        conn.close()
+    return jsonify({"address": full_address}), 201
+
+
+@app.route("/api/qmail/compose", methods=["POST"])
+@login_required
+def api_qmail_compose():
+    data = request.get_json(silent=True) or {}
+    # Not lowercased: the account_id half of a full_address legitimately contains uppercase
+    # letters (e.g. "IY9-SX-GMA2-ZAI-CS.DL.3.4.1A"), and this field is always system-generated
+    # and auto-filled by the smart "To" field, never hand-typed -- so there's no case-insensitivity
+    # need, and lowercasing it would break resolution against the mixed-case stored full_address.
+    to_address = (data.get("to") or "").strip()
+    subject = (data.get("subject") or "").strip()
+    body = (data.get("body") or "").strip()
+    if not to_address or not body:
+        return jsonify({"error": "A recipient and a message body are required"}), 400
+    conn = get_db()
+    try:
+        sender = conn.execute("SELECT qmail_username FROM users WHERE id = ?", (session["user_id"],)).fetchone()
+        if not sender or not sender["qmail_username"]:
+            return jsonify({"error": "Activate Qmail before sending a message"}), 400
+        # Never trust a client-supplied recipient id -- `to` is re-resolved here, server-side,
+        # against qmail_addresses (current, or an old address still inside its forward window).
+        to_user_id = qmail_core.resolve_address(conn, to_address)
+        if not to_user_id:
+            return jsonify({"error": "That Qmail address isn't recognized"}), 404
+        conn.execute(
+            "INSERT INTO qmail_messages (from_user_id, to_user_id, subject, body, created_at) VALUES (?, ?, ?, ?, ?)",
+            (session["user_id"], to_user_id, subject, body, dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"status": "sent"}), 201
+
+
+@app.route("/api/qmail/inbox")
+@login_required
+def api_qmail_inbox():
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """SELECT m.id, m.subject, m.body, m.created_at, m.read_at, u.name AS from_name, qa.full_address AS from_address
+               FROM qmail_messages m
+               JOIN users u ON u.id = m.from_user_id
+               LEFT JOIN qmail_addresses qa ON qa.user_id = m.from_user_id AND qa.is_current = 1
+               WHERE m.to_user_id = ? ORDER BY m.created_at DESC""",
+            (session["user_id"],),
+        ).fetchall()
+    finally:
+        conn.close()
+    return jsonify({"messages": [dict(r) for r in rows]})
+
+
+@app.route("/api/qmail/sent")
+@login_required
+def api_qmail_sent():
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """SELECT m.id, m.subject, m.body, m.created_at, u.name AS to_name, qa.full_address AS to_address
+               FROM qmail_messages m
+               JOIN users u ON u.id = m.to_user_id
+               LEFT JOIN qmail_addresses qa ON qa.user_id = m.to_user_id AND qa.is_current = 1
+               WHERE m.from_user_id = ? ORDER BY m.created_at DESC""",
+            (session["user_id"],),
+        ).fetchall()
+    finally:
+        conn.close()
+    return jsonify({"messages": [dict(r) for r in rows]})
+
+
+@app.route("/api/qmail/resolve-username")
+@login_required
+def api_qmail_resolve_username():
+    q = (request.args.get("q") or "").strip().lower()
+    if len(q) < 2:
+        return jsonify({"matches": []})
+    conn = get_db()
+    try:
+        connected = social_core.connected_user_ids(conn, session["user_id"])
+        if not connected:
+            return jsonify({"matches": []})
+        placeholders = ",".join("?" for _ in connected)
+        rows = conn.execute(
+            f"""SELECT u.id, u.name, qa.full_address
+               FROM users u JOIN qmail_addresses qa ON qa.user_id = u.id AND qa.is_current = 1
+               WHERE u.qmail_username LIKE ? AND u.id IN ({placeholders})
+                 AND u.is_demo = 0 AND u.is_removed = 0
+               ORDER BY u.name LIMIT 10""",
+            (q + "%", *connected),
+        ).fetchall()
+    finally:
+        conn.close()
+    return jsonify({"matches": [dict(r) for r in rows]})
+
+
+@app.route("/api/qmail/resolve-public-id")
+@login_required
+def api_qmail_resolve_public_id():
+    code = (request.args.get("code") or "").strip()
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT user_id FROM account_ids WHERE search_code = ? AND is_current = 1", (code,)
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "No member found with that Public ID"}), 404
+        target = conn.execute("SELECT name, qmail_username FROM users WHERE id = ?", (row["user_id"],)).fetchone()
+        if not target or not target["qmail_username"]:
+            return jsonify({"activated": False, "message": "This member has not activated Qmail"})
+        address = qmail_core.current_address(conn, row["user_id"])
+    finally:
+        conn.close()
+    return jsonify({"activated": True, "name": target["name"], "address": address})
+
+
+@app.route("/api/qmail/status")
+@login_required
+def api_qmail_status():
+    """Not one of the six design-approved routes -- added because the activation card and the
+    address-change banner both need to know, on page load, whether this member has activated and
+    whether they have a still-forwarding old address. Read-only, no new behavior beyond exposing
+    what the other routes already compute."""
+    conn = get_db()
+    try:
+        user = conn.execute("SELECT qmail_username FROM users WHERE id = ?", (session["user_id"],)).fetchone()
+        if not user or not user["qmail_username"]:
+            return jsonify({"activated": False})
+        address = qmail_core.current_address(conn, session["user_id"])
+        now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+        old = conn.execute(
+            "SELECT full_address, forward_until FROM qmail_addresses WHERE user_id = ? AND is_current = 0 AND forward_until > ? ORDER BY id DESC LIMIT 1",
+            (session["user_id"], now),
+        ).fetchone()
+        changed = {"old_address": old["full_address"], "forward_until": old["forward_until"]} if old else None
+    finally:
+        conn.close()
+    return jsonify({"activated": True, "address": address, "changed": changed})
 
 
 @app.route("/api/people/me")

@@ -161,7 +161,65 @@ def regenerate_account_id(conn, user_id, present_location: dict) -> str:
     conn.execute("UPDATE users SET account_id = ?, present_location_json = ? WHERE id = ?",
                  (new_account_id, json.dumps(present_location), user_id))
     conn.commit()
+
+    # Qmail (2026-10-18): the one choke point both account_id-change paths funnel through, so
+    # Qmail addressing can never develop the same two-path divergence bug that was just fixed for
+    # account_id itself. A no-op for a user who has never activated Qmail.
+    qmail_user = conn.execute("SELECT qmail_username FROM users WHERE id = ?", (user_id,)).fetchone()
+    if qmail_user and qmail_user["qmail_username"]:
+        import qmail_core
+        full_address = qmail_core.build_full_address(qmail_user["qmail_username"], new_account_id)
+        forward_until = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=qmail_core.FORWARD_WINDOW_DAYS)).isoformat(timespec="seconds")
+        conn.execute(
+            "UPDATE qmail_addresses SET is_current = 0, forward_until = ? WHERE user_id = ? AND is_current = 1",
+            (forward_until, user_id),
+        )
+        conn.execute(
+            "INSERT INTO qmail_addresses (user_id, account_id, full_address, is_current, created_at) VALUES (?, ?, ?, 1, ?)",
+            (user_id, new_account_id, full_address, dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")),
+        )
+        conn.commit()
+
     return new_account_id
+
+
+def connected_user_ids(conn, user_id) -> set:
+    """Every person this user is connected to: every Personal Group (any category, approved
+    membership, both directions -- groups they own and groups they've been approved into) plus
+    every private chat where their own side hasn't been left. No existing function already
+    returns this flat a list across every connection type (my_groups returns per-category groups
+    with member counts, my_chats only covers 1:1 chats) -- built fresh here for Qmail's smart "To"
+    field (app.py's /api/qmail/resolve-username), which must never suggest a disconnected user."""
+    ids = set()
+
+    for r in conn.execute(
+        """SELECT pgm.user_id FROM personal_groups pg
+           JOIN personal_group_members pgm ON pgm.group_id = pg.id
+           WHERE pg.owner_user_id = ? AND pgm.status = 'approved'""", (user_id,)):
+        ids.add(r["user_id"])
+
+    for r in conn.execute(
+        """SELECT pg.owner_user_id AS other_id FROM personal_group_members pgm
+           JOIN personal_groups pg ON pg.id = pgm.group_id
+           WHERE pgm.user_id = ? AND pgm.status = 'approved'""", (user_id,)):
+        ids.add(r["other_id"])
+
+    for r in conn.execute(
+        """SELECT pgm2.user_id AS other_id FROM personal_group_members pgm
+           JOIN personal_group_members pgm2 ON pgm2.group_id = pgm.group_id
+           WHERE pgm.user_id = ? AND pgm.status = 'approved' AND pgm2.status = 'approved'""", (user_id,)):
+        ids.add(r["other_id"])
+
+    for r in conn.execute(
+        """SELECT CASE WHEN user_lo = ? THEN user_hi ELSE user_lo END AS other_id,
+                  CASE WHEN user_lo = ? THEN user_lo_status ELSE user_hi_status END AS my_status
+           FROM private_chats WHERE user_lo = ? OR user_hi = ?""",
+        (user_id, user_id, user_id, user_id)):
+        if r["my_status"] == "active":
+            ids.add(r["other_id"])
+
+    ids.discard(user_id)
+    return ids
 
 
 def my_account_history(conn, user_id):
