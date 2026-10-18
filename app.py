@@ -1977,13 +1977,21 @@ def api_admin_profile_decide(request_id):
         old_birth_location = json.loads(old_user["birth_location_json"])
         old_zodiac = conn.execute("SELECT sun_element FROM user_zodiac WHERE user_id = ?", (row["user_id"],)).fetchone()
 
+        new_present_location = fields.pop("present_location", None)
+
         sets, args = [], []
         for k, v in fields.items():
-            col = {"birth_location": "birth_location_json", "present_location": "present_location_json"}.get(k, k)
+            col = {"birth_location": "birth_location_json"}.get(k, k)
             sets.append(f"{col} = ?")
-            args.append(json.dumps(v) if k in ("birth_location", "present_location") else v)
-        args.append(row["user_id"])
-        conn.execute(f"UPDATE users SET {', '.join(sets)} WHERE id = ?", args)
+            args.append(json.dumps(v) if k == "birth_location" else v)
+        if sets:
+            args.append(row["user_id"])
+            conn.execute(f"UPDATE users SET {', '.join(sets)} WHERE id = ?", args)
+
+        if new_present_location is not None:
+            # Same Account ID regeneration Path A already uses (social_core.decide_account_request)
+            # -- present_location must never change without account_id changing with it.
+            social_core.regenerate_account_id(conn, row["user_id"], new_present_location)
 
         if any(k in fields for k in FOUNDATIONAL_FIELDS if k != "present_location"):
             result = _recompute_profile(conn, row["user_id"])

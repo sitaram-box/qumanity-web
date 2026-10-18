@@ -142,6 +142,28 @@ def record_new_account_id(conn, user_id, account_id, present_location):
     conn.commit()
 
 
+def regenerate_account_id(conn, user_id, present_location: dict) -> str:
+    """Regenerates a user's account_id for a new present_location, updates users.account_id +
+    users.present_location_json, and records the change in account_ids (record_new_account_id
+    marks every prior row is_current=0 and inserts the new one as is_current=1). Returns the new
+    account_id. The one place both the dedicated 'request a new Account ID' flow
+    (decide_account_request) and the generic profile-change-request queue
+    (app.py's api_admin_profile_decide) regenerate an account_id -- so present_location can
+    never change without account_id changing with it again."""
+    import json
+    import id_generator
+    u = conn.execute("SELECT name, gender, dob, tob FROM users WHERE id = ?", (user_id,)).fetchone()
+    zodiac = conn.execute("SELECT sun_element FROM user_zodiac WHERE user_id = ?", (user_id,)).fetchone()
+    dob = dt.date.fromisoformat(u["dob"])
+    tob = dt.time.fromisoformat(u["tob"])
+    new_account_id = id_generator.generate_account_id(conn, u["name"], u["gender"], dob, tob, zodiac["sun_element"], present_location)
+    record_new_account_id(conn, user_id, new_account_id, present_location)
+    conn.execute("UPDATE users SET account_id = ?, present_location_json = ? WHERE id = ?",
+                 (new_account_id, json.dumps(present_location), user_id))
+    conn.commit()
+    return new_account_id
+
+
 def my_account_history(conn, user_id):
     return [dict(r) for r in conn.execute(
         "SELECT id, account_id, search_code, present_location_json, is_current, created_at FROM account_ids WHERE user_id = ? ORDER BY created_at DESC",
@@ -660,7 +682,6 @@ def list_account_requests(conn):
 
 def decide_account_request(conn, admin_id, request_id, approve):
     import json as _json
-    import id_generator
     ensure_account_request_table(conn)
     row = conn.execute("SELECT * FROM account_id_requests WHERE id=? AND status='pending'", (request_id,)).fetchone()
     if not row:
@@ -668,13 +689,6 @@ def decide_account_request(conn, admin_id, request_id, approve):
     conn.execute("UPDATE account_id_requests SET status=?, decided_by=?, decided_at=? WHERE id=?",
                  ("approved" if approve else "rejected", admin_id, _now(), request_id))
     if approve:
-        u = conn.execute("SELECT * FROM users WHERE id=?", (row["user_id"],)).fetchone()
-        zodiac = conn.execute("SELECT sun_element FROM user_zodiac WHERE user_id=?", (row["user_id"],)).fetchone()
-        import datetime as _dt
         present = _json.loads(row["present_location_json"])
-        dob = _dt.date.fromisoformat(u["dob"]); tob = _dt.time.fromisoformat(u["tob"])
-        new_account_id = id_generator.generate_account_id(conn, u["name"], u["gender"], dob, tob, zodiac["sun_element"], present)
-        conn.execute("UPDATE account_ids SET is_current=0 WHERE user_id=?", (row["user_id"],))
-        record_new_account_id(conn, row["user_id"], new_account_id, present)
-        conn.execute("UPDATE users SET account_id=?, present_location_json=? WHERE id=?", (new_account_id, row["present_location_json"], row["user_id"]))
+        regenerate_account_id(conn, row["user_id"], present)
     conn.commit()
