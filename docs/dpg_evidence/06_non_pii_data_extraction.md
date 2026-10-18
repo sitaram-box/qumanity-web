@@ -43,6 +43,8 @@ Note that `total_humans` on the older country and continent routes counts member
 
 The location's karma and Qoin balance are also available on their own at `GET /api/karma/collective/<level>/<location_id>` and `GET /api/wallet/balance/<location_type>/<location_id>`.
 
+**Council addresses as a count signal.** Added 18 October 2026. A location receives a permanent council address (`<level>-<location_id>@qumanity.in`) once its count of real members reaches its level's threshold: 5 for a village, 10 for a tehsil, rising tenfold at each level above to 10,000,000 for Earth. The address is created when `elemental_core.recompute_location_elements()` next runs, not the moment the count is reached, and today only the manual backfill script calls that function, so an address can lag the count. An address existing therefore says that the location had at least that many real members when its count was last recomputed. It is not a public export: a signed-in member sees the addresses for their own location chain on its Q-Punch panel (`GET /api/qpunch/<level>`), and a member who has activated Qmail can learn whether a given village has an address by trying to send to it, though a village below threshold currently produces the same error as a mistyped address (`404`, "That Qmail address isn't recognized"), so the probe is not a reliable way to distinguish 'no address yet' from 'wrong address'. For a village, the threshold equals the suppression threshold, so an address reveals no more than the public statistics already show (a number rather than `"<5"`). The one difference is permanence: an address is never removed, so if a village later falls back to one to four members, its address still shows that it once had at least five while its statistics read `"<5"`. Levels above village have thresholds of 10 or more, above the suppression threshold.
+
 **No personal data**
 
 The query behind the demographics endpoint reads only gender, date of birth, sun sign and element. It returns counts, never rows: no user IDs, names, contact details, birth dates or per-user records. Date of birth is used only to place each member in an age band.
@@ -69,7 +71,7 @@ The query behind the demographics endpoint reads only gender, date of birth, sun
 }
 ```
 
-For a location with one to four members, such as the pilot village today, every count reads `"<5"` and `karma_total` and `qoins_wallet_balance` are left out.
+For a location with one to four members, such as a small village, every count reads `"<5"` and `karma_total` and `qoins_wallet_balance` are left out.
 
 ## 6.3 CSV export
 
@@ -111,7 +113,7 @@ With one to four members, the `karma_total` and `qoins_wallet_balance` rows are 
 
 ## 6.4 What is excluded by design
 
-No export, in JSON or CSV, ever includes:
+No public export, in JSON or CSV, ever includes:
 - User IDs (internal, Private ID or Account ID)
 - Names
 - Email addresses
@@ -119,6 +121,11 @@ No export, in JSON or CSV, ever includes:
 - Birth date and time
 - Individual member locations
 - Any per-user row
+- Any message content: Qmail messages, attachments, drafts, messages to a council address, or the council action log. These are private communications between members, or between a member and their council, and no route exports them, publicly or to the Admin. Leaving them out keeps the public data surface to aggregates only, so nothing a member writes privately can reach a public dataset.
+
+*Correction, 18 October 2026: this section previously said that no export ever includes user IDs, names or per-user rows. Since commit cf610f5 (18 October 2026), the Admin member export does (below), so the statement now applies to public exports.*
+
+**The one export that contains personal data.** `GET /api/admin/users/export` (JSON) and `GET /api/admin/users/export.csv` return one row per real member, with their Private ID, Account ID, name and location. It is Admin only, every use is logged to `admin_export_log`, and it is not part of the non-PII mechanism this document describes. Document 07, section 7.3, gives its full treatment.
 
 Note: the routes `/api/user/zodiac/<id>`, `/api/user/kundali/summary/<id>` and the `/kundali/<id>` page are not part of the non-PII surface and must not be cited as evidence of it. Since 14 October 2026 they require sign-in and return a chart only to the member it belongs to (Document 07, action 8). The stats endpoints above are aggregate only.
 

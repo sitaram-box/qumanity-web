@@ -23,7 +23,7 @@ Qumanity is fully open-source from top to bottom. Every component in the technol
 
 ## 4.3 Technology stack
 
-Read from `requirements.txt`, `.python-version` and `mobile/package.json` on 11 October 2026, re-checked 17 October 2026. Licences are listed in Document 02, section 2.6.
+Read from `requirements.txt`, `.python-version` and `mobile/package.json` on 11 October 2026, re-checked 17 October 2026 and again on 18 October 2026 (commit 274c073; no dependency was added). Licences are listed in Document 02, section 2.6.
 
 | Layer | Components |
 |---|---|
@@ -36,6 +36,8 @@ Read from `requirements.txt`, `.python-version` and `mobile/package.json` on 11 
 | Fonts | Fraunces, Inter (SIL OFL) |
 | Phone app | React Native, Expo, react-native-* modules |
 | Spreadsheet export | openpyxl |
+| File storage | Qmail attachments are stored as BLOBs in the same SQLite database, capped at 2 MB each. This is a prototype choice; migrating to object storage later is a separate decision and does not change any current behaviour. No object-storage service is used. |
+| Email | Python's standard library (`smtplib`, `email.message`), optional, used only for the Admin's registration notice (section 4.4). Qmail is internal messaging inside the database: it does not send or receive internet email and uses no mail provider. |
 | Payments | None. Qoins are earned through civic activity and carry a rupee reference value for user clarity. Qoins are internal to the platform. |
 
 ## 4.4 Hosting and delivery
@@ -48,6 +50,7 @@ None of the following is required by the software. Each can be swapped without c
 | unpkg.com (CDN) | Serves Leaflet 1.9.4, three.js 0.160.0 and earcut 2.2.4 to the browser | Self-host the same files under `static/` |
 | Google Fonts | Serves Fraunces and Inter (SIL OFL) | Self-host the font files |
 | Open-Meteo API | Optional current-weather line on the dashboard (`static/js/dash_extras.js`). Open-Meteo is itself open-source (AGPL-3.0) | Remove the widget, or self-host Open-Meteo |
+| SMTP server (optional) | Sends the Admin a notice when a new member registers (`email_core.py`). It is off unless both `SMTP_HOST` and `QM_ADMIN_EMAIL` are set, and registration never depends on it. Whether production has it configured is not recorded in the repository. The code uses STARTTLS (port 587 by default), so a provider that only offers implicit SSL on port 465 will not work. | Any SMTP server that supports STARTTLS, including a self-hosted one; the server is chosen through environment variables, with no code change |
 | Expo | Builds the phone app. The Expo SDK is MIT-licensed | Build locally with the open-source Expo and React Native toolchain |
 
 ## 4.5 Removed proprietary dependencies

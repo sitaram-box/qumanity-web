@@ -45,6 +45,7 @@ HMAC-SHA256 was used only for Razorpay payment-signature checks and was removed 
 | OWASP ASVS | Not yet assessed. Planned. |
 | JSON Schema | Not used. API responses are not schema-validated today. Planned. |
 | iCalendar, RSS/Atom | Not used. Nothing in the code produces calendar or feed output. |
+| Internet mail (SMTP, RFC 5321) | Not used for Qmail. Qmail addresses (`<username>-<account_id>@qumanity.in` and `<level>-<location_id>@qumanity.in`) look like email addresses but are an internal addressing convention only: Qmail messages stay inside Qumanity, and no route sends or receives internet mail for them (added 18 October 2026). The only SMTP use is the optional registration notice to the Admin (`email_core.py`), which is off unless `SMTP_HOST` and `QM_ADMIN_EMAIL` are set. |
 
 ## 8.4 Evidence for the application form
 

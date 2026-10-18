@@ -20,9 +20,11 @@ Target dates are proposed. High priority is due by 31 December 2026 and Medium b
 
 ## 10.2 Code gaps
 
-Status checked against the code on 17 October 2026.
+Status checked against the code on 17 October 2026, and again on 18 October 2026.
 
 This row list was re-audited against the code on 17 October 2026. Rows 20 and 21 (Blocking for the public flip) were closed before submission, and rows 18 and 24 were closed after the last revision. The list reflects the code at commit 971de33.
+
+The list was re-checked against the code on 18 October 2026 at commit c09b91f, after Qmail, Q-Punch council addresses, the council queue, the Admin Panel's council scope, attachments, drafts and the `/qmail` page were added. Rows 1 to 30 were unchanged by that code except rows 8 and 9, whose scope now includes Qmail. Rows 31 to 44 are new: rows 31 and 44 were found and fixed during the 18 October 2026 pack review, rows 42 and 43 were closed the same day by the documentation commit 065cecc, and the rest are open. Both were found by checking a pack claim against what the routes actually do, not by reading the tests, so this pack pass also served as a second review of the code.
 
 | # | Gap | Source document | Priority | Target date | Status |
 |---|---|---|---|---|---|
@@ -33,8 +35,8 @@ This row list was re-audited against the code on 17 October 2026. Rows 20 and 21
 | 5 | No minimum age or parental-consent gate | Doc 07, action 5 | Medium | 31 Mar 2027 | Open |
 | 6 | No named grievance contact | Doc 07, action 6 | Medium | 31 Mar 2027 | Open |
 | 7 | Non-Indian member compliance (GDPR) not assessed | Doc 07, action 7 | Medium | 31 Mar 2027 | Open |
-| 8 | No "Report abusive content" feature | Doc 09, action 1 | High | 31 Dec 2026 | Open |
-| 9 | No "Block member" feature | Doc 09, action 2 | High | 31 Dec 2026 | Open |
+| 8 | No "Report abusive content" feature, for posts, messages, Qmail messages and profiles (Qmail added to its scope on 18 October 2026) | Doc 09, action 1 | High | 31 Dec 2026 | Open |
+| 9 | No "Block member" feature; a block must also stop Qmail (Qmail added to its scope on 18 October 2026) | Doc 09, action 2 | High | 31 Dec 2026 | Open |
 | 10 | No published community rules | Doc 09, action 3 | Medium | 31 Mar 2027 | Open |
 | 11 | No member-facing "hidden identity" switch | Doc 09, action 7 | Low | 30 Jun 2027 | Open |
 | 12 | CSV export for public stats not implemented | Doc 06, 6.5 #1 | Medium | 31 Mar 2027 | Done, 14 Oct 2026 |
@@ -56,6 +58,20 @@ This row list was re-audited against the code on 17 October 2026. Rows 20 and 21
 | 28 | `docs/ELECTION_PILOT.md` lists 500 demo Private IDs, and the seed script documents their shared PIN. Those accounts are not present in production; the list is a plan for local election testing. The 50 live board-test accounts share a PIN set in `scripts/seed_demo_voters.py`, but their Private IDs are not published; a signed-in demo account is not otherwise restricted | Doc 05, 5.2; Doc 07, 7.6 #10 | Low | 30 Jun 2027 | Open (disclosed) |
 | 29 | Member counts are refreshed by a scheduled backfill, not updated live when a member moves | `docs/member_count_design.md` | Low | When the pilot passes 100 members | Open |
 | 30 | `mobile/package.json` (qumanity-app) has no `author` field | Doc 03, 3.6 #1 | Low | Before submission | Done, 17 October 2026 (2bceb74) |
+| 31 | Qmail attachments were served inline with the sender-declared content type and no file-type allowlist, so an HTML or SVG attachment could run script on qumanity.in | Doc 09, action 8 | High | Before submission | Done, 18 Oct 2026 (f1edd55): served as downloads with `nosniff`, with a 15-type allowlist enforced on upload |
+| 32 | No automated browser-level regression test that the Qmail text renderer keeps `<script>` inert and `javascript:` links unclickable | Doc 09, action 9 | Medium | 31 Mar 2027 | Open |
+| 33 | Qmail messages, attachments and council queue messages are kept indefinitely and a member cannot delete them | Doc 07, action 11 | High | 31 Dec 2026 | Open (to be delivered with row 2) |
+| 34 | Abandoned Qmail drafts are never cleaned up automatically | Doc 07, action 12 | Low | 30 Jun 2027 | Open |
+| 35 | A member writing to their village council is not told that the message stays with the seat and can be read by council heads elected later | Doc 07, action 13 | Medium | 31 Mar 2027 | Open |
+| 36 | The member-facing route to submit an Admin query is not wired (`admin_queries_core.create()` exists; no route calls it). The asker can already read the replies (`GET /api/queries/mine/<id>`, row 44), but that view is in `/qmail`, which needs Qmail activated, so the submission work must also give a member without Qmail a way to open it | Doc 09, 9.4 | Low | 30 Jun 2027 | Open |
+| 37 | A council cannot start a new conversation with a member; it can only reply. Needs a way to record a message as sent by the council (`sent_as_level`, `sent_as_location_id`, which do not exist yet) | `docs/QMAIL.md`, section 11 | Low | 30 Jun 2027 | Open |
+| 38 | Council addresses above village are created and shown but cannot receive messages, because no elected councils exist above village | Doc 01, section 7; `docs/QMAIL.md`, section 11 | Low | When elected councils exist above village | Open |
+| 39 | Council addresses are created only when the member-count recompute next runs, and only the manual backfill script runs it, so an address can lag the count | Doc 06, 6.2 | Low | 30 Jun 2027 | Open (related to row 29) |
+| 40 | Attachments are stored as SQLite BLOBs, a prototype choice; move them to object storage if attachment volume outgrows SQLite | Doc 04, 4.3 | Low | If attachment volume outgrows SQLite | Open |
+| 41 | The test scripts hard-code the founder's checkout path; four of them also read files through it | Doc 05, 5.3 #11 | Medium | 31 Mar 2027 | Open |
+| 42 | The repository's `docs/API.md` (170 of 176 routes) and `docs/DATA_MODEL.md` (lists 67 tables and omits 10 of the 74 in a freshly migrated database; migrations to 018) do not cover the 18 October 2026 additions | Doc 05, 5.3 #10 | High | Before submission | Done, 18 Oct 2026 (065cecc): the repository's `docs/API.md`, `docs/ARCHITECTURE.md` and `docs/DATA_MODEL.md` now match this pack's copies byte for byte (178 routes; 74 tables on boot plus 2 on first use; migrations 001–003 and 007–024) |
+| 43 | `README.md`'s feature tour does not mention Qmail, council addresses or the Admin Panel | Doc 05, 5.3 #12 | Medium | Before submission | Done, 18 Oct 2026 (065cecc): a new README section covers all three and links `docs/QMAIL.md` and `docs/ADMIN_PANEL.md`. The same commit removed README statements that were no longer true (Doc 05, 5.2) |
+| 44 | A member who wrote to their council, or sent the Admin a query, was notified of a reply but no route returned the reply text, so they could not read it; the notification also never cleared | Doc 07, 7.3 | High | Before submission | Done, 18 Oct 2026 (c09b91f): the sender reads their original with each reply's text and time (`GET /api/qmail/sent/council/<id>`, `GET /api/queries/mine/<id>`), never the action log, and opening it clears the notification |
 
 ## 10.3 Legal and entity gaps
 
