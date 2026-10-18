@@ -157,6 +157,21 @@ Closed on 14 October 2026:
 | POST | `/api/people/chats/<int:chat_id>/leave` | Member |  | `status` |
 | POST | `/api/people/chats/<int:chat_id>/request-rejoin` | Member |  | `status` |
 
+### Qmail
+
+Internal messaging only — `@qumanity.in` is an addressing convention, not a live inbound
+mailbox. Full design: [docs/QMAIL.md](QMAIL.md).
+
+| Method | Path | Access | Parameters | Response fields |
+|---|---|---|---|---|
+| POST | `/api/qmail/activate` | Member | body: `username` | `address` |
+| POST | `/api/qmail/compose` | Member | body: `to`, `subject`, `body` | `status` |
+| GET | `/api/qmail/inbox` | Member |  | `messages` |
+| GET | `/api/qmail/sent` | Member |  | `messages` |
+| GET | `/api/qmail/resolve-username` | Member | query: `q` | `matches` |
+| GET | `/api/qmail/resolve-public-id` | Member | query: `code` | `activated`, `name`, `address` |
+| GET | `/api/qmail/status` | Member |  | `activated`, `address`, `changed` |
+
 ### Elections, Q-Punch and perception
 
 | Method | Path | Access | Parameters | Response fields |
@@ -228,6 +243,17 @@ Closed on 14 October 2026:
 | POST | `/api/admin/visibility/<key>` | Admin | body: `display_until`, `enabled` | (built by a helper) |
 | GET | `/api/admin/election-cycle` | Admin |  | `countries` |
 | POST | `/api/admin/election-cycle/<country_code>` | Admin | body: `interval_years`, `last_election_year` | `status`, `years` |
+
+Admin Panel (combined inbox over Citizen Reports, ID recovery and member queries; gated by
+`_is_admin_panel_user()`, additive to the `Admin` access level above). Full design:
+[docs/ADMIN_PANEL.md](ADMIN_PANEL.md).
+
+| Method | Path | Access | Parameters | Response fields |
+|---|---|---|---|---|
+| GET | `/api/admin/panel/feed` | Admin |  | `items` |
+| GET | `/api/admin/queries/<int:query_id>` | Admin |  | `id`, `category`, `subject`, `body`, `status`, `replies` |
+| POST | `/api/admin/queries/<int:query_id>/reply` | Admin | body: `message` | `status` |
+| POST | `/api/admin/queries/<int:query_id>/close` | Admin |  | `status` |
 
 ### Administration: lunar cycle, pipeline and archive
 

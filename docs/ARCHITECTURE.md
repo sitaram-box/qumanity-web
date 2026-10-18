@@ -67,6 +67,8 @@ Every Python module at the repository root.
 | `review_core.py` | App tour status and the one-time member rating |
 | `logout_review_core.py` | Optional rating on logout, once per lunar cycle |
 | `recovery_core.py` | Forgotten PIN (one-time code) and forgotten Private ID (admin-reviewed) |
+| `qmail_core.py` | Qmail: internal messaging addressed `[username]-[account_id]@qumanity.in` — not real inbound mail. See `docs/QMAIL.md` |
+| `admin_queries_core.py` | Admin Panel: general member queries with no location and no council escalation ladder (karma disputes, "I can't find my account"). See `docs/ADMIN_PANEL.md` |
 | `founder_core.py` | The Founder's Message on the homepage, in English only |
 | `cycle_middleware.py` | Stamps every activity row with the current lunar `cycle_id` |
 | `pipeline_core.py` | Aggregates a cycle's activity and transfers it up one level (Village to Earth) |
