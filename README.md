@@ -1,4 +1,4 @@
-# Qumanity — Global Timeline, Registration & Kundali (standalone prototype)
+# Qumanity
 
 Copyright (C) 2026 Rohit Mudgal (individual).
 Qumanity Lok LLP is in registration. The IP will be
@@ -9,20 +9,45 @@ License v3.0. See LICENSE for details.
 
 For a step-by-step setup guide, see [docs/INSTALL.md](docs/INSTALL.md).
 
-Homepage: a rotatable 3D Earth with **real continent shapes and country
-borders** (not dots) — click a country directly on the globe to select it,
-or use the "Search countries" fallback for tiny/hard-to-click nations.
-India is saffron-highlighted by default. A breadcrumb (Earth › Continent ›
-Country) tracks hover/selection, a click flies the camera to the country
-and traces its outline, and a Global Timeline stats sidebar plus
-Login/Register/Elements entry points round out the homepage.
+This repository is the web application behind qumanity.in. Members
+register with their birth and present location, sign in with a 9-digit
+Private ID and a 5-character PIN, and take part in civic life at their
+location: Collective Boards, elected village councils, Citizen Reports,
+and Qoins earned through civic activity. The phone app is a separate
+repository, [qumanity-app](https://github.com/sitaram-box/qumanity-app),
+and calls the same routes.
+
+The homepage shows live, aggregate statistics for the Indian Sub-continent
+on an interactive globe, and is where members sign in.
+
+## Qmail, council addresses and the Admin Panel
+
+These were added in October 2026 and are documented in their own files:
+
+- **Qmail**: internal messaging between members, with drafts and small
+  attachments, at `/qmail`. Addresses look like email addresses, but
+  nothing is sent to or received from internet mail. See
+  [docs/QMAIL.md](docs/QMAIL.md).
+- **Council addresses (Q-Punch)**: once a location has enough real members
+  (5 for a village), it gets a permanent council address. Messages to it go
+  to a shared queue that the serving council heads read and answer, and the
+  resident reads the reply in Qmail. See [docs/QMAIL.md](docs/QMAIL.md),
+  section 11.
+- **Admin Panel**: one inbox for Citizen Reports, ID-recovery requests,
+  member queries and council messages. A serving village council head sees
+  only their own village's council messages. See
+  [docs/ADMIN_PANEL.md](docs/ADMIN_PANEL.md).
+
+Every route, module and table is listed in [docs/API.md](docs/API.md),
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
+[docs/DATA_MODEL.md](docs/DATA_MODEL.md).
 
 ## The Earth map (Three.js + real GeoJSON, not dots)
 
 Chose **Option B (Three.js + GeoJSON)** over Cesium/Mapbox/Leaflet: the
 existing globe (`earth-globe.js`) already had working drag-rotate,
-scroll/pinch-zoom, and a click-pick pipeline shared by the homepage and
-both registration wizard steps — switching engines would have meant
+scroll/pinch-zoom, and a click-pick pipeline shared at the time by the
+homepage and both registration location steps — switching engines would have meant
 rebuilding all of that from scratch for a purely cosmetic-adjacent win.
 Country shapes turned out to be additive on top of the existing raycasting
 model, not a rewrite.
@@ -54,8 +79,8 @@ model, not a rewrite.
 
 ## India Map & Location Selection Tool
 
-Once India is picked (world globe or search), the wizard switches from the
-3D globe to a flat **Leaflet** map of India — deliberately a different
+In registration's Public Account step, an Indian location switches from the
+3D Sub-continent globe to a flat **Leaflet** map of India — deliberately a different
 engine than the world globe: India is a single flat region, so a real 2D
 map (pan/zoom/hover/click, no basemap tiles, just the state GeoJSON on a
 blank dark background) is the better fit than forcing it onto a sphere.
@@ -89,6 +114,10 @@ blank dark background) is the better fit than forcing it onto a sphere.
   docstring.
 ### The wizard: one step at a time, not everything at once
 
+This step-by-step wizard now runs only on the `/location-select` demo page;
+registration itself uses the India map with searchable lists
+(`static/js/register.js`).
+
 `location_select.js` (`QMLocationWizard`) redesigned the original all-at-once
 nested-tabs+dropdowns layout into a genuine step-by-step flow, after
 feedback that users couldn't tell what step they were on and the screen
@@ -108,8 +137,8 @@ was cluttered:
   **Edit** link (jumps back to that exact step) and the real **location
   path** (e.g. `CS.CH.1.1.1`) — this is the actual id chain through the
   selected levels, *not* the full Private/Account ID string (name
-  initials, gender/age codes, zodiac codes) — that generator is still a
-  separate, later phase.
+  initials, gender/age codes, zodiac codes), which `id_generator.py`
+  builds at registration.
 - **Villages are fetched on demand, not shipped upfront**: 621,057
   villages nationally (vs. 635 districts / 5,971 tehsils) would be a
   15–20MB static file. `scripts/import_india_villages.py` loads them once
@@ -120,11 +149,9 @@ was cluttered:
   an import bug) — flagged in the endpoint's docstring rather than
   silently deduplicated away.
 - Both components are reusable (`india_map.js`, `location_select.js`, same
-  factory pattern as `earth-globe.js`) — used both standalone
-  (`/india-map`, `/location-select` demo pages) and embedded in
-  `/register`'s birth/present location steps, reusing the *same*
-  `pendingSelection` → confirm-bar → `/api/auth/register` pipeline as
-  every other location pick.
+  factory pattern as `earth-globe.js`). Both run standalone on the
+  `/india-map` and `/location-select` demo pages, and `india_map.js` is
+  also embedded in `/register`'s Public Account step.
 - Real bugs hit and fixed while building this (worth knowing about if you
   extend it):
   - The `[hidden]` attribute vs. an explicit `display` CSS rule conflict
@@ -154,34 +181,23 @@ was cluttered:
   when the wizard step isn't active yet, `resize()` has to explicitly
   re-apply the default center/zoom, not just call `invalidateSize()`.
 
-Registration (`/register`) is **open to anyone worldwide** — a 5-step wizard:
+Registration (`/register`) is **open to anyone worldwide**, in four steps:
 
-1. **Your details** — name, gender, date/time of birth, language/mother tongue.
-2. **Birth location** — click a country directly on the same real-shape
-   Earth globe (or search). This is the **Private ID** location.
-3. **Present location** — the same globe again, reset and reused. This is
-   the **Public / Account ID** location.
-4. **Review** — summary of everything captured.
-5. **Kundali** — real Vedic birth chart, computed on "Complete registration".
+1. **Private Account**: personal details and a PIN.
+2. **Global Account**: birth location (anywhere on Earth) and present
+   location, continent then country.
+3. **Public Account**: if the present location is in the Indian
+   Sub-continent, the location down to the country's own tiers; for India,
+   Zone, State, District, Tehsil and Village.
+4. **Review & Submit**.
 
-Selecting **India** at either location step additionally opens the
-**Public Location Selection Tool** — a real 37-state, zone-colored picker
-(Central/North/South/East/West, parsed from SITAXML) — before confirming.
-Any other country stops at country level (e.g. "born in India → Delhi",
-"living in Australia", per the brief's own example), since only India's
-state data exists so far. District/Tehsil/Village drill-down and Private
-ID / Account ID *string* generation are still next phases — but
-registration itself now **persists to a real SQLite DB** and computes a
-**real Vedic kundali**, not placeholders.
+The new member gets a 9-digit Private ID for signing in and an Account ID
+built from their present location (`id_generator.py`). Their kundali is
+computed at registration and shown on the dashboard after sign-in.
 
-This is **deliberately disconnected** from the existing Qumanity platform
-(`identity_core.py`, `global_core.py`, the `/api/locations/children` API,
-17k-line `app.py` at qumanity.in) so the visual flow can be iterated on
-quickly without touching the live schema or data. Conventions are kept
-compatible on purpose:
+Location ids follow fixed conventions:
 
-- Location path format `Zone.State.District.Tehsil.Village` (e.g. `CS.DL.5.4.1E`)
-  matches the real platform's `location_path` in `identity_core.py`.
+- Location path format `Zone.State.District.Tehsil.Village` (e.g. `CS.DL.5.4.1E`).
 - IDs follow the SITAXML convention exactly: continents are `O_<CODE>`
   (`O_AS`), countries are `O_<CONTINENT>_<ISO3>` (`O_AS_IND`), India's
   states are `<ZONE>.<STATE>` (`CS.DL`).
@@ -190,10 +206,12 @@ compatible on purpose:
 
 ```bash
 pip install -r requirements.txt
-python3 db/init_db.py     # first time: create + seed qumanity_prototype.db
-python3 app.py
+python3 app.py            # creates and migrates qumanity_prototype.db on first boot
 # open http://127.0.0.1:5050
 ```
+
+[docs/INSTALL.md](docs/INSTALL.md) covers the India village data, which a
+fresh clone does not include, and the environment variables.
 
 ## Zodiac & kundali architecture
 
@@ -219,8 +237,8 @@ checked internally consistent (correct UTC offset, correct sign/nakshatra
 math) and its `lunar_core.py` sibling's eclipse predictions matched a real
 one I could independently verify (the Aug 2 2027 total solar eclipse).
 
-- **Ascendant/houses precision**: the wizard only collects continent/country
-  (state, for India) — not an exact birthplace — so ascendant and houses use
+- **Ascendant/houses precision**: the kundali does not use an exact
+  birthplace — ascendant and houses use
   a *centroid* (state centroid for India, continent centroid otherwise) and
   are flagged `location_precision` in the API response accordingly. Sun and
   Moon are essentially unaffected by this (they're time-dominated, not
@@ -238,10 +256,11 @@ one I could independently verify (the Aug 2 2027 total solar eclipse).
 ## What's here
 
 **Backend**
-- `app.py` — Flask app + all routes/APIs (see below).
-- `db/schema.sql`, `db/seed_zodiac_data.py`, `db/init_db.py` — SQLite schema
-  (`users`, `zodiac_signs`, `nakshatras`, `user_zodiac`,
-  `user_elemental_profile`, `location_elements`, `lunar_events`) and real
+- `app.py` — Flask app + all routes/APIs (see [docs/API.md](docs/API.md)).
+- `db/schema.sql`, `db/seed_zodiac_data.py`, `db/init_db.py` — the base
+  SQLite schema (members, zodiac, locations, wallets and elections; the
+  other tables come from the `*_core.py` modules and `migrations/`, see
+  [docs/DATA_MODEL.md](docs/DATA_MODEL.md)) and real
   reference-data seeding (12 zodiac signs, 27 nakshatras with their actual
   Vimshottari dasha lords).
 - `zodiac_core.py` — sun sign, full kundali generation, summary text.
@@ -252,33 +271,21 @@ one I could independently verify (the Aug 2 2027 total solar eclipse).
 - `folder_sync.py` — hybrid DB↔folder export (`folder_export/Earth/...`,
   mirroring the brief's Part 4 elemental folder layout) — idempotent, safe
   to delete and regenerate. Wired to a daily APScheduler job in `app.py`.
+- The other `*_core.py` modules hold the rest of the platform's logic
+  (boards, councils, elections, karma, Qoins, Qmail, reports and more);
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) lists each one.
 
-**API** (Part 5 of the brief)
-
-| Endpoint | What it does |
-|---|---|
-| `POST /api/auth/register` | Register, compute zodiac + kundali, update location stats |
-| `GET /api/user/zodiac/<id>` | Full stored kundali |
-| `GET /api/user/kundali/summary/<id>` | Just the summary fields |
-| `GET /api/location/elements/<id>?type=state\|country\|...` | One location's elemental distribution |
-| `GET /api/global/elements` | Earth-level totals + every location on record |
-| `GET /api/zodiac/signs` | The 12 zodiac_signs rows |
-| `GET /api/zodiac/current` | Today's tropical sign/element |
-| `GET /api/lunar/phase` | Current phase + upcoming events |
-| `POST /api/admin/sync-folders` | Trigger the DB→folder export |
-| `GET /api/world-data`, `/api/india-states`, `/api/global-data` | Existing globe/location data |
-| `GET /api/india-districts` | Real District/Tehsil names per state (SITAXML) |
-| `GET /api/india-villages/<tehsil_id>` | Real villages for one tehsil, fetched on demand |
+**API**: 178 JSON routes under `/api`, each with its access level, are listed in
+[docs/API.md](docs/API.md).
 
 **Frontend**
-- `templates/index.html` — homepage (Login/Register/Elements).
-- `templates/register.html` + `static/js/register.js` — the 5-step wizard;
-  Screen 5 is a real Kundali Display + Elemental Balance component built
-  from `/api/auth/register`'s response.
-- `templates/kundali_view.html` (`/kundali/<user_id>`) — the "private
-  account" kundali view, revisitable independent of the wizard's in-memory
-  state (there's no login/session system yet, so this is a bookmarkable
-  link rather than an authenticated dashboard).
+- `templates/home.html` — homepage (live statistics, sign-in, Register).
+- `templates/dashboard.html` (`/dashboard`) — the signed-in member's dashboard.
+- `templates/qmail.html` (`/qmail`) — Qmail; see [docs/QMAIL.md](docs/QMAIL.md).
+- `templates/register.html` + `static/js/register.js` — the 4-step
+  registration wizard.
+- `templates/kundali_view.html` (`/kundali/<user_id>`) — the member's own
+  kundali view. Sign-in is required, and a member can open only their own.
 - `templates/elements.html` (`/elements`) — the Elemental Dashboard: a
   location-level selector (Earth/Continent/Country/Zone/State/District/
   Tehsil/Village) over real registration data, plus the live lunar timeline.
@@ -288,8 +295,8 @@ one I could independently verify (the Aug 2 2027 total solar eclipse).
   of the full step-by-step wizard.
 - `static/js/earth-globe.js` — the reusable Three.js globe: drag/zoom,
   `setEarthTexture()`, `setCountryBorders()` + point-in-polygon hit-testing,
-  `highlightCountry()`/`clearCountryHighlight()`, `flyTo()`. Shared by the
-  homepage and both wizard location steps.
+  `highlightCountry()`/`clearCountryHighlight()`, `flyTo()`. Used by the
+  homepage and the registration wizard.
 - `static/js/india_map.js` — the reusable Leaflet India map (same
   create/reset/resize/destroy factory pattern as `earth-globe.js`):
   zone-colored states, hover tooltip, click-to-select, confirm bar, legend,
@@ -334,28 +341,13 @@ one I could independently verify (the Aug 2 2027 total solar eclipse).
 - Village names came through the Zone/State/District/Tehsil chain
   correctly, but 482 village ids repeat in the source XML itself (~0.08%
   of 621,057 rows) — a real source data-quality issue, not an import bug.
-- No Private ID / Account ID *string* generation yet — the `users` table
-  has the columns, left null. The format is specified in the original
-  brief; `identity_core.py` on the real platform has a working reference.
-  The real location *path* (e.g. `CS.CH.1.1.1`) is already produced
-  end-to-end by the wizard and is the input that ID string would consume.
-- No login/session/auth — `/kundali/<id>` is a bookmarkable link, not an
-  authenticated account page. The Login button is still a stub.
 - `location_elements` percentages are only as meaningful as the sample
   size — the seed data is whatever you register through the wizard.
 
-## Next phases (not built here)
+## Open work
 
-1. Private ID / Account ID string generation (name initials, gender/age
-   codes, zodiac element/sign, location path) — adapt from the real
-   platform's `identity_core.py`. The location *path* itself is already
-   available end-to-end (e.g. `CS.CH.1.1.1` for Chandigarh → Behlana);
-   only the ID string format (prefix/initials/codes) remains.
-2. A real login/session system so `/kundali/<id>` becomes an authenticated
-   "your account" page instead of a bookmarkable link.
-3. Swap the static JSON files for a real `location.db` import (SITAXML +
-   World Data), or point straight at the existing platform's
-   `global_core.py` / `/api/locations/children` API.
+Open gaps and planned work are tracked in
+[docs/dpg_evidence/10_forward_plan.md](docs/dpg_evidence/10_forward_plan.md).
 
 ## License
 
