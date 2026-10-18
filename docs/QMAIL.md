@@ -250,17 +250,34 @@ is just a member composing to a `village-...` address like anyone else).
 **Stored format: plain text with a narrow whitelist markup — `**bold**`, `_italic_`,
 `[text](url)` — never HTML, on either side.** There is no sanitizer library installed in this
 project (`requirements.txt` has none) and no `|safe` anywhere in any Jinja template — **this is
-deliberate, not an oversight.** The client (`static/js/dashboard.js`'s `qmRenderFormattedText`,
-shared with `static/js/dash_extras.js`) parses a message body and builds `<b>`/`<i>`/`<a>` DOM
-nodes directly via `createElement`/`textContent`, the same way every other piece of user text in
-this codebase has always been rendered (`board.js`'s `el()` helper, used everywhere, sets
-`.textContent`, never `.innerHTML`) — no HTML string is ever constructed from user input, so there
-is nothing to sanitize and no class of injection bug to guard against. A future contributor who
-notices no sanitizer is installed should not conclude it was forgotten; adding one, or adding
-`|safe` anywhere, would be the first time this codebase ever did either, and is worth stopping to
+deliberate, not an oversight.** The client (`static/js/qmail_format.js`'s `qmRenderFormattedText`)
+parses a message body and builds `<b>`/`<i>`/`<a>` DOM nodes directly via
+`createElement`/`textContent`, the same way every other piece of user text in this codebase has
+always been rendered (`board.js`'s `el()` helper, used everywhere, sets `.textContent`, never
+`.innerHTML`) — no HTML string is ever constructed from user input, so there is nothing to
+sanitize and no class of injection bug to guard against. A future contributor who notices no
+sanitizer is installed should not conclude it was forgotten; adding one, or adding `|safe`
+anywhere, would be the first time this codebase ever did either, and is worth stopping to
 reconsider rather than reaching for reflexively. A link's `url` is checked against `^https?://`
 before becoming a real `<a href>` — anything else (most importantly a `javascript:` URL) renders
 as its plain-text label, never a clickable element.
+
+**The renderer was extracted into its own file (2026-10-18), and rewritten, not merely moved.**
+`qmRenderFormattedText` originally lived in `static/js/dashboard.js` and built its `<b>`/`<i>`
+elements through that file's own local `apEl()` helper. Moving it into standalone
+`static/js/qmail_format.js` — so `dashboard.js` (the Admin Panel's council detail view),
+`dash_extras.js` (the dashboard's member mailbox) and `/qmail`'s own page script can all load one
+shared definition instead of risking a second copy drifting from the first, the same reasoning
+`social_core.regenerate_account_id()` already established as this codebase's precedent — meant
+`apEl()` was no longer reachable (a different file's closure-local helper). The function was
+rewritten to call `document.createElement`/`.textContent` directly instead, producing identical
+output but **new code, not the old bytes relocated**. A future reader diffing behavior against an
+old version of `dashboard.js` should know the implementation changed at this commit, not just its
+address. `templates/dashboard.html` loads `qmail_format.js` before both `dashboard.js` and
+`dash_extras.js` — plain `<script>` tags, no `defer`/`async`, so document order *is* execution
+order, deterministically; this is not a "usually fine, rarely flaky" ordering concern, it's
+guaranteed by the browser's own parsing model as long as none of the three tags ever gains a
+`defer`/`async` attribute.
 
 **Images are attachment-only, never inline by URL.** This is a privacy decision, not a style one:
 an `<img src="...">` pointing at an external URL leaks the viewer's IP and user-agent to that URL
@@ -296,4 +313,48 @@ by an automated regression test. `tests/test_qmail_attachments.py` covers everyt
 feature that a backend test *can* verify (size limits, access control, that the server never
 mangles a message body); it does not and cannot re-check the renderer itself. A future change to
 `qmRenderFormattedText` could reintroduce an XSS path and nothing in this test suite would catch
-it.
+it. **This gap applies in full to the extracted-and-rewritten version of the function above** — the
+extraction's own browser walkthrough (bold/italic rendered correctly in both the Admin Panel's
+council detail view and the member mailbox, zero console errors) and `tests/
+test_qmail_format_extraction.py` (which checks the script-tag wiring, not the rendering logic)
+are both one-time or structural checks, not a regression test of the renderer's safety properties
+either. There is still exactly one gap here, not two.
+
+## 13. Drafts
+
+Unsent compose-form state (`qmail_drafts`, `migrations/024_qmail_drafts.py`), one row per draft,
+scoped by `user_id`. Text only — no attachment in a draft; autosaving a BLOB on every
+compose-overlay close would multiply write volume for a feature that wasn't asked to extend.
+`to_address` is whatever the compose form's To field currently holds, unresolved and unvalidated —
+a draft is allowed to have a garbage or incomplete recipient while being edited; resolution only
+happens at actual send time, same as it always has for compose itself.
+
+**Scoping is the same 404-not-403 shape as the council queue's own invariants** (`docs/
+ADMIN_PANEL.md` §8): `qmail_core.save_draft()` and `delete_draft()` both filter their `UPDATE`/
+`DELETE` by `user_id` directly in the `WHERE` clause, not a fetch-then-check — a draft id
+belonging to a different user and a draft id that doesn't exist at all produce the identical
+zero-rows-affected result, which the routes turn into the same 404 either way.
+
+**Send-clears-draft is atomic with the message itself — and the atomicity lives inside
+`delete_draft()`, not where it looks like it should.** `api_qmail_compose` inserts the message
+(and the attachment, if any) first, and only calls `qmail_core.delete_draft()` after both have
+already succeeded — so a failure in between (the oversized-attachment check, specifically) rolls
+back the message insert via `conn.rollback()` and returns *before* the draft-deletion code is ever
+reached; the draft is never touched on a failed send. On a successful send, though, the commit
+that makes the message, the attachment, and the draft-deletion durable together is **`delete_draft()`'s
+own internal `conn.commit()`** (`qmail_core.py`), not `api_qmail_compose`'s trailing `conn.commit()`
+line — that trailing commit is a no-op in the draft case (nothing left pending to commit) and only
+does real work for an ordinary compose call with no `draft_id` at all. **This is non-obvious and
+easy to break**: a future tidy-up of `delete_draft()` that removes its `conn.commit()` — on the
+reasonable-looking grounds that "the caller already commits" — would silently split what is
+currently one atomic transaction into two, reopening exactly the failure mode this design avoids
+(a message sent but the draft not cleared, or worse, if the split landed differently). If
+`delete_draft()`'s commit is ever removed, the atomicity has to move somewhere else
+*deliberately*, not be dropped by accident.
+
+**No cleanup job for abandoned drafts.** A draft nobody ever sends or deletes sits in
+`qmail_drafts` forever — a stated, deliberate prototype limitation, not an oversight. Gmail has
+the same behavior (an abandoned draft sits in the Drafts folder indefinitely), so this isn't a
+regression against the product being mirrored. `POST /api/qmail/drafts/<id>/delete` exists
+specifically so a member can clean up their own drafts manually; nothing automatic does it for
+them.
