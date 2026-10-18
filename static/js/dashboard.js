@@ -973,44 +973,9 @@
     return Math.floor(s / 86400) + " d ago";
   }
 
-  // ---- Qmail formatted-text rendering (2026-10-18) -- shared with dash_extras.js's member
-  // mailbox, exposed on window since that's a separate file/IIFE loaded right after this one.
-  // There is no HTML string anywhere in this function, on purpose: every piece of user text
-  // reaches the page only through textContent or an element property, never innerHTML, so a
-  // <script> typed into a message body is inert text in every case, not something that needs
-  // sanitising -- see docs/QMAIL.md's note on why no sanitiser library is installed. Only three
-  // constructs are recognised (**bold**, _italic_, [text](url)); everything else, including any
-  // literal angle bracket, is plain text. A link whose url is not http(s) renders as its label
-  // only, never as an <a> -- this is what keeps a javascript: URL from ever becoming clickable. ----
-  function qmRenderFormattedText(text) {
-    var frag = document.createDocumentFragment();
-    String(text || "").split("\n").forEach(function (line, i) {
-      if (i > 0) frag.appendChild(document.createElement("br"));
-      qmRenderLineInto(frag, line);
-    });
-    return frag;
-  }
-  function qmRenderLineInto(frag, line) {
-    var re = /\*\*([^*]+)\*\*|_([^_]+)_|\[([^\]]+)\]\(([^)]+)\)/g;
-    var last = 0, m;
-    while ((m = re.exec(line)) !== null) {
-      if (m.index > last) frag.appendChild(document.createTextNode(line.slice(last, m.index)));
-      if (m[1] !== undefined) {
-        frag.appendChild(apEl("b", "", m[1]));
-      } else if (m[2] !== undefined) {
-        frag.appendChild(apEl("i", "", m[2]));
-      } else if (/^https?:\/\//i.test(m[4])) {
-        var a = document.createElement("a");
-        a.href = m[4]; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = m[3];
-        frag.appendChild(a);
-      } else {
-        frag.appendChild(document.createTextNode(m[3]));
-      }
-      last = re.lastIndex;
-    }
-    if (last < line.length) frag.appendChild(document.createTextNode(line.slice(last)));
-  }
-  window.qmRenderFormattedText = qmRenderFormattedText;
+  // qmRenderFormattedText (the formatted-text renderer apOpenCouncil below calls) now lives in
+  // static/js/qmail_format.js, loaded before this file -- see that file's own header for why it
+  // was extracted rather than kept here with a second copy in dash_extras.js.
 
   // Assigned inside the `if (apList)` block below, read by loadAdminPanel() at the bottom of this
   // IIFE -- a plain outer `var` assignment, not a function declaration, so it's unaffected by
