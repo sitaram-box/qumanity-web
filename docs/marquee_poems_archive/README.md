@@ -14,7 +14,7 @@ The poems marquee (the scrolling strip at the bottom of every page and app scree
 
 ## What is kept, and where
 
-- **Poem data:** six files (`poems_hindi.json`, `poems_english.json`, `poems_kannada.json`, `poems_malayalam.json`, `poems_tamil.json`, `poems_telugu.json`, 237 poems each) moved out of the repository to `~/Desktop/Qumanity_Poems_Private/Poems/` on the Founder's machine. `Poems/` is listed in `.gitignore`. Earlier commits still contain the files until the git history is purged.
+- **Poem data:** six files (`poems_hindi.json`, `poems_english.json`, `poems_kannada.json`, `poems_malayalam.json`, `poems_tamil.json`, `poems_telugu.json`, 237 poems each) moved out of the repository to `~/Desktop/Qumanity_Poems_Private/Poems/` on the Founder's machine. `Poems/` is listed in `.gitignore`. The files were purged from the repository's branch history on 7 October 2026. One cached GitHub reference (`refs/pull/1/head`, commit 0d73ea3) still contains them. A DMCA takedown notice was filed with GitHub on 17 October 2026 (Ticket #4870732) to purge that cache. Until it is confirmed, the files remain reachable through that reference.
 - **Website:** `templates/_poems_marquee.html`, `static/js/poems.js`, `static/css/poems.css`, and the `/api/poems/...` routes in `app.py`.
 - **Phone app (Qumanity_App):** `mobile/src/components/PoemsMarquee.tsx`.
 

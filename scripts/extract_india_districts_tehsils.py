@@ -31,7 +31,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # docs/india_location_fix.md) and is kept only for historical reference.
 SRC = os.environ.get(
     "SITAXML_SOURCE_PATH",
-    str(Path.home() / "Desktop" / "Windows Data" / "sita foundation" / "SITA Project Data" / "SITAXML.xml"),
+    str(Path.home() / "Qumanity_Data" / "SITAXML.xml"),
 )
 OUT = str(REPO_ROOT / "static" / "data" / "india_districts_tehsils.json")
 

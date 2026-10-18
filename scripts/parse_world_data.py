@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # raw source spreadsheet normally lives (2026-10-11, removing a hardcoded single-Mac path).
 SRC = os.environ.get(
     "WORLD_DATA_SOURCE_PATH",
-    str(Path.home() / "Desktop" / "Windows Data" / "sita foundation" / "SITA Project Data" / "O राम - World Data.xlsx"),
+    str(Path.home() / "Qumanity_Data" / "O राम - World Data.xlsx"),
 )
 OUT = str(REPO_ROOT / "static" / "data" / "global_countries.json")
 
