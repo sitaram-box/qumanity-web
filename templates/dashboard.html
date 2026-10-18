@@ -192,6 +192,51 @@
           </div>
           <p class="qm-timeline-note" id="qm-testcycle-error" hidden></p>
         </article>
+
+        <article class="pv-card pv-card-wide" id="qm-memberexport-card">
+          <h3><span class="pv-ico">📇</span> Member export <small class="pv-hint">Admin only — for ID recovery lookups; every export is logged</small></h3>
+          <div class="qm-memberexport-filters">
+            <label class="qm-field">
+              <span>Location level</span>
+              <select id="qm-memberexport-level">
+                <option value="earth">Earth (everyone)</option>
+                <option value="continent">Continent</option>
+                <option value="country">Country</option>
+                <option value="zone">Zone</option>
+                <option value="state">State</option>
+                <option value="district">District</option>
+                <option value="tehsil">Tehsil</option>
+                <option value="village">Village</option>
+              </select>
+            </label>
+            <label class="qm-field" id="qm-memberexport-locid-field" hidden>
+              <span>Location ID</span>
+              <input type="text" id="qm-memberexport-locid" placeholder="e.g. CS.DL.3.4.1A" />
+            </label>
+            <label class="qm-field">
+              <span>Time period</span>
+              <select id="qm-memberexport-period">
+                <option value="24h">Last 24 hours</option>
+                <option value="7d" selected>Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+                <option value="ytd">Current year to date</option>
+                <option value="all">All time</option>
+              </select>
+            </label>
+          </div>
+          <div class="qm-testcycle-actions">
+            <button type="button" class="qm-btn qm-btn-ghost" id="qm-memberexport-preview-btn">Preview</button>
+            <button type="button" class="qm-btn qm-btn-primary" id="qm-memberexport-csv-btn">⬇️ Download CSV</button>
+          </div>
+          <p class="qm-timeline-note" id="qm-memberexport-error" hidden></p>
+          <div class="qm-memberexport-results" id="qm-memberexport-results" hidden>
+            <p class="qm-dash-empty" id="qm-memberexport-count"></p>
+            <table class="qm-memberexport-table">
+              <thead><tr><th>Private ID</th><th>Account ID</th><th>Name</th><th>Location</th><th>Registered</th></tr></thead>
+              <tbody id="qm-memberexport-tbody"></tbody>
+            </table>
+          </div>
+        </article>
         {% endif %}
 
         <details class="pv-card pv-card-wide pv-settings">

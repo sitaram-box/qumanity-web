@@ -2971,6 +2971,135 @@ def _flatten_location_chain(location: dict) -> str:
     return ", ".join(parts)
 
 
+# ---- Admin member export (2026-10-18) ----
+# Every successful call -- JSON preview or CSV download -- is logged to admin_export_log (who,
+# when, filters, row count): a bulk export of every real member's Private ID is at least as
+# sensitive as the single-ID reveal recovery_core.reveal_private_code already logs, so it gets
+# the same accountability. Never includes pin_hash. Demo and retired accounts are excluded, same
+# as every other member-facing list in this app -- this tool is for finding a real member to help
+# with their own ID recovery, not for auditing demo data.
+
+_ADMIN_EXPORT_PERIODS = ("24h", "7d", "30d", "ytd", "all")
+
+
+def _admin_export_since(period: str, now: dt.datetime) -> dt.datetime | None:
+    """None means "all time" -- no lower bound. Every other period is a cutoff relative to `now`."""
+    if period == "24h":
+        return now - dt.timedelta(hours=24)
+    if period == "7d":
+        return now - dt.timedelta(days=7)
+    if period == "30d":
+        return now - dt.timedelta(days=30)
+    if period == "ytd":
+        return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    return None
+
+
+def _admin_users_export_rows(conn, level: str | None, location_id: str | None, period: str):
+    """Shared query behind both the JSON and .csv admin export routes. `level=None` (or "earth")
+    means every real member, no location filter -- matching how /api/earth/stats has no location
+    parameter at all. SQLite's CURRENT_TIMESTAMP (users.created_at's default) formats as
+    "YYYY-MM-DD HH:MM:SS", not ISO-with-T, so the threshold below is formatted to match it
+    exactly -- a plain .isoformat() string would not compare correctly against it."""
+    where = ["is_demo = 0", "is_removed = 0"]
+    params: list = []
+    if level and level != "earth":
+        if level not in _LOCATION_STATS_LEVELS:
+            raise ValueError("Unknown level: " + level)
+        if not location_id:
+            raise ValueError("location_id is required when level is not earth")
+        where.append("json_extract(present_location_json, ?) = ?")
+        params.extend(["$." + level + ".id", location_id])
+
+    since = _admin_export_since(period, dt.datetime.now(dt.timezone.utc))
+    if since is not None:
+        where.append("created_at >= ?")
+        params.append(since.strftime("%Y-%m-%d %H:%M:%S"))
+
+    query = (
+        "SELECT id, private_id_9digit, account_id, name, present_location_json, created_at "
+        f"FROM users WHERE {' AND '.join(where)} ORDER BY created_at DESC"
+    )
+    return conn.execute(query, params).fetchall()
+
+
+def _log_admin_export(conn, admin_user_id: int, level: str | None, location_id: str | None, period: str, row_count: int, fmt: str) -> None:
+    conn.execute(
+        "INSERT INTO admin_export_log (admin_user_id, exported_at, level, location_id, period, row_count, format) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (admin_user_id, dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), level, location_id, period, row_count, fmt),
+    )
+    conn.commit()
+
+
+def _admin_export_params():
+    """?level=<level|earth>&location_id=<id>&period=24h|7d|30d|ytd|all -- shared parsing for both
+    export routes. Raises ValueError on a bad level/period, caught by each route the same way."""
+    level = request.args.get("level", "earth")
+    location_id = request.args.get("location_id") or None
+    period = request.args.get("period", "7d")
+    if period not in _ADMIN_EXPORT_PERIODS:
+        raise ValueError("Unknown period: " + period)
+    return level, location_id, period
+
+
+@app.route("/api/admin/users/export")
+@login_required
+def api_admin_users_export():
+    if not _is_admin():
+        return jsonify({"error": "Admin only"}), 403
+    try:
+        level, location_id, period = _admin_export_params()
+        conn = get_db()
+        rows = _admin_users_export_rows(conn, level, location_id, period)
+        members = [
+            {
+                "id": r["id"],
+                "private_id": r["private_id_9digit"],
+                "account_id": r["account_id"],
+                "name": r["name"],
+                "location": _flatten_location_chain(json.loads(r["present_location_json"] or "{}")),
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
+        _log_admin_export(conn, session["user_id"], level, location_id, period, len(members), "json")
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"members": members, "count": len(members)})
+
+
+@app.route("/api/admin/users/export.csv")
+@login_required
+def api_admin_users_export_csv():
+    if not _is_admin():
+        return jsonify({"error": "Admin only"}), 403
+    try:
+        level, location_id, period = _admin_export_params()
+        conn = get_db()
+        rows = _admin_users_export_rows(conn, level, location_id, period)
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(("id", "private_id", "account_id", "name", "location", "created_at"))
+        for r in rows:
+            writer.writerow((
+                r["id"], r["private_id_9digit"], r["account_id"], r["name"],
+                _flatten_location_chain(json.loads(r["present_location_json"] or "{}")), r["created_at"],
+            ))
+        _log_admin_export(conn, session["user_id"], level, location_id, period, len(rows), "csv")
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=qumanity_members_{level}_{period}.csv"},
+    )
+
+
 # ---- Karma Qoins wallet API ----
 # Visibility rule (2026-10-17): the NUMBER of Qoins a wallet holds is public. The rupee VALUE
 # (balance_qoins, 1 Qoin = ₹1 today) is private -- visible only to the wallet's own owner, a

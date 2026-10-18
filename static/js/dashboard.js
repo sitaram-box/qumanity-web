@@ -876,4 +876,69 @@
     });
     if (startBtnEl) startBtnEl.addEventListener("click", function () { testCycleAction("/api/admin/test-cycle/start"); });
   }
+
+  // ---- Admin member export (2026-10-18) -- same is_admin gating as the Post Testing panel
+  // above: the markup only exists when is_admin was true at render time, so every lookup here
+  // guards with the same `if (!el) return` pattern.
+  var memberExportCard = document.getElementById("qm-memberexport-card");
+  if (memberExportCard) {
+    var meLevel = document.getElementById("qm-memberexport-level");
+    var meLocField = document.getElementById("qm-memberexport-locid-field");
+    var meLocInput = document.getElementById("qm-memberexport-locid");
+    var mePeriod = document.getElementById("qm-memberexport-period");
+    var meErr = document.getElementById("qm-memberexport-error");
+    var meResults = document.getElementById("qm-memberexport-results");
+    var meCount = document.getElementById("qm-memberexport-count");
+    var meTbody = document.getElementById("qm-memberexport-tbody");
+
+    function meToggleLocField() { meLocField.hidden = meLevel.value === "earth"; }
+    meToggleLocField();
+    meLevel.addEventListener("change", meToggleLocField);
+
+    function meQueryString() {
+      var params = new URLSearchParams();
+      params.set("level", meLevel.value);
+      if (meLevel.value !== "earth" && meLocInput.value.trim()) params.set("location_id", meLocInput.value.trim());
+      params.set("period", mePeriod.value);
+      return params.toString();
+    }
+
+    document.getElementById("qm-memberexport-preview-btn").addEventListener("click", function () {
+      meErr.hidden = true;
+      meResults.hidden = true;
+      if (meLevel.value !== "earth" && !meLocInput.value.trim()) {
+        meErr.textContent = "Enter a Location ID, or choose Earth (everyone).";
+        meErr.hidden = false;
+        return;
+      }
+      fetch("/api/admin/users/export?" + meQueryString())
+        .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
+        .then(function (result) {
+          if (!result.ok) throw new Error(result.body.error || "Could not load members");
+          meTbody.innerHTML = "";
+          result.body.members.forEach(function (m) {
+            var tr = document.createElement("tr");
+            [m.private_id, m.account_id, m.name, m.location, m.created_at].forEach(function (val) {
+              var td = document.createElement("td");
+              td.textContent = val || "";
+              tr.appendChild(td);
+            });
+            meTbody.appendChild(tr);
+          });
+          meCount.textContent = result.body.count + " member" + (result.body.count === 1 ? "" : "s") + " found.";
+          meResults.hidden = false;
+        })
+        .catch(function (err) { meErr.textContent = err.message; meErr.hidden = false; });
+    });
+
+    document.getElementById("qm-memberexport-csv-btn").addEventListener("click", function () {
+      meErr.hidden = true;
+      if (meLevel.value !== "earth" && !meLocInput.value.trim()) {
+        meErr.textContent = "Enter a Location ID, or choose Earth (everyone).";
+        meErr.hidden = false;
+        return;
+      }
+      window.location.href = "/api/admin/users/export.csv?" + meQueryString();
+    });
+  }
 })();

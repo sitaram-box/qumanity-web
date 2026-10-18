@@ -448,6 +448,15 @@
 .qm-testcycle-row b { color: var(--qm-gold-text); }
 .qm-testcycle-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 
+/* Admin member export (2026-10-18) */
+.qm-memberexport-filters { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 4px; }
+.qm-memberexport-filters .qm-field { min-width: 160px; }
+.qm-memberexport-results { margin-top: 14px; }
+.qm-memberexport-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.qm-memberexport-table th, .qm-memberexport-table td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--qm-border); }
+.qm-memberexport-table th { color: var(--qm-gold-text); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.qm-memberexport-table td { color: var(--qm-text); }
+
 .pv-grid-compact { gap: 12px; }
 .pv-grid-compact .pv-card { padding: 12px 16px; }
 .pv-settings { background: var(--qm-panel-bg); border: 1px solid var(--qm-border); border-radius: 14px; padding: 0; }
