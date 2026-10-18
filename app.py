@@ -1738,13 +1738,29 @@ def api_recover_id_reveal(request_id):
 @app.route("/api/admin/panel/feed")
 @login_required
 def api_admin_panel_feed():
-    if not _is_admin_panel_user():
+    # The choice between the two audiences is made HERE, before either handler runs -- not as a
+    # branch inside one shared function. A location-scoped caller's request never reaches the
+    # code that can see reports, ID recovery or member queries at all.
+    scope = _is_admin_panel_user()
+    if not scope:
         return jsonify({"error": "Admin access required"}), 403
+    if scope["scope"] == "global":
+        return _admin_panel_feed_global()
+    return _admin_panel_feed_location(scope["level"], scope["location_id"])
+
+
+def _admin_panel_feed_global():
+    """The Founder/Admin's view: the three existing sources, unchanged, plus every location's
+    council queue (status != 'closed'). Never called for a location-scoped caller."""
     conn = get_db()
     try:
         reports = reports_core.list_all_open(conn)
         id_recovery = [r for r in recovery_core.list_requests(conn) if r["status"] not in ("sent", "rejected")]
         queries = admin_queries_core.list_open(conn)
+        council_rows = conn.execute(
+            "SELECT id, level, location_id, subject, status, created_at FROM qpunch_queue_messages "
+            "WHERE status != 'closed' ORDER BY created_at DESC"
+        ).fetchall()
     finally:
         conn.close()
 
@@ -1768,14 +1784,47 @@ def api_admin_panel_feed():
             "title": q["subject"], "author": q["author_name"],
             "location": None, "created_at": q["created_at"],
         })
+    for c in council_rows:
+        items.append({
+            "source": "council", "id": c["id"], "status": c["status"],
+            "title": c["subject"] or "(no subject)", "author": None,
+            "location": f"{c['level'].capitalize()} {c['location_id']}",
+            "created_at": c["created_at"],
+        })
     items.sort(key=lambda it: it["created_at"] or "", reverse=True)
+    return jsonify({"items": items})
+
+
+def _admin_panel_feed_location(level, location_id):
+    """A council head's view: ONLY their own location's queue. `level` and `location_id` come
+    exclusively from the scope descriptor _is_admin_panel_user() computed server-side -- this
+    function takes no request argument of any kind, so there is no client-supplied value that
+    could reach this query. No reports, no ID recovery, no member queries -- those keys don't
+    exist in this response at all, not an empty list standing in for them."""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT id, subject, status, created_at FROM qpunch_queue_messages "
+            "WHERE level = ? AND location_id = ? ORDER BY created_at DESC",
+            (level, location_id),
+        ).fetchall()
+    finally:
+        conn.close()
+    items = [{
+        "source": "council", "id": r["id"], "status": r["status"],
+        "title": r["subject"] or "(no subject)", "author": None,
+        "location": f"{level.capitalize()} {location_id}", "created_at": r["created_at"],
+    } for r in rows]
     return jsonify({"items": items})
 
 
 @app.route("/api/admin/queries/<int:query_id>")
 @login_required
 def api_admin_query_detail(query_id):
-    if not _is_admin_panel_user():
+    # General member queries have no location to scope by -- global-only, full stop. A
+    # location-scoped head gets the same 403 as anyone else, not a narrower view of this.
+    scope = _is_admin_panel_user()
+    if not scope or scope["scope"] != "global":
         return jsonify({"error": "Admin access required"}), 403
     conn = get_db()
     try:
@@ -1791,7 +1840,8 @@ def api_admin_query_detail(query_id):
 @app.route("/api/admin/queries/<int:query_id>/reply", methods=["POST"])
 @login_required
 def api_admin_query_reply(query_id):
-    if not _is_admin_panel_user():
+    scope = _is_admin_panel_user()
+    if not scope or scope["scope"] != "global":
         return jsonify({"error": "Admin access required"}), 403
     data = request.get_json(silent=True) or {}
     conn = get_db()
@@ -1807,13 +1857,104 @@ def api_admin_query_reply(query_id):
 @app.route("/api/admin/queries/<int:query_id>/close", methods=["POST"])
 @login_required
 def api_admin_query_close(query_id):
-    if not _is_admin_panel_user():
+    scope = _is_admin_panel_user()
+    if not scope or scope["scope"] != "global":
         return jsonify({"error": "Admin access required"}), 403
     conn = get_db()
     try:
         admin_queries_core.close(conn, query_id)
     except LookupError as e:
         return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+def _qpunch_message_in_scope(conn, scope, message_id):
+    """Fetches a qpunch_queue_messages row by id and confirms it's inside the caller's scope --
+    global sees any message; location scope sees only its own (level, location_id). Returns the
+    row as a dict, or None if the message doesn't exist OR exists but belongs to a different
+    location -- the two cases are deliberately indistinguishable to the caller. A 404 either way
+    means a village head probing another village's message id learns nothing: not that it
+    exists, not that it doesn't."""
+    row = conn.execute("SELECT * FROM qpunch_queue_messages WHERE id = ?", (message_id,)).fetchone()
+    if not row:
+        return None
+    if scope["scope"] == "global":
+        return dict(row)
+    if row["level"] == scope["level"] and row["location_id"] == scope["location_id"]:
+        return dict(row)
+    return None
+
+
+def _log_qpunch_action(conn, message_id, actor_user_id, action, detail=None):
+    conn.execute(
+        "INSERT INTO qpunch_queue_actions (message_id, actor_user_id, action, detail, created_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (message_id, actor_user_id, action, detail, dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")),
+    )
+
+
+@app.route("/api/admin/panel/council/<int:message_id>")
+@login_required
+def api_admin_panel_council_detail(message_id):
+    scope = _is_admin_panel_user()
+    if not scope:
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    try:
+        message = _qpunch_message_in_scope(conn, scope, message_id)
+        if not message:
+            return jsonify({"error": "Message not found"}), 404
+        message["actions"] = [
+            dict(a) for a in conn.execute(
+                "SELECT actor_user_id, action, detail, created_at FROM qpunch_queue_actions "
+                "WHERE message_id = ? ORDER BY created_at", (message_id,),
+            ).fetchall()
+        ]
+        _log_qpunch_action(conn, message_id, session["user_id"], "viewed")
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify(message)
+
+
+@app.route("/api/admin/panel/council/<int:message_id>/reply", methods=["POST"])
+@login_required
+def api_admin_panel_council_reply(message_id):
+    scope = _is_admin_panel_user()
+    if not scope:
+        return jsonify({"error": "Admin access required"}), 403
+    text = ((request.get_json(silent=True) or {}).get("message") or "").strip()
+    if not text:
+        return jsonify({"error": "Reply message is required"}), 400
+    conn = get_db()
+    try:
+        message = _qpunch_message_in_scope(conn, scope, message_id)
+        if not message:
+            return jsonify({"error": "Message not found"}), 404
+        _log_qpunch_action(conn, message_id, session["user_id"], "replied", text)
+        conn.execute("UPDATE qpunch_queue_messages SET status = 'answered' WHERE id = ?", (message_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/admin/panel/council/<int:message_id>/close", methods=["POST"])
+@login_required
+def api_admin_panel_council_close(message_id):
+    scope = _is_admin_panel_user()
+    if not scope:
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    try:
+        message = _qpunch_message_in_scope(conn, scope, message_id)
+        if not message:
+            return jsonify({"error": "Message not found"}), 404
+        _log_qpunch_action(conn, message_id, session["user_id"], "closed")
+        conn.execute("UPDATE qpunch_queue_messages SET status = 'closed' WHERE id = ?", (message_id,))
+        conn.commit()
     finally:
         conn.close()
     return jsonify({"status": "ok"})
@@ -3267,17 +3408,49 @@ def _is_admin() -> bool:
     return bool(user and user["private_id_9digit"] in allowed)
 
 
-def _is_admin_panel_user() -> bool:
-    """The Admin Panel's own gate (2026-10-18) -- additive to _is_admin(), never a replacement
-    for it. Today this is identical to _is_admin(): only the Founder has Admin Panel access,
-    since village is the only level with a real elected council (the same documented gap as
-    announcements_core.is_council_member() / reports_core.is_holder_council()). The moment a
-    real council role exists at any level, THIS function -- not every route that calls it -- is
-    where that access plugs in. When it does, a council member's access must stay scoped to
-    their own location: the panel's global, cross-location views (e.g.
-    reports_core.list_all_open()) stay Admin-only forever, never extended to a scoped council
-    member the way a single location's own report inbox already is via is_holder_council()."""
-    return _is_admin()
+def _is_admin_panel_user():
+    """The Admin Panel's own gate (2026-10-18, extended 2026-10-18 for Q-Punch council scope).
+    Additive to _is_admin(), never a replacement for it -- every OTHER existing admin check in
+    this codebase (_is_admin() itself, the test-cycle panel, the member-export tool) keeps
+    calling _is_admin() directly, unaffected by this change.
+
+    Returns a scope descriptor, not a bool -- the panel now serves two different audiences with
+    two different views of the same feed, and every route that gates on this needs to know which:
+
+      - None: no panel access at all.
+      - {"scope": "global"}: the Founder/Admin. The three existing sources (reports, ID
+        recovery, member queries) stay global-only forever -- a general query or an ID-recovery
+        request has no location to scope by (see docs/ADMIN_PANEL.md Section 1) -- plus every
+        location's council queue.
+      - {"scope": "location", "level": "village", "location_id": ...}: a CURRENTLY-serving
+        village council head. Only their own village's council queue. Never the three global
+        sources, under any condition.
+
+    The location comes from village_council's current term (leadership_start <= today <=
+    leadership_end) -- the same query qmail_core._current_council_recipients() and
+    reports_core.is_holder_council() already use. There is no caching between requests: every
+    call re-checks today's date against the term, so a head whose term just ended falls out of
+    location scope on their very next request, not at some later refresh. Only village has real
+    elected data today, so this is the only level that can ever produce a location scope."""
+    if _is_admin():
+        return {"scope": "global"}
+    conn = get_db()
+    try:
+        user = _current_user_row(conn)
+        if not user:
+            return None
+        today = dt.date.today().isoformat()
+        row = conn.execute(
+            """SELECT village_id FROM village_council
+               WHERE leadership_start <= ? AND leadership_end >= ?
+                 AND (male_head_user_id = ? OR female_head_user_id = ?)""",
+            (today, today, user["id"], user["id"]),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    return {"scope": "location", "level": "village", "location_id": row["village_id"]}
 
 
 def _flatten_location_chain(location: dict) -> str:

@@ -36,7 +36,9 @@ def _now() -> str:
 
 
 def mark_read(conn, user_id: int, kind: str, chat_id: int) -> None:
-    if kind not in ("private", "group", "query"):  # 'query' = admin_queries.id (2026-10-18, Admin Panel replies)
+    if kind not in ("private", "group", "query", "council"):
+        # 'query' = admin_queries.id (2026-10-18, Admin Panel replies)
+        # 'council' = qpunch_queue_messages.id (2026-10-18, Q-Punch council replies)
         raise ValueError("Unknown chat kind")
     ensure_tables(conn)
     conn.execute(
@@ -79,12 +81,26 @@ def summary(conn, user_id: int) -> dict:
         (user_id, user_id),
     ).fetchall()
 
+    # Q-Punch council reply (2026-10-18): same high-water-mark pattern as 'query' above, with
+    # qpunch_queue_actions' 'replied' rows standing in for admin_query_replies -- unread means a
+    # reply NEWER than the sender's last-read mark, not "the message is still open". chat_id is
+    # qpunch_queue_messages.id; scoped to q.sender_id, the same person this module's union is
+    # always about -- the council's OTHER handling (viewed/closed actions) never counts here.
+    council_rows = conn.execute(
+        """SELECT q.id AS chat_id,
+                  (SELECT MAX(created_at) FROM qpunch_queue_actions WHERE message_id = q.id AND action = 'replied') AS last_msg,
+                  (SELECT last_read_at FROM chat_read_state WHERE user_id = ? AND kind = 'council' AND chat_id = q.id) AS last_read
+           FROM qpunch_queue_messages q WHERE q.sender_id = ?""",
+        (user_id, user_id),
+    ).fetchall()
+
     def is_unread(r):
         return bool(r["last_msg"]) and (not r["last_read"] or r["last_msg"] > r["last_read"])
 
     unread_private = sum(1 for r in private_rows if is_unread(r))
     unread_groups = sum(1 for r in group_rows if is_unread(r))
     unread_queries = sum(1 for r in query_rows if is_unread(r))
+    unread_council = sum(1 for r in council_rows if is_unread(r))
     pending_requests = conn.execute(
         "SELECT COUNT(*) FROM people_requests WHERE to_user_id = ? AND status IN ('pending', 'waiting')", (user_id,)
     ).fetchone()[0]
@@ -94,8 +110,9 @@ def summary(conn, user_id: int) -> dict:
         "unread_private": unread_private,
         "unread_groups": unread_groups,
         "unread_queries": unread_queries,
+        "unread_council": unread_council,
         "pending_requests": pending_requests,
-        "total": unread_private + unread_groups + pending_requests + unread_queries,
+        "total": unread_private + unread_groups + pending_requests + unread_queries + unread_council,
     }
 
 
@@ -134,6 +151,14 @@ def recent_items(conn, user_id: int, limit: int = 5) -> list[dict]:
         (user_id, user_id),
     ).fetchall()
 
+    council_rows = conn.execute(
+        """SELECT q.id AS chat_id, q.subject AS chat_name,
+                  (SELECT MAX(created_at) FROM qpunch_queue_actions WHERE message_id = q.id AND action = 'replied') AS last_msg,
+                  (SELECT last_read_at FROM chat_read_state WHERE user_id = ? AND kind = 'council' AND chat_id = q.id) AS last_read
+           FROM qpunch_queue_messages q WHERE q.sender_id = ?""",
+        (user_id, user_id),
+    ).fetchall()
+
     def is_unread(r):
         return bool(r["last_msg"]) and (not r["last_read"] or r["last_msg"] > r["last_read"])
 
@@ -159,6 +184,13 @@ def recent_items(conn, user_id: int, limit: int = 5) -> list[dict]:
             continue
         items.append({
             "kind": "query", "id": r["chat_id"], "title": r["chat_name"],
+            "created_at": r["last_msg"], "meta": {},
+        })
+    for r in council_rows:
+        if not is_unread(r):
+            continue
+        items.append({
+            "kind": "council", "id": r["chat_id"], "title": r["chat_name"],
             "created_at": r["last_msg"], "meta": {},
         })
     for r in conn.execute(
