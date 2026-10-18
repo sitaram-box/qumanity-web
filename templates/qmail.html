@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qumanity — Qmail</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/qmail.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body>
+  <header class="qm-header">
+    <a href="{{ url_for('dashboard') }}" style="display:contents" title="Back to Dashboard">
+      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+    </a>
+    <div class="qm-header-text">
+      <h1>✉️ Qmail</h1>
+      <p>{{ member_name }}</p>
+    </div>
+    <nav class="qm-header-actions">
+      <a href="{{ url_for('dashboard') }}" class="qm-btn qm-btn-ghost">← Dashboard</a>
+      <!-- Plain link to /logout, not dash_extras.js's .qm-logout-btn rating-gate flow -- that
+           flow's modals (#rating-modal, #logout-confirm-modal) don't exist on this page, and
+           pulling in dash_extras.js just for this button would drag in the whole dashboard
+           mailbox card it also wires up, which this page deliberately doesn't load. -->
+      <a href="{{ url_for('logout') }}" class="qm-btn qm-btn-ghost">Logout</a>
+    </nav>
+  </header>
+
+  <main class="qmail-shell">
+    <aside class="qmail-sidebar">
+      <button type="button" class="qmail-compose-btn" id="qmail-compose-btn">✏️ Compose</button>
+      <nav class="qmail-folders">
+        <button type="button" class="qmail-folder is-active" data-folder="inbox">📥 Inbox</button>
+        <button type="button" class="qmail-folder" data-folder="sent">📤 Sent</button>
+        <button type="button" class="qmail-folder" data-folder="drafts">📝 Drafts</button>
+      </nav>
+    </aside>
+
+    <section class="qmail-list-pane">
+      <div class="qmail-list" id="qmail-list">
+        <p class="qm-dash-empty" id="qmail-list-empty" hidden>Nothing here yet.</p>
+      </div>
+    </section>
+
+    <section class="qmail-reading-pane" id="qmail-reading">
+      <button type="button" class="qmail-back-btn qm-btn qm-btn-ghost" id="qmail-back-btn">← Back to list</button>
+      <div id="qmail-reading-content">
+        <p class="qm-dash-empty">Select a message from the list.</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="qmail-compose-overlay" id="qmail-compose-overlay" hidden>
+    <div class="qmail-compose-header">
+      <span id="qmail-compose-title">New Message</span>
+      <button type="button" class="qmail-compose-close" id="qmail-compose-close" title="Close (saves as draft if not empty)">✕</button>
+    </div>
+    <div class="qmail-compose-body">
+      <div class="qmail-compose-field">
+        <input type="text" id="qmail-to-input" placeholder="To — start typing a connected member's username…" autocomplete="off" />
+        <div class="qmail-to-suggestions" id="qmail-to-suggestions" hidden></div>
+      </div>
+      <div class="qmail-compose-field">
+        <input type="text" id="qmail-subject-input" placeholder="Subject" maxlength="120" />
+      </div>
+      <div class="qmail-format-toolbar">
+        <button type="button" class="qmail-fmt-btn" data-fmt="bold" title="Bold"><b>B</b></button>
+        <button type="button" class="qmail-fmt-btn" data-fmt="italic" title="Italic"><i>I</i></button>
+        <button type="button" class="qmail-fmt-btn" data-fmt="link" title="Link">🔗</button>
+        <label class="qmail-attach-btn" title="Attach a file, up to 2 MB">
+          📎<input type="file" id="qmail-attachment-input" hidden />
+        </label>
+        <span class="qmail-attach-name" id="qmail-attach-name"></span>
+      </div>
+      <textarea id="qmail-body-input" class="qmail-body-input" placeholder="Write your message…   (**bold**, _italic_, [text](https://…) for a link)"></textarea>
+      <p class="qm-timeline-note" id="qmail-compose-error" hidden></p>
+    </div>
+    <div class="qmail-compose-footer">
+      <button type="button" class="sg-btn" id="qmail-send-btn">Send</button>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/qmail_format.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/qmail.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/logo_nav.js') }}"></script>
+</body>
+</html>

@@ -475,7 +475,6 @@
 #rating-review-text { width: 100%; resize: vertical; font: inherit; }
 .qm-logout-btn { margin-left: 4px; }
 .qm-summary-error { color: #c82f2f; font-size: 0.85rem; margin-top: 6px; }
-#qm-messagebox-card .qm-dash-empty { margin: 0; }
 
 .pv-loc-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 .pv-loc-table th, .pv-loc-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid rgba(10, 25, 41, 0.08); }
@@ -737,31 +736,6 @@
 @media (max-width: 760px) {
   .ap-body { grid-template-columns: 1fr; }
   .ap-list { max-height: 260px; }
-}
-
-/* ---- Qmail mailbox: inbox / sent / compose (2026-10-18) ---- */
-.qm-mail-tabs { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
-.qm-mail-tab { padding: 6px 14px; border-radius: 999px; border: 1px solid var(--qm-input-border); background: var(--qm-panel-bg); color: var(--qm-text-dim); font: 600 0.8rem "Inter", system-ui, sans-serif; cursor: pointer; }
-.qm-mail-tab.is-active { background: linear-gradient(120deg, #ff8a1f, #ffd24a); color: #1a1205; border-color: transparent; }
-.qm-mail-body { display: grid; grid-template-columns: minmax(200px, 300px) 1fr; gap: 14px; min-height: 260px; }
-.qm-mail-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; max-height: 360px; border: 1px solid var(--qm-border); border-radius: 12px; padding: 8px; background: var(--qm-panel-bg); }
-.qm-mail-row { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; text-align: left; padding: 8px 10px; border-radius: 10px; border: 1px solid transparent; background: transparent; cursor: pointer; font: inherit; }
-.qm-mail-row:hover { background: rgba(201, 150, 12, 0.08); border-color: rgba(201, 150, 12, 0.25); }
-.qm-mail-row.is-unread .qm-mail-row-title { font-weight: 800; }
-.qm-mail-row-title { font-size: 0.86rem; color: var(--qm-text); font-weight: 600; }
-.qm-mail-row-meta { font-size: 0.72rem; color: var(--qm-text-dim); }
-.qm-mail-detail { border: 1px solid var(--qm-border); border-radius: 12px; padding: 14px; background: var(--qm-panel-bg); overflow-y: auto; }
-.qm-mail-detail-meta { margin: 0 0 6px; font-size: 0.78rem; color: var(--qm-text-dim); }
-.qm-mail-detail-body { margin: 8px 0; font-size: 0.9rem; color: var(--qm-text); white-space: pre-wrap; }
-.qm-mail-attachment-link { display: block; margin: 6px 0; font-size: 0.82rem; color: var(--qm-gold-text); text-decoration: none; }
-.qm-mail-attachment-link:hover { text-decoration: underline; }
-.qm-mail-compose { margin-top: 14px; padding-top: 14px; border-top: 1px dashed rgba(10, 25, 41, 0.12); display: flex; flex-direction: column; gap: 4px; }
-.qm-mail-suggestions { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; border: 1px solid var(--qm-input-border); border-radius: 8px; background: var(--qm-panel-bg); max-height: 160px; overflow-y: auto; }
-.qm-mail-suggestion { text-align: left; padding: 6px 10px; border: none; background: transparent; font: inherit; font-size: 0.82rem; color: var(--qm-text); cursor: pointer; }
-.qm-mail-suggestion:hover { background: rgba(201, 150, 12, 0.08); }
-@media (max-width: 760px) {
-  .qm-mail-body { grid-template-columns: 1fr; }
-  .qm-mail-list { max-height: 220px; }
 }
 
 .qp-ref { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(10, 25, 41, 0.12); }

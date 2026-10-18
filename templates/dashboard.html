@@ -110,43 +110,9 @@
           </div>
           <div id="qm-qmail-active" hidden>
             <div class="pv-field"><label>Your Qmail address</label><code id="qm-qmail-address"></code></div>
+            <a href="{{ url_for('qmail_page') }}" class="sg-btn" style="display:inline-block;margin-top:8px;text-decoration:none;">Open Qmail →</a>
           </div>
           <p class="qm-timeline-note" id="qm-qmail-changed-banner" hidden></p>
-        </article>
-
-        <article class="pv-card pv-card-wide" id="qm-mail-card" hidden>
-          <h3><span class="pv-ico">📥</span> Qmail — Inbox &amp; Sent</h3>
-          <div class="qm-mail-tabs">
-            <button type="button" class="qm-mail-tab is-active" data-mail-tab="inbox">Inbox</button>
-            <button type="button" class="qm-mail-tab" data-mail-tab="sent">Sent</button>
-            <button type="button" class="sg-btn" id="qm-mail-compose-btn" style="margin-left:auto;">✏️ Compose</button>
-          </div>
-          <div class="qm-mail-body">
-            <div class="qm-mail-list" id="qm-mail-list">
-              <p class="qm-dash-empty" id="qm-mail-list-empty" hidden>Nothing here yet.</p>
-            </div>
-            <div class="qm-mail-detail" id="qm-mail-detail">
-              <p class="qm-dash-empty">Select a message from the list.</p>
-            </div>
-          </div>
-
-          <div class="qm-mail-compose" id="qm-mail-compose-form" hidden>
-            <div class="pv-field">
-              <label for="qm-mail-to-input">To</label>
-              <input type="text" id="qm-mail-to-input" placeholder="Start typing a connected member's username…" autocomplete="off" />
-              <div class="qm-mail-suggestions" id="qm-mail-suggestions" hidden></div>
-            </div>
-            <div class="pv-field"><label for="qm-mail-subject-input">Subject</label><input type="text" id="qm-mail-subject-input" maxlength="120" /></div>
-            <div class="pv-field">
-              <label for="qm-mail-body-input">Message</label>
-              <p class="pv-hint">Use <code>**bold**</code>, <code>_italic_</code> or <code>[text](https://…)</code> for a link.</p>
-              <textarea id="qm-mail-body-input" rows="6"></textarea>
-            </div>
-            <div class="pv-field"><label for="qm-mail-attachment-input">Attachment (optional, up to 2 MB)</label><input type="file" id="qm-mail-attachment-input" /></div>
-            <button type="button" class="sg-btn" id="qm-mail-send-btn">Send</button>
-            <button type="button" class="qm-btn qm-btn-ghost" id="qm-mail-cancel-btn">Cancel</button>
-            <p class="qm-timeline-note" id="qm-mail-compose-error" hidden></p>
-          </div>
         </article>
 
         <article class="pv-card pv-card-wide">
@@ -205,11 +171,6 @@
           <h4 style="margin-top:16px;">Q-Punch (village council) — your real ballots</h4>
           <ul class="eh-qpunch" id="eh-qpunch"></ul>
           <p class="qm-dash-empty" id="eh-qpunch-empty" hidden>You haven't voted in a Q-Punch election yet.</p>
-        </article>
-
-        <article class="pv-card" id="qm-messagebox-card">
-          <h3><span class="pv-ico">📥</span> Message Box</h3>
-          <p class="qm-dash-empty">Coming soon — Message Box ships in a later update. Your chats already live under the <b>Personal</b> tab.</p>
         </article>
 
         <article class="pv-card" id="qm-myreports-card">

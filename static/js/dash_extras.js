@@ -549,142 +549,18 @@
       }
     }
 
-    var mailCard = $("qm-mail-card");
-
-    function renderQmailStatusAndMail(d) {
-      renderQmailStatus(d);
-      if (mailCard) mailCard.hidden = !d.activated;
-    }
-
-    api("/api/qmail/status").then(renderQmailStatusAndMail).catch(function () {});
+    api("/api/qmail/status").then(renderQmailStatus).catch(function () {});
 
     if (qmailActivateBtn) {
       qmailActivateBtn.addEventListener("click", function () {
         qmailActivateErr.hidden = true;
         api("/api/qmail/activate", { username: qmailUsernameInput.value }).then(function (d) {
-          renderQmailStatusAndMail({ activated: true, address: d.address, changed: null });
+          renderQmailStatus({ activated: true, address: d.address, changed: null });
         }).catch(function (err) {
           qmailActivateErr.textContent = err.message;
           qmailActivateErr.hidden = false;
         });
       });
-    }
-
-    // ---- Qmail mailbox: inbox / sent / compose (2026-10-18) ----
-    if (mailCard) {
-      var mailTabs = Array.prototype.slice.call(document.querySelectorAll(".qm-mail-tab"));
-      var mailList = $("qm-mail-list"), mailListEmpty = $("qm-mail-list-empty"), mailDetail = $("qm-mail-detail");
-      var mailComposeBtn = $("qm-mail-compose-btn"), mailComposeForm = $("qm-mail-compose-form"), mailCancelBtn = $("qm-mail-cancel-btn");
-      var mailToInput = $("qm-mail-to-input"), mailSuggestions = $("qm-mail-suggestions");
-      var mailSubjectInput = $("qm-mail-subject-input"), mailBodyInput = $("qm-mail-body-input");
-      var mailAttachmentInput = $("qm-mail-attachment-input"), mailSendBtn = $("qm-mail-send-btn"), mailComposeErr = $("qm-mail-compose-error");
-      var mailCurrentTab = "inbox", mailItemsCache = [];
-
-      function mailEl(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
-
-      function mailRenderList() {
-        mailList.innerHTML = "";
-        mailListEmpty.hidden = mailItemsCache.length !== 0;
-        mailItemsCache.forEach(function (m) {
-          var row = mailEl("button", "qm-mail-row"); row.type = "button";
-          var who = mailCurrentTab === "inbox" ? (m.from_name || m.from_address || "Unknown") : (m.to_name || m.to_address || "Unknown");
-          if (mailCurrentTab === "inbox" && !m.read_at) row.classList.add("is-unread");
-          row.appendChild(mailEl("div", "qm-mail-row-title", m.subject || "(no subject)"));
-          row.appendChild(mailEl("div", "qm-mail-row-meta", who + " · " + new Date(m.created_at).toLocaleString()));
-          row.addEventListener("click", function () { mailOpenDetail(m); });
-          mailList.appendChild(row);
-        });
-      }
-
-      function mailLoad() {
-        api("/api/qmail/" + mailCurrentTab).then(function (d) {
-          mailItemsCache = d.messages || [];
-          mailRenderList();
-        }).catch(function (e) { mailList.innerHTML = ""; mailList.appendChild(mailEl("p", "qm-dash-empty", e.message)); });
-      }
-
-      mailTabs.forEach(function (btn) {
-        btn.addEventListener("click", function () {
-          mailTabs.forEach(function (b) { b.classList.toggle("is-active", b === btn); });
-          mailCurrentTab = btn.getAttribute("data-mail-tab");
-          mailDetail.innerHTML = ""; mailDetail.appendChild(mailEl("p", "qm-dash-empty", "Select a message from the list."));
-          mailLoad();
-        });
-      });
-
-      function mailOpenDetail(m) {
-        mailDetail.innerHTML = "";
-        var who = mailCurrentTab === "inbox" ? (m.from_name || m.from_address) : (m.to_name || m.to_address);
-        mailDetail.appendChild(mailEl("h4", "", m.subject || "(no subject)"));
-        mailDetail.appendChild(mailEl("p", "qm-mail-detail-meta",
-          (mailCurrentTab === "inbox" ? "From " : "To ") + who + " · " + new Date(m.created_at).toLocaleString()));
-        var bodyP = document.createElement("p"); bodyP.className = "qm-mail-detail-body";
-        bodyP.appendChild(window.qmRenderFormattedText(m.body));
-        mailDetail.appendChild(bodyP);
-        (m.attachments || []).forEach(function (att) {
-          var link = document.createElement("a");
-          link.href = "/api/qmail/attachments/" + att.id; link.target = "_blank"; link.rel = "noopener noreferrer";
-          link.className = "qm-mail-attachment-link";
-          link.textContent = "📎 " + att.filename + " (" + Math.round(att.byte_size / 1024) + " KB)";
-          mailDetail.appendChild(link);
-        });
-        if (mailCurrentTab === "inbox" && !m.read_at) {
-          api("/api/qmail/messages/" + m.id + "/read", {}).then(function () { m.read_at = new Date().toISOString(); mailRenderList(); }).catch(function () {});
-        }
-      }
-
-      mailComposeBtn.addEventListener("click", function () {
-        mailComposeErr.hidden = true;
-        mailComposeForm.hidden = !mailComposeForm.hidden;
-      });
-      mailCancelBtn.addEventListener("click", function () {
-        mailComposeForm.hidden = true;
-        mailToInput.value = ""; mailSubjectInput.value = ""; mailBodyInput.value = ""; mailAttachmentInput.value = "";
-        mailSuggestions.hidden = true;
-      });
-
-      var mailSelectedAddress = null;
-      mailToInput.addEventListener("input", function () {
-        mailSelectedAddress = null;
-        var q = mailToInput.value.trim();
-        if (q.length < 2) { mailSuggestions.hidden = true; return; }
-        api("/api/qmail/resolve-username?q=" + encodeURIComponent(q)).then(function (d) {
-          mailSuggestions.innerHTML = "";
-          var matches = d.matches || [];
-          if (!matches.length) { mailSuggestions.hidden = true; return; }
-          matches.forEach(function (match) {
-            var row = mailEl("button", "qm-mail-suggestion", match.name + " (" + match.full_address + ")"); row.type = "button";
-            row.addEventListener("click", function () {
-              mailSelectedAddress = match.full_address;
-              mailToInput.value = match.name + " (" + match.full_address + ")";
-              mailSuggestions.hidden = true;
-            });
-            mailSuggestions.appendChild(row);
-          });
-          mailSuggestions.hidden = false;
-        }).catch(function () { mailSuggestions.hidden = true; });
-      });
-
-      mailSendBtn.addEventListener("click", function () {
-        mailComposeErr.hidden = true;
-        var toAddress = mailSelectedAddress;
-        if (!toAddress) { mailComposeErr.textContent = "Choose a recipient from the suggestions."; mailComposeErr.hidden = false; return; }
-        if (!mailBodyInput.value.trim()) { mailComposeErr.textContent = "A message body is required."; mailComposeErr.hidden = false; return; }
-        var form = new FormData();
-        form.append("to", toAddress);
-        form.append("subject", mailSubjectInput.value);
-        form.append("body", mailBodyInput.value);
-        if (mailAttachmentInput.files[0]) form.append("attachment", mailAttachmentInput.files[0]);
-        fetch("/api/qmail/compose", { method: "POST", body: form })
-          .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || "Something went wrong"); return j; }); })
-          .then(function () {
-            mailCancelBtn.click();
-            if (mailCurrentTab === "sent") mailLoad();
-          })
-          .catch(function (e) { mailComposeErr.textContent = e.message; mailComposeErr.hidden = false; });
-      });
-
-      mailLoad();
     }
   }
 })();

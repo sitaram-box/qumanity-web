@@ -1,0 +1,214 @@
+/* qmail.css (2026-10-18) -- the standalone /qmail page. style.css + register.css carry the
+   shared header/button/variable tokens (same three-stylesheet pattern templates/elements.html
+   already uses); this file is everything specific to the Gmail-style three-column layout and the
+   compose overlay. Two small utility classes (.qm-dash-empty, .sg-btn) are redefined here,
+   verbatim, because they only exist in dashboard.css today and this page deliberately doesn't
+   load that file (it would pull in a large amount of dashboard-only CSS -- the admin panel grid,
+   .pv-card, the stats panels -- for two rules' worth of reuse). No new CSS variables: every color
+   below is one of style.css's existing --qm-* tokens. */
+
+.qm-dash-empty { margin: 0; font-size: 0.85rem; color: var(--qm-text-dim); }
+.sg-btn { padding: 5px 12px; border-radius: 999px; cursor: pointer; border: 1.5px solid #B8860B; background: rgba(255, 210, 74, 0.18); color: var(--qm-gold-text); font: 700 0.76rem "Inter", system-ui, sans-serif; white-space: nowrap; }
+.sg-btn:hover:not(:disabled) { background: rgba(255, 210, 74, 0.32); }
+.sg-btn:disabled { opacity: 0.55; cursor: default; }
+
+body { background: var(--qm-bg); }
+
+/* ---- The three-column shell ---- */
+.qmail-shell {
+  display: grid;
+  grid-template-columns: 200px minmax(260px, 340px) 1fr;
+  gap: 14px;
+  height: calc(100vh - 110px);
+  padding: 16px 20px;
+  box-sizing: border-box;
+}
+
+.qmail-sidebar { display: flex; flex-direction: column; gap: 10px; }
+.qmail-compose-btn {
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(120deg, #ff8a1f, #ffd24a);
+  color: #1a1205;
+  font: 700 0.9rem "Inter", system-ui, sans-serif;
+  box-shadow: 0 2px 8px rgba(184, 134, 11, 0.25);
+}
+.qmail-compose-btn:hover { filter: brightness(1.04); }
+.qmail-folders { display: flex; flex-direction: column; gap: 2px; }
+.qmail-folder {
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: var(--qm-text-dim);
+  font: 600 0.85rem "Inter", system-ui, sans-serif;
+  cursor: pointer;
+}
+.qmail-folder:hover { background: rgba(201, 150, 12, 0.08); color: var(--qm-text); }
+.qmail-folder.is-active { background: rgba(255, 153, 51, 0.16); color: var(--qm-gold-text); }
+
+.qmail-list-pane { min-width: 0; overflow: hidden; }
+.qmail-list {
+  height: 100%;
+  overflow-y: auto;
+  border: 1px solid var(--qm-border);
+  border-radius: 14px;
+  background: var(--qm-panel-bg);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.qmail-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  background: transparent;
+  font: inherit;
+}
+.qmail-row:hover { background: rgba(201, 150, 12, 0.08); border-color: rgba(201, 150, 12, 0.22); }
+.qmail-row.is-selected { background: rgba(255, 153, 51, 0.14); border-color: rgba(255, 153, 51, 0.35); }
+.qmail-row-checkbox { margin-top: 3px; }
+.qmail-row-main { min-width: 0; }
+.qmail-row-who { font-size: 0.82rem; font-weight: 600; color: var(--qm-text); }
+.qmail-row.is-unread .qmail-row-who, .qmail-row.is-unread .qmail-row-subject { font-weight: 800; }
+.qmail-row-subject { font-size: 0.85rem; color: var(--qm-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qmail-row-snippet { font-size: 0.78rem; color: var(--qm-text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qmail-row-date { font-size: 0.72rem; color: var(--qm-text-dim); white-space: nowrap; }
+
+.qmail-reading-pane {
+  border: 1px solid var(--qm-border);
+  border-radius: 14px;
+  background: var(--qm-panel-bg);
+  padding: 20px;
+  overflow-y: auto;
+  min-width: 0;
+}
+.qmail-reading-pane h2 { margin: 0 0 6px; font-size: 1.1rem; color: var(--qm-gold-text); }
+.qmail-reading-meta { margin: 0 0 14px; font-size: 0.82rem; color: var(--qm-text-dim); }
+.qmail-reading-body { font-size: 0.92rem; color: var(--qm-text); white-space: pre-wrap; line-height: 1.6; }
+.qmail-attachment-link { display: block; margin: 10px 0 0; font-size: 0.82rem; color: var(--qm-gold-text); text-decoration: none; }
+.qmail-attachment-link:hover { text-decoration: underline; }
+
+/* ---- Compose overlay: Gmail's bottom-right-anchored panel, not a third column ---- */
+.qmail-compose-overlay {
+  position: fixed;
+  right: 24px;
+  bottom: 0;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--qm-panel-bg);
+  border: 1px solid var(--qm-border);
+  border-bottom: none;
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -8px 28px rgba(10, 25, 41, 0.22);
+  z-index: 60;
+}
+.qmail-compose-overlay[hidden] { display: none; }
+.qmail-compose-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--qm-navy);
+  color: var(--qm-white);
+  border-radius: 14px 14px 0 0;
+  font: 700 0.85rem "Inter", system-ui, sans-serif;
+}
+.qmail-compose-close { background: none; border: none; color: var(--qm-white); font-size: 1rem; cursor: pointer; opacity: 0.8; }
+.qmail-compose-close:hover { opacity: 1; }
+.qmail-compose-body { padding: 10px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.qmail-compose-field { position: relative; }
+.qmail-compose-field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: none;
+  border-bottom: 1px solid var(--qm-input-border);
+  background: transparent;
+  color: var(--qm-text);
+  font: inherit;
+}
+.qmail-compose-field input:focus { outline: none; border-bottom-color: var(--qm-saffron); }
+.qmail-to-suggestions {
+  position: absolute;
+  left: 0; right: 0; top: 100%;
+  background: var(--qm-panel-bg);
+  border: 1px solid var(--qm-input-border);
+  border-radius: 8px;
+  max-height: 160px;
+  overflow-y: auto;
+  z-index: 5;
+  box-shadow: 0 6px 18px rgba(10, 25, 41, 0.14);
+}
+.qmail-to-suggestion { display: block; width: 100%; text-align: left; padding: 7px 10px; border: none; background: transparent; font: inherit; font-size: 0.82rem; color: var(--qm-text); cursor: pointer; }
+.qmail-to-suggestion:hover { background: rgba(201, 150, 12, 0.08); }
+.qmail-format-toolbar { display: flex; align-items: center; gap: 4px; padding: 4px 0; }
+.qmail-fmt-btn {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--qm-input-border);
+  background: var(--qm-input-bg);
+  color: var(--qm-text);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.qmail-fmt-btn:hover { background: rgba(201, 150, 12, 0.12); }
+.qmail-attach-btn {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--qm-input-border);
+  background: var(--qm-input-bg);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.qmail-attach-btn:hover { background: rgba(201, 150, 12, 0.12); }
+.qmail-attach-name { font-size: 0.76rem; color: var(--qm-text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qmail-body-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 160px;
+  resize: vertical;
+  border: none;
+  background: transparent;
+  color: var(--qm-text);
+  font: inherit;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+.qmail-body-input:focus { outline: none; }
+.qmail-compose-footer { padding: 10px 16px 14px; }
+
+/* Narrow viewports: the reading pane sits BEHIND the list by default (matching the Admin Panel's
+   own .ap-body breakpoint, same 760px) -- the list shows first; opening a message adds
+   .is-reading to .qmail-shell, which swaps which of the two is visible. .qmail-back-btn (inside
+   the reading pane) returns to the list; it's a no-op, not even rendered meaningfully, above this
+   breakpoint, where both panes already show side by side. */
+.qmail-back-btn { display: none; }
+@media (max-width: 760px) {
+  .qmail-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    height: auto;
+  }
+  .qmail-sidebar { flex-direction: row; flex-wrap: wrap; }
+  .qmail-folders { flex-direction: row; flex-wrap: wrap; }
+  .qmail-reading-pane { display: none; }
+  .qmail-shell.is-reading .qmail-list-pane { display: none; }
+  .qmail-shell.is-reading .qmail-reading-pane { display: block; }
+  .qmail-shell.is-reading .qmail-back-btn { display: inline-block; }
+  .qmail-compose-overlay { right: 0; left: 0; width: auto; max-width: none; border-radius: 14px 14px 0 0; }
+}

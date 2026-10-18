@@ -2226,6 +2226,25 @@ def dashboard():
     )
 
 
+@app.route("/qmail")
+@login_required
+def qmail_page():
+    """The full-screen Qmail interface (2026-10-18) -- a standalone page, not a dashboard tab, so
+    it gets its own scroll/focus context and a real, bookmarkable URL (see docs/QMAIL.md). Needs
+    far less than the dashboard's own _profile_for(): just enough to render the header and know
+    whether to send an unactivated member back to the dashboard, where the activation UI actually
+    lives (#qm-qmail-card) -- this page assumes an address already exists, it doesn't mint one."""
+    conn = get_db()
+    user = conn.execute("SELECT name, qmail_username FROM users WHERE id = ?", (session["user_id"],)).fetchone()
+    conn.close()
+    if not user:
+        session.pop("user_id", None)
+        return redirect(url_for("login"))
+    if not user["qmail_username"]:
+        return redirect(url_for("dashboard"))
+    return render_template("qmail.html", member_name=user["name"])
+
+
 @app.route("/api/me")
 @login_required
 def api_me():
