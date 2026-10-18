@@ -1,8 +1,9 @@
 # Qumanity — Project Handover
 
 Written 17 October 2026, refreshed 18 October 2026 to cover Qmail, Q-Punch council addresses, the
-Admin Panel's scope evolution, attachments, drafts, and the standalone `/qmail` mailbox page. This
-is a snapshot for whoever picks up the project next — it is not a replacement for the detailed
+Admin Panel's scope evolution, attachments, drafts, and the standalone `/qmail` mailbox page, and
+refreshed again later on 18 October 2026 after the DPG evidence pack pass (§5), which led to two
+code fixes and a README correction. This is a snapshot for whoever picks up the project next — it is not a replacement for the detailed
 design docs already in this folder (linked throughout), and it will go stale as the code moves;
 treat it as a map, not a source of truth for exact current state.
 
@@ -31,9 +32,12 @@ session.
   tracked in a `migrations` table. `app.py`'s `ensure_database_ready()` runs the base schema, each
   module's own tables, and every migration on every boot — no manual step. Current range:
   001–003, 007–024 (004–006 unused). 024 is the most recent (Qmail drafts).
-- **74 application tables** (75 with SQLite's own `sqlite_sequence`) — counted directly against a
-  freshly-migrated throwaway database, not estimated from an older doc. Full list with purposes in
-  `docs/DATA_MODEL.md` (not refreshed in this pass — see §9).
+- **74 application tables on boot, 76 in a running database** — counted directly against a
+  freshly-migrated throwaway database, not estimated from an older doc (75 on boot if you count
+  SQLite's own `sqlite_sequence`). The other two are created on first use, not on boot:
+  `chat_read_state` by `notify_core.py` and `election_cycle_config` by `election_core.py`. The
+  legacy `election_history` table is no longer created. Full list with purposes in
+  `docs/DATA_MODEL.md`.
 - **Four in-process scheduler jobs** (APScheduler, `BackgroundScheduler`): daily folder sync
   (00:00), daily lunar-pipeline tick (00:00 IST), and the Post Testing cycle's monthly post job
   (1st, 02:00 IST) and weekly vote job (Monday, 02:00 IST). `QM_DISABLE_SCHEDULER` turns all of
@@ -44,13 +48,9 @@ session.
   would be added, should one genuinely be needed.
 - **Astronomy is local** — pyswisseph's built-in Moshier ephemeris, no external service, no data
   files.
-- Full architecture detail: `docs/ARCHITECTURE.md`. Every route: `docs/API.md`. Every table:
-  `docs/DATA_MODEL.md`. **`docs/ARCHITECTURE.md` and `docs/DATA_MODEL.md` have not been refreshed
-  across this whole Qmail/Q-Punch/Admin-Panel/attachments/drafts/`/qmail`-page arc** and still
-  reflect 17 October — they do not yet list `qmail_attachments`, `qmail_drafts`,
-  `qpunch_addresses`, `qpunch_queue_messages`, `qpunch_queue_actions`, or the `qmail_core.py` and
-  `/qmail` additions to the module map — flagged here rather than left for someone to discover by
-  surprise.
+- Full architecture detail: `docs/ARCHITECTURE.md`. Every route (178 under `/api`):
+  `docs/API.md`. Every table: `docs/DATA_MODEL.md`. All three were brought up to date at `065cecc`
+  and match the DPG pack's own copies byte for byte.
 
 ## 3. Database schema — what's new since the last stable baseline
 
@@ -206,6 +206,14 @@ untouched by any of this — two addresses, two surfaces, no crossover. Every to
 (view, reply, close) writes a `qpunch_queue_actions` row naming the real actor, the same
 transparency posture `id_recovery_reveals` already established for this codebase.
 
+**The resident reads the reply in Qmail.** Until `c09b91f` a member who wrote to their council, or
+sent the Admin a query, was notified of a reply but no route returned the reply's text, and the
+notification never cleared. Now `GET /api/qmail/sent/council/<id>` and `GET /api/queries/mine/<id>`
+return the sender's original with each reply's text and time — never the action log, and never who
+on the council or admin side replied — and opening either clears the notification through the
+existing `chat_read_state` table (kinds `council` and `query`). Both are sender-only, with the same
+404-not-403 shape as the queue. `tests/test_reply_read.py` covers them.
+
 ### 4.9 The Admin Panel's scope evolution
 
 Full design: `docs/ADMIN_PANEL.md`. Built as a single **filterable list + detail pane** (not three
@@ -230,6 +238,15 @@ serve route). One thing worth restating here because it's easy to miss: `GET
 it re-derives access on every request from the message the attachment belongs to — sender or
 recipient for a member message, sender or panel scope (reusing `_qpunch_message_in_scope()`
 directly) for a council one. There is no bare, unguarded file URL anywhere in this feature.
+
+**Fixed at `f1edd55`: attachments used to be served inline** with the sender-declared content type
+and no file-type allowlist, so an HTML or SVG attachment could run script on qumanity.in. They are
+now always served as downloads with `X-Content-Type-Options: nosniff`, and uploads are limited to a
+15-type allowlist (`qmail_core.AttachmentTypeError`, a `ValueError` subclass, so the compose route
+returns 400 for a disallowed type, not the size limit's 413). A file whose browser declares a blank
+or unknown type is rejected — deliberate strictness, and a limitation members may notice. The fix
+changed the serve route, not stored data, so attachments already stored are covered without a
+migration. `tests/test_qmail_attachments.py` section 6 covers it.
 
 **A known, stated gap**: whether a `<script>` tag in a message body actually renders as inert text,
 and whether a `javascript:`-scheme link actually fails to become clickable, are DOM-rendering
@@ -314,13 +331,29 @@ hasn't been done yet.
 
 ## 5. DPG Evidence Pack — status at this handover
 
-A separate, non-git directory at `~/Desktop/My Mac/DPG/` holds the 11 DPG Standard evidence docs.
-**A full re-audit is in progress, not complete.** Task 1 (read all 11 docs, summarize claims, flag
-sections likely affected by recent changes) is done. Tasks 2–6 (section-by-section drift analysis,
-proposed edits, Doc 11 status re-check, a new cover letter, applying + saving the edits) are **not
-yet started**, and explicitly have not been touched by the Qmail/Q-Punch/Admin-Panel work in this
-handover — that work was deliberately kept separate, not folded in. Whoever picks this up should
-re-read the prior Task 1 output before continuing, not restart from scratch.
+The master copy of the pack is a non-git directory on the owner's Mac, `~/Desktop/My Mac/DPG/`:
+the 11 DPG Standard evidence docs plus its own `API.md`, `ARCHITECTURE.md` and `DATA_MODEL.md`.
+The 18 October 2026 pass brought it up to date with Qmail, Q-Punch council addresses, the council
+queue, the Admin Panel's scope, attachments, drafts, `/qmail`, the Admin member export and the
+registration email. Statements the new features had made false were corrected in place, each with
+a note saying what it used to say and when it changed. Its Forward Plan (Doc 10) is the tracked
+list of open gaps; Doc 11 holds the application form answers (40 of 45 fields Ready).
+
+**The pass found two real bugs, both by checking a pack claim against what the routes actually do,
+not by reading the tests**, so it also served as a second review of the code. Both were fixed
+before submission rather than only disclosed:
+- `f1edd55` — Qmail attachments could run script on qumanity.in (§4.10).
+- `c09b91f` — a member could not read a council's or the Admin's reply to their own message (§4.8).
+
+**The README was also wrong, and was fixed at `065cecc`.** The front page still described a
+deliberately disconnected prototype, pointing at `identity_core.py` and `global_core.py` on "the
+real platform" (neither module exists in this repository), plus a manual `db/init_db.py` step the
+app no longer needs, a 12-route API table (there are 178), two "known simplifications" that had
+already been fixed, and nothing on Qmail, council addresses or the Admin Panel. Anyone reading that
+commit's diff should know the old text was out of date, not that the project changed direction.
+
+The pack's content is current as of `065cecc`; the pack itself was committed to `docs/dpg_evidence/`
+at `7fda4cb`. As it says of itself, it will go stale as the code moves.
 
 ## 6. Gotchas and lessons learned worth not re-discovering
 
@@ -349,6 +382,11 @@ re-read the prior Task 1 output before continuing, not restart from scratch.
   the application on the next boot, not just the Admin Panel. Before composing any `git add` list,
   check what the changed files actually import at module level, and stage every one of those files
   together.
+- **A commit state written into a document becomes false the moment the commit that carries the
+  document lands.** Name the content's last commit and the document's own commit separately, or
+  write the sentence so it stays true regardless of which commit last touched the file. This
+  pass's own handover said "the pack is current at `065cecc`", which was true when written and
+  false one commit later, once the pack itself was committed at `7fda4cb` (§5, §8).
 - **A worktree checkout that still imports the original directory verifies nothing.** A test
   script's `sys.path.insert(0, ROOT)` with a hardcoded absolute path (a pre-existing pattern in
   `tests/test_qmail.py` and others) means running "from" a fresh worktree still imports this
@@ -390,58 +428,55 @@ re-read the prior Task 1 output before continuing, not restart from scratch.
   -A`), one commit per approved task, `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>`
   trailer.
 - The DPG pack directory is not a git repo — edits there are saved as plain files, never committed
-  or pushed anywhere. `docs/dpg_evidence/` inside this repo is likewise off-limits until the
-  audit pass explicitly resumes (§5).
+  or pushed anywhere. `docs/dpg_evidence/` inside this repo is a copy of the pack and is changed
+  only when the owner asks for it; the Mac master is the source (§5).
 - Folder/master JSON rules, India location data, and the live user-account tree under `0_Earth`
   must never be restructured or deleted without being asked.
 
 ## 8. Current state
 
-- Latest commit at this handover: `ab01267` ("feat: add the dedicated /qmail screen and retire
-  the dashboard mailbox"), on `main`, pushed.
-- Migration range: 001–003, 007–024 (024 is `qmail_drafts`).
-- Eight test suites cover this handover's new work and all pass together against the working
-  tree: `tests/test_qpunch.py`, `tests/test_qmail.py`, `tests/test_account_id_sync.py`,
-  `tests/test_admin_panel_council_scope.py`, `tests/test_qmail_attachments.py`,
-  `tests/test_qmail_drafts.py`, `tests/test_qmail_format_extraction.py`, `tests/test_qmail_page.py`.
-- Docs current as of this handover: `docs/QMAIL.md`, `docs/ADMIN_PANEL.md`, `docs/API.md`,
-  `docs/HANDOVER.md` (this file). **Not refreshed in this pass**: `docs/ARCHITECTURE.md`,
-  `docs/DATA_MODEL.md` (both still reflect 17 October — missing `qmail_drafts` and the three
-  Q-Punch tables and `qmail_attachments` from the passes before this one).
+- Commits at this handover, all on `main` and pushed: `7fda4cb` (the DPG pack's 18 October 2026
+  revision), `065cecc` (the README and `docs/API.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`), and
+  the two code fixes before them, `c09b91f` and `f1edd55` (§5). The commit that adds this file
+  comes after them.
+- Migration range: 001–003, 007–024 (024 is `qmail_drafts`). Tables: 74 on boot, 76 in a running
+  database (§2).
+- 11 test scripts in `tests/`, all passing at `c09b91f` (`065cecc` changed docs only). Each is a
+  standalone script that prints PASS or FAIL; each hard-codes the owner's checkout path, so run
+  them with `PYTHONPATH=.`, and four of them also read files through that path (§9).
+- Docs current as of this handover: `README.md`, `docs/QMAIL.md`, `docs/ADMIN_PANEL.md`,
+  `docs/EMAIL.md`, `docs/API.md`, `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`,
+  `docs/HANDOVER.md` (this file).
 
 ## 9. Open items
 
-Not exhaustive — see `docs/DATA_MODEL.md`, `docs/ARCHITECTURE.md` and the Forward Plan in the DPG
-pack for the full lists.
+Not exhaustive — the Forward Plan in the DPG pack (Doc 10, section 10.2) is the full tracked list,
+and the row numbers below are its rows.
 
-- DPG pack audit: Tasks 2–6 outstanding (§5).
-- **The DPG evidence pack (`docs/dpg_evidence/`) needs an additive pass, not a corrective one.**
-  Its own last commit is `c641f2c` ("the 17 October 2026 revision"), an ancestor of `ebf5578` (the
-  last docs refresh in this handover's own arc) with nothing touching the pack in between — so as
-  of this handover, the pack has not been touched since `ebf5578`. Nothing in it has become
-  *false*: it describes a true subset of the platform, not an inaccurate one. What it doesn't yet
-  describe, all from after its last revision: Q-Punch council addresses and the shared council
-  queue (migration 022), Qmail attachments (023), the Admin Panel's scope-descriptor evolution for
-  village council heads, Qmail drafts (024), and the standalone `/qmail` mailbox page. This is
-  explicitly out of scope for this handover's own work — see §5 — and belongs in a separate pass.
-- `docs/ARCHITECTURE.md` and `docs/DATA_MODEL.md` need a pass to add the five new tables
-  (`qmail_attachments`, `qmail_drafts`, `qpunch_addresses`, `qpunch_queue_messages`,
-  `qpunch_queue_actions`), the `/qmail` route, and the Q-Punch/attachment/drafts additions to
-  `qmail_core.py`'s module-map entry.
-- `static/js/dashboard.js` carries two unrelated jobs (dashboard tabs, Admin Panel rendering) in
-  one file — a reasonable future split, not broken today (§4.11).
-- The member-profile popup's "Send Message" button (`static/js/dashboard.js:508-520`) stays
-  disabled even though Qmail fully exists — a future pass to wire it up, not an oversight (§4.11).
-- Council-*initiated* new conversations (a council proactively messaging a member who never wrote
-  in first) deferred to v2 — needs `sent_as_level`/`sent_as_location_id` columns that do not exist
-  yet (`docs/QMAIL.md` §11, `docs/ADMIN_PANEL.md` §9). Replying within an existing thread and
-  composing *to* a council address both already work today.
-- `SMTP_*` environment variables are not yet set on Railway — registration-notification email is
-  built but silent-no-ops in production until that's configured (`docs/EMAIL.md`).
-- A DMCA ticket (#4870732) is awaiting action on GitHub's side; a cached `refs/pull/1/head` is
-  still serving the poem files in the meantime.
-- `location_elements.total_users` suppression on `/api/location/elements/<id>` and
-  `/api/global/elements` (only `birth_users` is suppressed there today).
-- Production verification of the homepage, dashboard-tour, Qmail, Q-Punch, Admin Panel and
-  attachment changes at `https://qumanity.in` (local verification only is complete for all of
-  them).
+- **Members can't yet submit an Admin query, and replies need Qmail** (row 36).
+  `admin_queries_core.create()` exists but no route calls it. The asker can already read replies
+  (`GET /api/queries/mine/<id>`), but only on `/qmail`, which needs Qmail activated, so the
+  submission work must also give a member without Qmail a way to open them.
+- **Councils can only reply, not start a conversation** (row 37). Needs `sent_as_level` /
+  `sent_as_location_id` columns that do not exist yet (`docs/QMAIL.md` §11,
+  `docs/ADMIN_PANEL.md` §9).
+- **Council addresses above village can't receive messages** (row 38). They are created and shown,
+  but no elected councils exist above village yet (`QPUNCH_REACHABLE_LEVELS`, §4.8).
+- **Council addresses can lag the member count** (row 39). They are created only when the
+  member-count recompute runs, and only the manual backfill script runs it.
+- **Attachments are SQLite BLOBs** (row 40), a prototype choice; move them to object storage if
+  attachment volume outgrows SQLite (§4.7).
+- **The test scripts hard-code the owner's checkout path** (row 41). Resolving the root from each
+  script's own location fixes the import for all 11; the four that also read files through the
+  path need those reads changed too.
+- **`SMTP_*` environment variables are not yet set on Railway**, so the registration-notification
+  email is built but does nothing in production until they are (`docs/EMAIL.md`).
+- **DMCA ticket #4870732 is awaiting action on GitHub's side**; a cached `refs/pull/1/head` still
+  serves the poem files in the meantime.
+
+Also open, but not tracked in Doc 10:
+
+- The member-profile popup's "Send Message" button (`static/js/dashboard.js:518`) is still disabled
+  with a "Coming soon" note, even though Qmail exists (§4.11).
+- Production verification at `https://qumanity.in` of the homepage, dashboard tour, Qmail, Q-Punch,
+  Admin Panel and attachment changes; only local verification was done for them.
