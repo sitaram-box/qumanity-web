@@ -262,22 +262,29 @@ reconsider rather than reaching for reflexively. A link's `url` is checked again
 before becoming a real `<a href>` — anything else (most importantly a `javascript:` URL) renders
 as its plain-text label, never a clickable element.
 
-**The renderer was extracted into its own file (2026-10-18), and rewritten, not merely moved.**
-`qmRenderFormattedText` originally lived in `static/js/dashboard.js` and built its `<b>`/`<i>`
-elements through that file's own local `apEl()` helper. Moving it into standalone
-`static/js/qmail_format.js` — so `dashboard.js` (the Admin Panel's council detail view),
-`dash_extras.js` (the dashboard's member mailbox) and `/qmail`'s own page script can all load one
-shared definition instead of risking a second copy drifting from the first, the same reasoning
-`social_core.regenerate_account_id()` already established as this codebase's precedent — meant
-`apEl()` was no longer reachable (a different file's closure-local helper). The function was
-rewritten to call `document.createElement`/`.textContent` directly instead, producing identical
-output but **new code, not the old bytes relocated**. A future reader diffing behavior against an
-old version of `dashboard.js` should know the implementation changed at this commit, not just its
-address. `templates/dashboard.html` loads `qmail_format.js` before both `dashboard.js` and
-`dash_extras.js` — plain `<script>` tags, no `defer`/`async`, so document order *is* execution
-order, deterministically; this is not a "usually fine, rarely flaky" ordering concern, it's
-guaranteed by the browser's own parsing model as long as none of the three tags ever gains a
-`defer`/`async` attribute.
+**The renderer was extracted into its own file at commit `e99eced` (2026-10-18), and rewritten,
+not merely moved.** `qmRenderFormattedText` originally lived in `static/js/dashboard.js` and built
+its `<b>`/`<i>` elements through that file's own local `apEl()` helper. Moving it into standalone
+`static/js/qmail_format.js` — so every real consumer loads one shared definition instead of risking
+a second copy drifting from the first, the same reasoning `social_core.regenerate_account_id()`
+already established as this codebase's precedent — meant `apEl()` was no longer reachable (a
+different file's closure-local helper). The function was rewritten to call
+`document.createElement`/`.textContent` directly instead, producing identical output but **new
+code, not the old bytes relocated**. A future reader diffing behavior against an old version of
+`dashboard.js` should know the implementation changed at commit `e99eced`, not just its address.
+Both `templates/dashboard.html` and `templates/qmail.html` load `qmail_format.js` before their own
+consumer script (`dashboard.js`'s `apOpenCouncil`; `qmail.js`'s reading pane) — plain `<script>`
+tags, no `defer`/`async`, so document order *is* execution order, deterministically; this is not a
+"usually fine, rarely flaky" ordering concern, it's guaranteed by the browser's own parsing model
+as long as none of those tags ever gains a `defer`/`async` attribute.
+
+The set of real consumers changed again one commit later (`ab01267`, the `/qmail` page): the
+member mailbox UI that used to live inline on the dashboard (in `dash_extras.js`, calling this
+function) moved entirely to the standalone `/qmail` page, taking its only call site with it.
+`dash_extras.js` today calls `window.qmRenderFormattedText` zero times — it keeps only the Qmail
+*activation* card (username chooser, address display, the "Open Qmail →" link), which never
+needed the renderer. The two real consumers are `dashboard.js` (Admin Panel council detail) and
+`qmail.js` (the page's own reading pane).
 
 **Images are attachment-only, never inline by URL.** This is a privacy decision, not a style one:
 an `<img src="...">` pointing at an external URL leaks the viewer's IP and user-agent to that URL
@@ -358,3 +365,58 @@ the same behavior (an abandoned draft sits in the Drafts folder indefinitely), s
 regression against the product being mirrored. `POST /api/qmail/drafts/<id>/delete` exists
 specifically so a member can clean up their own drafts manually; nothing automatic does it for
 them.
+
+## 14. The `/qmail` page
+
+A standalone route (`@app.route("/qmail")`, `templates/qmail.html`), not a dashboard tab — it
+gets its own scroll/focus context and a real, bookmarkable URL, the same tradeoff every other page
+in this codebase already makes (no shared layout system exists here; every template is a
+self-contained `<!doctype html>…</html>` file). `GET /qmail` redirects an unactivated member back
+to `/dashboard`, where the activation UI (`#qm-qmail-card`) actually lives — this page assumes an
+address already exists, it doesn't mint one.
+
+**`static/css/qmail.css` is a separate file, not appended to `dashboard.css` — deliberately.**
+`/qmail` does not load `dashboard.css` at all, matching `templates/elements.html`'s own precedent
+(`style.css` + `register.css` + one page-specific stylesheet, no shared dashboard file). Appending
+to `dashboard.css` would mean loading a large amount of unrelated dashboard-only CSS — the Admin
+Panel's grid, `.pv-card`, every stats panel — on a page that needs none of it. Two small utility
+classes, `.qm-dash-empty` and `.sg-btn`, only existed in `dashboard.css` before this page needed
+them; they're redefined **verbatim** in `qmail.css` rather than pulling the whole file in for two
+rules. **A future contributor who notices `.sg-btn` defined in two CSS files should find this
+explanation, not "fix" it into one shared file** — that would mean `/qmail` loading
+`dashboard.css`, which is exactly the bloat this split was chosen to avoid.
+
+**The dashboard's own inline mailbox UI — the thing `/qmail` replaces — was deleted, not left to
+no-op.** `templates/dashboard.html`'s `#qm-mail-card` (the inbox/sent/compose block built the pass
+before this one) is gone; so is the legacy `#qm-messagebox-card` "Coming soon" placeholder it sat
+near. `static/js/dash_extras.js` lost the ~124 lines of inbox/sent/compose logic that only
+`#qm-mail-card` ever drove — once that element left the DOM, `$("qm-mail-card")` returns `null`
+and the whole block was already dead (the `if (mailCard) { … }` guard made it a safe no-op, not a
+crash), but a safe no-op left sitting in the file is still something a future reader has to read,
+understand, and confirm is actually unreachable before trusting it's unreachable. Removing it
+outright means the dashboard's own mailbox UI genuinely left, matching the feature's own framing,
+not merely stopped running.
+
+**Two bugs found by the live browser walkthrough, not by any static check — recorded here because
+neither has a Python-testable surface, the same class of gap already named for the renderer's
+safety properties.**
+
+- **An unconditional `display: flex` on `.qmail-compose-overlay` overrode the browser's own
+  `[hidden] { display: none }` default rule.** The overlay's `hidden` attribute was correctly set
+  and correctly read by JS (`overlay.hidden === true`), but it rendered on screen anyway, because
+  a same-specificity author rule beats the browser's own default stylesheet. No static-file test
+  can see this — the DOM attribute was right, the JS was right, only the rendered pixels were
+  wrong. The lesson for any future `hidden`-toggled element in this codebase: if its class also
+  declares `display` unconditionally, add an explicit `.your-class[hidden] { display: none; }`
+  rule, or the attribute does nothing.
+- **A smart-To autocomplete's display string leaked into a stored field meant to hold the
+  resolved value.** `closeCompose()`'s autosave originally read `toInput.value` directly — the
+  input's own *display* text ("Page Target (pagetargetqm-…@qumanity.in)") — not the address the
+  user actually selected. Every draft composed via the autocomplete (the common case, not an edge
+  one) silently saved a `to_address` that `resolve_address()`'s exact-string match could never
+  resolve; reopening and sending such a draft failed with "address not recognized" every time.
+  Fixed by preferring the autocomplete's own stored `selectedAddress` variable over the input's
+  display text. The general lesson: **any autocomplete field that writes a human-readable label
+  into the same input it resolves an address from must save the resolved value, not the input's
+  current text** — this pattern will recur anywhere else a "Name (address)" style autocomplete
+  feeds a field that gets persisted and re-submitted later (a draft, a saved search, anything).

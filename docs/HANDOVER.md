@@ -1,10 +1,10 @@
 # Qumanity — Project Handover
 
 Written 17 October 2026, refreshed 18 October 2026 to cover Qmail, Q-Punch council addresses, the
-Admin Panel's scope evolution and the member mailbox UI. This is a snapshot for whoever picks up
-the project next — it is not a replacement for the detailed design docs already in this folder
-(linked throughout), and it will go stale as the code moves; treat it as a map, not a source of
-truth for exact current state.
+Admin Panel's scope evolution, attachments, drafts, and the standalone `/qmail` mailbox page. This
+is a snapshot for whoever picks up the project next — it is not a replacement for the detailed
+design docs already in this folder (linked throughout), and it will go stale as the code moves;
+treat it as a map, not a source of truth for exact current state.
 
 ## 1. What Qumanity is
 
@@ -30,8 +30,8 @@ session.
 - **Migrations**: `migrations/NNN_description.{sql,py}`, applied by `tools/run_migrations.py`,
   tracked in a `migrations` table. `app.py`'s `ensure_database_ready()` runs the base schema, each
   module's own tables, and every migration on every boot — no manual step. Current range:
-  001–003, 007–023 (004–006 unused). 023 is the most recent (Qmail attachments).
-- **73 application tables** (74 with SQLite's own `sqlite_sequence`) — counted directly against a
+  001–003, 007–024 (004–006 unused). 024 is the most recent (Qmail drafts).
+- **74 application tables** (75 with SQLite's own `sqlite_sequence`) — counted directly against a
   freshly-migrated throwaway database, not estimated from an older doc. Full list with purposes in
   `docs/DATA_MODEL.md` (not refreshed in this pass — see §9).
 - **Four in-process scheduler jobs** (APScheduler, `BackgroundScheduler`): daily folder sync
@@ -45,10 +45,12 @@ session.
 - **Astronomy is local** — pyswisseph's built-in Moshier ephemeris, no external service, no data
   files.
 - Full architecture detail: `docs/ARCHITECTURE.md`. Every route: `docs/API.md`. Every table:
-  `docs/DATA_MODEL.md`. **Only `docs/API.md` was refreshed in this pass** (new Qmail/attachment/
-  council routes added); `docs/ARCHITECTURE.md` and `docs/DATA_MODEL.md` still reflect 17 October
-  and do not yet list `qmail_attachments`, `qpunch_addresses`, `qpunch_queue_messages` or
-  `qpunch_queue_actions` — flagged here rather than left for someone to discover by surprise.
+  `docs/DATA_MODEL.md`. **`docs/ARCHITECTURE.md` and `docs/DATA_MODEL.md` have not been refreshed
+  across this whole Qmail/Q-Punch/Admin-Panel/attachments/drafts/`/qmail`-page arc** and still
+  reflect 17 October — they do not yet list `qmail_attachments`, `qmail_drafts`,
+  `qpunch_addresses`, `qpunch_queue_messages`, `qpunch_queue_actions`, or the `qmail_core.py` and
+  `/qmail` additions to the module map — flagged here rather than left for someone to discover by
+  surprise.
 
 ## 3. Database schema — what's new since the last stable baseline
 
@@ -63,6 +65,7 @@ session.
 | 021 | `users.qmail_username`, `qmail_addresses`, `qmail_messages` — Qmail, internal member-to-member messaging (§4.7) |
 | 022 | `qpunch_addresses`, `qpunch_queue_messages`, `qpunch_queue_actions` — Q-Punch council addresses and their shared queue (§4.8) |
 | 023 | `qmail_attachments` — compose-time file attachments, stored as SQLite BLOBs (§4.10) |
+| 024 | `qmail_drafts` — unsent compose-form state, autosaved on close (§4.7) |
 
 **The invariant that matters most**: `board_posts.is_test = (post_kind == 'test')`, enforced by
 writing all three fields (`post_kind`, `is_test`, `is_demo_post`) in a single `INSERT`, never a
@@ -139,21 +142,31 @@ fixed earlier in this project's history). The smart "To" field's autocomplete is
 by `social_core.connected_user_ids()` (Personal Group membership unioned with active private
 chats) — a disconnected member never appears, under any circumstance.
 
-**The member mailbox UI** (activation card, inbox, sent, compose with a markup toolbar) lives on
-the dashboard's Private tab. Message bodies are plain text with a narrow whitelist markup
-(`**bold**`, `_italic_`, `[text](url)`) — never HTML, on either side. The client builds `<b>`/`<i>`/
-`<a>` DOM nodes directly from the parsed text; no HTML string is ever constructed from user input,
-so there is no sanitizer installed and no `|safe` anywhere in this codebase — **deliberately, not
-an oversight** (`docs/QMAIL.md` §12 says this explicitly, for exactly the reason a future
-contributor might otherwise "fix" it). A link's URL is scheme-checked (`http(s)://` only) before
-becoming clickable. Attachments are compose-time only, stored as SQLite BLOBs
-(`qmail_attachments`, migration 023) — a prototype choice, not permanent architecture, chosen
+**The member mailbox UI lives on its own page, `/qmail`, not the dashboard's Private tab** — see
+§4.11. The dashboard keeps only a small activation card (username chooser, address, an
+"Open Qmail →" link). Message bodies are plain text with a narrow whitelist markup (`**bold**`,
+`_italic_`, `[text](url)`) — never HTML, on either side. The client builds `<b>`/`<i>`/`<a>` DOM
+nodes directly from the parsed text (`static/js/qmail_format.js`'s `qmRenderFormattedText`, shared
+by the Admin Panel's council detail view and `/qmail`'s own reading pane); no HTML string is ever
+constructed from user input, so there is no sanitizer installed and no `|safe` anywhere in this
+codebase — **deliberately, not an oversight** (`docs/QMAIL.md` §12 says this explicitly, for
+exactly the reason a future contributor might otherwise "fix" it). A link's URL is scheme-checked
+(`http(s)://` only) before becoming clickable. Attachments are compose-time only, stored as SQLite
+BLOBs (`qmail_attachments`, migration 023) — a prototype choice, not permanent architecture, chosen
 because the database already carries the volume-persistence guarantee a disk path on Railway would
 need a new, separately-configured path to earn. Capped at 2 MB, enforced twice independently
 (Flask's app-wide `MAX_CONTENT_LENGTH` as a first line of defense, `qmail_core.save_attachment()`'s
 own precise byte check against the decoded data). Images are attachment-only, never inline by
 URL — a privacy decision (an inline `<img src>` to an external host leaks the viewer's IP at
 render time), not a style one.
+
+**Drafts** (`qmail_drafts`, migration 024): unsent compose-form state, autosaved silently when the
+compose overlay closes with any field non-empty. Scoped by `user_id`, same 404-not-403 shape as
+the council queue. Sending from a draft deletes it atomically with the send — the commit that does
+this lives inside `qmail_core.delete_draft()` itself, not where it looks like it should (full
+explanation in `docs/QMAIL.md` §13, worth reading before touching that function). **No cleanup job
+for abandoned drafts** — a stated limitation, not an oversight (Gmail behaves the same way); the
+delete route exists so a member can clean up their own drafts by hand.
 
 ### 4.8 Q-Punch council addresses
 
@@ -220,7 +233,8 @@ directly) for a council one. There is no bare, unguarded file URL anywhere in th
 
 **A known, stated gap**: whether a `<script>` tag in a message body actually renders as inert text,
 and whether a `javascript:`-scheme link actually fails to become clickable, are DOM-rendering
-properties of `static/js/dashboard.js`'s `qmRenderFormattedText()` with no Python-testable surface
+properties of `static/js/qmail_format.js`'s `qmRenderFormattedText()` (extracted out of
+`dashboard.js` and **rewritten**, not merely relocated — see §4.11) with no Python-testable surface
 in this stack (no Selenium/Playwright/jsdom installed). Both were verified directly in a live
 browser once, by hand, this session — not by an automated regression test. `tests/
 test_qmail_attachments.py` covers everything a backend test *can* verify about this feature
@@ -228,6 +242,75 @@ test_qmail_attachments.py` covers everything a backend test *can* verify about t
 re-check the renderer. A future change to that function could reintroduce an XSS path and nothing
 in this project's test suite would catch it — recorded here so the next person knows the renderer
 is unguarded by automation, not assumed safe forever because it passed once.
+
+### 4.11 The `/qmail` page
+
+A standalone route (`@app.route("/qmail")`), not a dashboard tab — every page in this codebase is
+already a self-contained template with no shared layout, so a dedicated route is the established
+pattern here, not a departure; it gets a real URL, back-button correctness, and its own scroll
+context with no risk of colliding with the dashboard's own overlay stack. `GET /qmail` redirects
+an unactivated member to `/dashboard`, where the activation card lives — this page assumes an
+address already exists.
+
+**At commit `ab01267`, `#qm-qmail-card` on the dashboard stopped being a mailbox and became a
+door.** It shows only activation (username chooser), the member's address, and an "Open Qmail →"
+link — the inbox/sent/compose UI it used to hold moved to `/qmail` entirely. A future contributor
+reading `templates/dashboard.html` and wondering why this card is just a link rather than a
+mailbox should read this as the deliberate endpoint of that move, not a card someone forgot to
+finish building.
+
+**`static/css/qmail.css` is its own file, not appended to `dashboard.css`.** `/qmail` doesn't load
+`dashboard.css` at all (same pattern `templates/elements.html` already used: `style.css` +
+`register.css` + one page-specific stylesheet). Appending would mean loading the Admin Panel's
+grid, `.pv-card`, and every stats-panel rule on a page that needs none of them. Two small utility
+classes (`.qm-dash-empty`, `.sg-btn`) are redefined verbatim in `qmail.css` because they only
+existed in `dashboard.css` before — **if `.sg-btn` ever looks like an accidental duplicate, it
+isn't; see `docs/QMAIL.md` §14 before "fixing" it into one shared file.**
+
+**The renderer was rewritten, not just moved, at commit `e99eced`.** `qmRenderFormattedText` used
+to live in `dashboard.js` and build elements through that file's own local `apEl()` helper;
+extracted into standalone `qmail_format.js`, it was rewritten to call
+`document.createElement`/`.textContent` directly, since `apEl()` wasn't reachable from the new
+file. Same output, different code — a future reader diffing against an old `dashboard.js` should
+know the implementation changed at that commit, not just its address.
+
+**Two bugs found only by a live browser walkthrough, neither with a static-test surface:**
+- `.qmail-compose-overlay`'s unconditional `display: flex` overrode the browser's own `[hidden] {
+  display: none }` default — the `hidden` attribute and the JS reading it were both correct, only
+  the rendered pixels were wrong. Fixed with an explicit `.qmail-compose-overlay[hidden] { display:
+  none; }`. Lesson for any future `hidden`-toggled element in this codebase: if its class also
+  declares `display` unconditionally, it needs that same explicit override, or `hidden` does
+  nothing.
+- The smart-To autocomplete's close-to-save-draft path read the input's *display* text ("Page
+  Target (pagetargetqm-…)") instead of the resolved address it had already captured in a separate
+  variable. Every draft composed via the autocomplete — the common case, not an edge one — silently
+  saved an unresolvable `to_address`; reopening and sending such a draft failed every time with
+  "address not recognized." Fixed by preferring the stored resolved address over the input's
+  display text. General lesson: **any autocomplete that writes a human-readable label into the
+  same field it resolves a value from must persist the resolved value, not the input's current
+  text** — this will recur wherever else a "Name (value)" autocomplete feeds something that gets
+  saved and re-submitted later.
+
+**Deleting the dashboard's old inline mailbox UI was a real removal, not a left-to-no-op.**
+`#qm-mail-card` and the legacy `#qm-messagebox-card` placeholder are gone from
+`templates/dashboard.html`; `static/js/dash_extras.js` lost the ~124 lines of inbox/sent/compose
+logic that only `#qm-mail-card` ever drove. That block would have safely no-op'd once the element
+left the DOM (`if (mailCard) { … }` already guarded it) — it was removed anyway, because a safe
+no-op left in the file is still something a future reader has to read and confirm is unreachable
+before trusting that it is.
+
+**Known structural debt, named so nobody "fixes" it without knowing it grew that way
+deliberately**: `static/js/dashboard.js` carries two unrelated jobs in one file — the dashboard's
+own tab/profile logic, and the Admin Panel's list+detail rendering (`apEl`, `apLoadFeed`,
+`apOpenReport`/`apOpenQuery`/`apOpenCouncil`, etc.). They ended up in the same file because the
+Admin Panel was built as an extension of the existing dashboard page, not a separate one. Splitting
+them into two files is a reasonable future cleanup, not something broken today.
+
+**A known gap, not an oversight**: the member-profile popup (`static/js/dashboard.js:508-520`,
+shown when clicking another member's card elsewhere in the app) still shows a disabled "✉️ Send
+Message" button with a "Coming soon" note, even though Qmail fully exists now. Wiring it to
+`/qmail`'s compose flow (or to a lighter in-place compose) is a reasonable future pass; it simply
+hasn't been done yet.
 
 ## 5. DPG Evidence Pack — status at this handover
 
@@ -281,6 +364,18 @@ re-read the prior Task 1 output before continuing, not restart from scratch.
 - **The formatted-text DOM renderer is safe by construction but unguarded by automated tests.**
   See §4.10's closing note — verified live once, not regression-tested, because no browser
   automation framework exists in this project.
+- **An unconditional `display` rule on a class beats the browser's own `[hidden] { display: none
+  }` default.** `.qmail-compose-overlay { display: flex; }` with no `[hidden]` override meant the
+  overlay rendered even while its `hidden` attribute was correctly `true` — the DOM was right, the
+  JS was right, only the cascade was wrong. No static-file test can see this; only opening the page
+  caught it (§4.11). Give any `hidden`-toggled element with its own `display` rule an explicit
+  `.your-class[hidden] { display: none; }`.
+- **A "Name (value)" autocomplete must persist the resolved value, not the input's display text,
+  anywhere that value gets saved and reused later.** The `/qmail` compose overlay's draft autosave
+  read the To field's own text instead of the address already captured in a separate variable —
+  every autocomplete-composed draft silently saved something `resolve_address()` could never match,
+  failing on every reopen-and-send. Found only by a live walkthrough (§4.11); will recur in any
+  future autocomplete field feeding something persisted.
 
 ## 7. Standing operational rules for this project
 
@@ -302,16 +397,17 @@ re-read the prior Task 1 output before continuing, not restart from scratch.
 
 ## 8. Current state
 
-- Latest commit at this handover: `079313c` ("feat: add member mailbox and council inbox UI with
-  attachment support"), on `main`, pushed.
-- Migration range: 001–003, 007–023.
-- Five test suites cover this handover's new work and all pass together against the working tree:
-  `tests/test_qpunch.py`, `tests/test_qmail.py`, `tests/test_account_id_sync.py`,
-  `tests/test_admin_panel_council_scope.py`, `tests/test_qmail_attachments.py`.
+- Latest commit at this handover: `ab01267` ("feat: add the dedicated /qmail screen and retire
+  the dashboard mailbox"), on `main`, pushed.
+- Migration range: 001–003, 007–024 (024 is `qmail_drafts`).
+- Eight test suites cover this handover's new work and all pass together against the working
+  tree: `tests/test_qpunch.py`, `tests/test_qmail.py`, `tests/test_account_id_sync.py`,
+  `tests/test_admin_panel_council_scope.py`, `tests/test_qmail_attachments.py`,
+  `tests/test_qmail_drafts.py`, `tests/test_qmail_format_extraction.py`, `tests/test_qmail_page.py`.
 - Docs current as of this handover: `docs/QMAIL.md`, `docs/ADMIN_PANEL.md`, `docs/API.md`,
   `docs/HANDOVER.md` (this file). **Not refreshed in this pass**: `docs/ARCHITECTURE.md`,
-  `docs/DATA_MODEL.md` (both still reflect 17 October — missing the three Q-Punch tables and
-  `qmail_attachments`).
+  `docs/DATA_MODEL.md` (both still reflect 17 October — missing `qmail_drafts` and the three
+  Q-Punch tables and `qmail_attachments` from the passes before this one).
 
 ## 9. Open items
 
@@ -319,8 +415,23 @@ Not exhaustive — see `docs/DATA_MODEL.md`, `docs/ARCHITECTURE.md` and the Forw
 pack for the full lists.
 
 - DPG pack audit: Tasks 2–6 outstanding (§5).
-- `docs/ARCHITECTURE.md` and `docs/DATA_MODEL.md` need a pass to add the four new tables and the
-  Q-Punch/attachment additions to `qmail_core.py`'s module-map entry.
+- **The DPG evidence pack (`docs/dpg_evidence/`) needs an additive pass, not a corrective one.**
+  Its own last commit is `c641f2c` ("the 17 October 2026 revision"), an ancestor of `ebf5578` (the
+  last docs refresh in this handover's own arc) with nothing touching the pack in between — so as
+  of this handover, the pack has not been touched since `ebf5578`. Nothing in it has become
+  *false*: it describes a true subset of the platform, not an inaccurate one. What it doesn't yet
+  describe, all from after its last revision: Q-Punch council addresses and the shared council
+  queue (migration 022), Qmail attachments (023), the Admin Panel's scope-descriptor evolution for
+  village council heads, Qmail drafts (024), and the standalone `/qmail` mailbox page. This is
+  explicitly out of scope for this handover's own work — see §5 — and belongs in a separate pass.
+- `docs/ARCHITECTURE.md` and `docs/DATA_MODEL.md` need a pass to add the five new tables
+  (`qmail_attachments`, `qmail_drafts`, `qpunch_addresses`, `qpunch_queue_messages`,
+  `qpunch_queue_actions`), the `/qmail` route, and the Q-Punch/attachment/drafts additions to
+  `qmail_core.py`'s module-map entry.
+- `static/js/dashboard.js` carries two unrelated jobs (dashboard tabs, Admin Panel rendering) in
+  one file — a reasonable future split, not broken today (§4.11).
+- The member-profile popup's "Send Message" button (`static/js/dashboard.js:508-520`) stays
+  disabled even though Qmail fully exists — a future pass to wire it up, not an oversight (§4.11).
 - Council-*initiated* new conversations (a council proactively messaging a member who never wrote
   in first) deferred to v2 — needs `sent_as_level`/`sent_as_location_id` columns that do not exist
   yet (`docs/QMAIL.md` §11, `docs/ADMIN_PANEL.md` §9). Replying within an existing thread and
