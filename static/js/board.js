@@ -49,6 +49,13 @@
       qpBody.appendChild(el("p", "qp-lead", d.level === "village"
         ? "Now: " + c.sign + " month — the " + c.sign + " leaders serve. Next month the " + "leaders of the next sign take over."
         : "Now: " + c.element + " leaders (" + c.sign + " month). Leaders of each element take the months of their signs."));
+      if (d.qpunch_address) {
+        var qa = d.qpunch_address, label = level.charAt(0).toUpperCase() + level.slice(1) + " Council";
+        var line = !qa.reachable ? label + " (not yet reachable in this prototype) — " + qa.address
+          : qa.seat_filled ? label + " — " + qa.address
+          : label + " (received by the Founder until the first election) — " + qa.address;
+        qpBody.appendChild(el("p", "qp-lead", line));
+      }
       if (d.election) qpBody.appendChild(electionBlock(d.election, d.guide, level));
       d.seats.forEach(function (s) {
         var row = el("div", "qp-seat" + (s.filled ? " is-filled" : ""));

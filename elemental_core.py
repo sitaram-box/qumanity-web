@@ -13,6 +13,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 
+import qmail_core
 from id_generator import age_code
 from zodiac_core import ZODIAC_RANGES
 
@@ -173,6 +174,15 @@ def recompute_location_elements(conn, dry_run: bool = False) -> dict:
                VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)""",
             (location_id, location_type, t["Fire"], t["Earth"], t["Air"], t["Water"], t["total"], t["birth"], now),
         )
+
+    # Q-Punch council addresses (2026-10-18): a location's address, once created, is permanent
+    # (qmail_core.sync_qpunch_addresses never retires one), so this only ever adds rows. Run in
+    # the same transaction as the location_elements rebuild above so a dry run rolls both back
+    # together -- a dry run must create zero addresses, the same as it writes zero stats.
+    qpunch_created = qmail_core.sync_qpunch_addresses(
+        conn, {key: t["total"] for key, t in tallies.items()}
+    )
+
     if dry_run:
         conn.rollback()
     else:
@@ -182,6 +192,7 @@ def recompute_location_elements(conn, dry_run: bool = False) -> dict:
         "real_users_counted": len(present_rows),
         "rows_before": before_count,
         "rows_after": len(tallies),
+        "qpunch_addresses_created": qpunch_created,
         "new_rows": {
             key: {"total_users": t["total"], "birth_users": t["birth"], "fire_count": t["Fire"],
                   "earth_count": t["Earth"], "air_count": t["Air"], "water_count": t["Water"]}

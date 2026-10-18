@@ -959,6 +959,26 @@ def api_qpunch(level):
         election = election_core.election_summary(conn, g["id"])
         cycle = election_core.current_cycle_for_village(conn, g["id"])
         guide = election_core.member_guide(conn, user, cycle)
+
+    # Q-Punch council address (2026-10-18): only shown once a row exists -- a level that hasn't
+    # crossed its member-count threshold yet has no row, and the residents/election_min progress
+    # bar below already says "not there yet" without a redundant line here.
+    qpunch_row = conn.execute(
+        "SELECT full_address FROM qpunch_addresses WHERE level = ? AND location_id = ?", (level, g["id"])
+    ).fetchone()
+    qpunch_address = None
+    if qpunch_row:
+        today_iso = dt.date.today().isoformat()
+        seat_filled = level == "village" and conn.execute(
+            """SELECT 1 FROM village_council WHERE village_id = ? AND leadership_start <= ? AND leadership_end >= ?
+               AND (male_head_user_id IS NOT NULL OR female_head_user_id IS NOT NULL)""",
+            (g["id"], today_iso, today_iso),
+        ).fetchone() is not None
+        qpunch_address = {
+            "address": qpunch_row["full_address"],
+            "reachable": level in qmail_core.QPUNCH_REACHABLE_LEVELS,
+            "seat_filled": seat_filled,
+        }
     conn.close()
 
     today = zodiac_core.get_zodiac_sign(dt.date.today())
@@ -971,7 +991,7 @@ def api_qpunch(level):
         "cycle": {"sign": today["sign"], "element": today["element"], "lead": lead, "kind": lead_kind},
         "volunteers": vols, "agents": agents, "can_volunteer": village and not mine, "is_volunteer": bool(mine),
         "is_admin": _is_admin(),
-        "election": election, "guide": guide,
+        "election": election, "guide": guide, "qpunch_address": qpunch_address,
         "seats": [
             {"seat": 1, "title": "Founder / Admin", "filled": True, "name": None,
              "text": "Guides and safeguards every group from Village to Earth. The Founder's personal identity is kept private."},
@@ -1112,14 +1132,27 @@ def api_qmail_compose():
         if not sender or not sender["qmail_username"]:
             return jsonify({"error": "Activate Qmail before sending a message"}), 400
         # Never trust a client-supplied recipient id -- `to` is re-resolved here, server-side,
-        # against qmail_addresses (current, or an old address still inside its forward window).
-        to_user_id = qmail_core.resolve_address(conn, to_address)
-        if not to_user_id:
+        # against qpunch_addresses first, then qmail_addresses (current, or an old address still
+        # inside its forward window). resolve_address's "kind" decides which table this lands in.
+        resolved = qmail_core.resolve_address(conn, to_address)
+        if not resolved:
             return jsonify({"error": "That Qmail address isn't recognized"}), 404
-        conn.execute(
-            "INSERT INTO qmail_messages (from_user_id, to_user_id, subject, body, created_at) VALUES (?, ?, ?, ?, ?)",
-            (session["user_id"], to_user_id, subject, body, dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")),
-        )
+        now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+        if resolved["kind"] == "council":
+            # A council address's queue, not either head's personal inbox -- see
+            # docs/QMAIL.md's Q-Punch section. The heads (or admin fallback) that
+            # resolved["user_ids"] names are who currently handles it, read from the Admin
+            # Panel, not delivered to via qmail_messages.
+            conn.execute(
+                "INSERT INTO qpunch_queue_messages (level, location_id, sender_id, subject, body, status, created_at) "
+                "VALUES (?, ?, ?, ?, ?, 'open', ?)",
+                (resolved["level"], resolved["location_id"], session["user_id"], subject, body, now),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO qmail_messages (from_user_id, to_user_id, subject, body, created_at) VALUES (?, ?, ?, ?, ?)",
+                (session["user_id"], resolved["user_ids"][0], subject, body, now),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -1149,17 +1182,33 @@ def api_qmail_inbox():
 def api_qmail_sent():
     conn = get_db()
     try:
-        rows = conn.execute(
+        member_rows = conn.execute(
             """SELECT m.id, m.subject, m.body, m.created_at, u.name AS to_name, qa.full_address AS to_address
                FROM qmail_messages m
                JOIN users u ON u.id = m.to_user_id
                LEFT JOIN qmail_addresses qa ON qa.user_id = m.to_user_id AND qa.is_current = 1
-               WHERE m.from_user_id = ? ORDER BY m.created_at DESC""",
+               WHERE m.from_user_id = ?""",
+            (session["user_id"],),
+        ).fetchall()
+        # The member's own outgoing copy of a council message, and nothing else -- never the
+        # council's reply or qpunch_queue_actions log, which live only in the Admin Panel. Same
+        # sender_id scoping as a regular sent message, just against the other table.
+        council_rows = conn.execute(
+            """SELECT q.id, q.subject, q.body, q.created_at, q.level, qp.full_address AS to_address
+               FROM qpunch_queue_messages q
+               LEFT JOIN qpunch_addresses qp ON qp.level = q.level AND qp.location_id = q.location_id
+               WHERE q.sender_id = ?""",
             (session["user_id"],),
         ).fetchall()
     finally:
         conn.close()
-    return jsonify({"messages": [dict(r) for r in rows]})
+    messages = [dict(r) for r in member_rows]
+    for r in council_rows:
+        d = dict(r)
+        d["to_name"] = f"{d.pop('level').capitalize()} Council"
+        messages.append(d)
+    messages.sort(key=lambda m: m["created_at"], reverse=True)
+    return jsonify({"messages": messages})
 
 
 @app.route("/api/qmail/resolve-username")
