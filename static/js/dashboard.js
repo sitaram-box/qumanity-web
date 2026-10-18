@@ -973,6 +973,45 @@
     return Math.floor(s / 86400) + " d ago";
   }
 
+  // ---- Qmail formatted-text rendering (2026-10-18) -- shared with dash_extras.js's member
+  // mailbox, exposed on window since that's a separate file/IIFE loaded right after this one.
+  // There is no HTML string anywhere in this function, on purpose: every piece of user text
+  // reaches the page only through textContent or an element property, never innerHTML, so a
+  // <script> typed into a message body is inert text in every case, not something that needs
+  // sanitising -- see docs/QMAIL.md's note on why no sanitiser library is installed. Only three
+  // constructs are recognised (**bold**, _italic_, [text](url)); everything else, including any
+  // literal angle bracket, is plain text. A link whose url is not http(s) renders as its label
+  // only, never as an <a> -- this is what keeps a javascript: URL from ever becoming clickable. ----
+  function qmRenderFormattedText(text) {
+    var frag = document.createDocumentFragment();
+    String(text || "").split("\n").forEach(function (line, i) {
+      if (i > 0) frag.appendChild(document.createElement("br"));
+      qmRenderLineInto(frag, line);
+    });
+    return frag;
+  }
+  function qmRenderLineInto(frag, line) {
+    var re = /\*\*([^*]+)\*\*|_([^_]+)_|\[([^\]]+)\]\(([^)]+)\)/g;
+    var last = 0, m;
+    while ((m = re.exec(line)) !== null) {
+      if (m.index > last) frag.appendChild(document.createTextNode(line.slice(last, m.index)));
+      if (m[1] !== undefined) {
+        frag.appendChild(apEl("b", "", m[1]));
+      } else if (m[2] !== undefined) {
+        frag.appendChild(apEl("i", "", m[2]));
+      } else if (/^https?:\/\//i.test(m[4])) {
+        var a = document.createElement("a");
+        a.href = m[4]; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = m[3];
+        frag.appendChild(a);
+      } else {
+        frag.appendChild(document.createTextNode(m[3]));
+      }
+      last = re.lastIndex;
+    }
+    if (last < line.length) frag.appendChild(document.createTextNode(line.slice(last)));
+  }
+  window.qmRenderFormattedText = qmRenderFormattedText;
+
   // Assigned inside the `if (apList)` block below, read by loadAdminPanel() at the bottom of this
   // IIFE -- a plain outer `var` assignment, not a function declaration, so it's unaffected by
   // strict mode's block-scoping of function declarations (apLoadFeed() itself IS declared inside
@@ -988,7 +1027,7 @@
     var apItemsCache = [];
 
     function apSourceLabel(source) {
-      return { report: "Citizen Report", id_recovery: "ID Recovery", query: "Query" }[source] || source;
+      return { report: "Citizen Report", id_recovery: "ID Recovery", query: "Query", council: "Council Queue" }[source] || source;
     }
 
     function apRenderList() {
@@ -1029,6 +1068,7 @@
       if (item.source === "report") apOpenReport(item.id);
       else if (item.source === "id_recovery") apOpenIdRecovery(item.id);
       else if (item.source === "query") apOpenQuery(item.id);
+      else if (item.source === "council") apOpenCouncil(item.id);
     }
 
     function apOpenReport(id) {
@@ -1139,6 +1179,58 @@
         });
         actions.appendChild(closeBtn);
         apDetail.appendChild(actions);
+      }).catch(function (e) { apDetail.innerHTML = ""; apDetail.appendChild(apEl("p", "qm-dash-empty", e.message)); });
+    }
+
+    function apOpenCouncil(id) {
+      fetch("/api/admin/panel/council/" + id).then(function (r) { return r.json(); }).then(function (m) {
+        apDetail.innerHTML = "";
+        apDetail.appendChild(apEl("h3", "ap-detail-title", m.subject || "(no subject)"));
+        apDetail.appendChild(apEl("p", "ap-detail-meta", m.level.charAt(0).toUpperCase() + m.level.slice(1) +
+          " " + m.location_id + " · status: " + m.status));
+        var bodyP = document.createElement("p"); bodyP.className = "ap-detail-body";
+        bodyP.appendChild(window.qmRenderFormattedText(m.body));
+        apDetail.appendChild(bodyP);
+
+        (m.attachments || []).forEach(function (att) {
+          var link = document.createElement("a");
+          link.href = "/api/qmail/attachments/" + att.id; link.target = "_blank"; link.rel = "noopener noreferrer";
+          link.className = "ap-attachment-link";
+          link.textContent = "📎 " + att.filename + " (" + Math.round(att.byte_size / 1024) + " KB)";
+          apDetail.appendChild(link);
+        });
+
+        var repliesBox = apEl("div", "ap-updates");
+        (m.actions || []).filter(function (a) { return a.action === "replied"; }).forEach(function (a) {
+          var row = apEl("div", "ap-update-row");
+          row.appendChild(apEl("b", "", a.actor_name + " "));
+          var span = document.createElement("span");
+          span.appendChild(window.qmRenderFormattedText(a.detail));
+          span.appendChild(document.createTextNode(" · " + apAgo(a.created_at)));
+          row.appendChild(span);
+          repliesBox.appendChild(row);
+        });
+        apDetail.appendChild(repliesBox);
+
+        if (m.status !== "closed") {
+          var actions2 = apEl("div", "ap-actions");
+          var replyInput = document.createElement("input");
+          replyInput.type = "text"; replyInput.placeholder = "Write a reply…"; replyInput.className = "ap-reply-input";
+          actions2.appendChild(replyInput);
+          var replyBtn = apEl("button", "qm-btn qm-btn-primary", "Reply"); replyBtn.type = "button";
+          replyBtn.addEventListener("click", function () {
+            if (!replyInput.value.trim()) return;
+            apApi("/api/admin/panel/council/" + id + "/reply", { message: replyInput.value })
+              .then(function () { apLoadFeed(); apOpenCouncil(id); }).catch(function (e) { alert(e.message); });
+          });
+          actions2.appendChild(replyBtn);
+          var closeBtn2 = apEl("button", "qm-btn qm-btn-ghost", "Close"); closeBtn2.type = "button";
+          closeBtn2.addEventListener("click", function () {
+            apApi("/api/admin/panel/council/" + id + "/close", {}).then(function () { apLoadFeed(); apOpenCouncil(id); }).catch(function (e) { alert(e.message); });
+          });
+          actions2.appendChild(closeBtn2);
+          apDetail.appendChild(actions2);
+        }
       }).catch(function (e) { apDetail.innerHTML = ""; apDetail.appendChild(apEl("p", "qm-dash-empty", e.message)); });
     }
 

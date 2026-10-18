@@ -226,3 +226,47 @@ def current_address(conn, user_id: int):
         "SELECT full_address FROM qmail_addresses WHERE user_id = ? AND is_current = 1", (user_id,)
     ).fetchone()
     return row["full_address"] if row else None
+
+
+# ---- Attachments (2026-10-18) -- compose-time only; see migrations/023_qmail_attachments.py for
+# why this is a SQLite BLOB, not a disk path. ----
+
+MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024  # 2 MB -- re-checked here against the DECODED bytes,
+# independent of Flask's own MAX_CONTENT_LENGTH (the app-wide, first-line request-body cap set in
+# app.py): a client that lies about Content-Length, or whose multipart overhead eats into a more
+# generous global cap, is still caught here, against the attachment's own actual length.
+
+
+def save_attachment(conn, kind: str, message_id: int, uploader_user_id: int, filename: str,
+                     content_type: str, data: bytes) -> int:
+    """Stores one attachment for a just-created message (kind='member' -> qmail_messages.id,
+    kind='council' -> qpunch_queue_messages.id). Raises ValueError if `data` exceeds
+    MAX_ATTACHMENT_BYTES -- the route turns that into a 413. Returns the new attachment's id."""
+    if kind not in ("member", "council"):
+        raise ValueError("Unknown attachment kind")
+    if len(data) > MAX_ATTACHMENT_BYTES:
+        raise ValueError(f"Attachment exceeds the {MAX_ATTACHMENT_BYTES // (1024 * 1024)} MB limit")
+    cur = conn.execute(
+        "INSERT INTO qmail_attachments (kind, message_id, uploader_user_id, filename, content_type, "
+        "byte_size, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (kind, message_id, uploader_user_id, filename, content_type, len(data), data, _now()),
+    )
+    return cur.lastrowid
+
+
+def attachments_for(conn, kind: str, message_id: int) -> list[dict]:
+    """Metadata only (no `data`) -- the list view and detail view show filename/size/type, never
+    the bytes themselves; those are fetched one at a time, access-checked, by the serve route."""
+    rows = conn.execute(
+        "SELECT id, filename, content_type, byte_size, created_at FROM qmail_attachments "
+        "WHERE kind = ? AND message_id = ?",
+        (kind, message_id),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_attachment(conn, attachment_id: int):
+    """The full row, including `data` -- only the serve route should call this, after it has
+    independently confirmed the requester may see the message this attachment belongs to."""
+    row = conn.execute("SELECT * FROM qmail_attachments WHERE id = ?", (attachment_id,)).fetchone()
+    return dict(row) if row else None

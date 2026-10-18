@@ -151,6 +151,14 @@ app.secret_key = os.environ.get("QM_SECRET_KEY", _INSECURE_DEFAULT_SECRET)
 if os.environ.get("RAILWAY_ENVIRONMENT") and app.secret_key == _INSECURE_DEFAULT_SECRET:
     raise RuntimeError("QM_SECRET_KEY must be set to a real secret before deploying (Railway environment detected).")
 
+# Qmail attachments (2026-10-18): a global, app-wide request-body cap, well above
+# qmail_core.MAX_ATTACHMENT_BYTES (2 MB) to leave room for multipart overhead and the other form
+# fields -- this is the FIRST line of defense (Werkzeug rejects an oversized request before
+# request.files is even populated); the second, precise check is in qmail_core.save_attachment()
+# against the decoded bytes' actual length. No other route in this app accepts a file upload, so
+# this cap has nothing else to conflict with.
+app.config["MAX_CONTENT_LENGTH"] = 3 * 1024 * 1024
+
 
 def login_required(view):
     @functools.wraps(view)
@@ -1116,14 +1124,25 @@ def api_qmail_activate():
 @app.route("/api/qmail/compose", methods=["POST"])
 @login_required
 def api_qmail_compose():
-    data = request.get_json(silent=True) or {}
-    # Not lowercased: the account_id half of a full_address legitimately contains uppercase
-    # letters (e.g. "IY9-SX-GMA2-ZAI-CS.DL.3.4.1A"), and this field is always system-generated
-    # and auto-filled by the smart "To" field, never hand-typed -- so there's no case-insensitivity
-    # need, and lowercasing it would break resolution against the mixed-case stored full_address.
-    to_address = (data.get("to") or "").strip()
-    subject = (data.get("subject") or "").strip()
-    body = (data.get("body") or "").strip()
+    # Multipart when an attachment is attached (request.files needs it); plain JSON otherwise --
+    # the only route in this app that accepts either, so the branch lives here, not in a shared
+    # helper nothing else would use.
+    if request.content_type and request.content_type.startswith("multipart/form-data"):
+        to_address = (request.form.get("to") or "").strip()
+        subject = (request.form.get("subject") or "").strip()
+        body = (request.form.get("body") or "").strip()
+        attachment_file = request.files.get("attachment")
+    else:
+        data = request.get_json(silent=True) or {}
+        # Not lowercased: the account_id half of a full_address legitimately contains uppercase
+        # letters (e.g. "IY9-SX-GMA2-ZAI-CS.DL.3.4.1A"), and this field is always system-generated
+        # and auto-filled by the smart "To" field, never hand-typed -- so there's no
+        # case-insensitivity need, and lowercasing it would break resolution against the
+        # mixed-case stored full_address.
+        to_address = (data.get("to") or "").strip()
+        subject = (data.get("subject") or "").strip()
+        body = (data.get("body") or "").strip()
+        attachment_file = None
     if not to_address or not body:
         return jsonify({"error": "A recipient and a message body are required"}), 400
     conn = get_db()
@@ -1143,16 +1162,30 @@ def api_qmail_compose():
             # docs/QMAIL.md's Q-Punch section. The heads (or admin fallback) that
             # resolved["user_ids"] names are who currently handles it, read from the Admin
             # Panel, not delivered to via qmail_messages.
-            conn.execute(
+            cur = conn.execute(
                 "INSERT INTO qpunch_queue_messages (level, location_id, sender_id, subject, body, status, created_at) "
                 "VALUES (?, ?, ?, ?, ?, 'open', ?)",
                 (resolved["level"], resolved["location_id"], session["user_id"], subject, body, now),
             )
+            attachment_kind = "council"
         else:
-            conn.execute(
+            cur = conn.execute(
                 "INSERT INTO qmail_messages (from_user_id, to_user_id, subject, body, created_at) VALUES (?, ?, ?, ?, ?)",
                 (session["user_id"], resolved["user_ids"][0], subject, body, now),
             )
+            attachment_kind = "member"
+        if attachment_file and attachment_file.filename:
+            # Second, precise check against the decoded bytes -- see qmail_core.MAX_ATTACHMENT_BYTES's
+            # own docstring for why this is independent of app.config["MAX_CONTENT_LENGTH"] above.
+            file_bytes = attachment_file.read()
+            try:
+                qmail_core.save_attachment(
+                    conn, attachment_kind, cur.lastrowid, session["user_id"],
+                    attachment_file.filename, attachment_file.mimetype or "application/octet-stream", file_bytes,
+                )
+            except ValueError as e:
+                conn.rollback()
+                return jsonify({"error": str(e)}), 413
         conn.commit()
     finally:
         conn.close()
@@ -1172,9 +1205,69 @@ def api_qmail_inbox():
                WHERE m.to_user_id = ? ORDER BY m.created_at DESC""",
             (session["user_id"],),
         ).fetchall()
+        messages = []
+        for r in rows:
+            d = dict(r)
+            d["attachments"] = qmail_core.attachments_for(conn, "member", d["id"])
+            messages.append(d)
     finally:
         conn.close()
-    return jsonify({"messages": [dict(r) for r in rows]})
+    return jsonify({"messages": messages})
+
+
+@app.route("/api/qmail/messages/<int:message_id>/read", methods=["POST"])
+@login_required
+def api_qmail_mark_read(message_id):
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT to_user_id FROM qmail_messages WHERE id = ?", (message_id,)).fetchone()
+        if not row or row["to_user_id"] != session["user_id"]:
+            return jsonify({"error": "Message not found"}), 404
+        conn.execute(
+            "UPDATE qmail_messages SET read_at = ? WHERE id = ?",
+            (dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), message_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/qmail/attachments/<int:attachment_id>")
+@login_required
+def api_qmail_attachment_serve(attachment_id):
+    conn = get_db()
+    try:
+        att = qmail_core.get_attachment(conn, attachment_id)
+        if not att:
+            return jsonify({"error": "Attachment not found"}), 404
+        if att["kind"] == "member":
+            msg = conn.execute(
+                "SELECT from_user_id, to_user_id FROM qmail_messages WHERE id = ?", (att["message_id"],)
+            ).fetchone()
+            allowed = bool(msg) and session["user_id"] in (msg["from_user_id"], msg["to_user_id"])
+        else:
+            msg = conn.execute(
+                "SELECT sender_id FROM qpunch_queue_messages WHERE id = ?", (att["message_id"],)
+            ).fetchone()
+            if not msg:
+                allowed = False
+            elif msg["sender_id"] == session["user_id"]:
+                allowed = True
+            else:
+                # The same scope check every council route uses -- a village head sees an
+                # attachment on their own location's message; another village's head gets the
+                # same 404 as if the attachment didn't exist, never a 403 that would confirm it.
+                scope = _is_admin_panel_user()
+                allowed = bool(scope) and _qpunch_message_in_scope(conn, scope, att["message_id"]) is not None
+        if not allowed:
+            return jsonify({"error": "Attachment not found"}), 404
+    finally:
+        conn.close()
+    return Response(
+        att["data"], mimetype=att["content_type"],
+        headers={"Content-Disposition": f'inline; filename="{att["filename"]}"'},
+    )
 
 
 @app.route("/api/qmail/sent")
@@ -1200,13 +1293,18 @@ def api_qmail_sent():
                WHERE q.sender_id = ?""",
             (session["user_id"],),
         ).fetchall()
+        messages = []
+        for r in member_rows:
+            d = dict(r)
+            d["attachments"] = qmail_core.attachments_for(conn, "member", d["id"])
+            messages.append(d)
+        for r in council_rows:
+            d = dict(r)
+            d["to_name"] = f"{d.pop('level').capitalize()} Council"
+            d["attachments"] = qmail_core.attachments_for(conn, "council", d["id"])
+            messages.append(d)
     finally:
         conn.close()
-    messages = [dict(r) for r in member_rows]
-    for r in council_rows:
-        d = dict(r)
-        d["to_name"] = f"{d.pop('level').capitalize()} Council"
-        messages.append(d)
     messages.sort(key=lambda m: m["created_at"], reverse=True)
     return jsonify({"messages": messages})
 
@@ -1908,10 +2006,12 @@ def api_admin_panel_council_detail(message_id):
             return jsonify({"error": "Message not found"}), 404
         message["actions"] = [
             dict(a) for a in conn.execute(
-                "SELECT actor_user_id, action, detail, created_at FROM qpunch_queue_actions "
-                "WHERE message_id = ? ORDER BY created_at", (message_id,),
+                """SELECT a.actor_user_id, a.action, a.detail, a.created_at, u.name AS actor_name
+                   FROM qpunch_queue_actions a JOIN users u ON u.id = a.actor_user_id
+                   WHERE a.message_id = ? ORDER BY a.created_at""", (message_id,),
             ).fetchall()
         ]
+        message["attachments"] = qmail_core.attachments_for(conn, "council", message_id)
         _log_qpunch_action(conn, message_id, session["user_id"], "viewed")
         conn.commit()
     finally:
