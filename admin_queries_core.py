@@ -73,6 +73,28 @@ def list_mine(conn, user_id: int) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def get_for_member(conn, user_id: int, query_id: int) -> dict | None:
+    """The asking member's own view of one query: the original and the text and time of each
+    reply, nothing else -- not who on the admin side replied, and not the status history. None
+    if the query doesn't exist OR belongs to someone else; the two are deliberately the same to
+    the caller, the same posture as the council routes' 404."""
+    ensure_tables(conn)
+    q = conn.execute(
+        "SELECT id, category, subject, body, created_at FROM admin_queries WHERE id = ? AND user_id = ?",
+        (query_id, user_id),
+    ).fetchone()
+    if not q:
+        return None
+    result = dict(q)
+    result["replies"] = [
+        dict(r) for r in conn.execute(
+            "SELECT message, created_at FROM admin_query_replies WHERE query_id = ? ORDER BY created_at, id",
+            (query_id,),
+        ).fetchall()
+    ]
+    return result
+
+
 def list_open(conn) -> list[dict]:
     """Every query that isn't closed, newest first -- the Admin Panel feed's source for this
     ticket type. Includes the asking user's name and their latest reply timestamp (if any) so the

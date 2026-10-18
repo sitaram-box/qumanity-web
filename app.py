@@ -1387,10 +1387,12 @@ def api_qmail_sent():
         messages = []
         for r in member_rows:
             d = dict(r)
+            d["kind"] = "member"
             d["attachments"] = qmail_core.attachments_for(conn, "member", d["id"])
             messages.append(d)
         for r in council_rows:
             d = dict(r)
+            d["kind"] = "council"
             d["to_name"] = f"{d.pop('level').capitalize()} Council"
             d["attachments"] = qmail_core.attachments_for(conn, "council", d["id"])
             messages.append(d)
@@ -1398,6 +1400,59 @@ def api_qmail_sent():
         conn.close()
     messages.sort(key=lambda m: m["created_at"], reverse=True)
     return jsonify({"messages": messages})
+
+
+# ---- Reading replies to your own message (2026-10-18). A council reply and an Admin query
+# reply already raised the sender's unread count (notify_core's 'council' and 'query' kinds), but
+# nothing returned the reply itself -- a resident was told there was a reply and had no way to
+# read it. These two routes return the sender's own original plus the text and time of each
+# reply, and mark that notification read. Never the action log (who viewed or closed it, who on
+# the council replied): that stays in the Admin Panel. ----
+
+@app.route("/api/qmail/sent/council/<int:message_id>")
+@login_required
+def api_qmail_sent_council_thread(message_id):
+    conn = get_db()
+    try:
+        row = conn.execute(
+            """SELECT q.id, q.subject, q.body, q.created_at, q.level, qp.full_address AS to_address
+               FROM qpunch_queue_messages q
+               LEFT JOIN qpunch_addresses qp ON qp.level = q.level AND qp.location_id = q.location_id
+               WHERE q.id = ? AND q.sender_id = ?""",
+            (message_id, session["user_id"]),
+        ).fetchone()
+        if not row:
+            # Someone else's council message gets the same 404 as one that doesn't exist.
+            return jsonify({"error": "Message not found"}), 404
+        thread = dict(row)
+        thread["to_name"] = f"{thread.pop('level').capitalize()} Council"
+        thread["attachments"] = qmail_core.attachments_for(conn, "council", message_id)
+        thread["replies"] = [
+            {"message": r["detail"], "created_at": r["created_at"]}
+            for r in conn.execute(
+                "SELECT detail, created_at FROM qpunch_queue_actions "
+                "WHERE message_id = ? AND action = 'replied' ORDER BY created_at, id",
+                (message_id,),
+            ).fetchall()
+        ]
+        notify_core.mark_read(conn, session["user_id"], "council", message_id)
+    finally:
+        conn.close()
+    return jsonify(thread)
+
+
+@app.route("/api/queries/mine/<int:query_id>")
+@login_required
+def api_my_query_thread(query_id):
+    conn = get_db()
+    try:
+        thread = admin_queries_core.get_for_member(conn, session["user_id"], query_id)
+        if not thread:
+            return jsonify({"error": "Query not found"}), 404
+        notify_core.mark_read(conn, session["user_id"], "query", query_id)
+    finally:
+        conn.close()
+    return jsonify(thread)
 
 
 @app.route("/api/qmail/resolve-username")

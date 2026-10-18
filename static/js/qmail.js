@@ -67,7 +67,9 @@
         body: r.body, date: r.created_at, unread: !r.read_at, attachments: r.attachments || [], raw: r };
     }
     if (folder === "sent") {
-      return { id: r.id, folder: folder, who: r.to_name || r.to_address || "Unknown", subject: r.subject,
+      // kind tells a member message from a council one -- their ids come from two tables and can
+      // be the same number.
+      return { id: r.id, folder: folder, kind: r.kind || "member", who: r.to_name || r.to_address || "Unknown", subject: r.subject,
         body: r.body, date: r.created_at, unread: false, attachments: r.attachments || [], raw: r };
     }
     // drafts -- to_address is unresolved/unvalidated by design (qmail_core.save_draft's own docstring)
@@ -106,6 +108,7 @@
   }
 
   function openMessage(item) {
+    if (item.folder === "sent" && item.kind === "council") { openThread("council", item.id); return; }
     readingContent.innerHTML = "";
     readingContent.appendChild(el("h2", "", item.subject || "(no subject)"));
     var metaLabel = item.folder === "inbox" ? "From " : "To ";
@@ -131,6 +134,47 @@
         renderList();
       }).catch(function () {});
     }
+  }
+
+  // ---- A message the member sent to a council, or a query they sent the Admin, with the
+  // replies to it. Opening it marks the reply notification read (server side, in the same GET).
+  // Shows the reply text and when it arrived, never who on the council replied or the log.
+  function openThread(kind, id) {
+    var url = kind === "council" ? "/api/qmail/sent/council/" + id : "/api/queries/mine/" + id;
+    var replyFrom = kind === "council" ? "the council" : "the Admin";
+    readingContent.innerHTML = "";
+    api(url).then(function (t) {
+      readingContent.innerHTML = "";
+      readingContent.appendChild(el("h2", "", t.subject || "(no subject)"));
+      var to = kind === "council" ? (t.to_name || t.to_address || "Council") : "the Admin";
+      readingContent.appendChild(el("p", "qmail-reading-meta", "To " + to + " · " + new Date(t.created_at).toLocaleString()));
+      var bodyP = el("div", "qmail-reading-body");
+      bodyP.appendChild(window.qmRenderFormattedText(t.body));
+      readingContent.appendChild(bodyP);
+      (t.attachments || []).forEach(function (att) {
+        var a = document.createElement("a");
+        a.href = "/api/qmail/attachments/" + att.id;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.className = "qmail-attachment-link";
+        a.textContent = "📎 " + att.filename + " (" + Math.round(att.byte_size / 1024) + " KB)";
+        readingContent.appendChild(a);
+      });
+      var replies = t.replies || [];
+      if (!replies.length) {
+        readingContent.appendChild(el("p", "qmail-reading-meta", "No reply yet."));
+      }
+      replies.forEach(function (r) {
+        readingContent.appendChild(el("p", "qmail-reading-meta", "Reply from " + replyFrom + " · " + new Date(r.created_at).toLocaleString()));
+        var replyBody = el("div", "qmail-reading-body");
+        replyBody.appendChild(window.qmRenderFormattedText(r.message));
+        readingContent.appendChild(replyBody);
+      });
+      if (shell) shell.classList.add("is-reading");
+    }).catch(function (e) {
+      readingContent.innerHTML = "";
+      readingContent.appendChild(el("p", "qm-dash-empty", e.message));
+    });
   }
 
   if (backBtn) backBtn.addEventListener("click", function () { if (shell) shell.classList.remove("is-reading"); });
@@ -299,5 +343,17 @@
       });
   });
 
-  loadFolder("inbox");
+  // A reply notification links here as /qmail#council-<id> or /qmail#query-<id>.
+  var hashMatch = /^#(council|query)-(\d+)$/.exec(window.location.hash || "");
+  if (hashMatch) {
+    if (hashMatch[1] === "council") {
+      folderBtns.forEach(function (b) { b.classList.toggle("is-active", b.getAttribute("data-folder") === "sent"); });
+      loadFolder("sent");
+    } else {
+      loadFolder("inbox");
+    }
+    openThread(hashMatch[1], parseInt(hashMatch[2], 10));
+  } else {
+    loadFolder("inbox");
+  }
 })();

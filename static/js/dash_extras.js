@@ -138,6 +138,11 @@
           var after = function () { closeMenu(); jumpToTab("personal"); setTimeout(refreshPersonalCount, 1000); };
           if (it.kind === "private" || it.kind === "group") {
             api("/api/notifications/mark-read", { kind: it.kind, id: it.id }).then(after).catch(after);
+          } else if (it.kind === "council" || it.kind === "query") {
+            // A reply to the member's own council message or Admin query: open it in /qmail,
+            // which marks it read when the reply is fetched.
+            closeMenu();
+            window.location.href = "/qmail#" + it.kind + "-" + it.id;
           } else {
             after(); // pending people-request: no read-state to mark, just surface it
           }
