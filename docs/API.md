@@ -166,8 +166,10 @@ mailbox. Full design: [docs/QMAIL.md](QMAIL.md).
 |---|---|---|---|---|
 | POST | `/api/qmail/activate` | Member | body: `username` | `address` |
 | POST | `/api/qmail/compose` | Member | body: `to`, `subject`, `body` | `status` |
-| GET | `/api/qmail/inbox` | Member |  | `messages` |
-| GET | `/api/qmail/sent` | Member |  | `messages` |
+| GET | `/api/qmail/inbox` | Member |  | `messages` (each with an `attachments` list) |
+| GET | `/api/qmail/sent` | Member |  | `messages` (member-to-member plus this member's own council sends) |
+| POST | `/api/qmail/messages/<int:message_id>/read` | Member (recipient only) |  | `status` |
+| GET | `/api/qmail/attachments/<int:attachment_id>` | Member (sender/recipient, or panel scope for a council message) |  | file bytes |
 | GET | `/api/qmail/resolve-username` | Member | query: `q` | `matches` |
 | GET | `/api/qmail/resolve-public-id` | Member | query: `code` | `activated`, `name`, `address` |
 | GET | `/api/qmail/status` | Member |  | `activated`, `address`, `changed` |
@@ -244,16 +246,20 @@ mailbox. Full design: [docs/QMAIL.md](QMAIL.md).
 | GET | `/api/admin/election-cycle` | Admin |  | `countries` |
 | POST | `/api/admin/election-cycle/<country_code>` | Admin | body: `interval_years`, `last_election_year` | `status`, `years` |
 
-Admin Panel (combined inbox over Citizen Reports, ID recovery and member queries; gated by
-`_is_admin_panel_user()`, additive to the `Admin` access level above). Full design:
-[docs/ADMIN_PANEL.md](ADMIN_PANEL.md).
+Admin Panel (one filterable list + detail pane over Citizen Reports, ID recovery, member queries
+and the Q-Punch council queue; gated by `_is_admin_panel_user()`, which returns a scope descriptor
+— Admin sees all four sources globally, a currently-serving village council head sees only their
+own village's council queue and nothing else). Full design: [docs/ADMIN_PANEL.md](ADMIN_PANEL.md).
 
 | Method | Path | Access | Parameters | Response fields |
 |---|---|---|---|---|
-| GET | `/api/admin/panel/feed` | Admin |  | `items` |
-| GET | `/api/admin/queries/<int:query_id>` | Admin |  | `id`, `category`, `subject`, `body`, `status`, `replies` |
-| POST | `/api/admin/queries/<int:query_id>/reply` | Admin | body: `message` | `status` |
-| POST | `/api/admin/queries/<int:query_id>/close` | Admin |  | `status` |
+| GET | `/api/admin/panel/feed` | Admin (global) or a village head (own location only) |  | `items` |
+| GET | `/api/admin/queries/<int:query_id>` | Admin only (general queries have no location to scope by) |  | `id`, `category`, `subject`, `body`, `status`, `replies` |
+| POST | `/api/admin/queries/<int:query_id>/reply` | Admin only | body: `message` | `status` |
+| POST | `/api/admin/queries/<int:query_id>/close` | Admin only |  | `status` |
+| GET | `/api/admin/panel/council/<int:message_id>` | Admin or that message's own village head | | message + `actions` + `attachments` |
+| POST | `/api/admin/panel/council/<int:message_id>/reply` | Admin or that message's own village head | body: `message` | `status` |
+| POST | `/api/admin/panel/council/<int:message_id>/close` | Admin or that message's own village head |  | `status` |
 
 ### Administration: lunar cycle, pipeline and archive
 

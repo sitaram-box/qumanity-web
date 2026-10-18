@@ -4,27 +4,38 @@ A design and operations reference, not a user manual. Built in commit `e4750e4`.
 
 ## 1. What it's for, and who can see it
 
-A combined inbox over three things an admin needs to review: Citizen Reports, ID recovery
-requests, and general member queries ("my karma looks wrong," "I can't find my account" — things
-that are inherently admin-only from the start, with no location and no council escalation
-ladder, so they don't fit `reports_core.py`'s model at all; see §4).
+A combined inbox, rendered as **one filterable list plus a detail pane** (`#ap-list` /
+`#ap-detail` in `templates/dashboard.html`, driven by `static/js/dashboard.js`'s `apRenderList`/
+`apOpenDetail`) — not three (or four) separate panes side by side. An earlier design round
+described this as "three-pane"; that was wrong, and this doc says what the code actually does:
+one list, filterable by source, with a detail view that dispatches on `item.source` to a
+per-source renderer. Four sources feed that one list today: Citizen Reports, ID recovery
+requests, general member queries ("my karma looks wrong," "I can't find my account" — things that
+are inherently admin-only from the start, with no location and no council escalation ladder, so
+they don't fit `reports_core.py`'s model at all; see §4), and, since 2026-10-18, the Q-Punch
+council queue (§9) — added as a fourth filter button and one new detail renderer
+(`apOpenCouncil`), not a new pane or a fifth tab. The shape absorbed a fourth source with almost
+no new pattern, which is the point of building it generic in the first place.
 
-**Today**: the Founder only — `_is_admin_panel_user()` is identical to `_is_admin()` right now,
-because village is the only level with a real elected council (the same documented gap as
-`announcements_core.is_council_member()` / `reports_core.is_holder_council()`).
+**Today**: the Founder sees all four sources, globally. A village council head sees only their
+own village's council queue (§8) — `_is_admin_panel_user()` is no longer identical to `_is_admin()`
+for that second audience, now that village has real elected data to scope by. Every level past
+village still has the same documented gap as `announcements_core.is_council_member()` /
+`reports_core.is_holder_council()`, so a council head at any other level doesn't exist yet to
+have access at all.
 
-**Later**: when a real Q-Punch council role exists at any level, that's the one function that
-changes (§2) — but even then, the panel's *global*, cross-location views (e.g.
-`reports_core.list_all_open()`) stay Admin-only forever. They are never extended to a scoped
-council member the way a single location's own report inbox already is, through
-`is_holder_council()`.
+**Later**: when a real council role exists at another level, `_is_admin_panel_user()` (§2) is
+still the one function that changes — but the panel's *global*, cross-location views (reports, ID
+recovery, member queries) stay Admin-only forever. They are never extended to a scoped council
+member the way the council queue already is.
 
 ## 2. `_is_admin_panel_user()` — the one swap point
 
-```python
-def _is_admin_panel_user() -> bool:
-    return _is_admin()
-```
+Returns a scope descriptor, not a bool, as of 2026-10-18 — `None` (no access), `{"scope":
+"global"}` (the Founder), or `{"scope": "location", "level": "village", "location_id": ...}` (a
+currently-serving village council head, read fresh from `village_council` on every call, no
+caching). The full shape, and the four invariants every route built on it must hold, are in §8 —
+not repeated here to avoid the two copies drifting apart.
 
 Additive to `_is_admin()`, never a replacement for it — every other existing admin check in this
 codebase (the test-cycle panel, the member export tool, etc.) keeps calling `_is_admin()`
@@ -41,14 +52,18 @@ Neither half is sufficient alone; both are present:
   entire `#qm-dash-admin` section in `{% if is_admin_panel_user %}`. For a non-admin viewer, the
   tab and its panel don't exist in the rendered page at all — not hidden by CSS, not present and
   disabled, genuinely absent from the HTML. `is_admin_panel_user` is passed into the template as
-  its own variable, deliberately separate from the existing `is_admin` variable, even though
-  they're identical today (same reasoning as §2).
+  its own variable, deliberately separate from the existing `is_admin` variable. A scope
+  descriptor dict is truthy, `None` is falsy, so this `{% if %}` still works correctly for a
+  location-scoped head without any template change — confirmed directly (`git status` showed no
+  diff to any `.html` file when the scope-descriptor change landed), not assumed.
 - **403 on direct fetch**: every one of the seven admin-panel routes
   (`/api/admin/panel/feed`, `/api/admin/queries/<id>`, `/api/admin/queries/<id>/reply`,
-  `/api/admin/queries/<id>/close`, plus the four already covered by the member-export pass)
-  checks `_is_admin_panel_user()` as its first statement and returns `403` if it fails — so
-  hitting the API directly, bypassing the UI entirely, is refused the same way the DOM already
-  hides it.
+  `/api/admin/queries/<id>/close`, `/api/admin/panel/council/<id>`,
+  `/api/admin/panel/council/<id>/reply`, `/api/admin/panel/council/<id>/close`, plus the four
+  already covered by the member-export pass) checks `_is_admin_panel_user()` as its first
+  statement and returns `403` if it fails — so hitting the API directly, bypassing the UI
+  entirely, is refused the same way the DOM already hides it. (The three query routes additionally
+  require `scope["scope"] == "global"` — see §8.)
 
 A DOM-only gate would still leak data to anyone who called the route directly. A route-only gate
 would still show a tab link to people who'd just get a 403 clicking it. Both are needed, and both
@@ -122,3 +137,75 @@ the proof — but the real fix is upstream of needing a fix at all: **run `ls mi
 naming a new migration file**, every time, especially when more than one line of work might be
 touching the tree concurrently. The collision that actually happened here is the argument for the
 rule, not a hypothetical one.
+
+## 8. Scoping invariants (2026-10-18, Q-Punch council scope)
+
+`_is_admin_panel_user()` now returns a scope descriptor (`None`, `{"scope": "global"}`, or
+`{"scope": "location", "level": "village", "location_id": ...}`) rather than a bool, so the panel
+can serve a village council head a feed scoped to their own location without ever letting them
+see a report, an ID-recovery request, or a member query — see `docs/QMAIL.md`'s Q-Punch section
+for the full feature. Four invariants hold for every route built on that scope, each one found or
+decided deliberately while building the feed branch, each one easy to undo by accident if a future
+change doesn't know why it's there:
+
+- **An out-of-scope message id returns 404, never 403.** `_qpunch_message_in_scope()` treats "the
+  message doesn't exist" and "the message exists but belongs to a different location" as the same
+  outcome on purpose. A 403 would confirm to a village head that some OTHER village's message id
+  is real; a 404 tells them nothing either way. Never special-case the 404 into a 403 "to be more
+  informative" — that information is exactly what a location-scoped caller must not get.
+
+- **The location handler takes no request argument.** `_admin_panel_feed_location(level,
+  location_id)` is only ever called with the two values the scope descriptor computed
+  server-side — never with anything read from `request.args`, `request.json`, or the URL. Scoping
+  here is structural (the function physically cannot see a client-supplied location), not a check
+  that could be forgotten or bypassed. If a future change adds a parameter to this function to let
+  a caller "pick" a location, the structural guarantee is gone — don't add one.
+
+- **The scope query re-runs on every call, with no caching.** `_is_admin_panel_user()` checks
+  `village_council`'s current term fresh, every request, against today's date. A head whose
+  `leadership_end` has passed falls out of location scope on their very next request, not at some
+  later session refresh or cache expiry — proven, not assumed, by
+  `tests/test_admin_panel_council_scope.py`'s Section 7 (an expired term turns a previously-200
+  feed fetch into a 403 with no other state change in between). Don't introduce a session-level
+  cache of the scope descriptor; it would reopen exactly this gap.
+
+- **A rejected cross-location write leaves no audit row.** When `_qpunch_message_in_scope()`
+  returns `None`, the route returns 404 *before* `_log_qpunch_action()` is ever called — a village
+  head's attempt to reply to or close another village's message produces nothing in
+  `qpunch_queue_actions`, not a logged-and-rejected attempt. `tests/test_admin_panel_council_scope.py`
+  Section 2 asserts this directly (queries the other village's action log for the attempted reply
+  text and asserts absence). Logging the attempt itself would mean the one table built to be an
+  honest record of who touched what also ends up holding read access to information the writer
+  was never shown.
+
+## 9. The council queue — the fourth source
+
+A village's Q-Punch council address (`docs/QMAIL.md` §11) delivers into `qpunch_queue_messages`,
+not into any individual's personal Qmail — `GET /api/admin/panel/council/<id>` (view),
+`POST .../reply`, `POST .../close` are its only read/write surface, all gated on
+`_is_admin_panel_user()` and scoped through `_qpunch_message_in_scope()` (§8). Every touch —
+**view, reply, and close alike** — writes a `qpunch_queue_actions` row naming the real
+`actor_user_id`, matching `id_recovery_reveals`' posture: a shared, auditable queue where every
+read and every write is attributable, not just the writes. A reply additionally moves the
+message's `status` to `'answered'` and is read back by `notify_core`'s derived unread count (kind
+`'council'`, `chat_id = qpunch_queue_messages.id`) — the asker sees the same unread badge their
+private/group chats already use, with no new notification infrastructure, the same reasoning §6
+already gives for the `'query'` kind.
+
+Reading `message.attachments` (`qmail_core.attachments_for(conn, "council", message_id)`) is part
+of this same detail response — an attachment on a council message is access-checked the identical
+way the message itself is, through `/api/qmail/attachments/<id>` reusing
+`_qpunch_message_in_scope()` directly, not a parallel check that could drift from it.
+
+**Composing a brand-new, council-*initiated* message to a member — one who never wrote in first —
+is deferred to a later pass, deliberately, not missing by oversight.** It needs a way to mark a
+`qmail_messages` row as sent *as* a council rather than as the individual head who pressed send
+(tentatively two nullable columns, `sent_as_level` / `sent_as_location_id`), so the recipient sees
+"Village Council" while the database still honestly records who actually sent it. **These columns
+do not exist anywhere in this codebase** — `qmail_messages`' schema has no `sent_as_level` column,
+and neither `api_qmail_compose` nor `api_admin_panel_council_reply`'s own source references the
+name, confirmed directly (`tests/test_qmail_attachments.py` Section 1), not assumed from the
+absence of a migration. *Replying* within an existing thread needs none of this and is fully
+built (above); composing *to* another village's council address already works today with no new
+code either (see `docs/QMAIL.md` §11's closing note). Only the proactive, council-as-sender case
+is the open piece.

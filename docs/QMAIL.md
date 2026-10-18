@@ -83,14 +83,16 @@ changes a Qmail address. Keep it that way.
 
 ## 6. The route table
 
-All seven routes are `@login_required`; none is public.
+All nine routes are `@login_required`; none is public.
 
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/api/qmail/activate` | `{"username"}` → validates, checks global uniqueness, writes `users.qmail_username`, mints the first `qmail_addresses` row. |
-| POST | `/api/qmail/compose` | `{"to", "subject", "body"}` — `to` is re-resolved server-side via `qmail_core.resolve_address`, never trusted from the client. |
-| GET | `/api/qmail/inbox` | This member's received messages. |
-| GET | `/api/qmail/sent` | This member's sent messages. |
+| POST | `/api/qmail/compose` | `{"to", "subject", "body"}` (JSON), or multipart with those three fields plus an optional `attachment` file — `to` is re-resolved server-side via `qmail_core.resolve_address`, never trusted from the client; see §11 for how a council address routes differently here, and §12 for the attachment. |
+| GET | `/api/qmail/inbox` | This member's received messages, each with an `attachments` list (metadata only). |
+| GET | `/api/qmail/sent` | This member's sent messages — member-to-member rows plus this member's own outgoing copy of anything they sent to a council address (§11). |
+| POST | `/api/qmail/messages/<id>/read` | Marks one received message read (`qmail_messages.read_at`) — only the recipient may call this for their own message. |
+| GET | `/api/qmail/attachments/<id>` | Streams one attachment's bytes, access-checked against the message it belongs to (§12) — never a bare, unguarded file URL. |
 | GET | `/api/qmail/resolve-username` | `?q=<partial>` — the smart "To" field's autocomplete, scoped to `social_core.connected_user_ids()` (§7). |
 | GET | `/api/qmail/resolve-public-id` | `?code=<12-digit>` — resolves via the existing `account_ids.search_code`, no connection required. Returns a clean `{"activated": false, ...}` for a member who hasn't activated — never a 404, never a fabricated address. |
 | GET | `/api/qmail/status` | **Not one of the original six design-approved routes.** Added because the activation card and the address-change banner both need page-load state (am I activated, do I have a still-forwarding old address) and none of the other six provide it. Flagged explicitly when added rather than folded in silently. Read-only. |
@@ -110,17 +112,18 @@ not a wider mode of the same one.
 
 ## 8. Known limits — planned, not built
 
-- No attachments.
 - No message threading.
 - No external delivery of any kind (§1) — no inbound receiving, no outbound to real mail
   providers.
 - No spam filtering (meaningless for an entirely internal system today, but worth naming
   explicitly as a gap the moment real external delivery is ever considered).
-- No read receipts beyond the plain `read_at` timestamp column already in `qmail_messages`
-  (nothing currently sets it — marking a message read isn't wired up yet).
-- No full mailbox UI (compose/inbox/sent screens) — only the activation card and the
-  address-change banner shipped with the backend. The mailbox UI was explicitly deferred as its
-  own, separate pass rather than folded into this one.
+- Read receipts are now wired up (`POST /api/qmail/messages/<id>/read`, §6) but are a plain
+  high-water mark, not a receipt the sender is told about — the sender never learns *when* a
+  message was read, only the recipient's own inbox shows it.
+- The mailbox UI (activation card, inbox/sent, compose with a markup toolbar and an optional
+  attachment) is built — see §12. Still not built: real-time delivery (the inbox is poll-on-open,
+  like every other feed in this app, not pushed) and a brand-new, council-*initiated* conversation
+  that isn't a reply to something a member sent first (§11's closing note).
 
 ## 9. A cautionary note: the compose `.lower()` bug
 
@@ -161,3 +164,136 @@ The standing rule, now recorded in two places (see also `docs/ADMIN_PANEL.md` §
 collision's other half happened): **run `ls migrations/` before naming a new migration file**,
 every time. If a rename is ever unavoidable after the fact, prove idempotency empirically against
 a DB that already has the old name applied — don't reason your way to "should be fine" and push.
+
+## 11. Q-Punch council addresses
+
+An extension of Qmail that addresses a **location**, not a member. Format:
+`<level>-<location_id>@qumanity.in` — e.g. `village-CS.DL.3.4.1A@qumanity.in`. No `qpunch-`
+prefix (an earlier round of this design used one; dropped once the address no longer needed to be
+distinguished from a member address by its shape at all — see "the withdrawn username guard"
+below). `location_id` is the location's own existing hierarchical id, used exactly as it already
+appears everywhere else in this codebase (`location_elements`, the folder tree, URL params) —
+never a generated slug, never lowercased.
+
+**One permanent row per location, created once it crosses a threshold, never removed.** A
+location's `qpunch_addresses` row is inserted the first time its real member count (`is_demo=0
+AND is_removed=0`) reaches its level's threshold, and stays forever — if the count later drops
+back below threshold, the address is not retired, deactivated, or hidden. A council mailbox that
+disappears because two members left is a worse experience than one that keeps serving a shrunk
+community; this holds at every level, not just village. There is deliberately no `status` column
+and no reactivate/retire logic to maintain.
+
+| Level | Threshold | Reachable today |
+|---|---|---|
+| village | 5 | Yes |
+| tehsil | 10 | Yes |
+| district | 100 | No — no real elected data above village (see below) |
+| state | 1,000 | No |
+| zone | 10,000 | No |
+| country | 100,000 | No |
+| continent | 1,000,000 | No — theoretical at this project's current scale |
+| earth | 10,000,000 | No — theoretical at this project's current scale |
+
+The threshold is "at least," i.e. `total_users >= threshold`: a village with exactly 5 real
+members gets its address. Generation hooks into `elemental_core.recompute_location_elements()`
+(`qmail_core.sync_qpunch_addresses`, called in the same transaction, so a dry run creates zero
+addresses the same way it writes zero stats) — inheriting that function's existing staleness (only
+the manual backfill script calls it; nothing in the scheduler does), a tradeoff already accepted
+elsewhere in this project, not something this feature newly introduces.
+
+**The village-only reachability gate is one constant, read by two consumers — not two
+independently-maintained gates.** `qmail_core.QPUNCH_REACHABLE_LEVELS = {"village"}` is checked
+by `resolve_address()` (delivery: a non-village council address resolves to `None`, same as an
+unknown one) and by the board-line renderer (display: a non-village address still *shows*, labeled
+"not yet reachable in this prototype"). An address at every level above village exists and is
+visible the moment it's generated; only village can actually receive mail, because only village
+has real elected data (`village_council` — the same documented gap as
+`reports_core.is_holder_council()` / `announcements_core.is_council_member()`). Having one shared
+constant, rather than a separate check hard-coded into each consumer, means the two can't drift
+apart — if a future change widens reachability, there is exactly one line to touch.
+
+**Delivery**: `resolve_address()` returns a tagged result, not a bare value — `{"kind": "member",
+"user_ids": [id]}` or `{"kind": "council", "level", "location_id", "user_ids": [...]}` — because a
+council message's *storage* differs from a member message's, not just its recipient count. A
+council address's `user_ids` (both current heads, or the admin fallback if the seat is empty, via
+the same precedent `reports_core.is_holder_council()` already established) is informational, used
+for the board line and for who the panel attributes a reply to — the message itself is never
+inserted into `qmail_messages`, because a council message has no fixed recipient set: the heads
+change at every election, and a message addressed to the village must still be visible to whoever
+holds the seat next. See `docs/ADMIN_PANEL.md`'s council-inbox section for where it actually lives
+(`qpunch_queue_messages`, read through the Admin Panel, not through personal Qmail).
+
+**The withdrawn username guard.** An earlier round of this design proposed rejecting any Qmail
+username that started with a reserved level word (`village-`, `district-`, …), to prevent a
+member's own address from being mistaken for a council one. The guard turned out to solve a
+problem that doesn't exist: `resolve_address()` does a single exact-string lookup against the
+stored `full_address` — no parsing, no hyphen-splitting, no inference from an address's shape at
+all. A member's full address and a council address can only ever collide if they are the *exact
+same string*, which `account_id`'s own generated shape (starting with a random prefix and
+initials, never with a literal level word) makes impossible by construction. **Do not re-propose
+this guard** — if a future change makes `resolve_address()` start parsing addresses instead of
+doing an exact lookup, that is the point to reconsider it, not before.
+
+**Compose-outward from a council address is reply-only in this pass.** A council head replying to
+an existing `qpunch_queue_messages` thread is fully built (`docs/ADMIN_PANEL.md`). A
+council-*initiated* new conversation — the council messaging a member who never wrote in first —
+is a genuinely different feature: it needs a way to mark a `qmail_messages` row as sent *as* a
+council rather than as the individual head who pressed send, so the recipient sees "Village
+Council" while the database still honestly records who actually sent it. That needs two new
+nullable columns (tentatively `sent_as_level` / `sent_as_location_id`) that **do not exist in this
+codebase** — deferred to a later pass, not half-built. Composing *to* another village's council
+address already works today with no new code (a council head who has personally activated Qmail
+is just a member composing to a `village-...` address like anyone else).
+
+## 12. The member mailbox: formatted text and attachments
+
+**Stored format: plain text with a narrow whitelist markup — `**bold**`, `_italic_`,
+`[text](url)` — never HTML, on either side.** There is no sanitizer library installed in this
+project (`requirements.txt` has none) and no `|safe` anywhere in any Jinja template — **this is
+deliberate, not an oversight.** The client (`static/js/dashboard.js`'s `qmRenderFormattedText`,
+shared with `static/js/dash_extras.js`) parses a message body and builds `<b>`/`<i>`/`<a>` DOM
+nodes directly via `createElement`/`textContent`, the same way every other piece of user text in
+this codebase has always been rendered (`board.js`'s `el()` helper, used everywhere, sets
+`.textContent`, never `.innerHTML`) — no HTML string is ever constructed from user input, so there
+is nothing to sanitize and no class of injection bug to guard against. A future contributor who
+notices no sanitizer is installed should not conclude it was forgotten; adding one, or adding
+`|safe` anywhere, would be the first time this codebase ever did either, and is worth stopping to
+reconsider rather than reaching for reflexively. A link's `url` is checked against `^https?://`
+before becoming a real `<a href>` — anything else (most importantly a `javascript:` URL) renders
+as its plain-text label, never a clickable element.
+
+**Images are attachment-only, never inline by URL.** This is a privacy decision, not a style one:
+an `<img src="...">` pointing at an external URL leaks the viewer's IP and user-agent to that URL
+the moment the message renders, before anyone clicks anything — unacceptable for a governance
+mailbox where "who read this and when" shouldn't be observable by a third party. An attachment's
+bytes live in this app's own database and are only ever served back through an authenticated,
+access-checked route (`GET /api/qmail/attachments/<id>`, §6) — reading one never pings anyone
+outside Qumanity.
+
+**Attachments are stored as SQLite BLOBs (`qmail_attachments`, `migrations/023_qmail_attachments.py`)
+— a prototype choice, not a permanent architecture.** The database already carries the
+volume-persistence guarantee Railway requires a separate, deliberately-configured path for
+(`docs/INSTALL.md`'s own warning about `QM_DB_PATH` and the ephemeral container filesystem shows
+how easily that gets forgotten) — a BLOB inherits that guarantee for free, with no new env var and
+no new "did I mount this right" failure mode. Migrating to real object storage later, if this ever
+outgrows SQLite, is a separable decision this table doesn't make any harder. Capped at 2 MB per
+attachment, **enforced twice, independently**: `app.config["MAX_CONTENT_LENGTH"]` (3 MB, an
+app-wide first line of defense that rejects an oversized request before `request.files` is even
+populated) and `qmail_core.save_attachment()`'s own explicit `len(data) > MAX_ATTACHMENT_BYTES`
+check against the decoded bytes — a client that lies about size, or whose multipart overhead eats
+into the wider global cap, is still caught by the second, precise check. `kind` + `message_id` is
+a loose, polymorphic reference (`'member'` → `qmail_messages.id`, `'council'` →
+`qpunch_queue_messages.id`) rather than a real foreign key, since it points at two different
+tables depending on `kind` — every query filters on both columns together, never `message_id`
+alone. Attachments are compose-time only; a reply never carries one in this pass.
+
+**A known gap, stated plainly rather than silently left for someone to discover**: whether a
+`<script>` tag actually renders as inert text, and whether a `javascript:`-scheme link actually
+fails to become clickable, are properties of the client-side DOM renderer with no Python-testable
+surface in this project's stack (no Selenium/Playwright/jsdom installed, and this pass deliberately
+didn't add one). Both were verified directly in a live browser once, by hand, this session — not
+by an automated regression test. `tests/test_qmail_attachments.py` covers everything about this
+feature that a backend test *can* verify (size limits, access control, that the server never
+mangles a message body); it does not and cannot re-check the renderer itself. A future change to
+`qmRenderFormattedText` could reintroduce an XSS path and nothing in this test suite would catch
+it.
