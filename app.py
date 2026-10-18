@@ -1132,6 +1132,7 @@ def api_qmail_compose():
         subject = (request.form.get("subject") or "").strip()
         body = (request.form.get("body") or "").strip()
         attachment_file = request.files.get("attachment")
+        draft_id = request.form.get("draft_id", type=int)
     else:
         data = request.get_json(silent=True) or {}
         # Not lowercased: the account_id half of a full_address legitimately contains uppercase
@@ -1143,6 +1144,7 @@ def api_qmail_compose():
         subject = (data.get("subject") or "").strip()
         body = (data.get("body") or "").strip()
         attachment_file = None
+        draft_id = data.get("draft_id")
     if not to_address or not body:
         return jsonify({"error": "A recipient and a message body are required"}), 400
     conn = get_db()
@@ -1186,6 +1188,13 @@ def api_qmail_compose():
             except ValueError as e:
                 conn.rollback()
                 return jsonify({"error": str(e)}), 413
+        if draft_id:
+            # Deleted in the SAME transaction as the message insert, not after conn.commit() --
+            # if anything above this point fails and rolls back, the draft rolls back with it,
+            # so a failed send never loses the draft. Scoped by session user_id (qmail_core.
+            # delete_draft's own WHERE clause) -- a stale or foreign draft_id just deletes
+            # nothing, silently; it never blocks the send.
+            qmail_core.delete_draft(conn, session["user_id"], draft_id)
         conn.commit()
     finally:
         conn.close()
@@ -1268,6 +1277,80 @@ def api_qmail_attachment_serve(attachment_id):
         att["data"], mimetype=att["content_type"],
         headers={"Content-Disposition": f'inline; filename="{att["filename"]}"'},
     )
+
+
+@app.route("/api/qmail/drafts")
+@login_required
+def api_qmail_drafts_list():
+    conn = get_db()
+    try:
+        drafts = qmail_core.drafts_for(conn, session["user_id"])
+    finally:
+        conn.close()
+    return jsonify({"drafts": drafts})
+
+
+def _draft_fields_from_request():
+    """Validates and extracts (to, subject, body) from a draft-save request body, or returns None
+    if the request is malformed or empty. `request.get_json(silent=True)` happily returns a
+    non-dict (a JSON array, a bare string or number) without raising, and calling .get() on that
+    crashes with an unhandled AttributeError -- a real 500, found and fixed here, not
+    hypothetical. A request with nothing in any of the three fields returns None too -- there is
+    nothing a draft row would be saving."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return None
+    to_address = (data.get("to") or "").strip()
+    subject = (data.get("subject") or "").strip()
+    body = (data.get("body") or "").strip()
+    if not (to_address or subject or body):
+        return None
+    return to_address, subject, body
+
+
+@app.route("/api/qmail/drafts", methods=["POST"])
+@login_required
+def api_qmail_drafts_create():
+    fields = _draft_fields_from_request()
+    if fields is None:
+        return jsonify({"error": "A draft needs a valid body with at least one of to/subject/body"}), 400
+    to_address, subject, body = fields
+    conn = get_db()
+    try:
+        draft_id = qmail_core.save_draft(conn, session["user_id"], to_address, subject, body)
+    finally:
+        conn.close()
+    return jsonify({"id": draft_id}), 201
+
+
+@app.route("/api/qmail/drafts/<int:draft_id>", methods=["POST"])
+@login_required
+def api_qmail_drafts_update(draft_id):
+    fields = _draft_fields_from_request()
+    if fields is None:
+        return jsonify({"error": "A draft needs a valid body with at least one of to/subject/body"}), 400
+    to_address, subject, body = fields
+    conn = get_db()
+    try:
+        result = qmail_core.save_draft(conn, session["user_id"], to_address, subject, body, draft_id=draft_id)
+        if result is None:
+            return jsonify({"error": "Draft not found"}), 404
+    finally:
+        conn.close()
+    return jsonify({"id": draft_id})
+
+
+@app.route("/api/qmail/drafts/<int:draft_id>/delete", methods=["POST"])
+@login_required
+def api_qmail_drafts_delete(draft_id):
+    conn = get_db()
+    try:
+        ok = qmail_core.delete_draft(conn, session["user_id"], draft_id)
+        if not ok:
+            return jsonify({"error": "Draft not found"}), 404
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
 
 
 @app.route("/api/qmail/sent")

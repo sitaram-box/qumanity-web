@@ -270,3 +270,49 @@ def get_attachment(conn, attachment_id: int):
     independently confirmed the requester may see the message this attachment belongs to."""
     row = conn.execute("SELECT * FROM qmail_attachments WHERE id = ?", (attachment_id,)).fetchone()
     return dict(row) if row else None
+
+
+# ---- Drafts (2026-10-18) -- unsent compose-form state, autosaved by the /qmail page when the
+# compose overlay closes with any field non-empty. Text only -- no attachment in a draft this
+# pass. No cleanup job for abandoned drafts -- see docs/QMAIL.md's drafts section. ----
+
+def save_draft(conn, user_id: int, to_address: str, subject: str, body: str, draft_id: int | None = None) -> int | None:
+    """Creates a new draft (draft_id=None) or overwrites an existing one the caller owns.
+    Every query here is scoped by user_id directly in the WHERE clause, not a fetch-then-check --
+    the same shape the council queue's own scoping invariants use, so a draft_id belonging to a
+    different user is indistinguishable from one that doesn't exist at all (the route turns a
+    failed update into a 404, never a 403 that would confirm the id is real). Returns the draft's
+    id on success, or None if draft_id was given but doesn't belong to this user."""
+    now = _now()
+    if draft_id is None:
+        cur = conn.execute(
+            "INSERT INTO qmail_drafts (user_id, to_address, subject, body, updated_at) VALUES (?, ?, ?, ?, ?)",
+            (user_id, to_address, subject, body, now),
+        )
+        conn.commit()
+        return cur.lastrowid
+    cur = conn.execute(
+        "UPDATE qmail_drafts SET to_address = ?, subject = ?, body = ?, updated_at = ? "
+        "WHERE id = ? AND user_id = ?",
+        (to_address, subject, body, now, draft_id, user_id),
+    )
+    conn.commit()
+    return draft_id if cur.rowcount else None
+
+
+def drafts_for(conn, user_id: int) -> list[dict]:
+    """Full rows, body included -- same shape as inbox/sent, so opening a draft into the compose
+    overlay never needs a second fetch."""
+    rows = conn.execute(
+        "SELECT * FROM qmail_drafts WHERE user_id = ? ORDER BY updated_at DESC", (user_id,)
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_draft(conn, user_id: int, draft_id: int) -> bool:
+    """True if a row belonging to this user was actually deleted. A delete scoped by user_id that
+    matches nothing (wrong owner, or already gone) is indistinguishable from each other -- same
+    404-not-403 shape as everything else in this module."""
+    cur = conn.execute("DELETE FROM qmail_drafts WHERE id = ? AND user_id = ?", (draft_id, user_id))
+    conn.commit()
+    return cur.rowcount > 0
