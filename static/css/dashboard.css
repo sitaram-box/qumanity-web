@@ -831,6 +831,36 @@
 .fw-suggestion-row p { color: var(--qm-text-dim); font-size: 0.84rem; }
 .fw-suggestion-row .qm-btn { align-self: flex-start; }
 
+/* ---- Family Tree, Phase 2 (2026-10-20): plain SVG rects/text, not foreignObject -- simpler and
+   fully compatible with d3-zoom's transform-based panning. Rendered by family_tree.js. ---- */
+#family-tree-container { margin-top: 8px; }
+.ft-svg-wrap {
+  width: 100%;
+  height: 480px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid var(--qm-border);
+  background: var(--qm-bg);
+}
+#ft-svg { width: 100%; height: 100%; cursor: grab; display: block; }
+#ft-svg:active { cursor: grabbing; }
+
+.ft-link-parent { fill: none; stroke: var(--qm-text-dim); stroke-width: 1.5; opacity: 0.6; }
+.ft-link-spouse { stroke: var(--qm-saffron); stroke-width: 3; stroke-linecap: round; }
+
+.ft-node rect { fill: var(--qm-panel-bg); stroke: var(--qm-border); stroke-width: 1.5; }
+.ft-node text { fill: var(--qm-text); font-size: 12px; font-family: inherit; text-anchor: middle; dominant-baseline: middle; }
+
+.ft-node.is-empty rect { fill: transparent; stroke: var(--qm-input-border); stroke-dasharray: 5 4; }
+.ft-node.is-empty text { fill: var(--qm-text-dim); font-style: italic; }
+
+.ft-node.is-deceased rect { fill: rgba(10, 25, 41, 0.05); stroke: var(--qm-text-dim); opacity: 0.8; }
+.ft-node.is-deceased text { fill: var(--qm-text-dim); }
+
+.ft-node.is-viewer rect { stroke: var(--qm-gold); stroke-width: 2.5; filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.6)); }
+.ft-node.is-viewer text { font-weight: 700; }
+
 /* ---- Election sentiment (Country = Lok Sabha, State = Vidhan Sabha only) ---- */
 .bd-sentiment { margin: 0 14px 10px; padding: 10px 14px; border-radius: 12px; background: rgba(139, 123, 255, 0.08); border: 1px solid rgba(139, 123, 255, 0.3); }
 .bd-sentiment b { display: block; margin-bottom: 8px; font-size: 0.82rem; color: #5b4fc4; }

@@ -73,7 +73,12 @@
     groups.forEach(function (g) {
       var li = el("li", "pt-group-row");
       var label = g.name + " · " + g.kind + " · " + g.members + " member" + (g.members === 1 ? "" : "s") + (g.is_admin ? " · Admin" : "");
-      li.appendChild(el("span", "qm-member-row", label));
+      var btn = el("button", "qm-member-row", label + "  🌳");
+      btn.type = "button";
+      btn.addEventListener("click", function () {
+        if (window.QMFamilyTree) window.QMFamilyTree.showTree(g.id);
+      });
+      li.appendChild(btn);
       groupsListEl.appendChild(li);
     });
   }

@@ -555,8 +555,15 @@
             </div>
 
             <div id="family-activated-summary" hidden>
-              <p class="qm-dash-empty">Your Family Timeline is active. The visual Family Tree is coming soon — for now, here are your groups:</p>
+              <p class="qm-dash-empty">Your Family Timeline is active. Pick a group below to view its tree:</p>
               <ul class="pt-grouplist" id="family-groups-list"></ul>
+            </div>
+
+            <div id="family-tree-container" hidden>
+              <button type="button" class="qm-btn qm-btn-ghost" id="ft-back-btn">← Back to groups</button>
+              <div class="ft-svg-wrap">
+                <svg id="ft-svg"></svg>
+              </div>
             </div>
 
             <div id="family-legacy-section">
@@ -692,6 +699,18 @@
         <div class="dq-modal-box dq-modal-wide">
           <button type="button" class="dq-modal-back" data-close aria-label="Back to Personal timeline" title="Back">← Back</button>
           <section class="bd" id="pt-group-chat"></section>
+        </div>
+      </div>
+      <div class="dq-modal" id="ft-edit-modal" hidden role="dialog" aria-modal="true">
+        <div class="dq-modal-box">
+          <button type="button" class="dq-modal-back" data-close aria-label="Close" title="Close">← Close</button>
+          <h3 id="ft-edit-modal-title">Add Family Member</h3>
+          <label class="qm-field"><span>Name</span><input type="text" id="ft-edit-name-input" maxlength="80" /></label>
+          <button type="button" class="qm-btn qm-btn-primary" id="ft-edit-save-name-btn">Save Name</button>
+          <p class="qm-timeline-note">— or, if they're already on Qumanity —</p>
+          <label class="qm-field"><span>Their Public ID or Account ID</span><input type="text" id="ft-edit-link-input" placeholder="e.g. X7K-RM-GMA2-ZFL-..." /></label>
+          <button type="button" class="qm-btn qm-btn-ghost" id="ft-edit-link-btn">Link This Member</button>
+          <p class="qm-summary-error" id="ft-edit-error" hidden></p>
         </div>
       </div>
     </section>
@@ -889,6 +908,8 @@
   <script src="{{ url_for('static', filename='js/board.js') }}"></script>
   <script src="{{ url_for('static', filename='js/social.js') }}"></script>
   <script src="{{ url_for('static', filename='js/family.js') }}"></script>
+  <script src="https://unpkg.com/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="{{ url_for('static', filename='js/family_tree.js') }}"></script>
   <script src="{{ url_for('static', filename='js/mobile_keyboard.js') }}"></script>
   <script src="{{ url_for('static', filename='js/logo_nav.js') }}"></script>
   {% include '_poems_marquee.html' %}
