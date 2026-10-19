@@ -58,6 +58,35 @@
 .qm-global-map-col { display: flex; flex-direction: column; gap: 12px; }
 .qm-global-dropdown-col { display: flex; flex-direction: column; gap: 16px; }
 
+/* Registration UI redesign (2026-10-19), item 1: Birth Location and Present Location each get
+   their own white card -- the same .qm-private-col pattern Step 1 already uses -- instead of
+   sitting as two stacked, unstyled rows. One rule covers every .qm-dropdown-row on both the
+   Global Account screen (continent/country) and the Public Account screen (zone..village),
+   since neither screen's markup needs to change for this. */
+.qm-dropdown-row {
+  background: #FFFFFF;
+  border: 1px solid #E5E8EC;
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 2px 8px rgba(10, 25, 41, 0.05);
+}
+.qm-panel-view .qm-dropdown-row { margin-top: 4px; }
+
+/* Item 2: progressive disclosure for the location cascade. A level the user can't reach yet
+   (its <select> is still .disabled, via searchable_select.js's .qm-ss.is-disabled) collapses
+   into a flat, dashed "waiting" bar instead of looking like a real, merely-greyed dropdown --
+   so four not-yet-reachable levels don't visually compete with the one the user can act on.
+   register.js's blockedPh() supplies the "Select a state first" wording this sits behind. */
+.qm-dropdown-field:has(.qm-ss.is-disabled) { opacity: 0.6; }
+.qm-dropdown-field:has(.qm-ss.is-disabled) > span { color: var(--qm-text-dim); font-weight: 500; }
+.qm-dropdown-field:has(.qm-ss.is-disabled) .qm-ss-display {
+  background: transparent;
+  border: 1px dashed var(--qm-input-border);
+  box-shadow: none;
+  font-style: italic;
+}
+.qm-dropdown-field:has(.qm-ss.is-disabled) .qm-ss-display::after { opacity: 0; }
+
 .qm-target-toggle[hidden] { display: none; }
 .qm-target-toggle { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .qm-target-pill {
@@ -369,6 +398,48 @@
 }
 .chart-summary p { margin: 6px 0; font-size: 0.9rem; }
 
+/* Item 4: the final reveal card (#review-result) is the one moment in registration where the
+   user receives something they must personally save -- a navy/gold "sealed document" treatment,
+   not the same flat white box every other summary step uses, so the visual weight matches what's
+   actually at stake. Scoped to the id so .chart-summary's own plain rule above (reused elsewhere
+   for the Kundali display) is untouched. */
+#review-result {
+  background: linear-gradient(160deg, var(--qm-navy) 0%, #132a42 100%);
+  border: 1px solid var(--qm-gold);
+  border-radius: 16px;
+  padding: 28px 26px;
+  box-shadow: 0 8px 28px rgba(10, 25, 41, 0.35), 0 0 0 1px rgba(255, 215, 0, 0.12) inset;
+}
+#review-result .qm-panel-subhead {
+  color: #FFFFFF;
+  font-size: 1.05rem;
+  margin: 0 0 14px;
+}
+#review-result p { margin: 6px 0; font-size: 0.9rem; color: rgba(255, 255, 255, 0.78); }
+#review-result p strong { color: #FFFFFF; }
+#review-result .qm-idbox {
+  margin: 10px 0 16px;
+  padding: 20px 18px;
+  border-radius: 12px;
+  text-align: center;
+  background: rgba(255, 215, 0, 0.08);
+  border: 1px dashed rgba(255, 215, 0, 0.55);
+}
+#review-result .qm-idbox code {
+  font: 700 1.9rem "Fraunces", Georgia, serif;
+  letter-spacing: 0.2em;
+  color: var(--qm-gold);
+  text-shadow: 0 0 18px rgba(255, 215, 0, 0.25);
+}
+#review-result .qm-kundali-note { color: rgba(255, 215, 0, 0.85); font-weight: 600; }
+#review-result .qm-btn-ghost {
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  background: rgba(255, 255, 255, 0.06);
+  color: #FFFFFF;
+  backdrop-filter: blur(4px);
+}
+#review-result .qm-btn-ghost:hover { background: rgba(255, 215, 0, 0.18); border-color: var(--qm-gold); }
+
 .qm-review-card {
   background: var(--qm-panel-bg);
   border: 1px solid var(--qm-border);
@@ -498,6 +569,25 @@
 .qm-tob-field { position: relative; }
 .qm-tob-row { display: flex; gap: 6px; align-items: center; }
 .qm-tob-row input[type="text"] { flex: 1; cursor: pointer; letter-spacing: 0.02em; }
+
+/* Item 5: "I don't remember my exact birth time" -- sits directly under the clock picker it
+   governs, not as a separate section. Checking it visibly locks the clock picker (below) so it
+   reads as "this field is off", matching the greyed treatment registration already uses for a
+   genuinely unavailable field. */
+.qm-tob-unknown-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 0.76rem;
+  color: var(--qm-text-dim);
+  cursor: pointer;
+}
+.qm-tob-unknown-check input[type="checkbox"] { accent-color: var(--qm-saffron); width: 14px; height: 14px; cursor: pointer; }
+.qm-tob-field.is-tob-unknown .qm-tob-row { opacity: 0.5; }
+.qm-tob-field.is-tob-unknown .qm-tob-row input[type="text"],
+.qm-tob-field.is-tob-unknown .qm-tob-row button { cursor: not-allowed; }
+.qm-tob-field.is-tob-unknown .qm-tob-unknown-check { color: var(--qm-gold-text); font-weight: 600; }
 .qm-tp-backdrop { position: fixed; inset: 0; z-index: 199; background: rgba(2, 6, 12, 0.6); backdrop-filter: blur(3px); }
 .qm-tp-backdrop[hidden] { display: none; }
 .qm-tp {

@@ -206,6 +206,24 @@
     host: document.getElementById("tob-field"),
   });
 
+  // "I don't remember my exact birth time": locks the clock picker and clears whatever was
+  // picked -- the backend (api_auth_register) discards any tob sent alongside tob_unknown=true
+  // and defaults to noon itself, but clearing it here too means the review screen never shows a
+  // specific time next to an admission that it isn't a real one.
+  var tobUnknownCheckbox = document.getElementById("field-tob-unknown");
+  var tobDisplay = document.getElementById("field-tob-display");
+  var tobBtn = document.getElementById("field-tob-btn");
+  tobUnknownCheckbox.addEventListener("change", function () {
+    var unknown = tobUnknownCheckbox.checked;
+    tobDisplay.disabled = unknown;
+    tobBtn.disabled = unknown;
+    document.getElementById("tob-field").classList.toggle("is-tob-unknown", unknown);
+    if (unknown) {
+      document.getElementById("field-tob").value = "";
+      tobDisplay.value = "";
+    }
+  });
+
   var genderInput = document.getElementById("field-gender");
   var genderButtons = Array.prototype.slice.call(document.querySelectorAll(".qm-gender-btn"));
   genderButtons.forEach(function (btn) {
@@ -300,8 +318,9 @@
       privateFormError.hidden = false;
       return;
     }
-    if (!document.getElementById("field-tob").value) {
-      privateFormError.textContent = "Please select your time of birth on the clock";
+    var tobUnknown = document.getElementById("field-tob-unknown").checked;
+    if (!tobUnknown && !document.getElementById("field-tob").value) {
+      privateFormError.textContent = "Please select your time of birth on the clock, or check “I don’t remember my exact birth time”";
       privateFormError.hidden = false;
       return;
     }
@@ -332,6 +351,7 @@
       gender: document.getElementById("field-gender").value,
       dob: document.getElementById("field-dob").value,
       tob: document.getElementById("field-tob").value,
+      tobUnknown: tobUnknown,
       language: document.getElementById("field-language").value.trim(),
       email: email,
       phone: document.getElementById("field-phone").value.trim(),
@@ -709,6 +729,16 @@
     return "Select a " + (labels[level] || level).toLowerCase() + "…";
   }
 
+  // Progressive disclosure: the placeholder shown while a level is still locked names the
+  // SPECIFIC parent it's waiting on -- "Select a state first" -- using the same per-country tier
+  // label map as ph(), rather than letting every not-yet-reachable level look like an identical
+  // empty dropdown. Paired with register.css's .qm-ss.is-disabled collapse styling.
+  function blockedPh(select, parentLevel) {
+    var target = select.id.split("-")[0];
+    var labels = countryLabels[publicCountryIds[target]] || {};
+    return "Select a " + (labels[parentLevel] || parentLevel).toLowerCase() + " first";
+  }
+
   // Zone/State/District/Tehsil/Village for India; each other country uses its
   // own tier names (Province / District / Local Level / Ward ...) and hides
   // tiers it doesn't have (the single zone, Afghanistan's tehsil).
@@ -737,8 +767,11 @@
     QMSearchableSelect.refresh(select);
   }
   function populateStateDropdown(select, zone) {
+    if (!zone) {
+      select.innerHTML = '<option value="">' + blockedPh(select, "zone") + '</option>';
+      select.disabled = true; QMSearchableSelect.refresh(select); return;
+    }
     select.innerHTML = '<option value="">' + ph(select, "state") + '</option>';
-    if (!zone) { select.disabled = true; QMSearchableSelect.refresh(select); return; }
     zone.states.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (s) {
       var opt = document.createElement("option");
       opt.value = s.id; opt.textContent = s.name;
@@ -748,9 +781,12 @@
     QMSearchableSelect.refresh(select);
   }
   function populateDistrictDropdown(select, stateEntry) {
-    select.innerHTML = '<option value="">' + ph(select, "district") + '</option>';
     var stateData = stateEntry && indiaDistricts.states[stateEntry.id];
-    if (!stateData) { select.disabled = true; QMSearchableSelect.refresh(select); return; }
+    if (!stateData) {
+      select.innerHTML = '<option value="">' + blockedPh(select, "state") + '</option>';
+      select.disabled = true; QMSearchableSelect.refresh(select); return;
+    }
+    select.innerHTML = '<option value="">' + ph(select, "district") + '</option>';
     stateData.districts.forEach(function (d) {
       var opt = document.createElement("option");
       opt.value = d.id; opt.textContent = d.name;
@@ -760,14 +796,17 @@
     QMSearchableSelect.refresh(select);
   }
   function populateTehsilDropdown(select, district) {
-    select.innerHTML = '<option value="">' + ph(select, "tehsil") + '</option>';
-    if (!district) { select.disabled = true; QMSearchableSelect.refresh(select); return; }
+    if (!district) {
+      select.innerHTML = '<option value="">' + blockedPh(select, "district") + '</option>';
+      select.disabled = true; QMSearchableSelect.refresh(select); return;
+    }
     if (!district.tehsils.length) {
       select.innerHTML = '<option value="">No tehsils in this district</option>';
       select.disabled = true;
       QMSearchableSelect.refresh(select);
       return;
     }
+    select.innerHTML = '<option value="">' + ph(select, "tehsil") + '</option>';
     district.tehsils.forEach(function (t) {
       var opt = document.createElement("option");
       opt.value = t.id; opt.textContent = t.name;
@@ -804,10 +843,15 @@
   }
 
   function populateVillageDropdown(select, tehsilId) {
+    if (!tehsilId) {
+      select.innerHTML = '<option value="">' + blockedPh(select, "tehsil") + '</option>';
+      select.disabled = true;
+      QMSearchableSelect.refresh(select);
+      return;
+    }
     select.innerHTML = '<option value="">' + ph(select, "village") + '</option>';
     select.disabled = true;
     QMSearchableSelect.refresh(select);
-    if (!tehsilId) return;
     fetch("/api/india-villages/" + encodeURIComponent(tehsilId))
       .then(function (r) { return r.json(); })
       .then(function (data) {
@@ -837,8 +881,7 @@
     populateStateDropdown(stateSelect, findZoneById(zone.id));
     stateSelect.value = st.id;
     populateDistrictDropdown(districtSelect, st);
-    tehsilSelect.innerHTML = '<option value="">' + ph(tehsilSelect, "tehsil") + '</option>';
-    tehsilSelect.disabled = true;
+    populateTehsilDropdown(tehsilSelect, null);
     populateVillageDropdown(villageSelect, null);
 
     recordPublicSelection(target, { zone: zone, state: st, district: null, tehsil: null, village: null });
@@ -858,8 +901,8 @@
     zoneSelect.addEventListener("change", function () {
       var zone = findZoneById(zoneSelect.value);
       populateStateDropdown(stateSelect, zone);
-      districtSelect.innerHTML = '<option value="">' + ph(districtSelect, "district") + '</option>'; districtSelect.disabled = true;
-      tehsilSelect.innerHTML = '<option value="">' + ph(tehsilSelect, "tehsil") + '</option>'; tehsilSelect.disabled = true;
+      populateDistrictDropdown(districtSelect, null);
+      populateTehsilDropdown(tehsilSelect, null);
       populateVillageDropdown(villageSelect, null);
       recordPublicSelection(target, { zone: zone, state: null, district: null, tehsil: null, village: null });
       if (indiaMapActiveFor(target)) indiaMap.setZoneFilter(zone ? zone.id : null);
@@ -867,7 +910,7 @@
     stateSelect.addEventListener("change", function () {
       var st = findStateById(stateSelect.value);
       populateDistrictDropdown(districtSelect, st);
-      tehsilSelect.innerHTML = '<option value="">' + ph(tehsilSelect, "tehsil") + '</option>'; tehsilSelect.disabled = true;
+      populateTehsilDropdown(tehsilSelect, null);
       populateVillageDropdown(villageSelect, null);
       recordPublicSelection(target, { state: st, district: null, tehsil: null, village: null });
       if (st && indiaMapActiveFor(target)) indiaMap.zoomToState(st.id);
@@ -920,8 +963,8 @@
     applyTierLabels(target, countryId);
     populateZoneDropdown(zoneSelect, countryId);
     populateStateDropdown(stateSelect, null);
-    districtSelect.innerHTML = '<option value="">' + ph(districtSelect, "district") + '</option>'; districtSelect.disabled = true;
-    tehsilSelect.innerHTML = '<option value="">' + ph(tehsilSelect, "tehsil") + '</option>'; tehsilSelect.disabled = true;
+    populateDistrictDropdown(districtSelect, null);
+    populateTehsilDropdown(tehsilSelect, null);
     populateVillageDropdown(villageSelect, null);
 
     // Every country except India has a single zone -- select it for them.
@@ -1081,6 +1124,7 @@
 
     var payload = {
       name: state.form.name, gender: state.form.gender, dob: state.form.dob, tob: state.form.tob,
+      tob_unknown: state.form.tobUnknown,
       language: state.form.language, email: state.form.email, phone: state.form.phone, pin: state.form.pin,
       birth_location: buildLocationPayload(state.birthLocation, state.birthPublic),
       present_location: buildLocationPayload(state.presentLocation, state.presentPublic),
