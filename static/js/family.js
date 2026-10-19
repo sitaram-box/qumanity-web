@@ -64,6 +64,7 @@
       summaryEl.hidden = !status.activated;
       if (status.activated) renderGroupsList(status.groups);
     }).catch(function () {});
+    loadLegacyGroups();
   }
 
   function renderGroupsList(groups) {
@@ -74,6 +75,36 @@
       var label = g.name + " · " + g.kind + " · " + g.members + " member" + (g.members === 1 ? "" : "s") + (g.is_admin ? " · Admin" : "");
       li.appendChild(el("span", "qm-member-row", label));
       groupsListEl.appendChild(li);
+    });
+  }
+
+  // ---- Legacy Family Groups bridge (2026-10-20): the old Paternal/Maternal personal_groups
+  // (category='family') still exist and may still have real chat history -- this panel no longer
+  // renders them in its own list (social.js's LIST_EL dropped 'family'), so without this, anyone
+  // with an active legacy chat would have no way back in. Data is untouched; this just restores
+  // access, reusing social.js's own tested chat modal via window.QMSocial rather than duplicating
+  // it. Revisit once the D3 tree (Phase 2) exists -- merge into the new structure, or keep both. ----
+  var legacyListEl = document.getElementById("family-legacy-list");
+  var legacyEmptyEl = document.getElementById("family-legacy-empty");
+
+  function loadLegacyGroups() {
+    api("/api/people/groups").then(function (d) {
+      renderLegacyGroups((d.family && d.family.owned || []).concat(d.family && d.family.joined || []));
+    }).catch(function () {});
+  }
+
+  function renderLegacyGroups(rows) {
+    legacyListEl.innerHTML = "";
+    legacyEmptyEl.hidden = !!rows.length;
+    rows.forEach(function (g) {
+      var li = el("li", "pt-group-row");
+      var btn = el("button", "qm-member-row", g.name + " · " + g.members + " member" + (g.members === 1 ? "" : "s") + (g.mine ? "" : " · " + g.owner_name + "'s group"));
+      btn.type = "button";
+      btn.addEventListener("click", function () {
+        if (window.QMSocial) window.QMSocial.openGroupChat(g.id, "family");
+      });
+      li.appendChild(btn);
+      legacyListEl.appendChild(li);
     });
   }
 

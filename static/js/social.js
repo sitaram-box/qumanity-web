@@ -244,4 +244,9 @@
   loadChats();
 
   document.querySelector('.qm-dash-tab[data-tab="personal"]').addEventListener("click", function () { loadInbox(); loadChats(); });
+
+  // Exposed for family.js's "Legacy Family Groups" bridge (2026-10-20): the old Paternal/Maternal
+  // personal_groups chats still need a way in, even though this panel no longer renders them in
+  // its own list -- reuses this exact, already-tested chat modal rather than duplicating it.
+  window.QMSocial = { openGroupChat: openGroupChat };
 })();
