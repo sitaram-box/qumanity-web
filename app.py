@@ -11,6 +11,7 @@ data can be swapped for the real backend later without changing the
 frontend contract.
 """
 
+import base64
 import csv
 import datetime as dt
 import functools
@@ -36,6 +37,7 @@ import folder_connector
 import folder_sync
 import founder_core
 import id_generator
+import identity_core
 import kundali_analyser
 import lunar_core
 import logout_review_core
@@ -1993,9 +1995,38 @@ def api_admin_panel_feed():
     return _admin_panel_feed_location(scope["level"], scope["location_id"])
 
 
+_IDENTITY_TICKET_LABELS = {
+    "id_change_a": "Birth location correction",
+    "id_change_b": "Private ID change request",
+    "birth_time_correction": "Birth time correction",
+}
+
+
+def _identity_ticket_rows(conn, level=None, location_id=None):
+    """profile_change_requests rows for the new ticket types only (request_type != 'edit') --
+    a plain self-service edit never appears in this feed, matching the authority boundary
+    api_admin_profile_decide enforces. Global (level=None) gets every pending ticket across all
+    villages; a location scope gets only its own."""
+    _ensure_profile_change_table(conn)
+    if level is None:
+        return conn.execute(
+            """SELECT r.id, r.request_type, r.location_level, r.location_id, r.status, r.created_at, u.name
+               FROM profile_change_requests r JOIN users u ON u.id = r.user_id
+               WHERE r.status = 'pending' AND r.request_type != 'edit' ORDER BY r.created_at DESC"""
+        ).fetchall()
+    return conn.execute(
+        """SELECT r.id, r.request_type, r.location_level, r.location_id, r.status, r.created_at, u.name
+           FROM profile_change_requests r JOIN users u ON u.id = r.user_id
+           WHERE r.status = 'pending' AND r.request_type != 'edit'
+             AND r.location_level = ? AND r.location_id = ? ORDER BY r.created_at DESC""",
+        (level, location_id),
+    ).fetchall()
+
+
 def _admin_panel_feed_global():
     """The Founder/Admin's view: the three existing sources, unchanged, plus every location's
-    council queue (status != 'closed'). Never called for a location-scoped caller."""
+    council queue (status != 'closed') and every pending identity-correction/birth-time ticket
+    (2026-10-19). Never called for a location-scoped caller."""
     conn = get_db()
     try:
         reports = reports_core.list_all_open(conn)
@@ -2005,6 +2036,7 @@ def _admin_panel_feed_global():
             "SELECT id, level, location_id, subject, status, created_at FROM qpunch_queue_messages "
             "WHERE status != 'closed' ORDER BY created_at DESC"
         ).fetchall()
+        identity_rows = _identity_ticket_rows(conn)
     finally:
         conn.close()
 
@@ -2035,12 +2067,21 @@ def _admin_panel_feed_global():
             "location": f"{c['level'].capitalize()} {c['location_id']}",
             "created_at": c["created_at"],
         })
+    for idn in identity_rows:
+        items.append({
+            "source": "identity", "id": idn["id"], "status": idn["status"],
+            "title": _IDENTITY_TICKET_LABELS.get(idn["request_type"], idn["request_type"]),
+            "author": idn["name"],
+            "location": f"{idn['location_level'].capitalize()} {idn['location_id']}" if idn["location_level"] else None,
+            "created_at": idn["created_at"],
+        })
     items.sort(key=lambda it: it["created_at"] or "", reverse=True)
     return jsonify({"items": items})
 
 
 def _admin_panel_feed_location(level, location_id):
-    """A council head's view: ONLY their own location's queue. `level` and `location_id` come
+    """A council head's view: ONLY their own location's queue, plus their own village's pending
+    identity-correction/birth-time tickets (2026-10-19). `level` and `location_id` come
     exclusively from the scope descriptor _is_admin_panel_user() computed server-side -- this
     function takes no request argument of any kind, so there is no client-supplied value that
     could reach this query. No reports, no ID recovery, no member queries -- those keys don't
@@ -2052,6 +2093,7 @@ def _admin_panel_feed_location(level, location_id):
             "WHERE level = ? AND location_id = ? ORDER BY created_at DESC",
             (level, location_id),
         ).fetchall()
+        identity_rows = _identity_ticket_rows(conn, level, location_id)
     finally:
         conn.close()
     items = [{
@@ -2059,6 +2101,13 @@ def _admin_panel_feed_location(level, location_id):
         "title": r["subject"] or "(no subject)", "author": None,
         "location": f"{level.capitalize()} {location_id}", "created_at": r["created_at"],
     } for r in rows]
+    items += [{
+        "source": "identity", "id": idn["id"], "status": idn["status"],
+        "title": _IDENTITY_TICKET_LABELS.get(idn["request_type"], idn["request_type"]),
+        "author": idn["name"], "location": f"{level.capitalize()} {location_id}",
+        "created_at": idn["created_at"],
+    } for idn in identity_rows]
+    items.sort(key=lambda it: it["created_at"] or "", reverse=True)
     return jsonify({"items": items})
 
 
@@ -2556,6 +2605,11 @@ def api_profile_personal_details():
 
 PROFILE_CHANGE_FIELDS = ("name", "email", "phone", "dob", "tob", "birth_location", "present_location")
 FOUNDATIONAL_FIELDS = ("dob", "tob", "birth_location", "present_location")  # only a council can approve these
+# private_id_9digit is deliberately NOT in PROFILE_CHANGE_FIELDS: it never reaches a ticket via
+# the generic self-service edit route (api_dashboard_edit_request). The only place a request can
+# set it is identity_core.submit_request() (id_change_a/id_change_b), always to the literal
+# sentinel "REGENERATE" -- a client-supplied 9-digit value is never trusted or applied.
+PRIVATE_CODE_REGENERATE_SENTINEL = "REGENERATE"
 
 
 def _ensure_profile_change_table(conn):
@@ -2564,6 +2618,7 @@ def _ensure_profile_change_table(conn):
         reason TEXT, status TEXT NOT NULL DEFAULT 'pending', decided_by INTEGER, decided_at TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
     conn.commit()
+    identity_core.ensure_tables(conn)
 
 
 @app.route("/api/dashboard/edit-request", methods=["POST"])
@@ -2605,19 +2660,121 @@ def api_dashboard_edit_request():
     return jsonify({"status": "queued"})
 
 
+@app.route("/api/dashboard/identity-request", methods=["POST"])
+@login_required
+def api_dashboard_identity_request():
+    """Type A (wrong birth location), Type B (compromised 9-digit Private ID), and birth-time
+    correction tickets (2026-10-19) -- routed to the user's birth village council via
+    identity_core.submit_request(), never applied directly. private_id_9digit is always the
+    literal "REGENERATE" sentinel here, never a client-supplied 9-digit value -- the real code is
+    only ever minted at approval time, by identity_core.regenerate_private_code(). Optional proof
+    attachment (base64-encoded in the JSON body) is stored the same way Qmail's attachments are."""
+    data = request.get_json(force=True) or {}
+    request_type = data.get("request_type")
+    if request_type not in identity_core.REQUEST_TYPES:
+        return jsonify({"error": "Unknown request_type"}), 400
+
+    if request_type == "id_change_a":
+        birth_location = data.get("birth_location")
+        if not birth_location or not (birth_location.get("country") or {}).get("id"):
+            return jsonify({"error": "birth_location needs a country"}), 400
+        fields = {"birth_location": birth_location, "private_id_9digit": PRIVATE_CODE_REGENERATE_SENTINEL}
+    elif request_type == "id_change_b":
+        fields = {"private_id_9digit": PRIVATE_CODE_REGENERATE_SENTINEL}
+    else:  # birth_time_correction
+        try:
+            dt.time.fromisoformat(data.get("tob") or "")
+        except ValueError:
+            return jsonify({"error": "Invalid tob"}), 400
+        fields = {"tob": data["tob"]}
+
+    conn = get_db()
+    _ensure_profile_change_table(conn)
+    request_id = identity_core.submit_request(
+        conn, session["user_id"], request_type, fields, data.get("reason", ""),
+        cycle_middleware.get_active_cycle_id(conn),
+    )
+
+    attachment = data.get("attachment")
+    if attachment:
+        try:
+            raw = base64.b64decode(attachment["data"], validate=True)
+            identity_core.save_attachment(
+                conn, request_id, session["user_id"],
+                attachment.get("filename", "proof"), attachment.get("content_type", ""), raw,
+            )
+        except (KeyError, ValueError, qmail_core.AttachmentTypeError) as e:
+            conn.close()
+            return jsonify({"error": str(e)}), 400
+
+    conn.close()
+    return jsonify({"status": "queued", "request_id": request_id})
+
+
+@app.route("/api/admin/profile-changes/<int:request_id>/attachments/<int:attachment_id>")
+@login_required
+def api_admin_profile_attachment_serve(request_id, attachment_id):
+    """Same access shape as api_qmail_attachment_serve: a 404, not a 403, for anyone who isn't
+    either the ticket's own submitter or an Admin/council head whose scope covers it -- never
+    confirming existence to an unauthorized caller."""
+    scope = _is_admin_panel_user()
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT * FROM profile_change_requests WHERE id = ?", (request_id,)).fetchone()
+        if not row:
+            return jsonify({"error": "Attachment not found"}), 404
+        allowed = row["user_id"] == session["user_id"] or (
+            scope and (
+                scope["scope"] == "global"
+                or (row["request_type"] != "edit" and row["location_level"] == scope["level"]
+                    and row["location_id"] == scope["location_id"])
+            )
+        )
+        if not allowed:
+            return jsonify({"error": "Attachment not found"}), 404
+        att = identity_core.get_attachment(conn, attachment_id)
+        if not att or att["request_id"] != request_id:
+            return jsonify({"error": "Attachment not found"}), 404
+    finally:
+        conn.close()
+    res = send_file(
+        io.BytesIO(att["data"]), mimetype=att["content_type"],
+        as_attachment=True, download_name=att["filename"] or "attachment",
+    )
+    res.headers["X-Content-Type-Options"] = "nosniff"
+    return res
+
+
 @app.route("/api/admin/profile-changes")
 @login_required
 def api_admin_profile_changes():
-    if not _is_admin():
+    """Global Admin sees every pending ticket. A village council head (location scope) sees only
+    their own village's identity-correction/birth-time tickets (request_type != 'edit') -- never
+    a plain self-service 'edit' ticket, which can touch present_location/account_id and stays
+    outside a birth-village council's authority, matching the boundary api_admin_profile_decide
+    enforces below."""
+    scope = _is_admin_panel_user()
+    if not scope:
         return jsonify({"error": "Admin only"}), 403
     conn = get_db()
     _ensure_profile_change_table(conn)
-    rows = [dict(r) for r in conn.execute(
-        """SELECT r.id, r.fields_json, r.reason, r.created_at, u.name FROM profile_change_requests r
-           JOIN users u ON u.id = r.user_id WHERE r.status = 'pending' ORDER BY r.id""")]
-    conn.close()
+    if scope["scope"] == "global":
+        rows = [dict(r) for r in conn.execute(
+            """SELECT r.id, r.fields_json, r.reason, r.request_type, r.location_level, r.location_id,
+                      r.created_at, u.name FROM profile_change_requests r
+               JOIN users u ON u.id = r.user_id WHERE r.status = 'pending' ORDER BY r.id""")]
+    else:
+        rows = [dict(r) for r in conn.execute(
+            """SELECT r.id, r.fields_json, r.reason, r.request_type, r.location_level, r.location_id,
+                      r.created_at, u.name FROM profile_change_requests r
+               JOIN users u ON u.id = r.user_id
+               WHERE r.status = 'pending' AND r.request_type != 'edit'
+                 AND r.location_level = ? AND r.location_id = ? ORDER BY r.id""",
+            (scope["level"], scope["location_id"]))]
     for r in rows:
         r["fields"] = json.loads(r.pop("fields_json"))
+        r["attachments"] = identity_core.attachments_for(conn, r["id"])
+    conn.close()
     return jsonify({"requests": rows})
 
 
@@ -2666,14 +2823,28 @@ def _recompute_profile(conn, user_id):
 def api_admin_profile_decide(request_id):
     """Approving applies simple fields (name/email/phone/dob/tob) and location fields directly, then
     -- if dob/tob/birth_location changed -- automatically recomputes the zodiac, Kundali and elemental
-    balance (age category is derived live from dob, so it updates itself)."""
-    if not _is_admin():
+    balance (age category is derived live from dob, so it updates itself). A plain self-service
+    'edit' ticket is global-Admin-only, same as always; a village council head may additionally
+    decide their own village's id_change_a/id_change_b/birth_time_correction tickets (2026-10-19) --
+    never another village's, and never a plain 'edit' ticket, which can touch present_location/
+    account_id outside a birth-village council's authority. A scope mismatch returns 404, not 403,
+    matching every other council-scoped route (see _qpunch_message_in_scope callers) -- it never
+    confirms to an unauthorized caller that the ticket exists."""
+    scope = _is_admin_panel_user()
+    if not scope:
         return jsonify({"error": "Admin only"}), 403
     approve = bool((request.get_json(silent=True) or {}).get("approve"))
     conn = get_db()
     _ensure_profile_change_table(conn)
     row = conn.execute("SELECT * FROM profile_change_requests WHERE id = ? AND status = 'pending'", (request_id,)).fetchone()
     if not row:
+        conn.close()
+        return jsonify({"error": "Request not found"}), 404
+    if scope["scope"] != "global" and (
+        row["request_type"] == "edit"
+        or row["location_level"] != scope["level"]
+        or row["location_id"] != scope["location_id"]
+    ):
         conn.close()
         return jsonify({"error": "Request not found"}), 404
     conn.execute("UPDATE profile_change_requests SET status = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -2685,12 +2856,21 @@ def api_admin_profile_decide(request_id):
         old_zodiac = conn.execute("SELECT sun_element FROM user_zodiac WHERE user_id = ?", (row["user_id"],)).fetchone()
 
         new_present_location = fields.pop("present_location", None)
+        # private_id_9digit never goes through the generic UPDATE below -- it is always the literal
+        # "REGENERATE" sentinel (identity_core.submit_request is the only writer), never a
+        # client-chosen value, and the real 9-digit code is minted fresh, not taken from the ticket.
+        regenerate_private_code = fields.pop("private_id_9digit", None) == PRIVATE_CODE_REGENERATE_SENTINEL
 
         sets, args = [], []
         for k, v in fields.items():
             col = {"birth_location": "birth_location_json"}.get(k, k)
             sets.append(f"{col} = ?")
             args.append(json.dumps(v) if k == "birth_location" else v)
+        if "tob" in fields:
+            # An approved tob now came from the user, not the registration-time noon placeholder --
+            # clears the flag set at registration (see api_auth_register's birth_time_known handling).
+            sets.append("birth_time_known = ?")
+            args.append(1)
         if sets:
             args.append(row["user_id"])
             conn.execute(f"UPDATE users SET {', '.join(sets)} WHERE id = ?", args)
@@ -2699,6 +2879,13 @@ def api_admin_profile_decide(request_id):
             # Same Account ID regeneration Path A already uses (social_core.decide_account_request)
             # -- present_location must never change without account_id changing with it.
             social_core.regenerate_account_id(conn, row["user_id"], new_present_location)
+
+        if regenerate_private_code:
+            # private_id_9digit is pure-random and independent of birth_location/present_location
+            # (id_generator.generate_private_code); account_id -- and therefore the Qmail address,
+            # which embeds account_id, not private_id_9digit (qmail_core.build_full_address) -- is
+            # untouched by this, so no Qmail resync happens here. See identity_core.py's docstring.
+            identity_core.regenerate_private_code(conn, row["user_id"])
 
         if any(k in fields for k in FOUNDATIONAL_FIELDS if k != "present_location"):
             result = _recompute_profile(conn, row["user_id"])
@@ -3258,6 +3445,14 @@ def api_auth_register():
     session, and update that location's elemental counts. Email and phone
     are optional (format-checked only if given); password is required."""
     data = request.get_json(force=True) or {}
+    # "I don't remember my exact birth time" (2026-10-19): noon is a placeholder to let
+    # Kundali/zodiac build at all, never a real claim about this user's birth time -- whatever
+    # tob the client sent is discarded, not merely defaulted, so a future client bug can't smuggle
+    # a real-looking time past this flag. users.birth_time_known lets Admin tell the two apart;
+    # identity_core.py's birth_time_correction ticket is the only way to supply the real time later.
+    birth_time_known = not bool(data.get("tob_unknown"))
+    if not birth_time_known:
+        data["tob"] = "12:00:00"
     required = ["name", "gender", "dob", "tob", "pin", "birth_location", "present_location"]
     missing = [f for f in required if not data.get(f)]
     if missing:
@@ -3318,6 +3513,7 @@ def api_auth_register():
     kundali["ephemeris"]["location_precision"] = precision
 
     conn = get_db()
+    _ensure_profile_change_table(conn)  # users.birth_time_known must exist before the INSERT below
     private_id = id_generator.generate_private_id(
         conn, data["name"], data["gender"], dob, tob, tropical["element"], birth_location
     )
@@ -3328,11 +3524,12 @@ def api_auth_register():
     cur = conn.execute(
         """INSERT INTO users (name, gender, dob, tob, language, birth_location_json,
                                present_location_json, private_id, account_id,
-                               email, phone, pin_hash, private_id_9digit)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                               email, phone, pin_hash, private_id_9digit, birth_time_known)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (data["name"], data["gender"], data["dob"], data["tob"], data.get("language"),
          json.dumps(birth_location), json.dumps(present_location), private_id, account_id,
-         email or None, phone or None, generate_password_hash(str(data["pin"])), private_code),
+         email or None, phone or None, generate_password_hash(str(data["pin"])), private_code,
+         int(birth_time_known)),
     )
     user_id = cur.lastrowid
     if helper_user_id:
