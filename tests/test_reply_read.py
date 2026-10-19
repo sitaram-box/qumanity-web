@@ -23,7 +23,7 @@ import sys
 import tempfile
 import time
 
-ROOT = "/Users/macmudgal/Desktop/Qumanity_DPG"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 _fd, _DB_PATH = tempfile.mkstemp(suffix=".db")

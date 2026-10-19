@@ -37,7 +37,7 @@ Until the deed is signed, Rohit Mudgal is the sole copyright holder, and the pub
 
 - **Source code:** the Flask website and API (qumanity-web) and the React Native / Expo phone app (qumanity-app), both licensed to the public under AGPL-3.0 (see Document 02).
 - **Documentation:** the design and build notes in each repository's `docs/` folder, the White Paper v4.0, the Technical Architecture v4.0 and this evidence pack (`docs/dpg_evidence/` in qumanity-web).
-- **Brand:** the name "Qumanity" and the logo files in `static/images/` (`logo-qumanity*.svg`, `logo-qumanity.png`).
+- **Brand:** the name "Qumanity" and the logo files in `static/images/` (`logo-qumanity*.svg`) and `static/images/_archive/` (`logo-qumanity.png`, an earlier raster version kept for reference, superseded by the SVG set).
 - **Content and compiled data:** interface translations in 12 languages (`static/locales/`), lunar month names (`translations/lunar_months.json`) and the location hierarchy compiled for the Zone-to-Village structure.
 
 Third-party components keep their own licences and owners (Document 02, section 2.6). The marquee poem translations are not owned by Qumanity (section 3.4).

@@ -32,10 +32,11 @@ Run with: python3 tests/test_qmail_format_extraction.py
 """
 from __future__ import annotations
 
+import os
 import re
 import sys
 
-ROOT = "/Users/macmudgal/Desktop/Qumanity_DPG"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 FAILS = []
 
