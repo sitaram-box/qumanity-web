@@ -544,9 +544,98 @@
           </div>
 
           <div class="pt-panel" id="pt-family-panel" hidden>
-            <p class="qm-dash-empty">Paternal and Maternal are set up for you — add more, or add members to any of them.</p>
-            <ul class="pt-grouplist" id="pt-family-list"></ul>
-            <form class="pt-new-group-inline" data-category="family"><input type="text" maxlength="60" placeholder="New family group, e.g. Cousins" required /><button type="submit" class="qm-btn qm-btn-ghost">+ New</button></form>
+
+            <div id="family-activation-gate">
+              <div class="qm-intro-card">
+                <p>Your Family Tree is the foundation of your Personal Timeline. Activate it once by
+                   telling us about your parents (and, if married, your spouse and children) — we'll
+                   check whether a Family Group already exists for them before creating a new one.</p>
+              </div>
+              <button type="button" class="qm-btn qm-btn-primary" id="family-activate-start-btn">🌳 Activate Family Timeline</button>
+            </div>
+
+            <div id="family-activated-summary" hidden>
+              <p class="qm-dash-empty">Your Family Timeline is active. The visual Family Tree is coming soon — for now, here are your groups:</p>
+              <ul class="pt-grouplist" id="family-groups-list"></ul>
+            </div>
+
+            <div id="family-wizard" hidden>
+              <div class="qm-steps" id="fw-steps">
+                <div class="qm-step is-active" data-fstep="parents"><span class="qm-step-index">1</span> Parents</div>
+                <div class="qm-step" data-fstep="marital"><span class="qm-step-index">2</span> Marital Status</div>
+                <div class="qm-step" data-fstep="children"><span class="qm-step-index">3</span> Children</div>
+                <div class="qm-step" data-fstep="discover"><span class="qm-step-index">4</span> Discover or Create</div>
+                <div class="qm-step" data-fstep="review"><span class="qm-step-index">5</span> Review</div>
+              </div>
+
+              <section class="qm-screen is-active" id="fw-screen-parents">
+                <div class="qm-private-columns fw-parents-cols">
+                  <div class="qm-private-col">
+                    <h3 class="qm-form-section-title">👨 Father</h3>
+                    <label class="qm-field"><span>Father's Name</span><input type="text" id="fw-father-name" maxlength="80" required /></label>
+                    <label class="fw-deceased-check"><input type="checkbox" id="fw-father-deceased" /><span>No longer living</span></label>
+                  </div>
+                  <div class="qm-private-col">
+                    <h3 class="qm-form-section-title">👩 Mother</h3>
+                    <label class="qm-field"><span>Mother's Name</span><input type="text" id="fw-mother-name" maxlength="80" required /></label>
+                    <label class="fw-deceased-check"><input type="checkbox" id="fw-mother-deceased" /><span>No longer living</span></label>
+                  </div>
+                </div>
+                <p class="qm-summary-error" id="fw-parents-error" hidden></p>
+                <div class="qm-summary-actions"><span></span><button type="button" class="qm-btn qm-btn-primary" id="fw-parents-next-btn">Next →</button></div>
+              </section>
+
+              <section class="qm-screen" id="fw-screen-marital">
+                <p class="qm-dash-empty" id="fw-single-note" hidden>You're Single — nothing needed here.</p>
+                <div class="qm-private-col" id="fw-spouse-block" hidden>
+                  <h3 class="qm-form-section-title">💍 Spouse</h3>
+                  <label class="qm-field"><span>Spouse's Name</span><input type="text" id="fw-spouse-name" maxlength="80" /></label>
+                  <label class="fw-deceased-check"><input type="checkbox" id="fw-spouse-onapp" /><span>Is your spouse already on Qumanity?</span></label>
+                  <div id="fw-spouse-search-row" hidden>
+                    <label class="qm-field"><span>Spouse's Public ID or 12-digit search code</span>
+                      <input type="text" id="fw-spouse-search-input" placeholder="e.g. 123456789012 or X7K-RM-..." />
+                    </label>
+                    <button type="button" class="qm-btn qm-btn-ghost" id="fw-spouse-search-btn">Find</button>
+                    <div id="fw-spouse-search-result"></div>
+                  </div>
+                </div>
+                <p class="qm-summary-error" id="fw-marital-error" hidden></p>
+                <div class="qm-summary-actions">
+                  <button type="button" class="qm-btn qm-btn-ghost" id="fw-marital-back-btn">← Back</button>
+                  <button type="button" class="qm-btn qm-btn-primary" id="fw-marital-next-btn">Next →</button>
+                </div>
+              </section>
+
+              <section class="qm-screen" id="fw-screen-children">
+                <p class="qm-dash-empty">Add a name for each child (optional — you can skip this and add them later).</p>
+                <div id="fw-children-rows"></div>
+                <button type="button" class="qm-btn qm-btn-ghost" id="fw-add-child-btn">+ Add another child</button>
+                <div class="qm-summary-actions">
+                  <button type="button" class="qm-btn qm-btn-ghost" id="fw-children-back-btn">← Back</button>
+                  <button type="button" class="qm-btn qm-btn-primary" id="fw-children-next-btn">Next →</button>
+                </div>
+              </section>
+
+              <section class="qm-screen" id="fw-screen-discover">
+                <p class="qm-dash-empty">We checked each name against existing Family Groups — review each one below.</p>
+                <div id="fw-discover-list"></div>
+                <div class="qm-summary-actions">
+                  <button type="button" class="qm-btn qm-btn-ghost" id="fw-discover-back-btn">← Back</button>
+                  <button type="button" class="qm-btn qm-btn-primary" id="fw-discover-next-btn">Next →</button>
+                </div>
+              </section>
+
+              <section class="qm-screen" id="fw-screen-review">
+                <dl class="qm-summary-list" id="fw-review-list"></dl>
+                <p class="qm-summary-error" id="fw-review-error" hidden></p>
+                <p class="qm-timeline-note" id="fw-review-partial-note" hidden></p>
+                <div class="qm-summary-actions">
+                  <button type="button" class="qm-btn qm-btn-ghost" id="fw-review-back-btn">← Back</button>
+                  <button type="button" class="qm-btn qm-btn-primary" id="fw-review-activate-btn">✅ Activate</button>
+                </div>
+              </section>
+            </div>
+
           </div>
 
           <div class="pt-panel" id="pt-friends-panel" hidden>
@@ -792,6 +881,7 @@
   <script src="{{ url_for('static', filename='js/tutorial.js') }}"></script>
   <script src="{{ url_for('static', filename='js/board.js') }}"></script>
   <script src="{{ url_for('static', filename='js/social.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/family.js') }}"></script>
   <script src="{{ url_for('static', filename='js/mobile_keyboard.js') }}"></script>
   <script src="{{ url_for('static', filename='js/logo_nav.js') }}"></script>
   {% include '_poems_marquee.html' %}

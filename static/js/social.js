@@ -83,8 +83,10 @@
     showTab(b.getAttribute("data-ptab"));
   });
 
-  // ---- group lists (Family / Friends / Business / Custom) ----
-  var LIST_EL = { family: document.getElementById("pt-family-list"), friends: document.getElementById("pt-friends-list"),
+  // ---- group lists (Friends / Business / Custom -- Family moved to family.js's Activation
+  // wizard, 2026-10-20: #pt-family-list no longer exists, the old Paternal/Maternal personal_groups
+  // data is untouched but this panel no longer renders it) ----
+  var LIST_EL = { friends: document.getElementById("pt-friends-list"),
                   business: document.getElementById("pt-business-list"), custom: document.getElementById("pt-custom-list") };
   var groupsCache = null;
 

@@ -499,6 +499,21 @@ def _resolve_slot(conn, user_id: int, entry: dict, fresh_node_ids: list, results
         if target_user_id:
             notify_to_activate(conn, user_id, target_user_id)
             results["notified"].append({"label": label, "name": name, "user_id": target_user_id})
+            # The exact-Public-ID path (not a fuzzy name guess -- the caller already verified
+            # exactly who this is via social_core.find_person()) should link to that person's OWN
+            # real self-node if they've already activated, never a redundant same-named
+            # placeholder disconnected from their real identity. This is NOT an auto-merge risk --
+            # it's a plain relationship edge between two already-distinct real nodes, same as the
+            # 'join' action above; it never sets claimed_user_id on anyone's behalf. If they
+            # haven't activated yet, there IS no self-node to link to -- falls through to creating
+            # a normal empty placeholder, same as before (a residual duplicate-node case, same
+            # deferred Phase 4 concern as everywhere else in this module).
+            existing_self_node = conn.execute(
+                "SELECT id FROM family_nodes WHERE claimed_user_id = ?", (target_user_id,)
+            ).fetchone()
+            if existing_self_node:
+                results["created_node_ids"].append({"label": label, "node_id": existing_self_node["id"], "name": name, "linked_existing": True})
+                return existing_self_node["id"]
         node_id = create_node(conn, user_id, name)
         fresh_node_ids.append(node_id)
         results["created_node_ids"].append({"label": label, "node_id": node_id, "name": name})

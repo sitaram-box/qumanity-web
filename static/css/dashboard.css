@@ -789,6 +789,48 @@
 .pt-new-group-inline { display: flex; gap: 8px; margin-top: 12px; }
 .pt-new-group-inline input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--qm-input-border); background: var(--qm-panel-bg); color: var(--qm-text); font: inherit; }
 
+/* ---- Family Timeline Activation Wizard (2026-10-20) -- reuses register.css's .qm-steps/
+   .qm-screen/.qm-private-col/.qm-field/.qm-summary-* verbatim (already loaded on this page);
+   only the pieces specific to this wizard (deceased checkboxes, dynamic child rows, the
+   Discover-step suggestion cards) are new. ---- */
+#family-wizard { margin-top: 8px; }
+.fw-parents-cols { grid-template-columns: 1fr 1fr; }
+@media (max-width: 700px) { .fw-parents-cols { grid-template-columns: 1fr; } }
+
+.fw-deceased-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: var(--qm-text-dim);
+  cursor: pointer;
+}
+.fw-deceased-check input[type="checkbox"] { accent-color: var(--qm-saffron); width: 14px; height: 14px; cursor: pointer; }
+
+.fw-child-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+.fw-child-row input {
+  flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px;
+  border: 1px solid var(--qm-input-border); background: var(--qm-input-bg); color: var(--qm-text); font: inherit;
+}
+.fw-child-remove { width: 34px; height: 34px; padding: 0; flex-shrink: 0; }
+
+.fw-discover-card { margin-bottom: 14px; }
+.fw-discover-card .qm-form-section-title { margin-bottom: 8px; }
+.fw-discover-body p { margin: 0 0 8px; font-size: 0.86rem; color: var(--qm-text); }
+.fw-suggestion-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  background: var(--qm-input-bg);
+  border: 1px solid var(--qm-border);
+}
+.fw-suggestion-row p { color: var(--qm-text-dim); font-size: 0.84rem; }
+.fw-suggestion-row .qm-btn { align-self: flex-start; }
+
 /* ---- Election sentiment (Country = Lok Sabha, State = Vidhan Sabha only) ---- */
 .bd-sentiment { margin: 0 14px 10px; padding: 10px 14px; border-radius: 12px; background: rgba(139, 123, 255, 0.08); border: 1px solid rgba(139, 123, 255, 0.3); }
 .bd-sentiment b { display: block; margin-bottom: 8px; font-size: 0.82rem; color: #5b4fc4; }

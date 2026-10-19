@@ -262,6 +262,41 @@ check("erin (a child, no spouse edge) is NOT admin after joining the lineage gro
 
 print()
 print("=" * 70)
+print("7. Exact-Public-ID spouse notify links to the REAL self-node, never a duplicate placeholder")
+print("=" * 70)
+# A real bug caught by live browser testing (2026-10-20): the 'notify' action used to always
+# create a brand-new empty placeholder node, even when the caller supplied an EXACT, already-
+# verified user_id (via social_core.find_person()) whose own self-node already exists -- leaving
+# the spouse edge pointing at a disconnected, same-named duplicate instead of the real person.
+
+logout()
+finn = register("Finn Noble")
+login(finn["private_code"])
+res = client.post("/api/family/activate", json={"father": {"name": "Finn Father", "action": "create"}, "mother": {"name": "Finn Mother", "action": "create"}})
+finn_self_node_id = res.get_json()["self_node_id"]
+
+logout()
+grace = register("Grace Noble")
+set_married(grace["private_code"])
+login(grace["private_code"])
+client.post("/api/family/activate", json={"father": {"name": "Grace Father", "action": "create"}, "mother": {"name": "Grace Mother", "action": "create"}})
+res = client.post("/api/family/marry", json={"spouse": {"name": "Finn Noble", "action": "notify", "user_id": finn["user_id"]}})
+check("grace's marry (notify, exact id) succeeds", res.status_code == 201)
+grace_marry_body = res.get_json()
+check("no NEW node was created for the exact-id spouse (linked_existing)",
+      any(n.get("linked_existing") and n["node_id"] == finn_self_node_id for n in grace_marry_body["created_node_ids"]))
+
+spouse_link_row = raw(
+    "SELECT node_lo_id, node_hi_id FROM family_spouse_links WHERE node_lo_id = ? OR node_hi_id = ? ORDER BY id DESC LIMIT 1",
+    (finn_self_node_id, finn_self_node_id),
+)
+check("the spouse_link points at finn's REAL claimed self-node, not a duplicate",
+      spouse_link_row is not None and finn_self_node_id in (spouse_link_row["node_lo_id"], spouse_link_row["node_hi_id"]))
+duplicate_count = raw("SELECT COUNT(*) AS n FROM family_nodes WHERE display_name LIKE 'Finn Noble%'")
+check("exactly one 'Finn Noble*' node exists in the whole DB (no duplicate placeholder)", duplicate_count["n"] == 1)
+
+print()
+print("=" * 70)
 if FAILS:
     print(f"{len(FAILS)} check(s) FAILED:")
     for f in FAILS:
