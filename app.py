@@ -1852,6 +1852,32 @@ def api_family_node_mark_deceased(node_id):
     return jsonify({"status": "ok"})
 
 
+@app.route("/api/family/node/<int:node_id>/name", methods=["POST"])
+@login_required
+@_board_error
+def api_family_node_rename(node_id):
+    data = request.get_json(silent=True) or {}
+    conn = _family(get_db())
+    try:
+        family_core.rename_node(conn, session["user_id"], node_id, data.get("name"))
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/family/node/<int:node_id>/link", methods=["POST"])
+@login_required
+@_board_error
+def api_family_node_link(node_id):
+    data = request.get_json(silent=True) or {}
+    conn = _family(get_db())
+    try:
+        family_core.link_node_to_user(conn, session["user_id"], node_id, data.get("user_id"))
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
 @app.route("/api/family-groups/<int:group_id>/tree")
 @login_required
 def api_family_group_tree(group_id):

@@ -297,6 +297,50 @@ check("exactly one 'Finn Noble*' node exists in the whole DB (no duplicate place
 
 print()
 print("=" * 70)
+print("8. Node editing: rename an empty node, link it to a real user (Pass 1 routes)")
+print("=" * 70)
+
+# Reuse greg's lineage group (father node "Deceased Patel") from section 2.
+father_node = next(n for n in greg_tree["nodes"] if n["name"] == "Deceased Patel")
+
+logout()
+login(greg["private_code"])
+res = client.post(f"/api/family/node/{father_node['id']}/name", json={"name": "Deceased Patel Sr."})
+check("admin can rename an empty node", res.status_code == 200)
+greg_tree2 = client.get(f"/api/family-groups/{greg_body['lineage_group_id']}/tree").get_json()
+check("the rename is reflected in the tree", any(n["name"] == "Deceased Patel Sr." for n in greg_tree2["nodes"]))
+
+res = client.post(f"/api/family/node/{father_node['id']}/name", json={"name": ""})
+check("renaming to an empty string is rejected (400)", res.status_code == 400)
+
+logout()
+login(erin["private_code"])  # erin is a plain member (not admin) of greg's group, from section 6
+res = client.post(f"/api/family/node/{father_node['id']}/name", json={"name": "Hijacked"})
+check("a non-admin cannot rename a node (403)", res.status_code == 403)
+
+hank = register("Hank Patel")  # a real, unclaimed-elsewhere user, to link into greg's mother node
+mother_node = next(n for n in greg_tree["nodes"] if n["name"] == "Living Mother Patel")
+logout()
+login(greg["private_code"])
+res = client.post(f"/api/family/node/{mother_node['id']}/link", json={"user_id": hank["account_id"]})
+check("admin can link an empty node by Account ID", res.status_code == 200)
+mother_row = raw("SELECT claimed_user_id, status FROM family_nodes WHERE id = ?", (mother_node["id"],))
+check("the node is now claimed by hank", mother_row["claimed_user_id"] == hank["user_id"] and mother_row["status"] == "claimed")
+
+res = client.post(f"/api/family/node/{mother_node['id']}/link", json={"user_id": hank["account_id"]})
+check("re-linking an already-claimed node is rejected (400)", res.status_code == 400)
+
+jill = register("Jill Patel")
+logout()
+login(greg["private_code"])  # registering jill switched the session to jill -- switch back to the admin
+res = client.post(f"/api/family/node/{father_node['id']}/link", json={"user_id": hank["account_id"]})
+check("linking a user who's already claimed elsewhere is rejected (400)", res.status_code == 400)
+
+res = client.post(f"/api/family/node/{father_node['id']}/link", json={"user_id": 999999})
+check("linking a nonexistent user id is rejected (400)", res.status_code == 400)
+
+print()
+print("=" * 70)
 if FAILS:
     print(f"{len(FAILS)} check(s) FAILED:")
     for f in FAILS:

@@ -205,20 +205,102 @@ def create_node(conn, created_by_user_id: int, display_name: str, gender=None, d
     return cur.lastrowid
 
 
+MAX_NODE_NAME_CHARS = 80  # matches the registration/activation forms' own name-field limit
+
+
+def _is_admin_of_node_group(conn, user_id: int, node_id: int) -> bool:
+    """True if user_id is an approved admin of AT LEAST ONE group this node belongs to --
+    the shared authorization check mark_deceased()/rename_node()/link_node_to_user() all need.
+    A node can be in more than one group; any one of them being admin-accessible is enough."""
+    return bool(conn.execute(
+        """SELECT 1 FROM family_group_nodes fgn JOIN family_group_members fgm ON fgm.group_id = fgn.group_id
+           WHERE fgn.node_id = ? AND fgm.user_id = ? AND fgm.is_admin = 1 AND fgm.status = 'approved'""",
+        (node_id, user_id),
+    ).fetchone())
+
+
 def mark_deceased(conn, user_id: int, node_id: int, is_deceased: bool = True) -> None:
     """Toggles a node's deceased flag. Any ADMIN of a group this node belongs to may do this --
     purely a tree-display attribute, never touching the real users row or that account's login
     capability even for a claimed node (a real, separate, far more sensitive admin action)."""
     if not conn.execute("SELECT 1 FROM family_nodes WHERE id = ?", (node_id,)).fetchone():
         raise LookupError("Node not found")
-    allowed = conn.execute(
-        """SELECT 1 FROM family_group_nodes fgn JOIN family_group_members fgm ON fgm.group_id = fgn.group_id
-           WHERE fgn.node_id = ? AND fgm.user_id = ? AND fgm.is_admin = 1 AND fgm.status = 'approved'""",
-        (node_id, user_id),
-    ).fetchone()
-    if not allowed:
+    if not _is_admin_of_node_group(conn, user_id, node_id):
         raise PermissionError("Only an admin of a group this person belongs to can change this")
     conn.execute("UPDATE family_nodes SET is_deceased = ? WHERE id = ?", (1 if is_deceased else 0, node_id))
+    conn.commit()
+
+
+def rename_node(conn, user_id: int, node_id: int, new_name) -> None:
+    """Renames an EMPTY node's display name -- never a claimed one. A claimed node's visible name
+    always comes live from users.name (see _node_display_name()), so renaming the snapshot column
+    here would silently do nothing visible -- refusing outright is less confusing than a no-op.
+    Any admin of a group this node belongs to may do this."""
+    row = conn.execute("SELECT claimed_user_id FROM family_nodes WHERE id = ?", (node_id,)).fetchone()
+    if not row:
+        raise LookupError("Node not found")
+    if row["claimed_user_id"]:
+        raise ValueError("This person has a real Qumanity account -- their name can only be changed on their own profile")
+    if not _is_admin_of_node_group(conn, user_id, node_id):
+        raise PermissionError("Only an admin of a group this person belongs to can change this")
+    new_name = (new_name or "").strip()
+    if not new_name:
+        raise ValueError("A name is required")
+    if len(new_name) > MAX_NODE_NAME_CHARS:
+        raise ValueError(f"Name is too long (max {MAX_NODE_NAME_CHARS} characters)")
+    conn.execute("UPDATE family_nodes SET display_name = ? WHERE id = ?", (new_name, node_id))
+    conn.commit()
+
+
+def _resolve_target_user_id(conn, raw) -> int:
+    """Accepts either a numeric users.id or an Account ID string (e.g. 'X7K-RM-GMA2-ZFL-...').
+    Raises ValueError if neither resolves to a real user -- never leaks which case failed, same
+    as every other identity lookup in this project."""
+    if raw is None or raw == "":
+        raise ValueError("A user or Account ID is required")
+    candidate = None
+    if isinstance(raw, int):
+        candidate = raw
+    else:
+        raw = str(raw).strip()
+        if raw.isdigit():
+            candidate = int(raw)
+        else:
+            row = conn.execute("SELECT id FROM users WHERE account_id = ?", (raw.upper(),)).fetchone()
+            if not row:
+                raise ValueError("No member found with that Account ID")
+            candidate = row["id"]
+    if not conn.execute("SELECT 1 FROM users WHERE id = ?", (candidate,)).fetchone():
+        raise ValueError("No member found with that ID")
+    return candidate
+
+
+def link_node_to_user(conn, user_id: int, node_id: int, target) -> None:
+    """Links an EMPTY node to a real user -- an admin unilaterally identifying who this person
+    really is. Deliberately does NOT touch family_group_members (no automatic group membership or
+    admin status) -- that would let an admin add a stranger into a group's chat without their own
+    request/consent, the exact reverse of how joining works everywhere else in this project. The
+    linked person can still separately request to join if they want to.
+
+    Only claims a node that is still empty, and only a target who isn't already claimed anywhere
+    else -- family_nodes.claimed_user_id is globally unique (idx_family_nodes_claimed_user), not
+    just unique within this one group, so this check is broader than "the same group" on purpose:
+    the database would reject the narrower case anyway, just with a confusing IntegrityError
+    instead of a clean message."""
+    row = conn.execute("SELECT claimed_user_id FROM family_nodes WHERE id = ?", (node_id,)).fetchone()
+    if not row:
+        raise LookupError("Node not found")
+    if row["claimed_user_id"]:
+        raise ValueError("This node is already linked to a member")
+    if not _is_admin_of_node_group(conn, user_id, node_id):
+        raise PermissionError("Only an admin of a group this person belongs to can change this")
+    target_user_id = _resolve_target_user_id(conn, target)
+    if conn.execute("SELECT 1 FROM family_nodes WHERE claimed_user_id = ?", (target_user_id,)).fetchone():
+        raise ValueError("That member already has their own profile node elsewhere")
+    conn.execute(
+        "UPDATE family_nodes SET claimed_user_id = ?, status = 'claimed', claimed_at = ? WHERE id = ?",
+        (target_user_id, _now(), node_id),
+    )
     conn.commit()
 
 
