@@ -29,6 +29,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import cycle_middleware
 import election_core
 import email_core
+import family_core
 import pipeline_core
 import pipeline_scheduler
 import test_cycle_scheduler
@@ -1771,6 +1772,110 @@ def api_people_chat_rejoin(chat_id):
     finally:
         conn.close()
     return jsonify({"status": "sent"}), 201
+
+
+# ---- Family Tree and Family Groups (2026-10-20), Phase 1: data + backend only, no D3 UI yet ----
+
+def _family(conn):
+    family_core.ensure_tables(conn)
+    return conn
+
+
+@app.route("/api/family/status")
+@login_required
+def api_family_status():
+    conn = _family(get_db())
+    try:
+        row = conn.execute(
+            "SELECT timeline_activated_at, relationship_status, has_children, sons_count, daughters_count "
+            "FROM users WHERE id = ?", (session["user_id"],),
+        ).fetchone()
+        groups = family_core.my_family_groups(conn, session["user_id"])
+    finally:
+        conn.close()
+    return jsonify({
+        "activated": bool(row["timeline_activated_at"]), "activated_at": row["timeline_activated_at"],
+        "relationship_status": row["relationship_status"],
+        "has_children": bool(row["has_children"]) if row["has_children"] is not None else None,
+        "sons_count": row["sons_count"] or 0, "daughters_count": row["daughters_count"] or 0,
+        "groups": groups,
+    })
+
+
+@app.route("/api/family/suggest")
+@login_required
+def api_family_suggest():
+    conn = _family(get_db())
+    try:
+        results = family_core.search_suggestions(conn, session["user_id"], request.args.get("name", ""))
+    finally:
+        conn.close()
+    return jsonify({"results": results})
+
+
+@app.route("/api/family/activate", methods=["POST"])
+@login_required
+@_board_error
+def api_family_activate():
+    data = request.get_json(force=True) or {}
+    conn = _family(get_db())
+    try:
+        result = family_core.activate_timeline(conn, session["user_id"], data)
+    finally:
+        conn.close()
+    return jsonify(result), 201
+
+
+@app.route("/api/family/marry", methods=["POST"])
+@login_required
+@_board_error
+def api_family_marry():
+    data = request.get_json(force=True) or {}
+    conn = _family(get_db())
+    try:
+        result = family_core.marry_timeline(conn, session["user_id"], data)
+    finally:
+        conn.close()
+    return jsonify(result), 201
+
+
+@app.route("/api/family/node/<int:node_id>/mark-deceased", methods=["POST"])
+@login_required
+@_board_error
+def api_family_node_mark_deceased(node_id):
+    data = request.get_json(silent=True) or {}
+    conn = _family(get_db())
+    try:
+        family_core.mark_deceased(conn, session["user_id"], node_id, bool(data.get("is_deceased", True)))
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/family-groups/<int:group_id>/tree")
+@login_required
+def api_family_group_tree(group_id):
+    conn = _family(get_db())
+    try:
+        tree = family_core.tree_for_group(conn, session["user_id"], group_id)
+    finally:
+        conn.close()
+    if tree is None:
+        return jsonify({"error": "Family Group not found"}), 404
+    return jsonify(tree)
+
+
+@app.route("/api/family-groups/<int:group_id>/join-request", methods=["POST"])
+@login_required
+@_board_error
+def api_family_group_join_request(group_id):
+    conn = _family(get_db())
+    try:
+        family_core.request_join_group(conn, session["user_id"], group_id)
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"status": "requested"}), 201
 
 
 # ---- Notifications (unread Personal-timeline chats + pending people-requests) ----

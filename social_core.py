@@ -513,10 +513,12 @@ def inbox(conn, user_id):
     # autoincrement from 1) can never cross-match into the wrong row.
     rows = conn.execute(
         """SELECT r.id, r.kind, r.first_message, r.created_at, r.status, r.from_user_id, u.name AS from_name,
-                  pg.name AS group_name, pg.category AS group_category, pc.name AS chat_name
+                  pg.name AS group_name, pg.category AS group_category, pc.name AS chat_name,
+                  fg.name AS family_group_name
            FROM people_requests r JOIN users u ON u.id = r.from_user_id
            LEFT JOIN personal_groups pg ON pg.id = r.group_id AND r.kind = 'group'
            LEFT JOIN private_chats pc ON pc.id = r.group_id AND r.kind = 'rejoin'
+           LEFT JOIN family_groups fg ON fg.id = r.group_id AND r.kind = 'family_group_join'
            WHERE r.to_user_id = ? AND r.status IN ('pending', 'waiting') ORDER BY r.id DESC""", (user_id,)).fetchall()
     out = []
     for r in rows:
@@ -574,6 +576,16 @@ def decide_request(conn, user_id, request_id, decision):
             chat = conn.execute("SELECT * FROM private_chats WHERE id = ?", (r["group_id"],)).fetchone()
             if chat:
                 conn.execute(f"UPDATE private_chats SET {_my_status_col(chat, r['from_user_id'])} = 'active' WHERE id = ?", (chat["id"],))
+        elif r["kind"] == "family_group_join":
+            # Reversed from kind='group' above: the REQUESTER (from_user_id) asked to join, and
+            # `user_id` (== to_user_id, the Family Group's founding creator) is the one deciding --
+            # so the new member is from_user_id, never the deciding user themself. group_id holds
+            # family_groups.id here (see family_core.request_join_group()). add_member() itself
+            # derives is_admin=1 when from_user_id has a spouse edge to an existing admin of this
+            # same group (2026-10-20) -- a spouse joining becomes co-admin; a child joining a
+            # parent's lineage group stays a plain member.
+            import family_core
+            family_core.add_member(conn, r["group_id"], r["from_user_id"], invited_by=None)
     conn.commit()
     return {"status": status}
 

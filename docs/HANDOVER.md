@@ -476,6 +476,11 @@ and the row numbers below are its rows.
 
 Also open, but not tracked in Doc 10:
 
+- **Family Group admin succession is unsolved** (`family_core.py`, 2026-10-20). If a group's sole
+  admin's own node is later marked deceased (`mark_deceased()`), the group is simply left as-is --
+  no automatic promotion of another member, no transfer flow. Deliberately deferred rather than
+  built speculatively; revisit once Report/Block and account-deletion tools exist, or if a real
+  user hits it.
 - The member-profile popup's "Send Message" button (`static/js/dashboard.js:518`) is still disabled
   with a "Coming soon" note, even though Qmail exists (§4.11).
 - Production verification at `https://qumanity.in` of the homepage, dashboard tour, Qmail, Q-Punch,

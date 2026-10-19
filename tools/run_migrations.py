@@ -33,6 +33,7 @@ def _ensure_source_tables(conn) -> None:
     target for this migration."""
     import board_core
     import election_core
+    import family_core
     import karma_core
     import perception_core
     import reactions_core
@@ -43,6 +44,7 @@ def _ensure_source_tables(conn) -> None:
     board_core.ensure_sub_tables(conn)
     social_core.ensure_tables(conn)
     social_core.ensure_account_request_table(conn)
+    family_core.ensure_tables(conn)
     karma_core.ensure_tables(conn)
     perception_core.ensure_tables(conn)
     review_core.ensure_tables(conn)
