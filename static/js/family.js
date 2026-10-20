@@ -1,8 +1,12 @@
 /**
- * family.js — Family Timeline activation: the 5-step Activation Wizard (Parents, Marital Status,
- * Children, Discover or Create, Review) that gates the Personal → Family Groups panel until a
- * user activates. Drives family_core.py's activate_timeline()/marry_timeline() (two separate
- * calls -- see Step 5) and search_suggestions() (Step 4).
+ * family.js — Family Timeline activation: the 6-step Activation Wizard (Parents, Your Status,
+ * Spouse, Children, Discover or Create, Review) that gates the Personal → Family Tree panel until
+ * a user activates. The wizard asks its own relationship-status question directly (Step 2) rather
+ * than trusting users.relationship_status, which may be stale or never set if the user reaches
+ * this wizard before ever visiting their profile page (2026-10-20 restructure -- the previous
+ * version's isMarried() read that field and silently skipped the Spouse/Children steps if it
+ * happened to be unset). Drives family_core.py's activate_timeline()/marry_timeline() (two
+ * separate calls -- see Step 6) and search_suggestions() (Step 5).
  */
 (function () {
   "use strict";
@@ -20,29 +24,45 @@
   var groupsListEl = document.getElementById("family-groups-list");
   var wizardEl = document.getElementById("family-wizard");
 
-  var STEP_ORDER = ["parents", "marital", "children", "discover", "review"];
+  var STEP_ORDER = ["parents", "status", "spouse", "children", "discover", "review"];
   var stepEls = Array.prototype.slice.call(document.querySelectorAll("#fw-steps .qm-step"));
   var screenEls = {
     parents: document.getElementById("fw-screen-parents"),
-    marital: document.getElementById("fw-screen-marital"),
+    status: document.getElementById("fw-screen-status"),
+    spouse: document.getElementById("fw-screen-spouse"),
     children: document.getElementById("fw-screen-children"),
     discover: document.getElementById("fw-screen-discover"),
     review: document.getElementById("fw-screen-review"),
   };
 
-  // state.slots is the single source of truth by Step 4 -- each entry already carries the exact
-  // shape activate_timeline()/marry_timeline() expect ({name, action, group_id?, matched_node_id?,
-  // user_id?, is_deceased?}), so Step 5's submit is just picking slots out by key, no translation.
+  // Single/married/separated/divorced/widowed -> family_core.py's own
+  // _RELATIONSHIP_TO_PROFILE_STATUS keys, exactly. marriage_status is a SEPARATE mapping (the
+  // richer, family_groups-only enum) -- the same wizard answer feeds two different destination
+  // columns with two different vocabularies, never one value reused for both.
+  var MARRIAGE_STATUS_MAP = { married: "active", separated: "separated", divorced: "dissolved", widowed: "active" };
+  var SPOUSE_HEADINGS = { married: "💍 Spouse", separated: "🤝 Former Spouse", divorced: "📄 Former Spouse", widowed: "🕊️ Late Spouse" };
+  var STATUS_LABELS = { single: "Single / Never Married", married: "Married", separated: "Separated", divorced: "Divorced", widowed: "Widowed" };
+  // Same 3 values registration offers (templates/register.html's male/female/both) -- the label
+  // here is just a different, relationship-appropriate framing of the identical underlying value,
+  // never a 4th option of its own. Keeping the value set consistent everywhere matters in practice:
+  // a claimed child's gender resolves live from their own real users.gender once claimed (see
+  // family_core.py's _person_summary()), so the placeholder's gender must speak the same vocabulary.
+  var GENDER_LABELS = { male: "Son", female: "Daughter", both: "Third Gender" };
+
+  // state.slots is the single source of truth by Step 5 -- each entry already carries the exact
+  // shape activate_timeline()/marry_timeline() expect ({name, action, gender?, group_id?,
+  // matched_node_id?, user_id?, is_deceased?}), so Step 6's submit is just picking slots out by
+  // key, no translation.
   var state = {
     status: null, // last GET /api/family/status response
     father: { name: "", is_deceased: false },
     mother: { name: "", is_deceased: false },
-    spouse: null, // null if single; else {name, viaExactId, resolvedUserId, resolvedAccountId}
-    children: [], // [{name}]
+    relationship: null, // single | married | separated | divorced | widowed -- the wizard's OWN answer
+    hasChildren: null, // true | false | null (not yet answered)
+    spouse: null, // null if single; else {name, viaExactId, resolvedUserId, resolvedAccountId, is_deceased?}
+    children: [], // [{name, gender}]
     slots: [],
   };
-
-  function isMarried() { return !!(state.status && state.status.relationship_status === "married"); }
 
   function goToFwStep(name) {
     var idx = STEP_ORDER.indexOf(name);
@@ -114,7 +134,7 @@
   }
 
   // Piggyback on the Personal tab's existing top-tab switcher (social.js owns show/hide) --
-  // just refresh our own gate/summary state whenever the Family Groups tab is opened.
+  // just refresh our own gate/summary state whenever the Family Tree tab is opened.
   var topTabs = document.getElementById("personal-top-tabs");
   if (topTabs) {
     topTabs.addEventListener("click", function (e) {
@@ -126,6 +146,8 @@
   document.getElementById("family-activate-start-btn").addEventListener("click", function () {
     state.father = { name: "", is_deceased: false };
     state.mother = { name: "", is_deceased: false };
+    state.relationship = null;
+    state.hasChildren = null;
     state.spouse = null;
     state.children = [];
     state.slots = [];
@@ -134,16 +156,36 @@
     document.getElementById("fw-father-deceased").checked = false;
     document.getElementById("fw-mother-name").value = "";
     document.getElementById("fw-mother-deceased").checked = false;
+
+    document.getElementById("fw-status-error").hidden = true;
+    Array.prototype.forEach.call(document.querySelectorAll("#fw-status-group .qm-gender-btn"), function (b) { b.classList.remove("is-active"); });
+    document.getElementById("fw-spouse-heading").textContent = "💍 Spouse";
+
     document.getElementById("fw-spouse-name").value = "";
     document.getElementById("fw-spouse-onapp").checked = false;
     document.getElementById("fw-spouse-search-row").hidden = true;
     document.getElementById("fw-spouse-search-input").value = "";
     document.getElementById("fw-spouse-search-result").innerHTML = "";
+    document.getElementById("fw-marital-error").hidden = true;
+
+    document.getElementById("fw-children-error").hidden = true;
+    Array.prototype.forEach.call(document.querySelectorAll("#fw-has-children-group .qm-gender-btn"), function (b) { b.classList.remove("is-active"); });
     document.getElementById("fw-children-rows").innerHTML = "";
+    document.getElementById("fw-children-rows-wrap").hidden = true;
     childRowCount = 0;
 
-    var seedCount = ((state.status && state.status.sons_count) || 0) + ((state.status && state.status.daughters_count) || 0);
-    for (var i = 0; i < seedCount; i++) addChildRow();
+    // Continuity with whatever the profile page already recorded (sons_count/daughters_count) --
+    // pre-fills that many rows (by aggregate count only, not per-child identity) and auto-answers
+    // "Yes" to the children question, rather than silently dropping this existing signal.
+    var sons = (state.status && state.status.sons_count) || 0;
+    var daughters = (state.status && state.status.daughters_count) || 0;
+    for (var i = 0; i < sons; i++) addChildRow("male");
+    for (var i = 0; i < daughters; i++) addChildRow("female");
+    if (sons + daughters > 0) {
+      state.hasChildren = true;
+      document.getElementById("fw-children-rows-wrap").hidden = false;
+      document.querySelector('#fw-has-children-group [data-haschildren="yes"]').classList.add("is-active");
+    }
 
     gateEl.hidden = true;
     wizardEl.hidden = false;
@@ -163,15 +205,42 @@
     errEl.hidden = true;
     state.father = { name: fatherName, is_deceased: document.getElementById("fw-father-deceased").checked };
     state.mother = { name: motherName, is_deceased: document.getElementById("fw-mother-deceased").checked };
-
-    var married = isMarried();
-    document.getElementById("fw-single-note").hidden = married;
-    document.getElementById("fw-spouse-block").hidden = !married;
-    goToFwStep(married ? "marital" : "children");
+    goToFwStep("status");
   });
 
-  // ---- Step 2: Marital Status ----
-  document.getElementById("fw-marital-back-btn").addEventListener("click", function () { goToFwStep("parents"); });
+  // ---- Step 2: Your Status (the branching point) ----
+  var statusButtons = Array.prototype.slice.call(document.querySelectorAll("#fw-status-group .qm-gender-btn"));
+  statusButtons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      state.relationship = btn.getAttribute("data-relationship");
+      statusButtons.forEach(function (b) { b.classList.toggle("is-active", b === btn); });
+    });
+  });
+
+  document.getElementById("fw-status-back-btn").addEventListener("click", function () { goToFwStep("parents"); });
+
+  document.getElementById("fw-status-next-btn").addEventListener("click", function () {
+    var errEl = document.getElementById("fw-status-error");
+    if (!state.relationship) {
+      errEl.textContent = "Please choose your relationship status.";
+      errEl.hidden = false;
+      return;
+    }
+    errEl.hidden = true;
+    if (state.relationship === "single") {
+      // Single users do not have a spouse or children in this form's context -- both steps are
+      // skipped entirely, not shown-then-left-empty.
+      state.spouse = null;
+      state.children = [];
+      buildSlotsAndEnterDiscover();
+      return;
+    }
+    document.getElementById("fw-spouse-heading").textContent = SPOUSE_HEADINGS[state.relationship];
+    goToFwStep("spouse");
+  });
+
+  // ---- Step 3: Spouse (only reached for married/separated/divorced/widowed) ----
+  document.getElementById("fw-marital-back-btn").addEventListener("click", function () { goToFwStep("status"); });
 
   document.getElementById("fw-spouse-onapp").addEventListener("change", function (e) {
     document.getElementById("fw-spouse-search-row").hidden = !e.target.checked;
@@ -205,41 +274,105 @@
     errEl.hidden = true;
     if (!onApp) state.spouse = { name: name, viaExactId: false };
     else state.spouse.name = name; // keep resolvedUserId/resolvedAccountId from the search
+    // Widowed marks the spouse deceased automatically -- no separate checkbox needed. Only takes
+    // effect for a freshly-created node (viaExactId resolves to an existing node that this wizard
+    // doesn't mutate the is_deceased flag of; a known, narrow limitation -- see mark_deceased()
+    // for that separately, if it's ever needed for an already-claimed spouse).
+    if (state.relationship === "widowed" && !onApp) state.spouse.is_deceased = true;
     goToFwStep("children");
   });
 
-  // ---- Step 3: Children ----
+  // ---- Step 4: Children (conditional: skipped entirely for Single) ----
   var childRowCount = 0;
-  function addChildRow() {
+  function addChildRow(presetGender) {
     childRowCount++;
     var idx = childRowCount;
     var row = el("div", "fw-child-row");
+    row.dataset.gender = presetGender || "";
     var input = document.createElement("input");
     input.type = "text"; input.maxLength = 80; input.placeholder = "Child " + idx + " name";
     input.className = "fw-child-input";
+
+    var genderGroup = el("div", "qm-gender-group fw-child-gender-group");
+    [
+      { gender: "male", icon: "👦", label: "Son" },
+      { gender: "female", icon: "👧", label: "Daughter" },
+      { gender: "both", icon: "⚧️", label: "Third Gender" },
+    ].forEach(function (g) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "qm-gender-btn fw-child-gender-btn";
+      btn.setAttribute("data-gender", g.gender);
+      btn.innerHTML = g.icon + "<span>" + g.label + "</span>";
+      if (g.gender === presetGender) btn.classList.add("is-active");
+      btn.addEventListener("click", function () {
+        row.dataset.gender = g.gender;
+        Array.prototype.forEach.call(genderGroup.children, function (b) { b.classList.toggle("is-active", b === btn); });
+      });
+      genderGroup.appendChild(btn);
+    });
+
     var removeBtn = el("button", "qm-btn qm-btn-ghost fw-child-remove", "✕");
     removeBtn.type = "button";
     removeBtn.setAttribute("aria-label", "Remove this child");
     removeBtn.addEventListener("click", function () { row.remove(); });
+
     row.appendChild(input);
+    row.appendChild(genderGroup);
     row.appendChild(removeBtn);
     document.getElementById("fw-children-rows").appendChild(row);
   }
   document.getElementById("fw-add-child-btn").addEventListener("click", function () { addChildRow(); });
 
-  document.getElementById("fw-children-back-btn").addEventListener("click", function () {
-    goToFwStep(isMarried() ? "marital" : "parents");
+  var hasChildrenButtons = Array.prototype.slice.call(document.querySelectorAll("#fw-has-children-group .qm-gender-btn"));
+  hasChildrenButtons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var yes = btn.getAttribute("data-haschildren") === "yes";
+      state.hasChildren = yes;
+      hasChildrenButtons.forEach(function (b) { b.classList.toggle("is-active", b === btn); });
+      document.getElementById("fw-children-rows-wrap").hidden = !yes;
+      if (yes && !document.querySelector("#fw-children-rows .fw-child-row")) addChildRow();
+    });
   });
 
+  document.getElementById("fw-children-back-btn").addEventListener("click", function () { goToFwStep("spouse"); });
+
   document.getElementById("fw-children-next-btn").addEventListener("click", function () {
-    state.children = Array.prototype.map.call(
-      document.querySelectorAll("#fw-children-rows .fw-child-input"),
-      function (inp) { return inp.value.trim(); }
-    ).filter(Boolean).map(function (name) { return { name: name }; });
+    var errEl = document.getElementById("fw-children-error");
+    errEl.hidden = true;
+    if (state.hasChildren === null) {
+      errEl.textContent = "Please choose Yes or No.";
+      errEl.hidden = false;
+      return;
+    }
+    if (state.hasChildren === false) {
+      state.children = [];
+      buildSlotsAndEnterDiscover();
+      return;
+    }
+    var rows = Array.prototype.slice.call(document.querySelectorAll("#fw-children-rows .fw-child-row"));
+    var children = [];
+    for (var i = 0; i < rows.length; i++) {
+      var name = rows[i].querySelector(".fw-child-input").value.trim();
+      if (!name) continue;
+      var gender = rows[i].dataset.gender;
+      if (!gender) {
+        errEl.textContent = "Please choose Son, Daughter or Child for " + name + ".";
+        errEl.hidden = false;
+        return;
+      }
+      children.push({ name: name, gender: gender });
+    }
+    if (!children.length) {
+      errEl.textContent = "Add at least one child, or go back and choose No.";
+      errEl.hidden = false;
+      return;
+    }
+    state.children = children;
     buildSlotsAndEnterDiscover();
   });
 
-  // ---- Step 4: Discover or Create ----
+  // ---- Step 5: Discover or Create ----
   function buildSlotsAndEnterDiscover() {
     state.slots = [
       { key: "father", label: "Father", name: state.father.name, is_deceased: state.father.is_deceased, action: "create" },
@@ -249,11 +382,11 @@
       if (state.spouse.viaExactId) {
         state.slots.push({ key: "spouse", label: "Spouse", name: state.spouse.name, action: "notify", user_id: state.spouse.resolvedUserId, resolved: true });
       } else {
-        state.slots.push({ key: "spouse", label: "Spouse", name: state.spouse.name, action: "create" });
+        state.slots.push({ key: "spouse", label: "Spouse", name: state.spouse.name, is_deceased: !!state.spouse.is_deceased, action: "create" });
       }
     }
     state.children.forEach(function (c, i) {
-      state.slots.push({ key: "child_" + (i + 1), label: "Child " + (i + 1), name: c.name, action: "create" });
+      state.slots.push({ key: "child_" + (i + 1), label: "Child " + (i + 1), name: c.name, gender: c.gender, action: "create" });
     });
     goToFwStep("discover");
     renderDiscoverList();
@@ -301,7 +434,7 @@
 
     groupMatches.forEach(function (m) {
       var row = el("div", "fw-suggestion-row");
-      row.appendChild(el("p", "", "We found " + m.group_name + " (" + m.group_kind + ", " + m.member_count +
+      row.appendChild(el("p", "", "We found " + m.group_name + " (" + m.member_count +
         " member" + (m.member_count === 1 ? "" : "s") + ") — matched via " + m.matched_name + "."));
       var joinBtn = el("button", "qm-btn qm-btn-primary", "Request to Join");
       joinBtn.type = "button";
@@ -339,18 +472,21 @@
     body.appendChild(createBtn);
   }
 
-  document.getElementById("fw-discover-back-btn").addEventListener("click", function () { goToFwStep("children"); });
+  document.getElementById("fw-discover-back-btn").addEventListener("click", function () {
+    goToFwStep(state.relationship === "single" ? "status" : "children");
+  });
   document.getElementById("fw-discover-next-btn").addEventListener("click", function () {
     goToFwStep("review");
     renderReview();
   });
 
-  // ---- Step 5: Review ----
+  // ---- Step 6: Review ----
   function slotPayload(key) {
     var s = state.slots.filter(function (x) { return x.key === key; })[0];
     if (!s) return null;
     var out = { name: s.name, action: s.action };
     if (s.is_deceased) out.is_deceased = true;
+    if (s.gender) out.gender = s.gender;
     if (s.group_id) out.group_id = s.group_id;
     if (s.matched_node_id) out.matched_node_id = s.matched_node_id;
     if (s.user_id) out.user_id = s.user_id;
@@ -366,10 +502,20 @@
   function renderReview() {
     var listEl = document.getElementById("fw-review-list");
     listEl.innerHTML = "";
+
+    var statusRow = document.createElement("div");
+    statusRow.appendChild(el("dt", "", "Your Status"));
+    statusRow.appendChild(el("dd", "", STATUS_LABELS[state.relationship] || state.relationship));
+    listEl.appendChild(statusRow);
+
     state.slots.forEach(function (slot) {
       var row = document.createElement("div");
       row.appendChild(el("dt", "", slot.label));
-      row.appendChild(el("dd", "", slot.name + (slot.is_deceased ? " (deceased)" : "") + " — " + actionLabel(slot.action)));
+      var detail = slot.name
+        + (slot.gender ? " (" + GENDER_LABELS[slot.gender] + ")" : "")
+        + (slot.is_deceased ? " (deceased)" : "")
+        + " — " + actionLabel(slot.action);
+      row.appendChild(el("dd", "", detail));
       listEl.appendChild(row);
     });
     document.getElementById("fw-review-error").hidden = true;
@@ -385,17 +531,20 @@
     errEl.hidden = true; noteEl.hidden = true;
     btn.disabled = true; btn.textContent = "Activating…";
 
-    var activatePayload = { father: slotPayload("father"), mother: slotPayload("mother") };
+    var activatePayload = { father: slotPayload("father"), mother: slotPayload("mother"), relationship: state.relationship };
 
     api("/api/family/activate", activatePayload).then(function () {
-      if (!isMarried() || !state.spouse) { finishWizard(); return; }
+      if (state.relationship === "single" || !state.spouse) { finishWizard(); return; }
       var childPayloads = state.slots
         .filter(function (s) { return s.key.indexOf("child_") === 0; })
         .map(function (s) { return slotPayload(s.key); });
       var spousePayload = state.spouse.viaExactId
         ? { name: state.spouse.name, action: "notify", user_id: state.spouse.resolvedUserId }
         : slotPayload("spouse");
-      return api("/api/family/marry", { spouse: spousePayload, children: childPayloads }).then(function () {
+      return api("/api/family/marry", {
+        spouse: spousePayload, children: childPayloads,
+        marriage_status: MARRIAGE_STATUS_MAP[state.relationship],
+      }).then(function () {
         finishWizard();
       }).catch(function (e) {
         noteEl.textContent = "Your Family Timeline is active. Adding your spouse ran into a problem: " +

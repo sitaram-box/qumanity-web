@@ -469,12 +469,22 @@ def _generate_unit_name(conn, husband_node_id, wife_node_id):
     return (_group_name_from(name) if name else "Family Group"), eldest_id
 
 
+VALID_MARRIAGE_STATUSES = ("active", "separated", "dissolved")
+
+
 def create_group(conn, created_by_user_id: int, name: str, eldest_node_id, husband_node_id, wife_node_id,
-                  member_node_ids, husband_parent_group_id=None, wife_parent_group_id=None) -> int:
+                  member_node_ids, husband_parent_group_id=None, wife_parent_group_id=None,
+                  marriage_status: str = "active") -> int:
     """The low-level mechanics: inserts the unit row, then grants family_group_nodes (tree
     visibility) and -- for whichever of husband/wife/member_node_ids is CURRENTLY a real, claimed
     user -- family_group_members (chat access), is_admin=1 for the two founders. An unclaimed
     founder slot grants admin automatically once link_node_to_user() later claims it.
+
+    marriage_status (2026-10-20): active | separated | dissolved -- the tree's own record of this
+    unit's marriage, independent of users.relationship_status (a different, 3-value legacy enum --
+    see activate_timeline()'s own relationship-sync, which is deliberately a separate mapping for a
+    separate column). A widowed founder's unit stays 'active' -- the SURVIVING founder is still
+    alive, it's their deceased spouse's own is_deceased flag that records the loss, not this column.
 
     The creator is ALSO always granted is_admin=1, additive to (not a replacement for) founder
     admin -- practically necessary the moment a unit is first founded with one or both slots still
@@ -482,13 +492,15 @@ def create_group(conn, created_by_user_id: int, name: str, eldest_node_id, husba
     without this, nobody could rename a typo'd placeholder or link it once that person signs up,
     since neither slot has a real admin yet. Mirrors the pre-restructure model, which granted the
     creator admin unconditionally."""
+    if marriage_status not in VALID_MARRIAGE_STATUSES:
+        raise ValueError("Unknown marriage status")
     cur = conn.execute(
         """INSERT INTO family_groups (name, created_by_user_id, kind, husband_node_id, wife_node_id,
                                        husband_parent_group_id, wife_parent_group_id, marriage_status,
                                        eldest_node_id, created_at)
-           VALUES (?, ?, 'unit', ?, ?, ?, ?, 'active', ?, ?)""",
+           VALUES (?, ?, 'unit', ?, ?, ?, ?, ?, ?, ?)""",
         (name, created_by_user_id, husband_node_id, wife_node_id,
-         husband_parent_group_id, wife_parent_group_id, eldest_node_id, _now()),
+         husband_parent_group_id, wife_parent_group_id, marriage_status, eldest_node_id, _now()),
     )
     group_id = cur.lastrowid
 
@@ -518,13 +530,19 @@ def create_group(conn, created_by_user_id: int, name: str, eldest_node_id, husba
 
 
 def _find_or_create_couple_group(conn, created_by_user_id: int, husband_node_id, wife_node_id,
-                                  member_node_ids=None, husband_parent_group_id=None, wife_parent_group_id=None):
+                                  member_node_ids=None, husband_parent_group_id=None, wife_parent_group_id=None,
+                                  marriage_status: str = "active"):
     """Finds an existing unit already founded by this exact pair, or by EITHER side alone (that
     side may already have been entered into a unit from someone else's earlier activation/
     marriage -- e.g. a sibling who activated first), or creates a new one. If both sides
     independently match two DIFFERENT existing units, the husband's side wins -- a documented,
     simplifying tie-break for a genuine data conflict that would need a human to resolve properly
     anyway, not a silent guess dressed up as correct. Returns (group_id, created: bool).
+
+    marriage_status is only used when a NEW unit is created here -- an EXISTING unit's own recorded
+    status is never overwritten just because someone else's activation/marriage call happens to
+    reuse it (e.g. activate_timeline()'s own parents'-unit lookup always passes the 'active'
+    default, regardless of the activating child's own relationship status).
 
     Deliberately does NOT add member_node_ids to an EXISTING unit found here -- if the caller
     reached it via a 'join' action on a slot, request_join_group() already queued a request to its
@@ -541,7 +559,7 @@ def _find_or_create_couple_group(conn, created_by_user_id: int, husband_node_id,
         return existing["id"], False
     name, eldest_id = _generate_unit_name(conn, husband_node_id, wife_node_id)
     group_id = create_group(conn, created_by_user_id, name, eldest_id, husband_node_id, wife_node_id,
-                             member_node_ids, husband_parent_group_id, wife_parent_group_id)
+                             member_node_ids, husband_parent_group_id, wife_parent_group_id, marriage_status)
     return group_id, True
 
 
@@ -693,17 +711,31 @@ def search_suggestions(conn, viewer_user_id: int, name: str) -> list[dict]:
 
 
 # ---- Relation slot resolution: shared by activate_timeline() (father/mother) and
-# marry_timeline() (children) ----
+# marry_timeline() (spouse/children) ----
 
-def _resolve_slot(conn, user_id: int, entry: dict, fresh_node_ids: list, results: dict, label: str):
-    """One relation entry -- {"name", "action": "create"|"join"|"notify", "is_deceased"?, ...}.
-    Returns the family_nodes.id this entry ends up representing (always non-None once a name was
-    given -- 'notify' still creates a normal empty node; the ping is a side effect, not a
+VALID_NODE_GENDERS = ("male", "female", "both")  # same 3 values registration offers (templates/register.html) -- never a different vocabulary for the same concept
+
+
+def _resolve_gender(entry: dict, default_gender):
+    """entry.get("gender") wins when the caller supplied one (the wizard's own explicit Son/
+    Daughter/Child selection for a child slot) -- default_gender is only a role-based fallback
+    (activate_timeline() passes 'male' for father, 'female' for mother; nothing else does)."""
+    gender = entry.get("gender") or default_gender
+    if gender is not None and gender not in VALID_NODE_GENDERS:
+        raise ValueError("Unknown gender")
+    return gender
+
+
+def _resolve_slot(conn, user_id: int, entry: dict, fresh_node_ids: list, results: dict, label: str, default_gender=None):
+    """One relation entry -- {"name", "action": "create"|"join"|"notify", "is_deceased"?, "gender"?,
+    ...}. Returns the family_nodes.id this entry ends up representing (always non-None once a name
+    was given -- 'notify' still creates a normal empty node; the ping is a side effect, not a
     different structural outcome, so parent/child linking works uniformly either way)."""
     if not entry or not (entry.get("name") or "").strip():
         return None
     action = entry.get("action", "create")
     name = entry["name"].strip()
+    gender = _resolve_gender(entry, default_gender)
 
     if action == "join":
         group_id, matched_node_id = entry.get("group_id"), entry.get("matched_node_id")
@@ -724,12 +756,12 @@ def _resolve_slot(conn, user_id: int, entry: dict, fresh_node_ids: list, results
             if existing_self_node:
                 results["created_node_ids"].append({"label": label, "node_id": existing_self_node["id"], "name": name, "linked_existing": True})
                 return existing_self_node["id"]
-        node_id = create_node(conn, user_id, name)
+        node_id = create_node(conn, user_id, name, gender=gender)
         fresh_node_ids.append(node_id)
         results["created_node_ids"].append({"label": label, "node_id": node_id, "name": name})
         return node_id
 
-    node_id = create_node(conn, user_id, name, is_deceased=bool(entry.get("is_deceased")))
+    node_id = create_node(conn, user_id, name, gender=gender, is_deceased=bool(entry.get("is_deceased")))
     fresh_node_ids.append(node_id)
     results["created_node_ids"].append({"label": label, "node_id": node_id, "name": name, "is_deceased": bool(entry.get("is_deceased"))})
     return node_id
@@ -738,16 +770,40 @@ def _resolve_slot(conn, user_id: int, entry: dict, fresh_node_ids: list, results
 # ---- Activation: father + mother -> find-or-create THEIR couple-unit, with the activating user
 # added as one of its (unmarried) child-members. ----
 
+# The Activation wizard's own 5-way relationship question (2026-10-20) -> users.relationship_status,
+# a separate, older, 3-value enum (app.py's RELATIONSHIP_STATUSES) read elsewhere for Qoins/Kundali
+# eligibility. Deliberately a different mapping from marriage_status (family_groups' own, richer
+# 3-value enum, set by marry_timeline()) -- same wizard answer, two different destination columns
+# with two different vocabularies, not one shared value reused twice.
+_RELATIONSHIP_TO_PROFILE_STATUS = {
+    "single": "single",
+    "married": "married",
+    "separated": "divorced_widowed",
+    "divorced": "divorced_widowed",
+    "widowed": "divorced_widowed",
+}
+
+
 def activate_timeline(conn, user_id: int, payload: dict) -> dict:
     """The one-time Activation gate. Raises ValueError for bad input (already activated, missing
     required fields) and LookupError if the user doesn't exist. Commits internally, same shape as
-    api_auth_register."""
+    api_auth_register.
+
+    payload["relationship"] (optional, 2026-10-20): one of _RELATIONSHIP_TO_PROFILE_STATUS's keys --
+    the wizard's Step 2 answer. Synced to users.relationship_status here, in THIS transaction,
+    because activate_timeline() is the one call every wizard run always makes (a 'single' answer
+    never reaches marry_timeline() at all, so syncing there would silently drop it). Omitted
+    entirely (None) by any caller that predates this field -- no sync attempted, not an error."""
     ensure_tables(conn)
     user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     if not user:
         raise LookupError("User not found")
     if user["timeline_activated_at"]:
         raise ValueError("Family Timeline is already activated")
+
+    relationship = payload.get("relationship")
+    if relationship is not None and relationship not in _RELATIONSHIP_TO_PROFILE_STATUS:
+        raise ValueError("Unknown relationship status")
 
     results = {"joined_requests": [], "notified": [], "created_node_ids": []}
     self_node_id = create_node(conn, user_id, user["name"], gender=user["gender"], claimed_user_id=user_id)
@@ -756,13 +812,13 @@ def activate_timeline(conn, user_id: int, payload: dict) -> dict:
     father = payload.get("father")
     if not father or not (father.get("name") or "").strip():
         raise ValueError("Father's name is required")
-    father_node_id = _resolve_slot(conn, user_id, father, [], results, "father")
+    father_node_id = _resolve_slot(conn, user_id, father, [], results, "father", default_gender="male")
     link_parent(conn, father_node_id, self_node_id, user_id)
 
     mother = payload.get("mother")
     if not mother or not (mother.get("name") or "").strip():
         raise ValueError("Mother's name is required")
-    mother_node_id = _resolve_slot(conn, user_id, mother, [], results, "mother")
+    mother_node_id = _resolve_slot(conn, user_id, mother, [], results, "mother", default_gender="female")
     link_parent(conn, mother_node_id, self_node_id, user_id)
 
     parents_group_id, _ = _find_or_create_couple_group(
@@ -771,6 +827,10 @@ def activate_timeline(conn, user_id: int, payload: dict) -> dict:
     )
     results["parents_group_id"] = parents_group_id
     results["parents_group_name"] = conn.execute("SELECT name FROM family_groups WHERE id = ?", (parents_group_id,)).fetchone()["name"]
+
+    if relationship is not None:
+        conn.execute("UPDATE users SET relationship_status = ? WHERE id = ?",
+                     (_RELATIONSHIP_TO_PROFILE_STATUS[relationship], user_id))
 
     conn.execute("UPDATE users SET timeline_activated_at = ? WHERE id = ?", (_now(), user_id))
     conn.commit()
@@ -790,7 +850,12 @@ def marry_timeline(conn, user_id: int, payload: dict) -> dict:
     if not self_node:
         raise ValueError("Activate your Family Timeline before adding a spouse")
     self_node_id = self_node["id"]
-    if user["relationship_status"] != "married":
+    # 'divorced_widowed' is also allowed (not just 'married'): the Activation wizard's Step 2 can
+    # map a Separated/Divorced/Widowed answer to this same profile bucket (see
+    # activate_timeline()'s _RELATIONSHIP_TO_PROFILE_STATUS) and still needs to record that ex- or
+    # late spouse, plus any children, in the tree -- this call isn't exclusively for an ongoing
+    # marriage any more.
+    if user["relationship_status"] not in ("married", "divorced_widowed"):
         raise ValueError("Set your relationship status to married first")
 
     if conn.execute(
@@ -802,6 +867,10 @@ def marry_timeline(conn, user_id: int, payload: dict) -> dict:
     spouse = payload.get("spouse")
     if not spouse or not (spouse.get("name") or "").strip():
         raise ValueError("Spouse's name is required")
+
+    marriage_status = payload.get("marriage_status", "active")
+    if marriage_status not in VALID_MARRIAGE_STATUSES:
+        raise ValueError("Unknown marriage status")
 
     results = {"joined_requests": [], "notified": [], "created_node_ids": []}
 
@@ -848,6 +917,7 @@ def marry_timeline(conn, user_id: int, payload: dict) -> dict:
     group_id, created = _find_or_create_couple_group(
         conn, user_id, husband_node_id, wife_node_id, member_node_ids=child_node_ids,
         husband_parent_group_id=husband_parent_group_id, wife_parent_group_id=wife_parent_group_id,
+        marriage_status=marriage_status,
     )
     results["marital_group_id"] = group_id
     results["marital_group_name"] = conn.execute("SELECT name FROM family_groups WHERE id = ?", (group_id,)).fetchone()["name"]
@@ -870,18 +940,26 @@ def my_family_groups(conn, user_id: int) -> list[dict]:
 
 
 def _person_summary(conn, node_id, viewer_user_id):
+    """Gender, like name and DOB elsewhere in this module (_node_display_name()/_node_dob()),
+    resolves live from `users.gender` once a node is claimed -- never trusting the stale snapshot
+    typed in at placeholder-creation time. Matters in practice: a node created with a guessed or
+    unknown gender (or none at all) must show the real person's own registered gender -- including
+    'both' (third gender) -- the instant they're claimed, not whatever `family_nodes.gender` still
+    says."""
     if not node_id:
         return None
     row = conn.execute(
-        """SELECT fn.id, fn.claimed_user_id, fn.gender, fn.status, fn.is_deceased, COALESCE(u.name, fn.display_name) AS name
+        """SELECT fn.id, fn.claimed_user_id, fn.gender AS node_gender, fn.status, fn.is_deceased,
+                  COALESCE(u.name, fn.display_name) AS name, u.gender AS user_gender
            FROM family_nodes fn LEFT JOIN users u ON u.id = fn.claimed_user_id WHERE fn.id = ?""",
         (node_id,),
     ).fetchone()
     if not row:
         return None
     return {
-        "id": row["id"], "name": row["name"], "gender": row["gender"], "status": row["status"],
-        "claimed": bool(row["claimed_user_id"]), "is_deceased": bool(row["is_deceased"]),
+        "id": row["id"], "name": row["name"],
+        "gender": row["user_gender"] if row["claimed_user_id"] else row["node_gender"],
+        "status": row["status"], "claimed": bool(row["claimed_user_id"]), "is_deceased": bool(row["is_deceased"]),
         "is_viewer": row["claimed_user_id"] == viewer_user_id,
     }
 

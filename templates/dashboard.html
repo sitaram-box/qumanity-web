@@ -576,10 +576,11 @@
             <div id="family-wizard" hidden>
               <div class="qm-steps" id="fw-steps">
                 <div class="qm-step is-active" data-fstep="parents"><span class="qm-step-index">1</span> Parents</div>
-                <div class="qm-step" data-fstep="marital"><span class="qm-step-index">2</span> Marital Status</div>
-                <div class="qm-step" data-fstep="children"><span class="qm-step-index">3</span> Children</div>
-                <div class="qm-step" data-fstep="discover"><span class="qm-step-index">4</span> Discover or Create</div>
-                <div class="qm-step" data-fstep="review"><span class="qm-step-index">5</span> Review</div>
+                <div class="qm-step" data-fstep="status"><span class="qm-step-index">2</span> Your Status</div>
+                <div class="qm-step" data-fstep="spouse"><span class="qm-step-index">3</span> Spouse</div>
+                <div class="qm-step" data-fstep="children"><span class="qm-step-index">4</span> Children</div>
+                <div class="qm-step" data-fstep="discover"><span class="qm-step-index">5</span> Discover or Create</div>
+                <div class="qm-step" data-fstep="review"><span class="qm-step-index">6</span> Review</div>
               </div>
 
               <section class="qm-screen is-active" id="fw-screen-parents">
@@ -599,10 +600,25 @@
                 <div class="qm-summary-actions"><span></span><button type="button" class="qm-btn qm-btn-primary" id="fw-parents-next-btn">Next →</button></div>
               </section>
 
-              <section class="qm-screen" id="fw-screen-marital">
-                <p class="qm-dash-empty" id="fw-single-note" hidden>You're Single — nothing needed here.</p>
-                <div class="qm-private-col" id="fw-spouse-block" hidden>
-                  <h3 class="qm-form-section-title">💍 Spouse</h3>
+              <section class="qm-screen" id="fw-screen-status">
+                <p class="qm-dash-empty">What is your current relationship status?</p>
+                <div class="qm-gender-group" id="fw-status-group">
+                  <button type="button" class="qm-gender-btn" data-relationship="single">🧍<span>Single / Never Married</span></button>
+                  <button type="button" class="qm-gender-btn" data-relationship="married">💍<span>Married</span></button>
+                  <button type="button" class="qm-gender-btn" data-relationship="separated">🤝<span>Separated</span></button>
+                  <button type="button" class="qm-gender-btn" data-relationship="divorced">📄<span>Divorced</span></button>
+                  <button type="button" class="qm-gender-btn" data-relationship="widowed">🕊️<span>Widowed</span></button>
+                </div>
+                <p class="qm-summary-error" id="fw-status-error" hidden></p>
+                <div class="qm-summary-actions">
+                  <button type="button" class="qm-btn qm-btn-ghost" id="fw-status-back-btn">← Back</button>
+                  <button type="button" class="qm-btn qm-btn-primary" id="fw-status-next-btn">Next →</button>
+                </div>
+              </section>
+
+              <section class="qm-screen" id="fw-screen-spouse">
+                <div class="qm-private-col">
+                  <h3 class="qm-form-section-title" id="fw-spouse-heading">💍 Spouse</h3>
                   <label class="qm-field"><span>Spouse's Name</span><input type="text" id="fw-spouse-name" maxlength="80" /></label>
                   <label class="fw-deceased-check"><input type="checkbox" id="fw-spouse-onapp" /><span>Is your spouse already on Qumanity?</span></label>
                   <div id="fw-spouse-search-row" hidden>
@@ -621,9 +637,17 @@
               </section>
 
               <section class="qm-screen" id="fw-screen-children">
-                <p class="qm-dash-empty">Add a name for each child (optional — you can skip this and add them later).</p>
-                <div id="fw-children-rows"></div>
-                <button type="button" class="qm-btn qm-btn-ghost" id="fw-add-child-btn">+ Add another child</button>
+                <p class="qm-dash-empty">Do you have children?</p>
+                <div class="qm-gender-group" id="fw-has-children-group">
+                  <button type="button" class="qm-gender-btn" data-haschildren="yes">👶<span>Yes</span></button>
+                  <button type="button" class="qm-gender-btn" data-haschildren="no">🚫<span>No</span></button>
+                </div>
+                <div id="fw-children-rows-wrap" hidden>
+                  <p class="qm-dash-empty">Add a name, and whether they're your son or daughter, for each child.</p>
+                  <div id="fw-children-rows"></div>
+                  <button type="button" class="qm-btn qm-btn-ghost" id="fw-add-child-btn">+ Add another child</button>
+                </div>
+                <p class="qm-summary-error" id="fw-children-error" hidden></p>
                 <div class="qm-summary-actions">
                   <button type="button" class="qm-btn qm-btn-ghost" id="fw-children-back-btn">← Back</button>
                   <button type="button" class="qm-btn qm-btn-primary" id="fw-children-next-btn">Next →</button>

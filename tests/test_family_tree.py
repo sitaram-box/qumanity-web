@@ -390,6 +390,113 @@ check("a non-member gets 404 (not 403) on the neighborhood endpoint", res.status
 
 print()
 print("=" * 70)
+print("10. The dynamic Activation wizard: relationship sync, marriage_status, child gender")
+print("=" * 70)
+
+logout()
+ivy = register("Ivy Kapoor")
+login(ivy["private_code"])
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Ivy Father", "action": "create"},
+    "mother": {"name": "Ivy Mother", "action": "create"},
+    "relationship": "divorced",
+})
+check("activation with relationship=divorced succeeds", res.status_code == 201)
+ivy_row = raw("SELECT relationship_status FROM users WHERE id = ?", (ivy["user_id"],))
+check("divorced maps to users.relationship_status='divorced_widowed' (the legacy 3-value enum)",
+      ivy_row["relationship_status"] == "divorced_widowed")
+
+res = client.post("/api/family/marry", json={
+    "spouse": {"name": "Ivy Ex", "action": "create"},
+    "children": [
+        {"name": "Ivy Child", "action": "create", "gender": "female"},
+        {"name": "Ivy Second Child", "action": "create", "gender": "both"},
+    ],
+    "marriage_status": "dissolved",
+})
+check("marry succeeds straight off the relationship-sync, no separate profile call needed (201)", res.status_code == 201)
+ivy_marry_body = res.get_json()
+ivy_group_row = raw("SELECT marriage_status FROM family_groups WHERE id = ?", (ivy_marry_body["marital_group_id"],))
+check("the unit's marriage_status is 'dissolved', not the old hardcoded 'active'", ivy_group_row["marriage_status"] == "dissolved")
+
+ivy_child_node_id = next(n["node_id"] for n in ivy_marry_body["created_node_ids"] if n["name"] == "Ivy Child")
+ivy_child_row = raw("SELECT gender FROM family_nodes WHERE id = ?", (ivy_child_node_id,))
+check("the child's gender ('female', a Daughter) is saved on the placeholder node", ivy_child_row["gender"] == "female")
+
+ivy_second_child_node_id = next(n["node_id"] for n in ivy_marry_body["created_node_ids"] if n["name"] == "Ivy Second Child")
+ivy_second_child_row = raw("SELECT gender FROM family_nodes WHERE id = ?", (ivy_second_child_node_id,))
+check("'both' (Third Gender) -- the SAME value registration itself offers, not a different 4th option -- is "
+      "accepted for a child too", ivy_second_child_row["gender"] == "both")
+
+res = client.get(f"/api/family/node/{ivy_marry_body['marital_group_id']}/neighborhood")
+ivy_nbh = res.get_json()
+ivy_child_summary = next(c for c in ivy_nbh["unmarried_children"] if c["name"] == "Ivy Child")
+check("the neighborhood reports the placeholder child's gender as 'female'", ivy_child_summary["gender"] == "female")
+
+# Claim that child node with a REAL user of a DIFFERENT gender ('both', third gender) -- the
+# neighborhood must then show the LIVE claimed gender, not the stale placeholder guess.
+logout()
+jade = register("Jade NonBinary")  # register() always sends gender=male -- overwrite directly for this check
+_conn = dbmod.get_db()
+_conn.execute("UPDATE users SET gender = 'both' WHERE id = ?", (jade["user_id"],))
+_conn.commit()
+_conn.close()
+
+login(ivy["private_code"])
+res = client.post(f"/api/family/node/{ivy_child_node_id}/link", json={"user_id": jade["account_id"]})
+check("admin can link the child placeholder to jade's real account", res.status_code == 200)
+
+res = client.get(f"/api/family/node/{ivy_marry_body['marital_group_id']}/neighborhood")
+ivy_nbh2 = res.get_json()
+jade_summary = next(c for c in ivy_nbh2["unmarried_children"] if c["id"] == ivy_child_node_id)
+check("once claimed, the node's gender resolves LIVE from users.gender ('both'), not the stale 'female' placeholder",
+      jade_summary["gender"] == "both")
+check("the node's name also now resolves live, to jade's own registered name", jade_summary["name"].startswith("Jade NonBinary"))
+
+# Single is rejected at the backend layer too, not just skipped by the frontend.
+logout()
+kay = register("Kay Solo")
+login(kay["private_code"])
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Kay Father", "action": "create"},
+    "mother": {"name": "Kay Mother", "action": "create"},
+    "relationship": "single",
+})
+check("activation with relationship=single succeeds", res.status_code == 201)
+kay_row = raw("SELECT relationship_status FROM users WHERE id = ?", (kay["user_id"],))
+check("single maps to users.relationship_status='single'", kay_row["relationship_status"] == "single")
+res = client.post("/api/family/marry", json={"spouse": {"name": "Should Not Work", "action": "create"}})
+check("marry_timeline itself rejects a single user (400), not just the wizard skipping the call", res.status_code == 400)
+
+# Invalid wizard inputs are rejected cleanly, not silently accepted.
+logout()
+leo = register("Leo Invalid")
+login(leo["private_code"])
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Leo Father", "action": "create"},
+    "mother": {"name": "Leo Mother", "action": "create"},
+    "relationship": "engaged",
+})
+check("an unknown relationship value is rejected (400)", res.status_code == 400)
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Leo Father", "action": "create"},
+    "mother": {"name": "Leo Mother", "action": "create"},
+    "relationship": "married",
+})
+check("activation retried with a valid relationship succeeds", res.status_code == 201)
+res = client.post("/api/family/marry", json={
+    "spouse": {"name": "Leo Spouse", "action": "create"},
+    "children": [{"name": "Leo Child", "action": "create", "gender": "unknown_value"}],
+})
+check("an unknown child gender value is rejected (400)", res.status_code == 400)
+res = client.post("/api/family/marry", json={
+    "spouse": {"name": "Leo Spouse", "action": "create"},
+    "marriage_status": "not_a_real_status",
+})
+check("an unknown marriage_status value is rejected (400)", res.status_code == 400)
+
+print()
+print("=" * 70)
 if FAILS:
     print(f"{len(FAILS)} check(s) FAILED:")
     for f in FAILS:
