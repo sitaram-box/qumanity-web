@@ -64,9 +64,9 @@ body { background: var(--qm-bg); }
 }
 .qmail-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   gap: 10px;
-  align-items: start;
+  align-items: center;
   padding: 10px 10px;
   border-radius: 10px;
   border: 1px solid transparent;

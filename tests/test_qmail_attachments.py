@@ -181,7 +181,12 @@ print("=" * 70)
 
 login(u2["private_code"])
 res = client.get("/api/qmail/inbox")
-att_id_member = res.get_json()["messages"][0]["attachments"][0]["id"]
+inbox_msg = res.get_json()["messages"][0]
+check("inbox rows carry from_user_id/from_gender for the avatar sweep (2026-10-20)",
+      inbox_msg.get("from_user_id") is not None and inbox_msg.get("from_gender") == "male")
+check("from_profile_picture_url is null when the sender has no picture uploaded",
+      inbox_msg.get("from_profile_picture_url") is None)
+att_id_member = inbox_msg["attachments"][0]["id"]
 res = client.get(f"/api/qmail/attachments/{att_id_member}")
 check("the recipient CAN fetch the attachment on their own received message", res.status_code == 200)
 check("the served bytes match what was uploaded", res.data == b"small attachment bytes")

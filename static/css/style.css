@@ -592,4 +592,14 @@ html, body {
 }
 .qm-confirm-box p { margin: 0 0 20px; font-size: 0.98rem; color: var(--qm-text); line-height: 1.5; }
 .qm-confirm-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+/* window.QMAvatar.render() (static/js/avatar.js): shared avatar styling for every surface that
+   renders one -- chat bubbles, Qmail rows, board posts, admin lists, the Family Tree. Lives in
+   this common stylesheet (not dashboard.css) because both dashboard.html and qmail.html need it. */
+.qm-avatar { border-radius: 50%; flex: 0 0 auto; display: inline-block; vertical-align: middle; }
+.qm-avatar-img { object-fit: cover; }
+.qm-avatar-fallback {
+  display: grid; place-items: center; color: #fff; font-weight: 700;
+  font-family: "Fraunces", Georgia, serif;
+}
 .qm-confirm-actions .qm-btn { flex: 1; min-width: 120px; }

@@ -368,10 +368,13 @@ def board_view(conn, user_id, present_location, level, now=None, is_admin=False)
     # that stays behind /api/wallet/balance/<level>/<id>, gated to council/admin in app.py.
     qoins = wallet_core.public_wallet_view(conn, level, g["id"])["qoin_count"]
     stars = [
-        {"post_id": s["post_id"], "author": s["author_name"], "score": s["score"], "at": s["created_at"]}
+        {"post_id": s["post_id"], "author": s["author_name"], "user_id": s["author_id"], "gender": s["gender"],
+         "profile_picture_url": f"/api/users/{s['author_id']}/profile-picture" if s["has_picture"] else None,
+         "score": s["score"], "at": s["created_at"]}
         for s in conn.execute(
-            """SELECT rs.post_id, rs.score, rs.created_at, u.name AS author_name FROM recognition_stars rs
-               JOIN users u ON u.id = rs.author_id
+            """SELECT rs.post_id, rs.score, rs.created_at, u.id AS author_id, u.name AS author_name, u.gender,
+                      u.profile_picture IS NOT NULL AS has_picture
+               FROM recognition_stars rs JOIN users u ON u.id = rs.author_id
                WHERE rs.location_id = ? AND rs.level = ? ORDER BY rs.id DESC LIMIT 25""",
             (g["id"], level),
         )
@@ -381,7 +384,9 @@ def board_view(conn, user_id, present_location, level, now=None, is_admin=False)
     # 'active' alone makes it visible to everyone, same query, no second query needed.
     is_demo_viewer = bool(conn.execute("SELECT is_demo FROM users WHERE id = ?", (user_id,)).fetchone()[0])
     rows = conn.execute(
-        """SELECT p.*, u.name AS author_name, v.value AS my_vote FROM board_posts p
+        """SELECT p.*, u.name AS author_name, u.gender AS author_gender,
+                  u.profile_picture IS NOT NULL AS author_has_picture, v.value AS my_vote
+           FROM board_posts p
            JOIN users u ON u.id = p.author_id
            LEFT JOIN board_votes v ON v.post_id = p.id AND v.user_id = ?
            WHERE p.group_id = ? AND p.level = ? AND p.status != 'removed'
@@ -414,8 +419,11 @@ def board_view(conn, user_id, present_location, level, now=None, is_admin=False)
         active = p["status"] == "active"
         comments = []
         if not active:
-            comments = [{"who": c["name"], "text": c["text"], "at": c["created_at"]} for c in conn.execute(
-                "SELECT c.text, c.created_at, u.name FROM board_comments c JOIN users u ON u.id = c.user_id WHERE c.post_id=? ORDER BY c.id LIMIT 50", (p["id"],))]
+            comments = [{"who": c["name"], "user_id": c["user_id"], "gender": c["gender"],
+                         "profile_picture_url": f"/api/users/{c['user_id']}/profile-picture" if c["has_picture"] else None,
+                         "text": c["text"], "at": c["created_at"]} for c in conn.execute(
+                """SELECT c.text, c.created_at, c.user_id, u.name, u.gender, u.profile_picture IS NOT NULL AS has_picture
+                   FROM board_comments c JOIN users u ON u.id = c.user_id WHERE c.post_id=? ORDER BY c.id LIMIT 50""", (p["id"],))]
         origin = None
         if p["origin_post_id"]:
             o = conn.execute("SELECT level, score FROM board_posts WHERE id=?", (p["origin_post_id"],)).fetchone()
@@ -425,7 +433,9 @@ def board_view(conn, user_id, present_location, level, now=None, is_admin=False)
             e = conn.execute("SELECT level FROM board_posts WHERE id=?", (p["elevated_to"],)).fetchone()
             nxt = LEVEL_LABEL[e["level"]] if e else None
         post_dict = {
-            "id": p["id"], "author": p["author_name"], "mine": p["author_id"] == user_id, "content": p["content"], "status": p["status"],
+            "id": p["id"], "author": p["author_name"], "author_id": p["author_id"], "author_gender": p["author_gender"],
+            "author_profile_picture_url": f"/api/users/{p['author_id']}/profile-picture" if p["author_has_picture"] else None,
+            "mine": p["author_id"] == user_id, "content": p["content"], "status": p["status"],
             "score": p["score"], "my_vote": p["my_vote"], "created_at": p["created_at"], "voting_end": p["voting_end"],
             "threshold": THRESHOLD[level], "window_days": WINDOW_DAYS[level], "origin": origin, "elevated_to": nxt, "comments": comments,
             "can_vote": active and p["post_kind"] == "member", "can_comment": not active, "post_kind": p["post_kind"],
@@ -568,12 +578,15 @@ def chat_messages(conn, user_id, sg_id, is_admin):
     if not _can_chat(conn, user_id, sg_id, is_admin):
         raise PermissionError("Ask the council to add you to this group")
     rows = list(reversed(conn.execute(
-        "SELECT m.id, m.text, m.created_at, m.user_id, u.name, u.account_id FROM board_messages m JOIN users u ON u.id=m.user_id "
+        "SELECT m.id, m.text, m.created_at, m.user_id, u.name, u.gender, u.account_id, "
+        "u.profile_picture IS NOT NULL AS has_picture FROM board_messages m JOIN users u ON u.id=m.user_id "
         "WHERE m.subgroup_id=? ORDER BY m.id DESC LIMIT 100", (sg_id,)).fetchall()))
     member_count = conn.execute("SELECT COUNT(*) FROM subgroup_members WHERE subgroup_id=? AND status='approved'", (sg_id,)).fetchone()[0] + 1  # +owner
     reactions = reactions_core.counts_for(conn, "subgroup", [r["id"] for r in rows], user_id)
     return {"id": g["id"], "name": g["name"], "admin_label": g["admin_label"] or "Village Council", "members": member_count,
-            "messages": [{"id": r["id"], "who": r["name"], "account_id": r["account_id"], "mine": r["user_id"] == user_id,
+            "messages": [{"id": r["id"], "who": r["name"], "user_id": r["user_id"], "gender": r["gender"],
+                         "profile_picture_url": f"/api/users/{r['user_id']}/profile-picture" if r["has_picture"] else None,
+                         "account_id": r["account_id"], "mine": r["user_id"] == user_id,
                          "text": r["text"], "at": r["created_at"], "reactions": reactions[r["id"]]} for r in rows]}
 
 

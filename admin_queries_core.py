@@ -101,21 +101,31 @@ def list_open(conn) -> list[dict]:
     combined feed can render a preview without an N+1 query per ticket."""
     ensure_tables(conn)
     rows = conn.execute(
-        """SELECT q.*, u.name AS author_name,
+        """SELECT q.*, u.name AS author_name, u.gender AS author_gender,
+                  u.profile_picture IS NOT NULL AS author_has_picture,
                   (SELECT MAX(created_at) FROM admin_query_replies r WHERE r.query_id = q.id) AS last_reply_at
            FROM admin_queries q JOIN users u ON u.id = q.user_id
            WHERE q.status != 'closed' ORDER BY q.created_at DESC"""
     ).fetchall()
-    return [dict(r) for r in rows]
+    return [_with_author_picture(dict(r), "user_id") for r in rows]
+
+
+def _with_author_picture(d: dict, author_id_key: str) -> dict:
+    """Converts the `author_has_picture` boolean every query/reply row carries into the one URL
+    form every QMAvatar.render() caller uses -- same pattern as family_core._profile_picture_url()."""
+    d["author_profile_picture_url"] = f"/api/users/{d[author_id_key]}/profile-picture" if d.pop("author_has_picture") else None
+    return d
 
 
 def replies_for(conn, query_id: int) -> list[dict]:
     rows = conn.execute(
-        """SELECT r.*, u.name AS author_name FROM admin_query_replies r
+        """SELECT r.*, u.name AS author_name, u.gender AS author_gender,
+                  u.profile_picture IS NOT NULL AS author_has_picture
+           FROM admin_query_replies r
            JOIN users u ON u.id = r.author_user_id WHERE r.query_id = ? ORDER BY r.created_at ASC""",
         (query_id,),
     ).fetchall()
-    return [dict(r) for r in rows]
+    return [_with_author_picture(dict(r), "author_user_id") for r in rows]
 
 
 def reply(conn, admin_user_id: int, query_id: int, message: str) -> None:

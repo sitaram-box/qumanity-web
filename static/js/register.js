@@ -235,7 +235,7 @@
 
   // ---- Keep what was typed: a draft of Step 1 survives a page refresh (passwords are never stored) ----
   var DRAFT_KEY = "qm_reg_draft";
-  var draftFields = ["field-first-name", "field-last-name", "field-language", "field-email", "field-phone"];
+  var draftFields = ["field-first-name", "field-middle-name", "field-last-name", "field-language", "field-email", "field-phone"];
   function saveDraft() {
     try {
       var d = { gender: genderInput.value, dob: [dobDaySelect.value, dobMonthSelect.value, dobYearSelect.value], tob: document.getElementById("field-tob").value };
@@ -298,6 +298,7 @@
     privateFormError.hidden = true;
 
     var firstName = document.getElementById("field-first-name").value.trim();
+    var middleName = document.getElementById("field-middle-name").value.trim();
     var lastName = document.getElementById("field-last-name").value.trim();
     var email = document.getElementById("field-email").value.trim();
     var password = document.getElementById("field-password").value;
@@ -348,6 +349,7 @@
 
     state.form = {
       name: firstName + " " + lastName,
+      middle_name: middleName,
       gender: document.getElementById("field-gender").value,
       dob: document.getElementById("field-dob").value,
       tob: document.getElementById("field-tob").value,
@@ -1077,7 +1079,7 @@
     }
     var zp = state.zodiacPreview;
     renderList("review-personal-list", [
-      ["👤 Name", f.name], ["⚧️ Gender", f.gender],
+      ["👤 Name", f.name], ["👤 Middle Name", f.middle_name || "—"], ["⚧️ Gender", f.gender],
       ["📅 Date & Time of Birth", formatDobTimeDisplay(f.dob, f.tob)],
       ["🎂 Age Category", zp ? (zp.age_code + " (" + zp.age_name + " – " + zp.age_range + ")") : "—"],
       ["✨ Zodiac", zp ? ("Sun in " + zp.sign + " (" + zp.element + ")") : "—"],
@@ -1123,7 +1125,7 @@
     reviewSubmitBtn.textContent = "Creating your account…";
 
     var payload = {
-      name: state.form.name, gender: state.form.gender, dob: state.form.dob, tob: state.form.tob,
+      name: state.form.name, middle_name: state.form.middle_name, gender: state.form.gender, dob: state.form.dob, tob: state.form.tob,
       tob_unknown: state.form.tobUnknown,
       language: state.form.language, email: state.form.email, phone: state.form.phone, pin: state.form.pin,
       birth_location: buildLocationPayload(state.birthLocation, state.birthPublic),

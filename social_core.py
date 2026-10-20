@@ -443,21 +443,31 @@ def _is_member(conn, group, user_id):
     return bool(conn.execute("SELECT 1 FROM personal_group_members WHERE group_id = ? AND user_id = ? AND status = 'approved'", (group["id"], user_id)).fetchone())
 
 
+def _picture_url(user_id, has_picture) -> str:
+    return f"/api/users/{user_id}/profile-picture" if has_picture else None
+
+
 def group_messages(conn, user_id, group_id):
     import reactions_core
     g = group_by_id(conn, group_id)
     if not _is_member(conn, g, user_id):
         raise PermissionError("You are not a member of this group")
     rows = list(reversed(conn.execute(
-        "SELECT m.id, m.text, m.created_at, m.user_id, u.name, u.account_id FROM personal_messages m JOIN users u ON u.id = m.user_id "
+        "SELECT m.id, m.text, m.created_at, m.user_id, u.name, u.gender, u.account_id, "
+        "u.profile_picture IS NOT NULL AS has_picture FROM personal_messages m JOIN users u ON u.id = m.user_id "
         "WHERE m.group_id = ? ORDER BY m.id DESC LIMIT 200", (group_id,)).fetchall()))
-    members = [{"name": u2["name"], "you": u2["id"] == user_id} for u2 in conn.execute(
-        """SELECT u.id, u.name FROM personal_group_members m JOIN users u ON u.id = m.user_id WHERE m.group_id = ? AND m.status = 'approved'
-           UNION SELECT u.id, u.name FROM users u WHERE u.id = ?""", (group_id, g["owner_user_id"]))]
+    members = [{"user_id": u2["id"], "name": u2["name"], "gender": u2["gender"],
+                "profile_picture_url": _picture_url(u2["id"], u2["has_picture"]), "you": u2["id"] == user_id}
+               for u2 in conn.execute(
+        """SELECT u.id, u.name, u.gender, u.profile_picture IS NOT NULL AS has_picture FROM personal_group_members m
+           JOIN users u ON u.id = m.user_id WHERE m.group_id = ? AND m.status = 'approved'
+           UNION SELECT u.id, u.name, u.gender, u.profile_picture IS NOT NULL FROM users u WHERE u.id = ?""", (group_id, g["owner_user_id"]))]
     reactions = reactions_core.counts_for(conn, "personal", [r["id"] for r in rows], user_id)
     return {"id": g["id"], "category": g["category"], "name": g["name"], "is_owner": g["owner_user_id"] == user_id, "members": members,
             "business": {"name": g["business_name"], "sector": g["business_sector"], "services": g["business_services"]} if g["category"] == "business" else None,
-            "messages": [{"id": r["id"], "who": r["name"], "account_id": r["account_id"], "mine": r["user_id"] == user_id,
+            "messages": [{"id": r["id"], "who": r["name"], "user_id": r["user_id"], "gender": r["gender"],
+                         "profile_picture_url": _picture_url(r["user_id"], r["has_picture"]),
+                         "account_id": r["account_id"], "mine": r["user_id"] == user_id,
                          "text": r["text"], "at": r["created_at"], "reactions": reactions[r["id"]]} for r in rows]}
 
 
@@ -611,11 +621,15 @@ def my_chats(conn, user_id):
            FROM private_chats c WHERE c.user_lo = ? OR c.user_hi = ?""", (user_id, user_id, user_id)).fetchall()
     out = []
     for r in rows:
-        other = conn.execute("SELECT name FROM users WHERE id = ?", (r["other_id"],)).fetchone()
+        other = conn.execute(
+            "SELECT name, gender, profile_picture IS NOT NULL AS has_picture FROM users WHERE id = ?", (r["other_id"],)
+        ).fetchone()
         other_name = other["name"] if other else "Unknown"
         last = conn.execute("SELECT text, created_at FROM private_messages WHERE chat_id = ? ORDER BY id DESC LIMIT 1", (r["id"],)).fetchone()
         out.append({
             "chat_id": r["id"], "name": r["name"] or other_name, "with": other_name,
+            "with_user_id": r["other_id"], "with_gender": other["gender"] if other else None,
+            "with_profile_picture_url": _picture_url(r["other_id"], other["has_picture"]) if other else None,
             "left": r[_my_status_col(r, user_id)] == "left",
             "last": last["text"] if last else None, "at": last["created_at"] if last else None,
         })
@@ -627,13 +641,17 @@ def chat_messages(conn, user_id, chat_id):
     if not row or user_id not in (row["user_lo"], row["user_hi"]):
         raise PermissionError("Not your chat")
     other_id = row["user_hi"] if row["user_lo"] == user_id else row["user_lo"]
-    other = conn.execute("SELECT name, account_id FROM users WHERE id = ?", (other_id,)).fetchone()
+    other = conn.execute(
+        "SELECT name, account_id, gender, profile_picture IS NOT NULL AS has_picture FROM users WHERE id = ?", (other_id,)
+    ).fetchone()
     other_name = other["name"] if other else "Unknown"
     left = row[_my_status_col(row, user_id)] == "left"
     # Visible while left (history stays readable) -- only sending and seeing NEW messages is blocked.
     msgs = conn.execute("SELECT text, created_at, user_id FROM private_messages WHERE chat_id = ? ORDER BY id", (chat_id,)).fetchall()
     return {
         "name": row["name"] or other_name, "with": other_name,
+        "with_user_id": other_id, "with_gender": other["gender"] if other else None,
+        "with_profile_picture_url": _picture_url(other_id, other["has_picture"]) if other else None,
         "is_owner": True,  # both members are admins
         "left": left, "other_left": row[_other_status_col(row, user_id)] == "left",
         "other_account_id": other["account_id"] if other else None,
