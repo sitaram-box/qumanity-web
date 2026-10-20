@@ -275,6 +275,9 @@
 .qm-member-list li:last-child { border-bottom: none; }
 .qm-member-row {
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   text-align: left;
   border: none;
   background: none;
@@ -407,10 +410,18 @@
   display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 18px 20px; margin-bottom: 14px; border-radius: 16px;
   background: linear-gradient(120deg, rgba(255, 153, 51, 0.12), rgba(139, 123, 255, 0.08)); border: 1px solid rgba(201, 150, 12, 0.3);
 }
+.pv-avatar-wrap { position: relative; flex: 0 0 auto; }
 .pv-avatar {
-  width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto;
+  width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center;
   font: 700 1.6rem "Fraunces", Georgia, serif; color: #1a1205; background: linear-gradient(135deg, #ff8a1f, #ffd24a);
+  background-size: cover; background-position: center;
 }
+.pv-avatar-upload-btn {
+  position: absolute; right: -4px; bottom: -4px; width: 24px; height: 24px; border-radius: 50%;
+  border: 1px solid rgba(10, 25, 41, 0.15); background: #fff; font-size: 0.8rem; line-height: 1;
+  display: grid; place-items: center; cursor: pointer; padding: 0;
+}
+.pv-avatar-error { display: block; position: absolute; top: 100%; left: 0; width: 160px; color: #c0392b; margin-top: 4px; }
 .pv-hero-main { flex: 1 1 260px; min-width: 0; }
 .pv-name { margin: 0 0 6px; font-size: 1.35rem; color: var(--qm-text); }
 .pv-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -587,7 +598,6 @@
 .bd-post.is-frozen { border-color: rgba(139, 123, 255, 0.4); }
 .bd-post-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .bd-post-head b { color: var(--qm-gold-text); font-size: 0.85rem; } .bd-post-head small { color: var(--qm-text-dim); font-size: 0.72rem; margin-left: auto; }
-.bd-avatar { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font: 700 0.72rem "Inter", sans-serif; color: #1a1205; background: linear-gradient(135deg, #ff8a1f, #ffd24a); }
 .bd-origin { margin: 2px 0 4px; font-size: 0.74rem; color: #1a8a67; }
 .bd-text { margin: 4px 0 8px; color: var(--qm-text); font-size: 0.95rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
 .bd-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 0.74rem; color: var(--qm-text-dim); }
@@ -599,7 +609,7 @@
 .bd-vote:hover { border-color: #B8860B; }
 .bd-vote.is-on { background: linear-gradient(120deg, #ff8a1f, #ffd24a); color: #1a1205; border-color: transparent; }
 .bd-comments { border-top: 1px solid rgba(10, 25, 41, 0.08); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
-.bd-comment { font-size: 0.82rem; color: var(--qm-text); } .bd-comment b { color: var(--qm-gold-text); }
+.bd-comment { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: var(--qm-text); } .bd-comment b { color: var(--qm-gold-text); }
 .bd-cform { display: flex; gap: 6px; margin-top: 4px; }
 .bd-cform input { flex: 1; min-width: 0; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--qm-input-border); background: var(--qm-panel-bg); color: var(--qm-text); font: inherit; font-size: 0.82rem; }
 .bd-cform button { padding: 6px 12px; border-radius: 999px; border: 0; cursor: pointer; background: #ffd24a; color: #1a1205; font-weight: 700; font-size: 0.8rem; }
@@ -724,7 +734,7 @@
 .ap-detail-meta { margin: 0 0 4px; font-size: 0.8rem; color: var(--qm-text-dim); }
 .ap-detail-body { margin: 10px 0; font-size: 0.92rem; color: var(--qm-text); white-space: pre-wrap; }
 .ap-updates { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; padding: 10px; border-radius: 10px; background: rgba(10, 25, 41, 0.04); max-height: 220px; overflow-y: auto; }
-.ap-update-row { font-size: 0.84rem; color: var(--qm-text); }
+.ap-update-row { display: flex; align-items: center; gap: 6px; font-size: 0.84rem; color: var(--qm-text); }
 .ap-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
 .ap-reply-input { flex: 1; min-width: 160px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--qm-input-border); background: var(--qm-input-bg); color: var(--qm-text); font: inherit; }
 .ap-badge { align-self: flex-start; padding: 2px 8px; border-radius: 999px; font: 700 0.65rem "Inter", system-ui, sans-serif; text-transform: capitalize; background: rgba(10, 25, 41, 0.08); color: var(--qm-text-dim); }
@@ -833,6 +843,14 @@
 }
 .fw-suggestion-row p { color: var(--qm-text-dim); font-size: 0.84rem; }
 .fw-suggestion-row .qm-btn { align-self: flex-start; }
+.fw-suggestion-top { display: flex; align-items: center; gap: 10px; }
+.fw-suggestion-avatar {
+  width: 40px; height: 40px; border-radius: 50%; flex: 0 0 auto; display: grid; place-items: center;
+  font: 700 1rem "Fraunces", Georgia, serif; color: #1a1205; background: linear-gradient(135deg, #ff8a1f, #ffd24a);
+  background-size: cover; background-position: center;
+}
+.fw-suggestion-text { min-width: 0; }
+.fw-suggestion-text p { margin: 0; }
 
 /* ---- Family Tree, Nuclear Family Node neighborhood view (2026-10-20): plain SVG rects/text, not
    foreignObject -- simpler and fully compatible with d3-zoom's transform-based panning. A unit
@@ -892,6 +910,11 @@
 .ft-single-rect.is-empty + text { fill: var(--qm-text-dim); font-style: italic; }
 .ft-single-rect.is-deceased { fill: rgba(10, 25, 41, 0.05); stroke: var(--qm-text-dim); opacity: 0.8; }
 .ft-single-rect.is-viewer { stroke: var(--qm-gold); stroke-width: 2.5; filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.6)); }
+
+.ft-add-rect { fill: transparent; stroke: var(--qm-input-border); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.ft-card .ft-add-rect + text { fill: var(--qm-text-dim); font-style: italic; }
+.ft-empty-label { fill: var(--qm-text-dim); font-style: italic; }
+.ft-avatar { overflow: visible; }
 
 /* ---- Election sentiment (Country = Lok Sabha, State = Vidhan Sabha only) ---- */
 .bd-sentiment { margin: 0 14px 10px; padding: 10px 14px; border-radius: 12px; background: rgba(139, 123, 255, 0.08); border: 1px solid rgba(139, 123, 255, 0.3); }

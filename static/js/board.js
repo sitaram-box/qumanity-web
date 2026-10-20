@@ -308,6 +308,7 @@
       stars.forEach(function (s) {
         var row = el("div", "bd-star-row");
         row.appendChild(el("span", "bd-star-ico", "⭐"));
+        if (window.QMAvatar) row.appendChild(window.QMAvatar.render({ name: s.author, gender: s.gender, profile_picture_url: s.profile_picture_url }, 22));
         row.appendChild(el("b", "", s.author));
         row.appendChild(el("small", "", "score " + fmt(s.score) + " · " + ago(s.at)));
         list.appendChild(row);
@@ -434,7 +435,7 @@
       var b = el("article", "bd-post" + (p.mine ? " is-mine" : "") + " is-" + p.status);
       var head = el("div", "bd-post-head");
       if (rank === 0 && p.score > 0) head.appendChild(el("span", "bd-crown", "🏆"));
-      head.appendChild(el("span", "bd-avatar", (p.author || "?").charAt(0)));
+      if (window.QMAvatar) head.appendChild(window.QMAvatar.render({ name: p.author, gender: p.author_gender, profile_picture_url: p.author_profile_picture_url }, 28));
       head.appendChild(el("b", "", p.author));
       var badge = postBadge(p);
       if (badge) head.appendChild(el("span", "bd-badge bd-badge-" + p.post_kind, badge));
@@ -488,7 +489,11 @@
       } else {
         var cm = el("div", "bd-comments");
         cm.appendChild(el("small", "", p.comments.length ? p.comments.length + " comment" + (p.comments.length === 1 ? "" : "s") : "No comments yet"));
-        p.comments.forEach(function (c) { var r = el("div", "bd-comment"); r.appendChild(el("b", "", c.who)); r.appendChild(el("span", "", " " + c.text)); cm.appendChild(r); });
+        p.comments.forEach(function (c) {
+          var r = el("div", "bd-comment");
+          if (window.QMAvatar) r.appendChild(window.QMAvatar.render({ name: c.who, gender: c.gender, profile_picture_url: c.profile_picture_url }, 22));
+          r.appendChild(el("b", "", c.who)); r.appendChild(el("span", "", " " + c.text)); cm.appendChild(r);
+        });
         var f = el("form", "bd-cform"), i = el("input"); i.type = "text"; i.maxLength = 500; i.placeholder = "Write a comment…"; i.required = true;
         var go = el("button", "", "Send"); go.type = "submit"; f.appendChild(i); f.appendChild(go);
         f.addEventListener("submit", function (e) { e.preventDefault(); api("/api/board/comment", { post_id: p.id, text: i.value }).then(load).catch(function (er) { alert(er.message); }); });
@@ -513,7 +518,9 @@
 
     function subgroupBubble(m, memberCount) {
       var b = el("div", "bd-msg bd-msg-full" + (m.mine ? " is-mine" : ""));
-      var head = el("div", "bd-msg-head"); head.appendChild(el("b", "", m.who)); head.appendChild(el("small", "", m.account_id || "")); b.appendChild(head);
+      var head = el("div", "bd-msg-head");
+      if (window.QMAvatar) head.appendChild(window.QMAvatar.render({ name: m.who, gender: m.gender, profile_picture_url: m.profile_picture_url }, 28));
+      head.appendChild(el("b", "", m.who)); head.appendChild(el("small", "", m.account_id || "")); b.appendChild(head);
       b.appendChild(el("p", "bd-msg-text", m.text));
       b.appendChild(el("small", "bd-msg-time", ago(m.at)));
       b.appendChild(reactionBar(m, "subgroup", memberCount, function () { load(); }));

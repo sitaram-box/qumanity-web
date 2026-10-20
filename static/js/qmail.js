@@ -63,13 +63,15 @@
 
   function normalizeItem(r, folder) {
     if (folder === "inbox") {
-      return { id: r.id, folder: folder, who: r.from_name || r.from_address || "Unknown", subject: r.subject,
+      return { id: r.id, folder: folder, who: r.from_name || r.from_address || "Unknown",
+        gender: r.from_gender, profile_picture_url: r.from_profile_picture_url, subject: r.subject,
         body: r.body, date: r.created_at, unread: !r.read_at, attachments: r.attachments || [], raw: r };
     }
     if (folder === "sent") {
       // kind tells a member message from a council one -- their ids come from two tables and can
-      // be the same number.
-      return { id: r.id, folder: folder, kind: r.kind || "member", who: r.to_name || r.to_address || "Unknown", subject: r.subject,
+      // be the same number. A council "recipient" isn't a person, so it has no avatar data at all.
+      return { id: r.id, folder: folder, kind: r.kind || "member", who: r.to_name || r.to_address || "Unknown",
+        gender: r.to_gender, profile_picture_url: r.to_profile_picture_url, subject: r.subject,
         body: r.body, date: r.created_at, unread: false, attachments: r.attachments || [], raw: r };
     }
     // drafts -- to_address is unresolved/unvalidated by design (qmail_core.save_draft's own docstring)
@@ -90,6 +92,8 @@
       cb.className = "qmail-row-checkbox";
       cb.addEventListener("click", function (e) { e.stopPropagation(); }); // scaffolded only -- no bulk action
       row.appendChild(cb);
+
+      if (window.QMAvatar) row.appendChild(window.QMAvatar.render({ name: item.who, gender: item.gender, profile_picture_url: item.profile_picture_url }, 36));
 
       var main = el("div", "qmail-row-main");
       main.appendChild(el("div", "qmail-row-who", item.who));

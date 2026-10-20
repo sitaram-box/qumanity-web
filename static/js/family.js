@@ -142,13 +142,32 @@
     familySearchInput.addEventListener("keydown", function (e) { if (e.key === "Enter") familySearchBtn.click(); });
   }
 
+  // A 40px avatar for a suggestion row -- the uploaded profile picture if there is one, else a
+  // colored circle with the name's first letter (same fallback idiom as the Private account's
+  // own .pv-avatar).
+  function suggestionAvatar(name, pictureUrl) {
+    var div = el("div", "fw-suggestion-avatar");
+    if (pictureUrl) { div.style.backgroundImage = "url('" + pictureUrl + "')"; }
+    else { div.textContent = (name || "?").charAt(0).toUpperCase(); }
+    return div;
+  }
+  function genderLabel(gender) {
+    return gender === "male" ? "Male" : gender === "female" ? "Female" : gender === "both" ? "Third Gender" : "";
+  }
+
   function renderFamilySearchResults(rows) {
     familySearchResult.innerHTML = "";
     if (!rows.length) { familySearchResult.appendChild(el("p", "qm-dash-empty", "No matches nearby.")); return; }
     rows.forEach(function (r) {
       var row = el("div", "fw-suggestion-row");
-      var detail = r.name + (r.location ? " — " + r.location : "") + (r.mutual_group_name ? " · shares " + r.mutual_group_name : "");
-      row.appendChild(el("p", "", detail));
+      var top = el("div", "fw-suggestion-top");
+      top.appendChild(suggestionAvatar(r.name, r.profile_picture_url));
+      var textWrap = el("div", "fw-suggestion-text");
+      var detail = r.name + (r.gender ? " · " + genderLabel(r.gender) : "") +
+        (r.location ? " — " + r.location : "") + (r.mutual_group_name ? " · shares " + r.mutual_group_name : "");
+      textWrap.appendChild(el("p", "", detail));
+      top.appendChild(textWrap);
+      row.appendChild(top);
       var joinBtn = el("button", "qm-btn qm-btn-primary", "Request to Join " + r.group_name);
       joinBtn.type = "button";
       joinBtn.addEventListener("click", function () {
@@ -567,7 +586,13 @@
 
     userMatches.forEach(function (m) {
       var row = el("div", "fw-suggestion-row");
-      row.appendChild(el("p", "", m.name + " is already on Qumanity but hasn't activated their Family Timeline."));
+      var top = el("div", "fw-suggestion-top");
+      top.appendChild(suggestionAvatar(m.name, m.profile_picture_url));
+      var textWrap = el("div", "fw-suggestion-text");
+      textWrap.appendChild(el("p", "", m.name + (m.gender ? " · " + genderLabel(m.gender) : "") +
+        " is already on Qumanity but hasn't activated their Family Timeline."));
+      top.appendChild(textWrap);
+      row.appendChild(top);
       var notifyBtn = el("button", "qm-btn qm-btn-ghost", "Notify Them");
       notifyBtn.type = "button";
       notifyBtn.addEventListener("click", function () {

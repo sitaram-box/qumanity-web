@@ -426,18 +426,84 @@ def link_parent(conn, parent_node_id: int, child_node_id: int, created_by_user_i
     )
 
 
-# ---- Naming: one algorithm now, not two -- a unit's naming pool is always exactly its two
-# founders (the activating child is never in that pool; they're a plain child-member, not a
-# founder, of their parents' unit), so the old generation-rank "a parent always outranks the
-# activating user" problem this module solved last pass no longer arises at all. ----
+# ---- Naming (2026-10-20): '[HusbandCode]-[WifeCode]-[Surname] Family', both founders
+# contributing -- not just whichever is eldest-and-alive, the old _group_name_from() rule this
+# replaces. _pick_unit_eldest() below is a SEPARATE, still-needed concept (it picks which founder
+# fills family_groups.eldest_node_id, unused by naming) and is untouched. ----
 
-def _group_name_from(name: str) -> str:
-    parts = [p for p in (name or "").split() if p]
-    if not parts:
+def _split_name_parts(full_name: str, explicit_middle: str = None) -> tuple:
+    """(first, middle, last) tokens from a free-text name. `explicit_middle` -- a claimed user's
+    own users.middle_name -- wins outright when given; otherwise any tokens strictly between the
+    first and last word of `full_name` fill that role, so a name typed as one string ("A P J
+    Abdul Kalam") still yields a sensible middle ("P J Abdul") without ever touching a dedicated
+    middle-name field -- the only form an unclaimed placeholder node's name can take at all,
+    since family_nodes has no middle_name column of its own."""
+    tokens = (full_name or "").split()
+    if not tokens:
+        return "", "", ""
+    first = tokens[0]
+    last = tokens[-1] if len(tokens) > 1 else ""
+    middle = (explicit_middle or "").strip() or " ".join(tokens[1:-1])
+    return first, middle, last
+
+
+def _name_parts_for_node(conn, node_id) -> tuple:
+    """(first, middle, last) for a family_nodes.id -- live from `users` (name + middle_name) once
+    claimed, same live-resolution rule as _node_display_name(); an unclaimed placeholder has no
+    middle_name column at all, so its Middle comes purely from _split_name_parts()'s
+    between-tokens fallback on its single display_name string."""
+    if not node_id:
+        return "", "", ""
+    row = conn.execute("SELECT claimed_user_id, display_name FROM family_nodes WHERE id = ?", (node_id,)).fetchone()
+    if not row:
+        return "", "", ""
+    if row["claimed_user_id"]:
+        u = conn.execute("SELECT name, middle_name FROM users WHERE id = ?", (row["claimed_user_id"],)).fetchone()
+        if u:
+            return _split_name_parts(u["name"], u["middle_name"])
+    return _split_name_parts(row["display_name"])
+
+
+def _name_code(first: str, middle: str, last: str, fallback_last: str = "") -> str:
+    """The 4-letter per-founder code, verified against the founder's own worked examples:
+      "A"/"P J Abdul"/"Kalam" -> APAM | "Vishal"/-/"Kumar" -> VIAR
+      "Sakshi"/no last (fallback="Kumar") -> SAAR (the "crucial rule": no surname of her own
+      borrows the husband's) | "Amit"/no last/no fallback -> AMIT (self-pads from its own pool)
+
+    `pool` is First+Middle run together (spaces stripped); its first 2 characters are the code's
+    initials (First's own letters first, reaching into Middle only once First alone is shorter
+    than 2 characters). The last 2 characters come from Last's own last 2 letters, or --  only
+    when this side has no last name at all -- fallback_last's, or, failing both, the NEXT 2
+    characters of the same pool (indices [2:4]), so a bare single name still yields a stable
+    4-character code from itself alone. A pool/last shorter than 2 characters yields a shorter-
+    than-4 code rather than padding with anything invented."""
+    pool = (first or "") + (middle or "").replace(" ", "")
+    initials = pool[:2].upper()
+    effective_last = last or fallback_last
+    tail = (effective_last[-2:] if effective_last else pool[2:4]).upper()
+    return initials + tail
+
+
+def _group_name_from_couple(conn, husband_node_id, wife_node_id) -> str:
+    """'[HusbandCode]-[WifeCode]-[Surname] Family'. Surname is the husband's last name, or the
+    wife's if he has none, or omitted entirely if neither does. When both have a last name and
+    they DIFFER, the surname is '[HusbandLast] & [WifeLast]' rather than picking one silently.
+    Falls back to 'Family Group' if neither founder is known yet (mirrors the old function's
+    behavior for a not-yet-fully-formed unit)."""
+    h_first, h_middle, h_last = _name_parts_for_node(conn, husband_node_id)
+    w_first, w_middle, w_last = _name_parts_for_node(conn, wife_node_id)
+    if not h_first and not w_first:
         return "Family Group"
-    first_initial = parts[0][0].upper()
-    surname = parts[-1] if len(parts) > 1 else parts[0]
-    return f"{first_initial}{surname} Family Group"
+
+    h_code = _name_code(h_first, h_middle, h_last) if h_first else ""
+    w_code = _name_code(w_first, w_middle, w_last, fallback_last=h_last) if w_first else ""
+    codes = "-".join(c for c in (h_code, w_code) if c)
+
+    if h_last and w_last:
+        surname = h_last if h_last.lower() == w_last.lower() else f"{h_last} & {w_last}"
+    else:
+        surname = h_last or w_last
+    return f"{codes}-{surname} Family" if surname else f"{codes} Family"
 
 
 def _pick_unit_eldest(conn, husband_node_id, wife_node_id):
@@ -466,8 +532,8 @@ def _pick_unit_eldest(conn, husband_node_id, wife_node_id):
 
 def _generate_unit_name(conn, husband_node_id, wife_node_id):
     eldest_id = _pick_unit_eldest(conn, husband_node_id, wife_node_id)
-    name = _node_display_name(conn, eldest_id) if eldest_id else None
-    return (_group_name_from(name) if name else "Family Group"), eldest_id
+    name = _group_name_from_couple(conn, husband_node_id, wife_node_id)
+    return name, eldest_id
 
 
 VALID_MARRIAGE_STATUSES = ("active", "separated", "dissolved")
@@ -740,10 +806,14 @@ def search_suggestions(conn, viewer_user_id: int, name: str) -> list[dict]:
         })
 
     for r in conn.execute(
-        "SELECT id, name FROM users WHERE name LIKE ? COLLATE NOCASE AND timeline_activated_at IS NULL AND id != ?",
+        """SELECT id, name, gender, profile_picture IS NOT NULL AS has_picture FROM users
+           WHERE name LIKE ? COLLATE NOCASE AND timeline_activated_at IS NULL AND id != ?""",
         (pattern, viewer_user_id),
     ):
-        results.append({"type": "unactivated_user", "user_id": r["id"], "name": r["name"]})
+        results.append({
+            "type": "unactivated_user", "user_id": r["id"], "name": r["name"], "gender": r["gender"],
+            "profile_picture_url": _profile_picture_url(r["id"]) if r["has_picture"] else None,
+        })
 
     # 2026-10-20: real, ALREADY-ACTIVATED members nearby, by name -- a third, different discovery
     # path from the two above (which only ever surface existing family_nodes placeholders, or
@@ -765,8 +835,8 @@ def search_suggestions(conn, viewer_user_id: int, name: str) -> list[dict]:
             "SELECT group_id FROM family_group_members WHERE user_id = ? AND status = 'approved'", (viewer_user_id,)
         )}
         for r in conn.execute(
-            """SELECT id, name, hide_identity, present_location_json FROM users
-               WHERE name LIKE ? COLLATE NOCASE AND id != ? AND timeline_activated_at IS NOT NULL
+            """SELECT id, name, gender, hide_identity, present_location_json, profile_picture IS NOT NULL AS has_picture
+               FROM users WHERE name LIKE ? COLLATE NOCASE AND id != ? AND timeline_activated_at IS NOT NULL
                  AND is_demo = 0 AND is_removed = 0""",
             (pattern, viewer_user_id),
         ):
@@ -802,7 +872,8 @@ def search_suggestions(conn, viewer_user_id: int, name: str) -> list[dict]:
             target_group_id = candidate_group_rows[0]["group_id"]
             target_group_name = conn.execute("SELECT name FROM family_groups WHERE id = ?", (target_group_id,)).fetchone()["name"]
             results.append({
-                "type": "real_user", "user_id": r["id"], "name": r["name"],
+                "type": "real_user", "user_id": r["id"], "name": r["name"], "gender": r["gender"],
+                "profile_picture_url": _profile_picture_url(r["id"]) if r["has_picture"] else None,
                 "location": _location_display_brief(candidate_location),
                 "same_tehsil": candidate_tehsil_id is not None and candidate_tehsil_id == viewer_tehsil_id,
                 "mutual_group_name": mutual_group_name,
@@ -812,6 +883,15 @@ def search_suggestions(conn, viewer_user_id: int, name: str) -> list[dict]:
     if not results:
         results.append({"type": "none"})
     return results
+
+
+def _profile_picture_url(user_id: int) -> str:
+    """The one URL form every caller uses for a user's profile picture -- never built ad hoc,
+    so a path change only happens here. Unconditional: the serving route itself (GET
+    /api/users/<id>/profile-picture) is what enforces the hide_identity gate, returning 404 for a
+    viewer who isn't family -- an <img> tag just shows nothing on a 404, no different from any
+    other broken-image fallback already needed for "no picture uploaded" at all."""
+    return f"/api/users/{user_id}/profile-picture"
 
 
 def _location_display_brief(location: dict) -> str:
@@ -918,6 +998,72 @@ def _link_known_parents_group(conn, user_id: int, child_node_id: int, group_id: 
     if current and not current[side_column]:
         conn.execute(f"UPDATE family_groups SET {side_column} = ? WHERE id = ?", (known_group_id, group_id))
     return known_group_id
+
+
+# ---- Explicit tree growth (2026-10-20): the D3 neighborhood view's own "+Add" buttons, for
+# growing the tree by hand instead of only through the Activation/Marriage wizards. ----
+
+def add_parents_to_group(conn, user_id: int, group_id: int, side: str, father_entry, mother_entry) -> dict:
+    """The '+ Add Father's/Mother's Family' (husband side) / '+ Add Mother's Family' (wife side)
+    button: a thin wrapper around _link_known_parents_group(), the exact same mechanism the
+    wizards use one generation at a time -- one code path for "known at activation" and "added
+    later by hand," not two. Raises ValueError if that side already has a parents' unit (additive
+    only, never an overwrite) or if the side's founder slot isn't filled yet, and PermissionError
+    if user_id isn't an admin of group_id."""
+    if side not in ("husband", "wife"):
+        raise ValueError("Unknown side")
+    if not _is_admin_of_group(conn, user_id, group_id):
+        raise PermissionError("Only an admin of this group can grow the tree here")
+    group = conn.execute("SELECT * FROM family_groups WHERE id = ?", (group_id,)).fetchone()
+    if not group:
+        raise LookupError("Family Group not found")
+    side_column = "husband_parent_group_id" if side == "husband" else "wife_parent_group_id"
+    founder_node_id = group["husband_node_id"] if side == "husband" else group["wife_node_id"]
+    if not founder_node_id:
+        raise ValueError("That side's founder isn't known yet")
+    if group[side_column]:
+        raise ValueError("This side's family is already added")
+    if not (father_entry and (father_entry.get("name") or "").strip()) and \
+       not (mother_entry and (mother_entry.get("name") or "").strip()):
+        raise ValueError("Enter at least one parent's name")
+    results = {"joined_requests": [], "notified": [], "created_node_ids": []}
+    parent_group_id = _link_known_parents_group(
+        conn, user_id, founder_node_id, group_id, side_column,
+        father_entry, mother_entry, results, "father", "mother",
+    )
+    conn.commit()
+    results["parent_group_id"] = parent_group_id
+    return results
+
+
+def add_child_to_group(conn, user_id: int, group_id: int, name: str, gender=None) -> dict:
+    """The '+ Add Child' AND '+ Add Sibling' buttons -- one primitive, not two: both create a plain,
+    unclaimed family_nodes placeholder and link it as a child-member of group_id's two founders.
+    'Add Child' passes the viewer's own unit as group_id; 'Add Sibling' (an in-law -- structurally a
+    child of the SPOUSE'S parents' unit, not a peer of the viewer) passes THAT unit's group_id
+    instead. Unclaimed, so this only grants family_group_nodes (tree visibility), never
+    family_group_members (chat access) -- nobody has consented to anything, same as every other
+    freshly-created placeholder elsewhere in this module."""
+    if not _is_admin_of_group(conn, user_id, group_id):
+        raise PermissionError("Only an admin of this group can grow the tree here")
+    group = conn.execute("SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (group_id,)).fetchone()
+    if not group:
+        raise LookupError("Family Group not found")
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("A name is required")
+    if gender is not None and gender not in VALID_NODE_GENDERS:
+        raise ValueError("Unknown gender")
+    node_id = create_node(conn, user_id, name, gender=gender)
+    for parent_node_id in (group["husband_node_id"], group["wife_node_id"]):
+        if parent_node_id:
+            link_parent(conn, parent_node_id, node_id, user_id)
+    conn.execute(
+        "INSERT OR IGNORE INTO family_group_nodes (group_id, node_id, added_by_user_id, added_at) VALUES (?, ?, ?, ?)",
+        (group_id, node_id, user_id, _now()),
+    )
+    conn.commit()
+    return {"node_id": node_id, "name": name}
 
 
 def activate_timeline(conn, user_id: int, payload: dict) -> dict:
@@ -1120,7 +1266,8 @@ def _person_summary(conn, node_id, viewer_user_id):
         return None
     row = conn.execute(
         """SELECT fn.id, fn.claimed_user_id, fn.gender AS node_gender, fn.status, fn.is_deceased,
-                  COALESCE(u.name, fn.display_name) AS name, u.gender AS user_gender
+                  COALESCE(u.name, fn.display_name) AS name, u.gender AS user_gender,
+                  u.profile_picture IS NOT NULL AS has_picture
            FROM family_nodes fn LEFT JOIN users u ON u.id = fn.claimed_user_id WHERE fn.id = ?""",
         (node_id,),
     ).fetchone()
@@ -1131,6 +1278,7 @@ def _person_summary(conn, node_id, viewer_user_id):
         "gender": row["user_gender"] if row["claimed_user_id"] else row["node_gender"],
         "status": row["status"], "claimed": bool(row["claimed_user_id"]), "is_deceased": bool(row["is_deceased"]),
         "is_viewer": row["claimed_user_id"] == viewer_user_id,
+        "profile_picture_url": _profile_picture_url(row["claimed_user_id"]) if row["claimed_user_id"] and row["has_picture"] else None,
     }
 
 

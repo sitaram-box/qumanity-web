@@ -565,6 +565,7 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: document.getElementById("edit-name").value.trim(),
+        middle_name: document.getElementById("edit-middle-name").value.trim(),
         email: document.getElementById("edit-email").value.trim(),
         phone: document.getElementById("edit-phone").value.trim(),
         reason: document.getElementById("edit-reason").value.trim(),
@@ -582,6 +583,38 @@
         editError.hidden = false;
       });
   });
+
+  // ---- Profile picture (2026-10-20): self-service, uploads immediately -- unlike Edit Profile
+  // above, this never goes through council approval (see profile_picture_core.py). ----
+  var avatarInput = document.getElementById("pv-avatar-input");
+  var avatarUploadBtn = document.getElementById("pv-avatar-upload-btn");
+  var avatarEl = document.getElementById("pv-avatar");
+  var avatarInitialEl = document.getElementById("pv-avatar-initial");
+  var avatarErrorEl = document.getElementById("pv-avatar-error");
+  if (avatarUploadBtn) {
+    avatarUploadBtn.addEventListener("click", function () { avatarInput.click(); });
+    avatarInput.addEventListener("change", function () {
+      var file = avatarInput.files[0];
+      if (!file) return;
+      avatarErrorEl.hidden = true;
+      var formData = new FormData();
+      formData.append("picture", file);
+      avatarUploadBtn.disabled = true;
+      fetch("/api/profile/picture", { method: "POST", body: formData })
+        .then(function (res) { return res.json().then(function (body) { return { ok: res.ok, body: body }; }); })
+        .then(function (result) {
+          avatarUploadBtn.disabled = false;
+          if (!result.ok) throw new Error(result.body.error || "Could not upload picture");
+          avatarEl.style.backgroundImage = "url('/api/users/" + QM_USER_ID + "/profile-picture?v=" + Date.now() + "')";
+          avatarInitialEl.hidden = true;
+        })
+        .catch(function (err) {
+          avatarUploadBtn.disabled = false;
+          avatarErrorEl.textContent = err.message;
+          avatarErrorEl.hidden = false;
+        });
+    });
+  }
 
   // ---- Qoins Wallet (Private tab) ----
   var walletBalanceEl = document.getElementById("qm-wallet-balance");
@@ -1121,6 +1154,7 @@
         var repliesBox = apEl("div", "ap-updates");
         (q.replies || []).forEach(function (r) {
           var row = apEl("div", "ap-update-row");
+          if (window.QMAvatar) row.appendChild(window.QMAvatar.render({ name: r.author_name, gender: r.author_gender, profile_picture_url: r.author_profile_picture_url }, 22));
           row.appendChild(apEl("b", "", r.author_name + " "));
           row.appendChild(apEl("span", "", r.message + " · " + apAgo(r.created_at)));
           repliesBox.appendChild(row);

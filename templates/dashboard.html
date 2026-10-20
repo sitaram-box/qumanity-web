@@ -62,7 +62,15 @@
 
     <section class="qm-dash-panel is-active" id="qm-dash-private">
       <div class="pv-hero">
-        <div class="pv-avatar" aria-hidden="true">{{ profile.name[:1] }}</div>
+        <div class="pv-avatar-wrap">
+          <div class="pv-avatar" id="pv-avatar" aria-hidden="true"
+               {% if profile.has_profile_picture %}style="background-image:url('/api/users/{{ session.user_id }}/profile-picture?v={{ profile.profile_picture_updated_at }}')"{% endif %}>
+            <span id="pv-avatar-initial" {% if profile.has_profile_picture %}hidden{% endif %}>{{ profile.name[:1] }}</span>
+          </div>
+          <button type="button" class="pv-avatar-upload-btn" id="pv-avatar-upload-btn" title="Change profile picture">📷</button>
+          <input type="file" id="pv-avatar-input" accept="image/png,image/jpeg,image/webp" hidden />
+          <small class="pv-avatar-error" id="pv-avatar-error" hidden></small>
+        </div>
         <div class="pv-hero-main">
           <h2 class="pv-name">{{ profile.name }}</h2>
           <div class="pv-chips">
@@ -789,6 +797,30 @@
           <p class="qm-summary-error" id="ft-edit-error" hidden></p>
         </div>
       </div>
+
+      <div class="dq-modal" id="ft-add-modal" hidden role="dialog" aria-modal="true">
+        <div class="dq-modal-box">
+          <button type="button" class="dq-modal-back" data-close aria-label="Close" title="Close">← Close</button>
+          <h3 id="ft-add-modal-title">Add Family Member</h3>
+
+          <div id="ft-add-parents-fields">
+            <label class="qm-field"><span>Father's Name</span><input type="text" id="ft-add-father-name" maxlength="80" /></label>
+            <label class="qm-field"><span>Mother's Name</span><input type="text" id="ft-add-mother-name" maxlength="80" /></label>
+          </div>
+
+          <div id="ft-add-child-fields" hidden>
+            <label class="qm-field"><span>Name</span><input type="text" id="ft-add-child-name" maxlength="80" /></label>
+            <div class="qm-gender-group" id="ft-add-child-gender-group">
+              <button type="button" class="qm-gender-btn" data-gender="male">👦<span>Son</span></button>
+              <button type="button" class="qm-gender-btn" data-gender="female">👧<span>Daughter</span></button>
+              <button type="button" class="qm-gender-btn" data-gender="both">⚧️<span>Third Gender</span></button>
+            </div>
+          </div>
+
+          <button type="button" class="qm-btn qm-btn-primary" id="ft-add-save-btn">Add</button>
+          <p class="qm-summary-error" id="ft-add-error" hidden></p>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -796,6 +828,7 @@
     <h3>Edit Profile</h3>
     <form id="edit-profile-form" class="qm-form">
       <label class="qm-field"><span>Name</span><input type="text" id="edit-name" value="{{ profile.name }}" /></label>
+      <label class="qm-field"><span>Middle Name <small class="pv-hint">optional</small></span><input type="text" id="edit-middle-name" value="{{ profile.middle_name }}" /></label>
       <label class="qm-field"><span>Email</span><input type="email" id="edit-email" value="{{ profile.email or '' }}" /></label>
       <label class="qm-field"><span>Phone</span><input type="text" id="edit-phone" placeholder="+91-XXXXXXXXXX" /></label>
       <label class="qm-field"><span>Reason for change</span><input type="text" id="edit-reason" required /></label>
@@ -975,8 +1008,10 @@
     var QM_KUNDALI = {{ profile.kundali_view | tojson }};
     var QM_LANGS = {{ profile.languages | tojson }};
     var QM_PREFERRED_LANG = {{ profile.preferred_language | tojson }};
+    var QM_USER_ID = {{ session.user_id | tojson }};
   </script>
   <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/avatar.js') }}"></script>
   <script src="{{ url_for('static', filename='js/qmail_format.js') }}"></script>
   <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
   <script src="{{ url_for('static', filename='js/dash_extras.js') }}"></script>

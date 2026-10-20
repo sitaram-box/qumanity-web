@@ -8,6 +8,13 @@
  * neighborhood; the current (middle) unit is never clickable to navigate. Exposes
  * window.QMFamilyTree.showTree(groupId) for family.js's group list to call into (name kept for
  * compatibility with the existing call site).
+ *
+ * Explicit tree growth (2026-10-20): the top row always shows exactly 2 slots (husband/wife side)
+ * -- a real unit card if neighborhood_for_group() found one, else a dashed "+ Add Father's/
+ * Mother's Family" button. The bottom row always appends a trailing dashed "+ Add Child" button
+ * after any real children. A dashed "+ Add Sibling" button sits beside the SPOUSE's parents' card
+ * specifically (only once that card is real) -- an in-law is structurally a child of the spouse's
+ * parents' unit, not a peer of the viewer, so it is never placed beside the self card.
  */
 (function () {
   "use strict";
@@ -18,7 +25,7 @@
   var svgEl = document.getElementById("ft-svg");
   var backBtn = document.getElementById("ft-back-btn");
 
-  var UNIT_W = 230, UNIT_H = 60, SINGLE_W = 130, CARD_GAP = 50, ROW_H = 180;
+  var UNIT_W = 230, UNIT_H = 60, SINGLE_W = 130, CARD_GAP = 50, ROW_H = 180, AVATAR_R = 11;
 
   function api(url, body) {
     var opt = body !== undefined ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {};
@@ -36,31 +43,63 @@
     return n + " member" + (n === 1 ? "" : "s");
   }
 
-  // ---- Layout: fixed 3 rows, centered on x=0. No hierarchy algorithm needed -- row and width are
-  // already known from the neighborhood response's own shape. ----
-  function layoutUniform(items, y, width) {
-    var n = items.length;
-    if (!n) return [];
-    var totalW = n * width + (n - 1) * CARD_GAP;
-    var x = -totalW / 2;
-    return items.map(function (item) {
-      var cx = x + width / 2;
-      x += width + CARD_GAP;
-      return { x: cx, y: y, width: width, kind: "unit", data: item };
-    });
+  // ---- Avatars: window.QMAvatar.render() (static/js/avatar.js), the SAME function every other
+  // surface (chat, Qmail, board, admin) uses -- embedded via <foreignObject>, since SVG has no
+  // <img>/<div> of its own to render QMAvatar's real HTMLElement output directly. ----
+  function renderAvatar(parent, person, cx, cy, r) {
+    if (!person || !window.QMAvatar) return;
+    var size = r * 2;
+    var fo = parent.append("foreignObject").attr("class", "ft-avatar")
+      .attr("x", cx - r).attr("y", cy - r).attr("width", size).attr("height", size);
+    var body = fo.append("xhtml:div").style("width", size + "px").style("height", size + "px");
+    body.node().appendChild(QMAvatar.render(person, size));
   }
 
-  function layoutChildren(childGroups, unmarriedChildren, y) {
-    var items = (childGroups || []).map(function (g) { return { kind: "unit", data: g, width: UNIT_W }; })
-      .concat((unmarriedChildren || []).map(function (p) { return { kind: "person", data: p, width: SINGLE_W }; }));
+  // ---- Layout: fixed 3 rows, centered on x=0. A single generic row-layout function (mixed
+  // widths, centered) now covers all three rows -- the top row needs mixed widths too, once a
+  // narrower "+ Add Sibling" button can sit beside a full-width parent-unit card. ----
+  function layoutRow(items, y) {
     if (!items.length) return [];
     var totalW = items.reduce(function (sum, it) { return sum + it.width; }, 0) + (items.length - 1) * CARD_GAP;
     var x = -totalW / 2;
     return items.map(function (it) {
       var cx = x + it.width / 2;
       x += it.width + CARD_GAP;
-      return { x: cx, y: y, width: it.width, kind: it.kind, data: it.data };
+      var out = { x: cx, y: y, width: it.width, kind: it.kind, data: it.data };
+      if (it.role) out.role = it.role;
+      if (it.side) out.side = it.side;
+      if (it.targetGroupId !== undefined) out.targetGroupId = it.targetGroupId;
+      return out;
     });
+  }
+
+  function buildTopRowItems(nbh) {
+    var bySide = {};
+    (nbh.parent_groups || []).forEach(function (g) { bySide[g.side] = g; });
+    var husbandItem = bySide.husband
+      ? { kind: "unit", data: bySide.husband, role: "husband", width: UNIT_W }
+      : { kind: "add-parents", side: "husband", width: UNIT_W };
+    var wifeItem = bySide.wife
+      ? { kind: "unit", data: bySide.wife, role: "wife", width: UNIT_W }
+      : { kind: "add-parents", side: "wife", width: UNIT_W };
+    var items = [husbandItem, wifeItem];
+
+    // The spouse is whichever founder of the CURRENT unit the viewer is NOT -- "Add Sibling"
+    // only makes sense once we know which side is the spouse's, and only once that side's
+    // parents' unit is real (there's nothing to attach an in-law to otherwise).
+    var spouseSide = (nbh.husband && nbh.husband.is_viewer) ? "wife" : ((nbh.wife && nbh.wife.is_viewer) ? "husband" : null);
+    if (spouseSide && bySide[spouseSide]) {
+      var siblingItem = { kind: "add-sibling", targetGroupId: bySide[spouseSide].group_id, width: SINGLE_W };
+      if (spouseSide === "husband") items.unshift(siblingItem); else items.push(siblingItem);
+    }
+    return items;
+  }
+
+  function buildBottomRowItems(nbh) {
+    var items = (nbh.child_groups || []).map(function (g) { return { kind: "unit", data: g, width: UNIT_W }; })
+      .concat((nbh.unmarried_children || []).map(function (p) { return { kind: "person", data: p, width: SINGLE_W }; }));
+    items.push({ kind: "add-child", targetGroupId: nbh.group_id, width: SINGLE_W });
+    return items;
   }
 
   // ---- Rendering ----
@@ -92,7 +131,8 @@
     var cls = "ft-person" + (!person || !person.claimed ? " is-empty" : "")
       + (person && person.is_deceased ? " is-deceased" : "") + (person && person.is_viewer ? " is-viewer" : "");
     var p = group.append("g").attr("class", cls).attr("transform", "translate(" + offsetX + ",0)");
-    p.append("text").attr("y", 5).text(person ? personLabel(person) : "+ Add");
+    renderAvatar(p, person, 0, -12, AVATAR_R);
+    p.append("text").attr("y", 18).text(person ? personLabel(person) : "+ Add");
     if (person && !person.claimed) {
       p.style("cursor", "pointer").on("click", function (event) {
         event.stopPropagation();
@@ -105,7 +145,8 @@
     var cls = "ft-single-rect" + (person.is_deceased ? " is-deceased" : "") + (!person.claimed ? " is-empty" : "") + (person.is_viewer ? " is-viewer" : "");
     group.append("rect").attr("class", cls)
       .attr("x", -width / 2).attr("y", -UNIT_H * 0.35).attr("width", width).attr("height", UNIT_H * 0.7).attr("rx", 10);
-    group.append("text").attr("y", 5).text(person ? personLabel(person) : "+ Add");
+    renderAvatar(group, person, 0, -9, AVATAR_R * 0.8);
+    group.append("text").attr("class", person.claimed ? null : "ft-empty-label").attr("y", 13).text(person ? personLabel(person) : "+ Add");
     if (!person.claimed) {
       group.style("cursor", "pointer").on("click", function (event) {
         event.stopPropagation();
@@ -114,13 +155,24 @@
     }
   }
 
+  function renderAddUnitCard(group, width, label) {
+    group.append("rect").attr("class", "ft-unit-rect ft-add-rect")
+      .attr("x", -width / 2).attr("y", -UNIT_H / 2).attr("width", width).attr("height", UNIT_H).attr("rx", 12);
+    group.append("text").text(label);
+  }
+
+  function renderAddPersonCard(group, width, label) {
+    group.append("rect").attr("class", "ft-single-rect is-empty")
+      .attr("x", -width / 2).attr("y", -UNIT_H * 0.35).attr("width", width).attr("height", UNIT_H * 0.7).attr("rx", 10);
+    group.append("text").attr("y", 5).text(label);
+  }
+
   function renderNeighborhood(nbh) {
-    var parentCards = layoutUniform(nbh.parent_groups, -ROW_H, UNIT_W).map(function (c, i) {
-      c.role = nbh.parent_groups[i].side;
-      return c;
-    });
+    var topItems = buildTopRowItems(nbh);
+    var parentCards = layoutRow(topItems, -ROW_H);
     var selfCard = { x: 0, y: 0, width: UNIT_W, kind: "unit", data: nbh, role: "self" };
-    var childCards = layoutChildren(nbh.child_groups, nbh.unmarried_children, ROW_H);
+    var bottomItems = buildBottomRowItems(nbh);
+    var childCards = layoutRow(bottomItems, ROW_H);
 
     var svg = d3.select(svgEl);
     svg.selectAll("*").remove();
@@ -128,17 +180,21 @@
     var zoomBehavior = d3.zoom().scaleExtent([0.4, 2]).on("zoom", function (event) { g.attr("transform", event.transform); });
     svg.call(zoomBehavior);
 
-    // Connecting lines, drawn first so cards sit visually on top of them.
+    // Connecting lines, drawn first so cards sit visually on top of them. The "+ Add Sibling"
+    // button is never linked to self -- it isn't a child of this unit, it would belong to the
+    // spouse's parents' unit above, which already has its own card.
     var linkGen = d3.linkVertical().x(function (d) { return d.x; }).y(function (d) { return d.y; });
     var linksLayer = g.append("g").attr("class", "ft-links-layer");
     parentCards.forEach(function (p) {
+      if (p.kind === "add-sibling") return;
+      var sourceHalfH = p.kind === "add-parents" ? UNIT_H / 2 : UNIT_H / 2;
       linksLayer.append("path").attr("class", "ft-link").attr("d", linkGen({
-        source: { x: p.x, y: p.y + UNIT_H / 2 },
+        source: { x: p.x, y: p.y + sourceHalfH },
         target: { x: selfCard.x, y: selfCard.y - UNIT_H / 2 },
       }));
     });
     childCards.forEach(function (c) {
-      var targetHalfH = c.kind === "person" ? UNIT_H * 0.35 : UNIT_H / 2;
+      var targetHalfH = c.kind === "unit" ? UNIT_H / 2 : UNIT_H * 0.35;
       linksLayer.append("path").attr("class", "ft-link").attr("d", linkGen({
         source: { x: selfCard.x, y: selfCard.y + UNIT_H / 2 },
         target: { x: c.x, y: c.y - targetHalfH },
@@ -156,18 +212,41 @@
 
     cardGroups.each(function (d) {
       var group = d3.select(this);
-      if (d.kind === "person") {
-        renderPersonCard(group, d.data, d.width);
-      } else {
-        renderUnitCard(group, d.data, d.width, d === selfCard, d.role);
+      switch (d.kind) {
+        case "person":
+          renderPersonCard(group, d.data, d.width);
+          break;
+        case "add-parents":
+          renderAddUnitCard(group, d.width, d.side === "husband" ? "+ Add Father's Family" : "+ Add Mother's Family");
+          break;
+        case "add-sibling":
+          renderAddPersonCard(group, d.width, "+ Add Sibling");
+          break;
+        case "add-child":
+          renderAddPersonCard(group, d.width, "+ Add Child");
+          break;
+        default:
+          renderUnitCard(group, d.data, d.width, d === selfCard, d.role);
       }
     });
 
-    // Click-to-navigate: any unit card except the current (self) one. A click on an empty person
-    // slot is stopped from bubbling here (see renderPersonHalf), so it opens the edit modal only.
+    // Click-to-navigate: any real unit card except the current (self) one. A click on an empty
+    // person slot is stopped from bubbling here (see renderPersonHalf), so it opens the edit
+    // modal only.
     cardGroups.filter(function (d) { return d.kind === "unit" && d !== selfCard; })
       .style("cursor", "pointer")
       .on("click", function (event, d) { showTree(d.data.group_id); });
+
+    // Click-to-grow: the dashed "+Add" buttons each open ft-add-modal in the right mode.
+    cardGroups.filter(function (d) { return d.kind === "add-parents"; })
+      .style("cursor", "pointer")
+      .on("click", function (event, d) { openAddModal("parents", { groupId: nbh.group_id, side: d.side }); });
+    cardGroups.filter(function (d) { return d.kind === "add-sibling"; })
+      .style("cursor", "pointer")
+      .on("click", function (event, d) { openAddModal("child", { groupId: d.targetGroupId, title: "Add Sibling" }); });
+    cardGroups.filter(function (d) { return d.kind === "add-child"; })
+      .style("cursor", "pointer")
+      .on("click", function (event, d) { openAddModal("child", { groupId: d.targetGroupId, title: "Add Child" }); });
 
     // Center the initial view on the current unit.
     var wrapRect = svgEl.getBoundingClientRect();
@@ -257,6 +336,76 @@
     api("/api/family/node/" + state.editingNodeId + "/link", { user_id: val })
       .then(reloadAfterEdit)
       .catch(function (e) { errorEl.textContent = e.message; errorEl.hidden = false; });
+  });
+
+  // ---- "+Add" modal (2026-10-20): grows the tree by hand. 'parents' mode fills a missing
+  // husband-/wife-side parents' unit (POST .../add-parents); 'child' mode covers BOTH "+ Add
+  // Child" and "+ Add Sibling" (POST .../add-child) -- same route, the opener just picks which
+  // unit's group_id to target. ----
+  var addModal = document.getElementById("ft-add-modal");
+  var addModalTitle = document.getElementById("ft-add-modal-title");
+  var addParentsFields = document.getElementById("ft-add-parents-fields");
+  var addChildFields = document.getElementById("ft-add-child-fields");
+  var addFatherInput = document.getElementById("ft-add-father-name");
+  var addMotherInput = document.getElementById("ft-add-mother-name");
+  var addChildNameInput = document.getElementById("ft-add-child-name");
+  var addChildGenderBtns = Array.prototype.slice.call(document.querySelectorAll("#ft-add-child-gender-group .qm-gender-btn"));
+  var addErrorEl = document.getElementById("ft-add-error");
+  var addState = { mode: null, groupId: null, side: null, gender: null };
+
+  addModal.addEventListener("click", function (e) {
+    if (e.target === addModal || e.target.hasAttribute("data-close")) addModal.hidden = true;
+  });
+
+  addChildGenderBtns.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      addState.gender = btn.getAttribute("data-gender");
+      addChildGenderBtns.forEach(function (b) { b.classList.toggle("is-active", b === btn); });
+    });
+  });
+
+  function openAddModal(mode, opts) {
+    addState.mode = mode;
+    addState.groupId = opts.groupId;
+    addState.side = opts.side || null;
+    addState.gender = null;
+    addErrorEl.hidden = true;
+    addFatherInput.value = ""; addMotherInput.value = ""; addChildNameInput.value = "";
+    addChildGenderBtns.forEach(function (b) { b.classList.remove("is-active"); });
+
+    if (mode === "parents") {
+      addModalTitle.textContent = opts.side === "husband" ? "Add Father's Family" : "Add Mother's Family";
+      addParentsFields.hidden = false;
+      addChildFields.hidden = true;
+    } else {
+      addModalTitle.textContent = opts.title || "Add Child";
+      addParentsFields.hidden = true;
+      addChildFields.hidden = false;
+    }
+    addModal.hidden = false;
+  }
+
+  function reloadAfterAdd() {
+    addModal.hidden = true;
+    if (state.currentGroupId) showTree(state.currentGroupId);
+  }
+
+  document.getElementById("ft-add-save-btn").addEventListener("click", function () {
+    addErrorEl.hidden = true;
+    if (addState.mode === "parents") {
+      var father = addFatherInput.value.trim(), mother = addMotherInput.value.trim();
+      if (!father && !mother) { addErrorEl.textContent = "Enter at least one parent's name."; addErrorEl.hidden = false; return; }
+      api("/api/family/node/" + addState.groupId + "/add-parents", {
+        side: addState.side,
+        father: father ? { name: father } : null,
+        mother: mother ? { name: mother } : null,
+      }).then(reloadAfterAdd).catch(function (e) { addErrorEl.textContent = e.message; addErrorEl.hidden = false; });
+    } else {
+      var name = addChildNameInput.value.trim();
+      if (!name) { addErrorEl.textContent = "A name is required."; addErrorEl.hidden = false; return; }
+      api("/api/family/node/" + addState.groupId + "/add-child", { name: name, gender: addState.gender })
+        .then(reloadAfterAdd).catch(function (e) { addErrorEl.textContent = e.message; addErrorEl.hidden = false; });
+    }
   });
 
   window.QMFamilyTree = { showTree: showTree };

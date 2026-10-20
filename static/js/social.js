@@ -47,19 +47,31 @@
     return { feed: feed, form: form, ta: ta };
   }
 
-  function renderMessages(feed, messages, emptyText, memberCount, onReact) {
+  // `other` (optional): the single other party's {name, gender, profile_picture_url} for a
+  // private 1:1 chat, whose per-message rows (unlike group chat) don't each carry identity --
+  // there's only ever one "other" person, so every non-mine bubble is them.
+  function renderMessages(feed, messages, emptyText, memberCount, onReact, other) {
     feed.innerHTML = "";
     if (!messages.length) { feed.appendChild(el("p", "bd-empty", emptyText)); return; }
     messages.forEach(function (m) {
       if (m.reactions && memberCount) {
         var b = el("div", "bd-msg bd-msg-full" + (m.mine ? " is-mine" : ""));
-        var head = el("div", "bd-msg-head"); head.appendChild(el("b", "", m.who)); head.appendChild(el("small", "", m.account_id || "")); b.appendChild(head);
+        var head = el("div", "bd-msg-head");
+        if (window.QMAvatar) head.appendChild(window.QMAvatar.render({ name: m.who, gender: m.gender, profile_picture_url: m.profile_picture_url }, 28));
+        head.appendChild(el("b", "", m.who)); head.appendChild(el("small", "", m.account_id || "")); b.appendChild(head);
         b.appendChild(el("p", "bd-msg-text", m.text));
         b.appendChild(el("small", "bd-msg-time", ago(m.at)));
         b.appendChild(reactionBar(m, memberCount, onReact));
         feed.appendChild(b);
       } else {
-        var plain = el("div", "bd-msg" + (m.mine ? " is-mine" : "")); if (!m.mine && m.who) plain.appendChild(el("b", "", m.who)); plain.appendChild(document.createTextNode(m.text));
+        var plain = el("div", "bd-msg" + (m.mine ? " is-mine" : ""));
+        if (!m.mine && (other || m.who)) {
+          var plainHead = el("div", "bd-msg-head");
+          if (other && window.QMAvatar) plainHead.appendChild(window.QMAvatar.render(other, 24));
+          if (m.who) plainHead.appendChild(el("b", "", m.who));
+          plain.appendChild(plainHead);
+        }
+        plain.appendChild(document.createTextNode(m.text));
         feed.appendChild(plain);
       }
     });
@@ -232,7 +244,9 @@
     api("/api/people/chats").then(function (d) {
       chatList.innerHTML = ""; chatEmpty.hidden = d.chats.length > 0;
       d.chats.forEach(function (c) {
-        var li = el("li", "pt-inbox-item"); var b = el("button", "qm-member-row", c.with + (c.last ? " — " + c.last : "")); b.type = "button";
+        var li = el("li", "pt-inbox-item"); var b = el("button", "qm-member-row"); b.type = "button";
+        if (window.QMAvatar) b.appendChild(window.QMAvatar.render({ name: c.with, gender: c.with_gender, profile_picture_url: c.with_profile_picture_url }, 28));
+        b.appendChild(document.createTextNode(c.with + (c.last ? " — " + c.last : "")));
         b.addEventListener("click", function () { openChat(c.chat_id); });
         li.appendChild(b); chatList.appendChild(li);
       });
@@ -242,7 +256,8 @@
     chatModal.hidden = false;
     api("/api/people/chats/" + chatId).then(function (d) {
       var ui = renderChatShell(chatRoot, { title: d.with, sub: "Private chat", placeholder: "Message " + d.with + "…" });
-      renderMessages(ui.feed, d.messages, "No messages yet.");
+      renderMessages(ui.feed, d.messages, "No messages yet.", null, null,
+        { name: d.with, gender: d.with_gender, profile_picture_url: d.with_profile_picture_url });
       ui.form.addEventListener("submit", function (e) {
         e.preventDefault();
         api("/api/people/chats/" + chatId, { text: ui.ta.value }).then(function () { ui.ta.value = ""; openChat(chatId); }).catch(function (er) { alert(er.message); });

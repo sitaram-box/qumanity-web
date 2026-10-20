@@ -18,9 +18,12 @@ install).
 """
 from __future__ import annotations
 
+import io
 import os
 import sys
 import tempfile
+
+from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -32,6 +35,7 @@ os.environ["QM_DISABLE_SCHEDULER"] = "1"
 
 import app as appmod  # noqa: E402
 import db as dbmod  # noqa: E402
+import family_core  # noqa: E402
 
 FAILS = []
 
@@ -111,7 +115,7 @@ body = res.get_json()
 check("self_node_id present", "self_node_id" in body)
 check("parents' unit created", "parents_group_id" in body)
 check("no marital unit created (single, no spouse yet)", "marital_group_id" not in body)
-check("unit named after eldest founder (PSharma Family Group)", body.get("parents_group_name") == "PSharma Family Group")
+check("unit named via the husband+wife naming code (2026-10-20 format)", body.get("parents_group_name") == "PAMA-SUMA-Sharma Family")
 
 res = client.get("/api/family/status")
 check("now activated", res.get_json()["activated"] is True)
@@ -135,7 +139,7 @@ check("neighborhood has no parent units (father/mother have no known birth units
 
 print()
 print("=" * 70)
-print("2. Deceased father: naming now follows the single alive-eldest rule (the living mother wins)")
+print("2. Deceased father: naming still combines both founders regardless of alive/deceased status")
 print("=" * 70)
 
 greg = register("Greg Patel")
@@ -146,10 +150,9 @@ res = client.post("/api/family/activate", json={
 })
 check("activation with a deceased father succeeds", res.status_code == 201)
 greg_body = res.get_json()
-check("naming picks the ALIVE founder (mother), not the deceased father -- the old generation-first "
-      "lineage rule is retired; under the Nuclear Node model there's one alive-and-eldest rule, "
-      "applied to exactly the two founders",
-      greg_body["parents_group_name"] == "LPatel Family Group")
+check("naming combines BOTH founders' codes regardless of alive/deceased status (2026-10-20 format) "
+      "-- unlike eldest_node_id, which still prefers the alive founder for its own, separate purpose",
+      greg_body["parents_group_name"] == "DEEL-LIEL-Patel Family")
 greg_tree = client.get(f"/api/family-groups/{greg_body['parents_group_id']}/tree").get_json()
 father_node = next(n for n in greg_tree["nodes"] if n["name"] == "Deceased Patel")
 check("father node is flagged is_deceased", father_node["is_deceased"] is True)
@@ -217,7 +220,7 @@ check("suggest succeeds", res.status_code == 200)
 results = res.get_json()["results"]
 check("finds the unactivated real user", any(r["type"] == "unactivated_user" and r["user_id"] == pardeep_real["user_id"] for r in results))
 check("does NOT suggest alice's own unit back to herself (already a member)",
-      not any(r["type"] == "group" and r["group_name"] == "PSharma Family Group" for r in results))
+      not any(r["type"] == "group" and r["group_name"] == "PAMA-SUMA-Sharma Family" for r in results))
 
 res = client.get("/api/family/suggest", query_string={"name": "Nobody At All Xyz"})
 check("no-match search returns type=none", res.get_json()["results"] == [{"type": "none"}])
@@ -524,7 +527,7 @@ check("the parents' unit's husband_parent_group_id (paternal grandparents) is se
 check("the parents' unit's wife_parent_group_id (maternal grandparents) is set", noah_parents_row["wife_parent_group_id"] is not None)
 
 pgf_unit = raw("SELECT name FROM family_groups WHERE id = ?", (noah_parents_row["husband_parent_group_id"],))
-check("the paternal grandparents' unit is named after Noah PGF/PGM", pgf_unit["name"] == "NPGF Family Group")
+check("the paternal grandparents' unit is named via the husband+wife code", pgf_unit["name"] == "NOGF-NOGM-PGF & PGM Family")
 
 # A sibling activating into the SAME parents' unit, supplying DIFFERENT grandparent names, must
 # NOT overwrite the already-known grandparent links.
@@ -557,7 +560,7 @@ noah_marry_body = res.get_json()
 noah_marital_row = raw("SELECT wife_parent_group_id FROM family_groups WHERE id = ?", (noah_marry_body["marital_group_id"],))
 check("the spouse's parents are linked on the SPOUSE'S side (wife_parent_group_id)", noah_marital_row["wife_parent_group_id"] is not None)
 sf_unit = raw("SELECT name FROM family_groups WHERE id = ?", (noah_marital_row["wife_parent_group_id"],))
-check("the spouse's parents' unit is named correctly", sf_unit["name"] == "NSF Family Group")
+check("the spouse's parents' unit is named correctly", sf_unit["name"] == "NOSF-NOSM-SF & SM Family")
 
 print()
 print("=" * 70)
@@ -728,6 +731,270 @@ login(greg["private_code"])
 greg_status = client.get("/api/family/status").get_json()
 greg_parents_row = next(g for g in greg_status["groups"] if g["id"] == greg_body["parents_group_id"])
 check("is_founder=False for a plain child-member's parents' unit ('Joined Family')", greg_parents_row["is_founder"] is False)
+
+print()
+print("=" * 70)
+print("15. Explicit tree growth: the '+Add' parents/child routes")
+print("=" * 70)
+
+grower = register("Grower Self")
+login(grower["private_code"])
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Grower Father", "action": "create"}, "mother": {"name": "Grower Mother", "action": "create"},
+    "relationship": "married",
+})
+grower_body = res.get_json()
+grower_parents_id = grower_body["parents_group_id"]  # husband=father, wife=mother -- neither side's own parents known yet
+res = client.post("/api/family/marry", json={"spouse": {"name": "Grower Spouse", "action": "create"}, "marriage_status": "active"})
+grower_marital_id = res.get_json()["marital_group_id"]
+
+# "+ Add Father's Family": fills husband_parent_group_id on grower's PARENTS' unit (i.e. the
+# paternal grandparents).
+res = client.post(f"/api/family/node/{grower_parents_id}/add-parents",
+                   json={"side": "husband", "father": {"name": "Paternal Grandpa"}, "mother": {"name": "Paternal Grandma"}})
+check("add-parents (husband side, both names) succeeds (201)", res.status_code == 201)
+grandparents_group_id = res.get_json()["parent_group_id"]
+check("a new grandparents' unit was created", grandparents_group_id is not None)
+row = raw("SELECT husband_parent_group_id FROM family_groups WHERE id = ?", (grower_parents_id,))
+check("grower's parents' unit now has husband_parent_group_id set", row["husband_parent_group_id"] == grandparents_group_id)
+nbh = client.get(f"/api/family/node/{grower_parents_id}/neighborhood").get_json()
+check("the new grandparents' unit shows up in the neighborhood view, tagged side=husband",
+      any(pg["group_id"] == grandparents_group_id and pg["side"] == "husband" for pg in nbh["parent_groups"]))
+
+# Repeating on the SAME side is rejected -- additive only, never an overwrite.
+res = client.post(f"/api/family/node/{grower_parents_id}/add-parents",
+                   json={"side": "husband", "father": {"name": "Someone Else"}, "mother": None})
+check("add-parents on an already-filled side is rejected (400)", res.status_code == 400)
+check("...with a clear 'already added' message", "already added" in res.get_json().get("error", ""))
+
+res = client.post(f"/api/family/node/{grower_parents_id}/add-parents", json={"side": "sideways", "father": {"name": "X"}})
+check("an unknown side is rejected (400)", res.status_code == 400)
+
+res = client.post(f"/api/family/node/{grower_parents_id}/add-parents", json={"side": "wife", "father": None, "mother": None})
+check("add-parents with neither parent named is rejected (400)", res.status_code == 400)
+
+# A stranger (not an admin of this unit) cannot grow someone else's tree.
+stranger = register("Stranger NoAccess")
+login(stranger["private_code"])
+res = client.post(f"/api/family/node/{grower_parents_id}/add-parents",
+                   json={"side": "wife", "father": {"name": "Intruder Father"}, "mother": None})
+check("a non-admin stranger is refused with 403, not 400/201", res.status_code == 403)
+
+# "+ Add Child": a plain placeholder child of grower's OWN marital unit.
+login(grower["private_code"])
+res = client.post(f"/api/family/node/{grower_marital_id}/add-child", json={"name": "Grower Child One", "gender": "female"})
+check("add-child on grower's own unit succeeds (201)", res.status_code == 201)
+child_node_id = res.get_json()["node_id"]
+nbh = client.get(f"/api/family/node/{grower_marital_id}/neighborhood").get_json()
+check("the new child appears in unmarried_children", any(p["id"] == child_node_id for p in nbh["unmarried_children"]))
+
+# "+ Add Sibling" is the EXACT SAME primitive, just targeting a different unit's group_id (here,
+# the grandparents' unit from above) -- proving the one-primitive-two-buttons design, not a
+# second code path.
+res = client.post(f"/api/family/node/{grandparents_group_id}/add-child", json={"name": "Grower Uncle", "gender": "male"})
+check("the same add-child route, targeted at the grandparents' unit, adds a 'sibling-in-law' there (201)", res.status_code == 201)
+
+res = client.post(f"/api/family/node/{grower_marital_id}/add-child", json={"name": "", "gender": "male"})
+check("add-child with a blank name is rejected (400)", res.status_code == 400)
+res = client.post(f"/api/family/node/{grower_marital_id}/add-child", json={"name": "Bad Gender Kid", "gender": "nonbinary-typo"})
+check("add-child with an invalid gender value is rejected (400)", res.status_code == 400)
+
+logout()
+login(stranger["private_code"])
+res = client.post(f"/api/family/node/{grower_marital_id}/add-child", json={"name": "Intruder Kid"})
+check("a non-admin stranger cannot add-child to someone else's unit either (403)", res.status_code == 403)
+
+print()
+print("=" * 70)
+print("16. Profile pictures: upload, Pillow processing, serving, and the hide_identity gate")
+print("=" * 70)
+
+
+def _tiny_image_bytes(fmt="PNG", size=(40, 30), color=(200, 60, 10)):
+    buf = io.BytesIO()
+    Image.new("RGB", size, color).save(buf, format=fmt)
+    return buf.getvalue()
+
+
+logout()
+login(grower["private_code"])
+
+res = client.post("/api/profile/picture", data={"picture": (io.BytesIO(_tiny_image_bytes()), "me.png", "image/png")})
+check("uploading a valid PNG succeeds (200)", res.status_code == 200)
+
+res = client.get(f"/api/users/{grower['user_id']}/profile-picture")
+check("the picture is served back (200)", res.status_code == 200)
+check("served as image/jpeg (always re-encoded, whatever the upload format was)", res.mimetype == "image/jpeg")
+check("nosniff header present", res.headers.get("X-Content-Type-Options") == "nosniff")
+served_img = Image.open(io.BytesIO(res.data))
+check("stored thumbnail is exactly 256x256", served_img.size == (256, 256))
+check("EXIF was stripped (no exif data block on the re-saved JPEG)", not served_img.getexif())
+
+res = client.get("/api/me")
+check("/api/me now reports has_profile_picture = true", res.get_json()["has_profile_picture"] is True)
+
+# A non-rectangular upload still comes out 256x256 (center-cropped, not squashed).
+res = client.post("/api/profile/picture", data={"picture": (io.BytesIO(_tiny_image_bytes(size=(300, 90))), "wide.png", "image/png")})
+check("re-uploading a wide (non-square) image still succeeds (200)", res.status_code == 200)
+served_img2 = Image.open(io.BytesIO(client.get(f"/api/users/{grower['user_id']}/profile-picture").data))
+check("a wide upload is still stored as a 256x256 square (center-cropped)", served_img2.size == (256, 256))
+
+# Type allowlist: extension/content-type must both be an allowed image type, and must agree.
+res = client.post("/api/profile/picture", data={"picture": (io.BytesIO(b"not really an image"), "shell.svg", "image/svg+xml")})
+check("an .svg upload is rejected (400)", res.status_code == 400)
+res = client.post("/api/profile/picture", data={"picture": (io.BytesIO(_tiny_image_bytes()), "me.png", "image/gif")})
+check("a .png filename declared as image/gif is rejected -- extension and type disagree (400)", res.status_code == 400)
+
+# Size cap: 3MB raw-upload ceiling. A file this far over also trips Flask's own global
+# MAX_CONTENT_LENGTH (set to the same 3MB, app.py line ~168) before our view even runs, so the
+# response here is werkzeug's own 413, not our friendly 400 -- both are "rejected, not stored",
+# which is what matters; profile_picture_core.save_profile_picture()'s own ValueError path (for a
+# body that slips in just under werkzeug's cap but over ours) is covered directly below instead.
+oversized = b"\xff" * (3 * 1024 * 1024 + 1)
+res = client.post("/api/profile/picture", data={"picture": (io.BytesIO(oversized), "huge.png", "image/png")})
+check("an upload well over 3MB is rejected, not stored (400 or 413)", res.status_code in (400, 413))
+
+import profile_picture_core as _ppc  # noqa: E402  (imported here, not at module top, purely for this one direct-unit check)
+_conn2 = dbmod.get_db()
+try:
+    _ppc.save_profile_picture(_conn2, grower["user_id"], "huge.png", "image/png", oversized)
+    check("save_profile_picture() itself rejects an oversized image with ValueError", False)
+except ValueError as e:
+    check("save_profile_picture() itself rejects an oversized image with ValueError", True)
+    check("...with a message naming the limit", "3 MB" in str(e))
+finally:
+    _conn2.close()
+
+res = client.post("/api/profile/picture", data={})
+check("a request with no file at all is rejected cleanly (400), not a 500", res.status_code == 400)
+
+# hide_identity gate: the SAME rule that already masks a hidden user's name also hides their
+# picture, for anyone who isn't an established family member.
+hidden_pic_user = register("HiddenPic Person")
+_conn = dbmod.get_db()
+_conn.execute("UPDATE users SET hide_identity = 1 WHERE id = ?", (hidden_pic_user["user_id"],))
+_conn.commit()
+_conn.close()
+login(hidden_pic_user["private_code"])
+client.post("/api/profile/picture", data={"picture": (io.BytesIO(_tiny_image_bytes()), "hidden.png", "image/png")})
+res = client.get(f"/api/users/{hidden_pic_user['user_id']}/profile-picture")
+check("the hidden user can still see their own picture (200)", res.status_code == 200)
+
+logout()
+login(stranger["private_code"])
+res = client.get(f"/api/users/{hidden_pic_user['user_id']}/profile-picture")
+check("a stranger gets 404 for a hide_identity user's picture, same as their masked name", res.status_code == 404)
+
+# Search suggestions now carry gender + profile_picture_url for a real, already-activated match.
+logout()
+login(grower["private_code"])
+res = client.get("/api/family/suggest", query_string={"name": "Stranger NoAccess"})
+suggest_hits = [r for r in res.get_json()["results"] if r["type"] in ("real_user", "unactivated_user")]
+check("a search match (unactivated, no picture) carries gender and a null profile_picture_url",
+      any(h.get("gender") == "male" and h.get("profile_picture_url") is None for h in suggest_hits))
+
+print()
+print("=" * 70)
+print("17. Family Group naming: the husband+wife code, verified against every worked example")
+print("=" * 70)
+
+
+def _expected_name(husband_name, wife_name, husband_middle=None, wife_middle=None):
+    hf, hm, hl = family_core._split_name_parts(husband_name, husband_middle)
+    wf, wm, wl = family_core._split_name_parts(wife_name, wife_middle)
+    h_code = family_core._name_code(hf, hm, hl) if hf else ""
+    w_code = family_core._name_code(wf, wm, wl, fallback_last=hl) if wf else ""
+    codes = "-".join(c for c in (h_code, w_code) if c)
+    if hl and wl:
+        surname = hl if hl.lower() == wl.lower() else f"{hl} & {wl}"
+    else:
+        surname = hl or wl
+    return f"{codes}-{surname} Family" if surname else f"{codes} Family"
+
+
+check("_name_code: 'A'/'P J Abdul'/'Kalam' -> APAM", family_core._name_code("A", "P J Abdul", "Kalam") == "APAM")
+check("_name_code: 'Vishal'/-/'Kumar' -> VIAR", family_core._name_code("Vishal", "", "Kumar") == "VIAR")
+check("_name_code: 'Sakshi' (no last, fallback=Kumar) -> SAAR", family_core._name_code("Sakshi", "", "", fallback_last="Kumar") == "SAAR")
+check("_name_code: 'Rohit'/-/'Mudgal' -> ROAL", family_core._name_code("Rohit", "", "Mudgal") == "ROAL")
+check("_name_code: 'Ria' (no last, fallback=Mudgal) -> RIAL", family_core._name_code("Ria", "", "", fallback_last="Mudgal") == "RIAL")
+check("_name_code: 'Amit' (no last, no fallback) self-pads -> AMIT", family_core._name_code("Amit", "", "") == "AMIT")
+check("_name_code: 'Priya'/-/'Sharma' -> PRMA", family_core._name_code("Priya", "", "Sharma") == "PRMA")
+
+naming_codex = register("Codex Husband")
+login(naming_codex["private_code"])
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Sunil Thakur", "action": "create"}, "mother": {"name": "Priya Thakur", "action": "create"},
+})
+check("shared-surname couple names the unit without '&' (Thakur, not 'Thakur & Thakur')",
+      res.get_json()["parents_group_name"] == _expected_name("Sunil Thakur", "Priya Thakur") == "SUUR-PRUR-Thakur Family")
+
+logout()
+naming_codex2 = register("Codex Husband Two")
+login(naming_codex2["private_code"])
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Amit Sharma", "action": "create"}, "mother": {"name": "Priya Verma", "action": "create"},
+})
+check("differing surnames join with '&' (husband's last name first)",
+      res.get_json()["parents_group_name"] == _expected_name("Amit Sharma", "Priya Verma") == "AMMA-PRMA-Sharma & Verma Family")
+
+logout()
+naming_codex3 = register("Codex Husband Three")
+login(naming_codex3["private_code"])
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Amit", "action": "create"}, "mother": {"name": "Priya Sharma", "action": "create"},
+})
+check("husband with no last name at all: only the wife's surname trails the group name",
+      res.get_json()["parents_group_name"] == _expected_name("Amit", "Priya Sharma") == "AMIT-PRMA-Sharma Family")
+
+print()
+print("=" * 70)
+print("18. Middle name: optional field, carried through registration, and self-service edit")
+print("=" * 70)
+
+mn_user = register("Middlename Carrier")
+_conn3 = dbmod.get_db()
+_conn3.execute("UPDATE users SET middle_name = ? WHERE id = ?", ("Kumar", mn_user["user_id"]))
+_conn3.commit()
+_conn3.close()
+login(mn_user["private_code"])
+res = client.get("/api/me")
+check("middle_name round-trips through /api/me", res.get_json()["middle_name"] == "Kumar")
+
+# A fresh registration with no middle name at all leaves it blank, not some placeholder.
+no_mn_user = register("No Middlename Person")
+login(no_mn_user["private_code"])
+res = client.get("/api/me")
+check("a user who never set a middle name reports an empty string, not null/error", res.get_json()["middle_name"] == "")
+
+# Editing it goes through the SAME council-approval queue as name/email/phone -- never applied
+# immediately, consistent with every other PROFILE_CHANGE_FIELDS entry.
+res = client.post("/api/dashboard/edit-request", json={"middle_name": "Prasad", "reason": "Adding my middle name"})
+check("middle_name edit is queued, not applied immediately (201)", res.status_code == 200 and res.get_json()["status"] == "queued")
+res = client.get("/api/me")
+check("the queued middle_name has NOT applied yet", res.get_json()["middle_name"] == "")
+
+req_row = raw("SELECT id FROM profile_change_requests WHERE user_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 1", (no_mn_user["user_id"],))
+os.environ["QM_ADMIN_PRIVATE_IDS"] = no_mn_user["private_code"]  # self-approval is fine here -- only exercising the generic apply path, not scope rules (already covered by test_admin_panel_council_scope.py)
+res = client.post(f"/api/admin/profile-changes/{req_row['id']}/decide", json={"approve": True})
+check("admin approval applies the queued middle_name change (200)", res.status_code == 200)
+res = client.get("/api/me")
+check("middle_name now reflects the approved change", res.get_json()["middle_name"] == "Prasad")
+del os.environ["QM_ADMIN_PRIVATE_IDS"]
+
+# The claimed founder's naming code must use their OWN users.middle_name (just approved above),
+# not a between-tokens guess off their display name -- the DB join _name_parts_for_node() does.
+res = client.post("/api/family/activate", json={
+    "father": {"name": "NMN Father", "action": "create"}, "mother": {"name": "NMN Mother", "action": "create"},
+    "relationship": "married",
+})
+check("the middle-name-bearing user's own activation succeeds", res.status_code == 201)
+res = client.post("/api/family/marry", json={"spouse": {"name": "NMN Spouse", "action": "create"}, "marriage_status": "active"})
+check("marrying succeeds", res.status_code == 201)
+marital_name = res.get_json()["marital_group_name"]
+no_mn_user_name = raw("SELECT name FROM users WHERE id = ?", (no_mn_user["user_id"],))["name"]
+expected = _expected_name(no_mn_user_name, "NMN Spouse", husband_middle="Prasad")
+check("the claimed founder's approved middle_name feeds the naming code via the DB join, not a guess",
+      marital_name == expected)
 
 print()
 print("=" * 70)

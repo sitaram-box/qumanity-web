@@ -32,6 +32,7 @@ import email_core
 import family_core
 import pipeline_core
 import pipeline_scheduler
+import profile_picture_core
 import test_cycle_scheduler
 import elemental_core
 import folder_connector
@@ -125,6 +126,13 @@ def _ensure_user_columns():
         # members, and on anything they themselves post to a Public/Global Collective Board --
         # see social_core.py's identity-masking helpers.
         ("hide_identity", "INTEGER DEFAULT 0"),
+        # Profile picture (2026-10-20): see migrations/028_profile_pictures.py and
+        # profile_picture_core.py -- listed here too, as every other users-table column is, so a
+        # database that skipped migration 028 still boots with these columns present.
+        ("profile_picture", "BLOB"), ("profile_picture_updated_at", "TEXT"),
+        # Middle name (2026-10-20, migrations/029_middle_name.py): optional, feeds the Family
+        # Group naming logic (family_core._name_code()) -- see that function's own docstring.
+        ("middle_name", "TEXT"),
     ):
         if col not in cols:
             conn.execute(f"ALTER TABLE users ADD COLUMN {col} {ddl}")
@@ -1213,7 +1221,9 @@ def api_qmail_inbox():
     conn = get_db()
     try:
         rows = conn.execute(
-            """SELECT m.id, m.subject, m.body, m.created_at, m.read_at, u.name AS from_name, qa.full_address AS from_address
+            """SELECT m.id, m.subject, m.body, m.created_at, m.read_at, u.name AS from_name,
+                      u.id AS from_user_id, u.gender AS from_gender,
+                      u.profile_picture IS NOT NULL AS from_has_picture, qa.full_address AS from_address
                FROM qmail_messages m
                JOIN users u ON u.id = m.from_user_id
                LEFT JOIN qmail_addresses qa ON qa.user_id = m.from_user_id AND qa.is_current = 1
@@ -1224,6 +1234,7 @@ def api_qmail_inbox():
         for r in rows:
             d = dict(r)
             d["attachments"] = qmail_core.attachments_for(conn, "member", d["id"])
+            d["from_profile_picture_url"] = f"/api/users/{d['from_user_id']}/profile-picture" if d.pop("from_has_picture") else None
             messages.append(d)
     finally:
         conn.close()
@@ -1370,7 +1381,9 @@ def api_qmail_sent():
     conn = get_db()
     try:
         member_rows = conn.execute(
-            """SELECT m.id, m.subject, m.body, m.created_at, u.name AS to_name, qa.full_address AS to_address
+            """SELECT m.id, m.subject, m.body, m.created_at, u.name AS to_name,
+                      u.id AS to_user_id, u.gender AS to_gender,
+                      u.profile_picture IS NOT NULL AS to_has_picture, qa.full_address AS to_address
                FROM qmail_messages m
                JOIN users u ON u.id = m.to_user_id
                LEFT JOIN qmail_addresses qa ON qa.user_id = m.to_user_id AND qa.is_current = 1
@@ -1392,6 +1405,7 @@ def api_qmail_sent():
             d = dict(r)
             d["kind"] = "member"
             d["attachments"] = qmail_core.attachments_for(conn, "member", d["id"])
+            d["to_profile_picture_url"] = f"/api/users/{d['to_user_id']}/profile-picture" if d.pop("to_has_picture") else None
             messages.append(d)
         for r in council_rows:
             d = dict(r)
@@ -1496,13 +1510,17 @@ def api_qmail_resolve_public_id():
         ).fetchone()
         if not row:
             return jsonify({"error": "No member found with that Public ID"}), 404
-        target = conn.execute("SELECT name, qmail_username FROM users WHERE id = ?", (row["user_id"],)).fetchone()
+        target = conn.execute(
+            "SELECT name, qmail_username, profile_picture IS NOT NULL AS has_picture FROM users WHERE id = ?",
+            (row["user_id"],),
+        ).fetchone()
+        picture_url = f"/api/users/{row['user_id']}/profile-picture" if target and target["has_picture"] else None
         if not target or not target["qmail_username"]:
-            return jsonify({"activated": False, "message": "This member has not activated Qmail"})
+            return jsonify({"activated": False, "message": "This member has not activated Qmail", "profile_picture_url": picture_url})
         address = qmail_core.current_address(conn, row["user_id"])
     finally:
         conn.close()
-    return jsonify({"activated": True, "name": target["name"], "address": address})
+    return jsonify({"activated": True, "name": target["name"], "address": address, "profile_picture_url": picture_url})
 
 
 @app.route("/api/qmail/status")
@@ -1878,6 +1896,34 @@ def api_family_node_link(node_id):
     finally:
         conn.close()
     return jsonify({"status": "ok"})
+
+
+@app.route("/api/family/node/<int:group_id>/add-parents", methods=["POST"])
+@login_required
+@_board_error
+def api_family_add_parents(group_id):
+    data = request.get_json(silent=True) or {}
+    conn = _family(get_db())
+    try:
+        result = family_core.add_parents_to_group(
+            conn, session["user_id"], group_id, data.get("side"), data.get("father"), data.get("mother"),
+        )
+    finally:
+        conn.close()
+    return jsonify(result), 201
+
+
+@app.route("/api/family/node/<int:group_id>/add-child", methods=["POST"])
+@login_required
+@_board_error
+def api_family_add_child(group_id):
+    data = request.get_json(silent=True) or {}
+    conn = _family(get_db())
+    try:
+        result = family_core.add_child_to_group(conn, session["user_id"], group_id, data.get("name"), data.get("gender"))
+    finally:
+        conn.close()
+    return jsonify(result), 201
 
 
 @app.route("/api/family-groups/<int:group_id>/tree")
@@ -2532,6 +2578,49 @@ def api_me():
     return jsonify(profile)
 
 
+@app.route("/api/profile/picture", methods=["POST"])
+@login_required
+def api_profile_picture_upload():
+    """Self-service, immediate -- unlike /api/dashboard/edit-request, this never goes through
+    council approval (see profile_picture_core.py's module docstring: a picture is cosmetic, not
+    a foundational identity fact)."""
+    file = request.files.get("picture")
+    if not file or not file.filename:
+        return jsonify({"error": "Choose an image to upload"}), 400
+    data = file.read()
+    if not data:
+        return jsonify({"error": "Choose an image to upload"}), 400
+    conn = get_db()
+    try:
+        profile_picture_core.save_profile_picture(conn, session["user_id"], file.filename, file.content_type, data)
+    except profile_picture_core.ImageTypeError as e:
+        return jsonify({"error": str(e)}), 400
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/users/<int:user_id>/profile-picture")
+def api_profile_picture_serve(user_id):
+    # Not @login_required on purpose: an <img src> request sends cookies like any other same-
+    # origin request, but a logged-out browser tab showing a cached page shouldn't 302 to the
+    # login page in place of the image -- a clean 404 degrades the same way "no picture" already does.
+    viewer_user_id = session.get("user_id")
+    conn = get_db()
+    try:
+        picture = profile_picture_core.get_profile_picture(conn, user_id, viewer_user_id)
+    finally:
+        conn.close()
+    if not picture:
+        return jsonify({"error": "No profile picture"}), 404
+    res = send_file(io.BytesIO(picture), mimetype="image/jpeg", as_attachment=False)
+    res.headers["X-Content-Type-Options"] = "nosniff"
+    res.headers["Cache-Control"] = "private, max-age=3600"
+    return res
+
+
 @app.route("/api/user/pin", methods=["POST"])
 @login_required
 def api_change_pin():
@@ -2681,6 +2770,7 @@ def _profile_for(user_id):
         "private_id": user["private_id"],
         "account_id": user["account_id"],
         "name": user["name"],
+        "middle_name": user["middle_name"] or "",
         "gender": user["gender"],
         "dob": user["dob"],
         "tob": user["tob"],
@@ -2706,6 +2796,8 @@ def _profile_for(user_id):
         "present_location": _location_display(json.loads(user["present_location_json"])),
         "birth_location_struct": json.loads(user["birth_location_json"]),
         "present_location_struct": json.loads(user["present_location_json"]),
+        "has_profile_picture": bool(user["profile_picture"]),
+        "profile_picture_updated_at": user["profile_picture_updated_at"] or "",
     }
     return profile
 
@@ -2763,7 +2855,7 @@ def api_profile_personal_details():
         conn.close()
 
 
-PROFILE_CHANGE_FIELDS = ("name", "email", "phone", "dob", "tob", "birth_location", "present_location")
+PROFILE_CHANGE_FIELDS = ("name", "middle_name", "email", "phone", "dob", "tob", "birth_location", "present_location")
 FOUNDATIONAL_FIELDS = ("dob", "tob", "birth_location", "present_location")  # only a council can approve these
 # private_id_9digit is deliberately NOT in PROFILE_CHANGE_FIELDS: it never reaches a ticket via
 # the generic self-service edit route (api_dashboard_edit_request). The only place a request can
@@ -3682,11 +3774,11 @@ def api_auth_register():
     )
     private_code = id_generator.generate_private_code(conn)
     cur = conn.execute(
-        """INSERT INTO users (name, gender, dob, tob, language, birth_location_json,
+        """INSERT INTO users (name, middle_name, gender, dob, tob, language, birth_location_json,
                                present_location_json, private_id, account_id,
                                email, phone, pin_hash, private_id_9digit, birth_time_known)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (data["name"], data["gender"], data["dob"], data["tob"], data.get("language"),
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (data["name"], (data.get("middle_name") or "").strip() or None, data["gender"], data["dob"], data["tob"], data.get("language"),
          json.dumps(birth_location), json.dumps(present_location), private_id, account_id,
          email or None, phone or None, generate_password_hash(str(data["pin"])), private_code,
          int(birth_time_known)),
