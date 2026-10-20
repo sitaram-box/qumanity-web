@@ -57,9 +57,17 @@
     status: null, // last GET /api/family/status response
     father: { name: "", is_deceased: false },
     mother: { name: "", is_deceased: false },
+    grandparentsKnown: null, // true | false | null (not yet answered)
+    fatherFather: { name: "", is_deceased: false },
+    fatherMother: { name: "", is_deceased: false },
+    motherFather: { name: "", is_deceased: false },
+    motherMother: { name: "", is_deceased: false },
     relationship: null, // single | married | separated | divorced | widowed -- the wizard's OWN answer
     hasChildren: null, // true | false | null (not yet answered)
     spouse: null, // null if single; else {name, viaExactId, resolvedUserId, resolvedAccountId, is_deceased?}
+    spouseParentsKnown: null, // true | false | null (not yet answered)
+    spouseFather: { name: "", is_deceased: false },
+    spouseMother: { name: "", is_deceased: false },
     children: [], // [{name, gender}]
     slots: [],
   };
@@ -84,17 +92,26 @@
       summaryEl.hidden = !status.activated;
       if (status.activated) renderGroupsList(status.groups);
     }).catch(function () {});
-    loadLegacyGroups();
   }
 
+  // "My Family" (a unit the viewer themself founded) always sorts above "Joined Family" (a unit
+  // they were approved into, e.g. their parents') -- is_founder/is_admin come straight from
+  // family_core.my_family_groups(), which also excludes dormant units (both founders deceased)
+  // entirely from this list, though they still render, faded, in the D3 tree. See that function's
+  // own docstring for why is_founder and is_admin are two independent signals, not one.
   function renderGroupsList(groups) {
     groupsListEl.innerHTML = "";
     if (!groups.length) { groupsListEl.appendChild(el("li", "pt-empty-row", "No groups yet.")); return; }
-    groups.forEach(function (g) {
+    var sorted = groups.slice().sort(function (a, b) { return (b.is_founder ? 1 : 0) - (a.is_founder ? 1 : 0); });
+    sorted.forEach(function (g) {
       var li = el("li", "pt-group-row");
-      var label = g.name + " · " + g.kind + " · " + g.members + " member" + (g.members === 1 ? "" : "s") + (g.is_admin ? " · Admin" : "");
-      var btn = el("button", "qm-member-row", label + "  🌳");
+      var btn = el("button", "qm-member-row ft-group-btn" + (g.is_founder ? " is-my-family" : " is-joined-family"));
       btn.type = "button";
+      if (g.is_founder) btn.appendChild(el("span", "ft-group-dot"));
+      btn.appendChild(el("span", "ft-group-name", g.name));
+      var badgeText = g.is_founder ? "My Family" : (g.is_admin ? "Joined Family · Admin" : "Joined Family · Member");
+      btn.appendChild(el("span", "ft-group-badge", badgeText));
+      btn.appendChild(el("span", "ft-group-meta", g.members + " member" + (g.members === 1 ? "" : "s") + "  🌳"));
       btn.addEventListener("click", function () {
         if (window.QMFamilyTree) window.QMFamilyTree.showTree(g.id);
       });
@@ -103,33 +120,48 @@
     });
   }
 
-  // ---- Legacy Family Groups bridge (2026-10-20): the old Paternal/Maternal personal_groups
-  // (category='family') still exist and may still have real chat history -- this panel no longer
-  // renders them in its own list (social.js's LIST_EL dropped 'family'), so without this, anyone
-  // with an active legacy chat would have no way back in. Data is untouched; this just restores
-  // access, reusing social.js's own tested chat modal via window.QMSocial rather than duplicating
-  // it. Revisit once the D3 tree (Phase 2) exists -- merge into the new structure, or keep both. ----
-  var legacyListEl = document.getElementById("family-legacy-list");
-  var legacyEmptyEl = document.getElementById("family-legacy-empty");
-
-  function loadLegacyGroups() {
-    api("/api/people/groups").then(function (d) {
-      renderLegacyGroups((d.family && d.family.owned || []).concat(d.family && d.family.joined || []));
-    }).catch(function () {});
+  // ---- Find a relative: name + location search for already-activated members, distinct from the
+  // Activation wizard's own father/mother/spouse/child slot-matching (same /api/family/suggest
+  // route, a third result "type": "real_user" family_core.search_suggestions() now also returns). ----
+  var familySearchInput = document.getElementById("family-search-input");
+  var familySearchBtn = document.getElementById("family-search-btn");
+  var familySearchResult = document.getElementById("family-search-result");
+  if (familySearchBtn) {
+    familySearchBtn.addEventListener("click", function () {
+      var q = familySearchInput.value.trim();
+      if (q.length < 2) return;
+      familySearchResult.innerHTML = "";
+      familySearchResult.appendChild(el("p", "qm-dash-empty", "Searching…"));
+      api("/api/family/suggest?name=" + encodeURIComponent(q)).then(function (d) {
+        renderFamilySearchResults((d.results || []).filter(function (r) { return r.type === "real_user"; }));
+      }).catch(function () {
+        familySearchResult.innerHTML = "";
+        familySearchResult.appendChild(el("p", "qm-dash-empty", "Couldn't search right now."));
+      });
+    });
+    familySearchInput.addEventListener("keydown", function (e) { if (e.key === "Enter") familySearchBtn.click(); });
   }
 
-  function renderLegacyGroups(rows) {
-    legacyListEl.innerHTML = "";
-    legacyEmptyEl.hidden = !!rows.length;
-    rows.forEach(function (g) {
-      var li = el("li", "pt-group-row");
-      var btn = el("button", "qm-member-row", g.name + " · " + g.members + " member" + (g.members === 1 ? "" : "s") + (g.mine ? "" : " · " + g.owner_name + "'s group"));
-      btn.type = "button";
-      btn.addEventListener("click", function () {
-        if (window.QMSocial) window.QMSocial.openGroupChat(g.id, "family");
+  function renderFamilySearchResults(rows) {
+    familySearchResult.innerHTML = "";
+    if (!rows.length) { familySearchResult.appendChild(el("p", "qm-dash-empty", "No matches nearby.")); return; }
+    rows.forEach(function (r) {
+      var row = el("div", "fw-suggestion-row");
+      var detail = r.name + (r.location ? " — " + r.location : "") + (r.mutual_group_name ? " · shares " + r.mutual_group_name : "");
+      row.appendChild(el("p", "", detail));
+      var joinBtn = el("button", "qm-btn qm-btn-primary", "Request to Join " + r.group_name);
+      joinBtn.type = "button";
+      joinBtn.addEventListener("click", function () {
+        joinBtn.disabled = true; joinBtn.textContent = "Requesting…";
+        api("/api/family-groups/" + r.group_id + "/join-request", {}).then(function () {
+          joinBtn.textContent = "✓ Requested";
+        }).catch(function (e) {
+          joinBtn.disabled = false; joinBtn.textContent = "Request to Join " + r.group_name;
+          alert(e.message);
+        });
       });
-      li.appendChild(btn);
-      legacyListEl.appendChild(li);
+      row.appendChild(joinBtn);
+      familySearchResult.appendChild(row);
     });
   }
 
@@ -146,9 +178,17 @@
   document.getElementById("family-activate-start-btn").addEventListener("click", function () {
     state.father = { name: "", is_deceased: false };
     state.mother = { name: "", is_deceased: false };
+    state.grandparentsKnown = null;
+    state.fatherFather = { name: "", is_deceased: false };
+    state.fatherMother = { name: "", is_deceased: false };
+    state.motherFather = { name: "", is_deceased: false };
+    state.motherMother = { name: "", is_deceased: false };
     state.relationship = null;
     state.hasChildren = null;
     state.spouse = null;
+    state.spouseParentsKnown = null;
+    state.spouseFather = { name: "", is_deceased: false };
+    state.spouseMother = { name: "", is_deceased: false };
     state.children = [];
     state.slots = [];
 
@@ -156,6 +196,13 @@
     document.getElementById("fw-father-deceased").checked = false;
     document.getElementById("fw-mother-name").value = "";
     document.getElementById("fw-mother-deceased").checked = false;
+
+    Array.prototype.forEach.call(document.querySelectorAll("#fw-grandparents-group .qm-gender-btn"), function (b) { b.classList.remove("is-active"); });
+    document.getElementById("fw-grandparents-wrap").hidden = true;
+    ["ff", "fm", "mf", "mm"].forEach(function (p) {
+      document.getElementById("fw-" + p + "-name").value = "";
+      document.getElementById("fw-" + p + "-deceased").checked = false;
+    });
 
     document.getElementById("fw-status-error").hidden = true;
     Array.prototype.forEach.call(document.querySelectorAll("#fw-status-group .qm-gender-btn"), function (b) { b.classList.remove("is-active"); });
@@ -167,6 +214,12 @@
     document.getElementById("fw-spouse-search-input").value = "";
     document.getElementById("fw-spouse-search-result").innerHTML = "";
     document.getElementById("fw-marital-error").hidden = true;
+    Array.prototype.forEach.call(document.querySelectorAll("#fw-spouse-grandparents-group .qm-gender-btn"), function (b) { b.classList.remove("is-active"); });
+    document.getElementById("fw-spouse-parents-wrap").hidden = true;
+    ["sf", "sm"].forEach(function (p) {
+      document.getElementById("fw-" + p + "-name").value = "";
+      document.getElementById("fw-" + p + "-deceased").checked = false;
+    });
 
     document.getElementById("fw-children-error").hidden = true;
     Array.prototype.forEach.call(document.querySelectorAll("#fw-has-children-group .qm-gender-btn"), function (b) { b.classList.remove("is-active"); });
@@ -192,7 +245,23 @@
     goToFwStep("parents");
   });
 
-  // ---- Step 1: Parents ----
+  // ---- Step 1: Parents (+ optional Grandparents) ----
+  var grandparentsButtons = Array.prototype.slice.call(document.querySelectorAll("#fw-grandparents-group .qm-gender-btn"));
+  grandparentsButtons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var yes = btn.getAttribute("data-grandparents") === "yes";
+      state.grandparentsKnown = yes;
+      grandparentsButtons.forEach(function (b) { b.classList.toggle("is-active", b === btn); });
+      document.getElementById("fw-grandparents-wrap").hidden = !yes;
+    });
+  });
+
+  function readGrandparentField(prefix) {
+    var name = document.getElementById("fw-" + prefix + "-name").value.trim();
+    if (!name) return { name: "", is_deceased: false };
+    return { name: name, is_deceased: document.getElementById("fw-" + prefix + "-deceased").checked };
+  }
+
   document.getElementById("fw-parents-next-btn").addEventListener("click", function () {
     var fatherName = document.getElementById("fw-father-name").value.trim();
     var motherName = document.getElementById("fw-mother-name").value.trim();
@@ -205,6 +274,14 @@
     errEl.hidden = true;
     state.father = { name: fatherName, is_deceased: document.getElementById("fw-father-deceased").checked };
     state.mother = { name: motherName, is_deceased: document.getElementById("fw-mother-deceased").checked };
+    if (state.grandparentsKnown) {
+      state.fatherFather = readGrandparentField("ff");
+      state.fatherMother = readGrandparentField("fm");
+      state.motherFather = readGrandparentField("mf");
+      state.motherMother = readGrandparentField("mm");
+    } else {
+      state.fatherFather = state.fatherMother = state.motherFather = state.motherMother = { name: "", is_deceased: false };
+    }
     goToFwStep("status");
   });
 
@@ -261,6 +338,22 @@
       resultEl.appendChild(el("p", "qm-summary-error", e.message));
     });
   });
+  var spouseGrandparentsButtons = Array.prototype.slice.call(document.querySelectorAll("#fw-spouse-grandparents-group .qm-gender-btn"));
+  spouseGrandparentsButtons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var yes = btn.getAttribute("data-spouseparents") === "yes";
+      state.spouseParentsKnown = yes;
+      spouseGrandparentsButtons.forEach(function (b) { b.classList.toggle("is-active", b === btn); });
+      document.getElementById("fw-spouse-parents-wrap").hidden = !yes;
+    });
+  });
+
+  function readSpouseParentField(prefix) {
+    var name = document.getElementById("fw-" + prefix + "-name").value.trim();
+    if (!name) return { name: "", is_deceased: false };
+    return { name: name, is_deceased: document.getElementById("fw-" + prefix + "-deceased").checked };
+  }
+
   document.getElementById("fw-marital-next-btn").addEventListener("click", function () {
     var errEl = document.getElementById("fw-marital-error");
     var name = document.getElementById("fw-spouse-name").value.trim();
@@ -279,6 +372,12 @@
     // doesn't mutate the is_deceased flag of; a known, narrow limitation -- see mark_deceased()
     // for that separately, if it's ever needed for an already-claimed spouse).
     if (state.relationship === "widowed" && !onApp) state.spouse.is_deceased = true;
+    if (state.spouseParentsKnown) {
+      state.spouseFather = readSpouseParentField("sf");
+      state.spouseMother = readSpouseParentField("sm");
+    } else {
+      state.spouseFather = state.spouseMother = { name: "", is_deceased: false };
+    }
     goToFwStep("children");
   });
 
@@ -378,6 +477,16 @@
       { key: "father", label: "Father", name: state.father.name, is_deceased: state.father.is_deceased, action: "create" },
       { key: "mother", label: "Mother", name: state.mother.name, is_deceased: state.mother.is_deceased, action: "create" },
     ];
+    // Grandparents (and the spouse's parents, below) are always "create" -- not run through the
+    // Discover step's existing-group matching, a deliberate scoped simplification -- but still
+    // shown in Discover/Review for transparency before Activate, reusing the same slot pipeline.
+    [
+      ["fatherFather", "father_father", "Father's Father"], ["fatherMother", "father_mother", "Father's Mother"],
+      ["motherFather", "mother_father", "Mother's Father"], ["motherMother", "mother_mother", "Mother's Mother"],
+    ].forEach(function (g) {
+      var v = state[g[0]];
+      if (v && v.name) state.slots.push({ key: g[1], label: g[2], name: v.name, is_deceased: v.is_deceased, action: "create", skipDiscover: true });
+    });
     if (state.spouse) {
       if (state.spouse.viaExactId) {
         state.slots.push({ key: "spouse", label: "Spouse", name: state.spouse.name, action: "notify", user_id: state.spouse.resolvedUserId, resolved: true });
@@ -385,6 +494,10 @@
         state.slots.push({ key: "spouse", label: "Spouse", name: state.spouse.name, is_deceased: !!state.spouse.is_deceased, action: "create" });
       }
     }
+    [["spouseFather", "spouse_father", "Spouse's Father"], ["spouseMother", "spouse_mother", "Spouse's Mother"]].forEach(function (g) {
+      var v = state[g[0]];
+      if (v && v.name) state.slots.push({ key: g[1], label: g[2], name: v.name, is_deceased: v.is_deceased, action: "create", skipDiscover: true });
+    });
     state.children.forEach(function (c, i) {
       state.slots.push({ key: "child_" + (i + 1), label: "Child " + (i + 1), name: c.name, gender: c.gender, action: "create" });
     });
@@ -410,6 +523,10 @@
 
       if (slot.resolved) {
         markSlotResolved(card, "Linked to an existing Qumanity member — we'll notify them.");
+        return;
+      }
+      if (slot.skipDiscover) {
+        markSlotResolved(card, "Will create a new profile for " + slot.name + ".");
         return;
       }
       body.appendChild(el("p", "qm-dash-empty", "Checking…"));
@@ -531,7 +648,11 @@
     errEl.hidden = true; noteEl.hidden = true;
     btn.disabled = true; btn.textContent = "Activating…";
 
-    var activatePayload = { father: slotPayload("father"), mother: slotPayload("mother"), relationship: state.relationship };
+    var activatePayload = {
+      father: slotPayload("father"), mother: slotPayload("mother"), relationship: state.relationship,
+      father_father: slotPayload("father_father"), father_mother: slotPayload("father_mother"),
+      mother_father: slotPayload("mother_father"), mother_mother: slotPayload("mother_mother"),
+    };
 
     api("/api/family/activate", activatePayload).then(function () {
       if (state.relationship === "single" || !state.spouse) { finishWizard(); return; }
@@ -544,6 +665,7 @@
       return api("/api/family/marry", {
         spouse: spousePayload, children: childPayloads,
         marriage_status: MARRIAGE_STATUS_MAP[state.relationship],
+        spouse_father: slotPayload("spouse_father"), spouse_mother: slotPayload("spouse_mother"),
       }).then(function () {
         finishWizard();
       }).catch(function (e) {
@@ -563,4 +685,7 @@
     wizardEl.hidden = true;
     refreshFamilyPanel();
   }
+
+  // Exposed so family_tree.js can refresh the groups list after a successful "Leave this unit".
+  window.QMFamilyRefresh = refreshFamilyPanel;
 })();

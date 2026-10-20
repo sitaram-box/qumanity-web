@@ -31,11 +31,9 @@
     return person.name + (person.is_deceased ? " 🕊️" : "");
   }
 
-  function unitTitle(unit, role) {
-    if (role === "self") return "My Family";
-    if (role === "husband") return "Father's Family";
-    if (role === "wife") return "Mother's Family";
-    return unit.name; // a child unit -- shown by its own group name, no fixed relation label
+  function unitSubtitle(unit) {
+    var n = unit.members || 0;
+    return n + " member" + (n === 1 ? "" : "s");
   }
 
   // ---- Layout: fixed 3 rows, centered on x=0. No hierarchy algorithm needed -- row and width are
@@ -66,11 +64,23 @@
   }
 
   // ---- Rendering ----
+  // Color encodes the relation this card has to the CURRENT unit (role: 'self' | 'husband' |
+  // 'wife' | undefined for a child unit): self = navy, husband's ascending line = saffron, wife's
+  // ascending line = gold -- replaces the old text labels ("Father's Family" etc.), which the
+  // group-name header (below) now occupies instead.
+  function roleClass(role) {
+    if (role === "self") return "is-self";
+    if (role === "husband") return "is-husband-side";
+    if (role === "wife") return "is-wife-side";
+    return "";
+  }
+
   function renderUnitCard(group, unit, width, isSelf, role) {
-    var rectCls = "ft-unit-rect" + (unit.is_dormant ? " is-dormant" : "") + (isSelf ? " is-current" : "");
+    var rectCls = "ft-unit-rect" + (unit.is_dormant ? " is-dormant" : "") + (" " + roleClass(role)).trimEnd();
     group.append("rect").attr("class", rectCls)
       .attr("x", -width / 2).attr("y", -UNIT_H / 2).attr("width", width).attr("height", UNIT_H).attr("rx", 12);
-    group.append("text").attr("class", "ft-unit-title").attr("y", -UNIT_H / 2 - 10).text(unitTitle(unit, role));
+    group.append("text").attr("class", "ft-unit-title").attr("y", -UNIT_H / 2 - 10).text(unit.name);
+    group.append("text").attr("class", "ft-unit-subtitle").attr("y", UNIT_H / 2 + 16).text(unitSubtitle(unit));
 
     renderPersonHalf(group, unit.husband, -width / 4);
     renderPersonHalf(group, unit.wife, width / 4);
@@ -179,23 +189,53 @@
     summaryEl.hidden = false;
   });
 
-  // ---- Click-an-empty-node modal ----
+  var leaveBtn = document.getElementById("ft-leave-btn");
+  var leaveErrorEl = document.getElementById("ft-leave-error");
+  if (leaveBtn) {
+    leaveBtn.addEventListener("click", function () {
+      if (!state.currentGroupId) return;
+      leaveErrorEl.hidden = true;
+      if (!window.confirm("Leave this Family Group? You can rejoin later by requesting again.")) return;
+      api("/api/family-groups/" + state.currentGroupId + "/leave", {}).then(function () {
+        container.hidden = true;
+        summaryEl.hidden = false;
+        if (window.QMFamilyRefresh) window.QMFamilyRefresh();
+      }).catch(function (e) {
+        leaveErrorEl.textContent = e.message;
+        leaveErrorEl.hidden = false;
+      });
+    });
+  }
+
+  // ---- Click-an-empty-node modal (2026-10-20 redesign): a clicked node already HAS a typed
+  // name (e.g. "Pardeep Sharma") -- the modal's default, primary action is linking it to a real
+  // Qumanity member by their 12-digit Public ID, not re-typing a name that's already there. The
+  // Name field stays tucked behind an "Edit Name" toggle, pre-filled with the current name so
+  // editing it is a correction, not starting from blank. ----
   var editModal = document.getElementById("ft-edit-modal");
+  var nameSection = document.getElementById("ft-edit-name-section");
   var nameInput = document.getElementById("ft-edit-name-input");
   var linkInput = document.getElementById("ft-edit-link-input");
   var errorEl = document.getElementById("ft-edit-error");
+  var toggleNameBtn = document.getElementById("ft-edit-toggle-name-btn");
 
   editModal.addEventListener("click", function (e) {
     if (e.target === editModal || e.target.hasAttribute("data-close")) editModal.hidden = true;
   });
 
+  toggleNameBtn.addEventListener("click", function () {
+    nameSection.hidden = !nameSection.hidden;
+  });
+
   function openEditModal(person) {
     state.editingNodeId = person.id;
-    document.getElementById("ft-edit-modal-title").textContent = "Add: " + person.name;
-    nameInput.value = "";
+    document.getElementById("ft-edit-modal-title").textContent = person.name;
+    nameInput.value = person.name;
     linkInput.value = "";
+    nameSection.hidden = true; // defaults to the Link view -- see the redesign note above
     errorEl.hidden = true;
     editModal.hidden = false;
+    linkInput.focus();
   }
 
   function reloadAfterEdit() {
@@ -213,7 +253,7 @@
 
   document.getElementById("ft-edit-link-btn").addEventListener("click", function () {
     var val = linkInput.value.trim();
-    if (!val) { errorEl.textContent = "Enter a Public ID or Account ID."; errorEl.hidden = false; return; }
+    if (!val) { errorEl.textContent = "Enter a 12-digit Public ID."; errorEl.hidden = false; return; }
     api("/api/family/node/" + state.editingNodeId + "/link", { user_id: val })
       .then(reloadAfterEdit)
       .catch(function (e) { errorEl.textContent = e.message; errorEl.hidden = false; });

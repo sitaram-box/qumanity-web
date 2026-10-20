@@ -348,28 +348,36 @@ res = client.post(f"/api/family/node/{father_node['id']}/name", json={"name": "H
 check("a non-admin cannot rename a node (403)", res.status_code == 403)
 
 hank = register("Hank Patel")  # a real, unclaimed-elsewhere user, to link into greg's mother node
+hank_search_code = client.get("/api/people/me").get_json()["search_code"]  # session is hank's right after registering
+check("hank has a real 12-digit Public Search ID", hank_search_code is not None and len(hank_search_code) == 12)
 mother_node = next(n for n in greg_tree["nodes"] if n["name"] == "Living Mother Patel")
 logout()
 login(greg["private_code"])
-res = client.post(f"/api/family/node/{mother_node['id']}/link", json={"user_id": hank["account_id"]})
-check("admin can link an empty node by Account ID", res.status_code == 200)
+# Formatted exactly like a user would paste it (spaces, like the UI's "4060 2408 5969" example) --
+# the normalization bug this covers: the backend must strip them before matching search_code.
+formatted_code = hank_search_code[:4] + " " + hank_search_code[4:8] + " " + hank_search_code[8:]
+res = client.post(f"/api/family/node/{mother_node['id']}/link", json={"user_id": formatted_code})
+check("admin can link an empty node by a SPACE-FORMATTED 12-digit Public ID", res.status_code == 200)
 mother_row = raw("SELECT claimed_user_id, status FROM family_nodes WHERE id = ?", (mother_node["id"],))
 check("the node is now claimed by hank", mother_row["claimed_user_id"] == hank["user_id"] and mother_row["status"] == "claimed")
 check("hank, having claimed a founder slot, is now also an admin of greg's parents' unit",
       bool(raw("SELECT is_admin FROM family_group_members WHERE group_id = ? AND user_id = ?",
                 (greg_body["parents_group_id"], hank["user_id"]))["is_admin"]))
 
-res = client.post(f"/api/family/node/{mother_node['id']}/link", json={"user_id": hank["account_id"]})
+res = client.post(f"/api/family/node/{mother_node['id']}/link", json={"user_id": hank_search_code})
 check("re-linking an already-claimed node is rejected (400)", res.status_code == 400)
 
 jill = register("Jill Patel")
 logout()
 login(greg["private_code"])  # registering jill switched the session to jill -- switch back to the admin
-res = client.post(f"/api/family/node/{father_node['id']}/link", json={"user_id": hank["account_id"]})
+res = client.post(f"/api/family/node/{father_node['id']}/link", json={"user_id": hank_search_code})
 check("linking a user who's already claimed elsewhere is rejected (400)", res.status_code == 400)
 
-res = client.post(f"/api/family/node/{father_node['id']}/link", json={"user_id": 999999})
-check("linking a nonexistent user id is rejected (400)", res.status_code == 400)
+res = client.post(f"/api/family/node/{father_node['id']}/link", json={"user_id": "999999999999"})
+check("a well-formed but non-existent 12-digit Public ID is rejected (400)", res.status_code == 400)
+
+res = client.post(f"/api/family/node/{father_node['id']}/link", json={"user_id": "4060-2408"})
+check("an incomplete/malformed Public ID is rejected (400)", res.status_code == 400)
 
 print()
 print("=" * 70)
@@ -437,13 +445,14 @@ check("the neighborhood reports the placeholder child's gender as 'female'", ivy
 # neighborhood must then show the LIVE claimed gender, not the stale placeholder guess.
 logout()
 jade = register("Jade NonBinary")  # register() always sends gender=male -- overwrite directly for this check
+jade_search_code = client.get("/api/people/me").get_json()["search_code"]
 _conn = dbmod.get_db()
 _conn.execute("UPDATE users SET gender = 'both' WHERE id = ?", (jade["user_id"],))
 _conn.commit()
 _conn.close()
 
 login(ivy["private_code"])
-res = client.post(f"/api/family/node/{ivy_child_node_id}/link", json={"user_id": jade["account_id"]})
+res = client.post(f"/api/family/node/{ivy_child_node_id}/link", json={"user_id": jade_search_code})
 check("admin can link the child placeholder to jade's real account", res.status_code == 200)
 
 res = client.get(f"/api/family/node/{ivy_marry_body['marital_group_id']}/neighborhood")
@@ -494,6 +503,231 @@ res = client.post("/api/family/marry", json={
     "marriage_status": "not_a_real_status",
 })
 check("an unknown marriage_status value is rejected (400)", res.status_code == 400)
+
+print()
+print("=" * 70)
+print("11. Grandparents (Step 1) and Spouse's Parents (Step 3): link to husband/wife_parent_group_id")
+print("=" * 70)
+
+noah = register("Noah Grandkid")
+login(noah["private_code"])
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Noah Father", "action": "create"}, "mother": {"name": "Noah Mother", "action": "create"},
+    "father_father": {"name": "Noah PGF", "action": "create"}, "father_mother": {"name": "Noah PGM", "action": "create"},
+    "mother_father": {"name": "Noah MGF", "action": "create"}, "mother_mother": {"name": "Noah MGM", "action": "create"},
+    "relationship": "married",
+})
+check("activation with all 4 grandparents succeeds", res.status_code == 201)
+noah_body = res.get_json()
+noah_parents_row = raw("SELECT husband_parent_group_id, wife_parent_group_id FROM family_groups WHERE id = ?", (noah_body["parents_group_id"],))
+check("the parents' unit's husband_parent_group_id (paternal grandparents) is set", noah_parents_row["husband_parent_group_id"] is not None)
+check("the parents' unit's wife_parent_group_id (maternal grandparents) is set", noah_parents_row["wife_parent_group_id"] is not None)
+
+pgf_unit = raw("SELECT name FROM family_groups WHERE id = ?", (noah_parents_row["husband_parent_group_id"],))
+check("the paternal grandparents' unit is named after Noah PGF/PGM", pgf_unit["name"] == "NPGF Family Group")
+
+# A sibling activating into the SAME parents' unit, supplying DIFFERENT grandparent names, must
+# NOT overwrite the already-known grandparent links.
+logout()
+noah_sib = register("Noah Sibling")
+login(noah_sib["private_code"])
+res = client.get("/api/family/suggest", query_string={"name": "Noah Father"})
+match = next(r for r in res.get_json()["results"] if r["type"] == "group")
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Noah Father", "action": "join", "group_id": match["group_id"], "matched_node_id": match["matched_node_id"]},
+    "mother": {"name": "Sib Mother", "action": "create"},
+    "father_father": {"name": "Someone Else Entirely", "action": "create"},
+})
+check("sibling's activation (joining, with a DIFFERENT grandfather name) succeeds", res.status_code == 201)
+noah_parents_row2 = raw("SELECT husband_parent_group_id FROM family_groups WHERE id = ?", (noah_body["parents_group_id"],))
+check("the ORIGINAL paternal grandparents link is unchanged -- never silently overwritten",
+      noah_parents_row2["husband_parent_group_id"] == noah_parents_row["husband_parent_group_id"])
+
+logout()
+login(noah["private_code"])
+res = client.post("/api/family/marry", json={
+    "spouse": {"name": "Noah Spouse", "action": "create"},
+    "spouse_father": {"name": "Noah SF", "action": "create"}, "spouse_mother": {"name": "Noah SM", "action": "create"},
+    "marriage_status": "active",
+})
+check("marry with spouse's parents succeeds", res.status_code == 201)
+noah_marry_body = res.get_json()
+# Noah registers male (register()'s own fixture) -> Noah is husband_node_id, spouse is wife_node_id
+# -> the spouse's parents fill wife_parent_group_id, not husband_parent_group_id.
+noah_marital_row = raw("SELECT wife_parent_group_id FROM family_groups WHERE id = ?", (noah_marry_body["marital_group_id"],))
+check("the spouse's parents are linked on the SPOUSE'S side (wife_parent_group_id)", noah_marital_row["wife_parent_group_id"] is not None)
+sf_unit = raw("SELECT name FROM family_groups WHERE id = ?", (noah_marital_row["wife_parent_group_id"],))
+check("the spouse's parents' unit is named correctly", sf_unit["name"] == "NSF Family Group")
+
+print()
+print("=" * 70)
+print("12. Name + location search for already-activated members, and the join-request it sends")
+print("=" * 70)
+
+logout()
+mira = register("Mira Findme")
+login(mira["private_code"])
+client.post("/api/family/activate", json={"father": {"name": "Mira Father", "action": "create"}, "mother": {"name": "Mira Mother", "action": "create"}})
+mira_parents_group_id = client.get("/api/family/status").get_json()["groups"][0]["id"]
+
+logout()
+zara = register("Zara Searcher")
+login(zara["private_code"])
+client.post("/api/family/activate", json={"father": {"name": "Zara Father", "action": "create"}, "mother": {"name": "Zara Mother", "action": "create"}})
+res = client.get("/api/family/suggest", query_string={"name": "Mira Findme"})
+real_user_hits = [r for r in res.get_json()["results"] if r["type"] == "real_user"]
+check("the search finds the real, already-activated Mira (same district)", any(r["name"].startswith("Mira Findme") for r in real_user_hits))
+mira_hit = next(r for r in real_user_hits if r["name"].startswith("Mira Findme"))
+check("the result carries a joinable group_id (her parents' unit)", mira_hit["group_id"] == mira_parents_group_id)
+
+res = client.post(f"/api/family-groups/{mira_hit['group_id']}/join-request", json={})
+check("clicking the result sends a Join Family Group request (201)", res.status_code == 201)
+
+logout()
+login(mira["private_code"])
+res = client.get("/api/people/inbox")
+check("Mira (the unit's admin) receives the join request", any(r["kind"] == "family_group_join" for r in res.get_json()["requests"]))
+
+# hide_identity exclusion: a real, name-matching, activated user who's hidden must not be returned.
+logout()
+hidden_user = register("Mira Hiddenone")
+_conn = dbmod.get_db()
+_conn.execute("UPDATE users SET hide_identity = 1 WHERE id = ?", (hidden_user["user_id"],))
+_conn.commit()
+_conn.close()
+login(hidden_user["private_code"])
+client.post("/api/family/activate", json={"father": {"name": "Hidden Father", "action": "create"}, "mother": {"name": "Hidden Mother", "action": "create"}})
+
+logout()
+login(zara["private_code"])
+res = client.get("/api/family/suggest", query_string={"name": "Mira Hiddenone"})
+check("a hide_identity user is excluded from name search results (not yet an established family member)",
+      not any(r["type"] == "real_user" for r in res.get_json()["results"]))
+
+print()
+print("=" * 70)
+print("13. Leave Group: blocked while parents/children are active members, succeeds otherwise")
+print("=" * 70)
+
+# Noah's SIBLING being a member does NOT block Noah's own leave -- a sibling is neither Noah's
+# parent nor his child, and the rule is literally "parents OR children", not "any relative". The
+# real blocking case needs a CLAIMED child who is an approved family_group_members row of the
+# SAME group as their CLAIMED parent -- constructed fresh here, since link_node_to_user() alone
+# (used above) deliberately does NOT grant group membership (that still needs a real join+approve).
+logout()
+blocker_parent = register("Blocker Parent")
+login(blocker_parent["private_code"])
+client.post("/api/family/activate", json={
+    "father": {"name": "BP Father", "action": "create"}, "mother": {"name": "BP Mother", "action": "create"},
+    "relationship": "married",
+})
+res = client.post("/api/family/marry", json={"spouse": {"name": "BP Spouse", "action": "create"}, "marriage_status": "active"})
+if "marital_group_id" not in res.get_json():
+    sys.exit(f"SETUP FAILED (blocker_parent marry): {res.status_code} {res.get_data(as_text=True)[:500]}")
+blocker_group_id = res.get_json()["marital_group_id"]
+
+logout()
+blocker_child = register("Blocker Child")
+login(blocker_child["private_code"])
+res = client.get("/api/family/suggest", query_string={"name": "Blocker Parent"})
+bp_match = next(r for r in res.get_json()["results"] if r["type"] == "group" and r["group_id"] == blocker_group_id)
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Blocker Parent", "action": "join", "group_id": bp_match["group_id"], "matched_node_id": bp_match["matched_node_id"]},
+    "mother": {"name": "BC Mother", "action": "create"},
+})
+check("blocker_child's activation (joining as blocker_parent's claimed child) succeeds", res.status_code == 201)
+
+logout()
+login(blocker_parent["private_code"])
+res = client.get("/api/people/inbox")
+join_req = next(r for r in res.get_json()["requests"] if r["kind"] == "family_group_join")
+client.post(f"/api/people/inbox/{join_req['id']}/decide", json={"decision": "accept"})
+
+res = client.post(f"/api/family-groups/{blocker_group_id}/leave", json={})
+check("blocker_parent cannot leave their OWN unit (400)", res.status_code == 400)
+check("blocker_parent is blocked as a FOUNDER first (even though their child is also an active "
+      "member here) -- the founder-block check wins over the parent/child-block check",
+      res.get_json().get("error", "") == "You cannot leave your own family group.")
+
+# The parent/child-block message specifically, for a NON-founder: blocker_child (a plain joined
+# member, not a founder) gets their OWN child added to the SAME unit, then tries to leave.
+logout()
+blocker_grandchild = register("Blocker Grandchild")
+login(blocker_grandchild["private_code"])
+res = client.get("/api/family/suggest", query_string={"name": "Blocker Child"})
+bc_match = next(r for r in res.get_json()["results"] if r["type"] == "group" and r["group_id"] == blocker_group_id)
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Blocker Child", "action": "join", "group_id": bc_match["group_id"], "matched_node_id": bc_match["matched_node_id"]},
+    "mother": {"name": "BG Mother", "action": "create"},
+})
+check("blocker_grandchild's activation (joining as blocker_child's claimed child) succeeds", res.status_code == 201)
+
+logout()
+login(blocker_parent["private_code"])  # the unit's creator approves, per request_join_group()
+res = client.get("/api/people/inbox")
+gc_req = next(r for r in res.get_json()["requests"] if r["kind"] == "family_group_join")
+client.post(f"/api/people/inbox/{gc_req['id']}/decide", json={"decision": "accept"})
+
+logout()
+login(blocker_child["private_code"])
+res = client.post(f"/api/family-groups/{blocker_group_id}/leave", json={})
+check("blocker_child (NOT a founder) is blocked by the parent/child-block instead (400)", res.status_code == 400)
+check("the error message names parents/children specifically for a non-founder block",
+      "parents/children" in res.get_json().get("error", ""))
+
+# A lone user with no parent/child co-members in their OWN freshly-created unit can leave freely.
+logout()
+loner = register("Loner Solo")
+login(loner["private_code"])
+res = client.post("/api/family/activate", json={"father": {"name": "Loner Father", "action": "create"}, "mother": {"name": "Loner Mother", "action": "create"}})
+loner_group_id = res.get_json()["parents_group_id"]
+res = client.post(f"/api/family-groups/{loner_group_id}/leave", json={})
+check("a user with no active parent/child co-members can leave (200)", res.status_code == 200)
+left_row = raw("SELECT status FROM family_group_members WHERE group_id = ? AND user_id = ?", (loner_group_id, loner["user_id"]))
+check("their membership status is 'left', not deleted", left_row["status"] == "left")
+res = client.get(f"/api/family/node/{loner_group_id}/neighborhood")
+check("a 'left' member no longer sees the unit's neighborhood (404)", res.status_code == 404)
+
+print()
+print("=" * 70)
+print("14. Chat list: dormancy filter, is_founder tagging, and the D3 tree keeping dormant units")
+print("=" * 70)
+
+dormant_user = register("Dormant Test User")
+login(dormant_user["private_code"])
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Dead Grandad", "action": "create", "is_deceased": True},
+    "mother": {"name": "Dead Grandma", "action": "create", "is_deceased": True},
+    "relationship": "married",
+})
+dormant_body = res.get_json()
+res = client.post("/api/family/marry", json={"spouse": {"name": "Dormant Test Spouse", "action": "create"}, "marriage_status": "active"})
+dormant_marital_id = res.get_json()["marital_group_id"]
+
+status = client.get("/api/family/status").get_json()
+group_ids_in_list = {g["id"] for g in status["groups"]}
+check("the dormant parents' unit (both founders deceased) does NOT appear in the chat list",
+      dormant_body["parents_group_id"] not in group_ids_in_list)
+check("the user's own (non-dormant) marital unit DOES appear in the chat list",
+      dormant_marital_id in group_ids_in_list)
+
+own_unit_row = next(g for g in status["groups"] if g["id"] == dormant_marital_id)
+check("is_founder=True for the user's own founded unit ('My Family')", own_unit_row["is_founder"] is True)
+
+nbh = client.get(f"/api/family/node/{dormant_marital_id}/neighborhood").get_json()
+dormant_parent_entry = next(pg for pg in nbh["parent_groups"] if pg["group_id"] == dormant_body["parents_group_id"])
+check("the dormant unit STILL appears in the D3 neighborhood view (as a faded root ancestor)",
+      dormant_parent_entry is not None)
+check("the D3 view correctly flags it as dormant", dormant_parent_entry["is_dormant"] is True)
+
+# is_founder=False for a plain joined unit (the parents' unit a child is a member of, not a founder
+# of) -- reusing an earlier, non-dormant scenario (greg, from section 2/8, still has living parents).
+greg_status = None
+logout()
+login(greg["private_code"])
+greg_status = client.get("/api/family/status").get_json()
+greg_parents_row = next(g for g in greg_status["groups"] if g["id"] == greg_body["parents_group_id"])
+check("is_founder=False for a plain child-member's parents' unit ('Joined Family')", greg_parents_row["is_founder"] is False)
 
 print()
 print("=" * 70)

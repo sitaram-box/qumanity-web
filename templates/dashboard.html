@@ -557,20 +557,25 @@
             <div id="family-activated-summary" hidden>
               <p class="qm-dash-empty">Your Family Timeline is active. Pick a group below to view its tree:</p>
               <ul class="pt-grouplist" id="family-groups-list"></ul>
+
+              <h3 class="qm-form-section-title">🔎 Find a relative</h3>
+              <p class="qm-dash-empty">Search by name — we'll check people near you and in your mutual groups.</p>
+              <div class="pt-search-row">
+                <input type="text" class="qm-explorer-search" id="family-search-input" placeholder="Name" />
+                <button type="button" class="qm-btn qm-btn-ghost" id="family-search-btn">Search</button>
+              </div>
+              <div id="family-search-result"></div>
             </div>
 
             <div id="family-tree-container" hidden>
-              <button type="button" class="qm-btn qm-btn-ghost" id="ft-back-btn">← Back to groups</button>
+              <div class="ft-toolbar">
+                <button type="button" class="qm-btn qm-btn-ghost" id="ft-back-btn">← Back to groups</button>
+                <button type="button" class="qm-btn qm-btn-ghost" id="ft-leave-btn">🚪 Leave this unit</button>
+              </div>
+              <p class="qm-summary-error" id="ft-leave-error" hidden></p>
               <div class="ft-svg-wrap">
                 <svg id="ft-svg"></svg>
               </div>
-            </div>
-
-            <div id="family-legacy-section">
-              <h3 class="qm-form-section-title">🗂️ Legacy Family Groups</h3>
-              <p class="qm-dash-empty">Your original Paternal/Maternal groups, from before Family Timeline activation — still here, still open.</p>
-              <ul class="pt-grouplist" id="family-legacy-list"></ul>
-              <p class="qm-dash-empty" id="family-legacy-empty" hidden>No legacy groups.</p>
             </div>
 
             <div id="family-wizard" hidden>
@@ -584,6 +589,7 @@
               </div>
 
               <section class="qm-screen is-active" id="fw-screen-parents">
+                <p class="qm-timeline-note">Your Birth Parents — not your spouse's.</p>
                 <div class="qm-private-columns fw-parents-cols">
                   <div class="qm-private-col">
                     <h3 class="qm-form-section-title">👨 Father</h3>
@@ -596,6 +602,31 @@
                     <label class="fw-deceased-check"><input type="checkbox" id="fw-mother-deceased" /><span>No longer living</span></label>
                   </div>
                 </div>
+
+                <p class="qm-dash-empty">Are your grandparents alive or known?</p>
+                <div class="qm-gender-group" id="fw-grandparents-group">
+                  <button type="button" class="qm-gender-btn" data-grandparents="yes">🧓<span>Yes</span></button>
+                  <button type="button" class="qm-gender-btn" data-grandparents="no">🚫<span>No</span></button>
+                </div>
+                <div id="fw-grandparents-wrap" hidden>
+                  <div class="qm-private-columns fw-parents-cols">
+                    <div class="qm-private-col">
+                      <h3 class="qm-form-section-title">👴👵 Father's Parents</h3>
+                      <label class="qm-field"><span>Grandfather's Name</span><input type="text" id="fw-ff-name" maxlength="80" /></label>
+                      <label class="fw-deceased-check"><input type="checkbox" id="fw-ff-deceased" /><span>No longer living</span></label>
+                      <label class="qm-field"><span>Grandmother's Name</span><input type="text" id="fw-fm-name" maxlength="80" /></label>
+                      <label class="fw-deceased-check"><input type="checkbox" id="fw-fm-deceased" /><span>No longer living</span></label>
+                    </div>
+                    <div class="qm-private-col">
+                      <h3 class="qm-form-section-title">👴👵 Mother's Parents</h3>
+                      <label class="qm-field"><span>Grandfather's Name</span><input type="text" id="fw-mf-name" maxlength="80" /></label>
+                      <label class="fw-deceased-check"><input type="checkbox" id="fw-mf-deceased" /><span>No longer living</span></label>
+                      <label class="qm-field"><span>Grandmother's Name</span><input type="text" id="fw-mm-name" maxlength="80" /></label>
+                      <label class="fw-deceased-check"><input type="checkbox" id="fw-mm-deceased" /><span>No longer living</span></label>
+                    </div>
+                  </div>
+                </div>
+
                 <p class="qm-summary-error" id="fw-parents-error" hidden></p>
                 <div class="qm-summary-actions"><span></span><button type="button" class="qm-btn qm-btn-primary" id="fw-parents-next-btn">Next →</button></div>
               </section>
@@ -629,6 +660,22 @@
                     <div id="fw-spouse-search-result"></div>
                   </div>
                 </div>
+
+                <p class="qm-dash-empty">Are your spouse's parents alive or known?</p>
+                <div class="qm-gender-group" id="fw-spouse-grandparents-group">
+                  <button type="button" class="qm-gender-btn" data-spouseparents="yes">🧓<span>Yes</span></button>
+                  <button type="button" class="qm-gender-btn" data-spouseparents="no">🚫<span>No</span></button>
+                </div>
+                <div id="fw-spouse-parents-wrap" hidden>
+                  <div class="qm-private-col">
+                    <h3 class="qm-form-section-title" id="fw-spouse-parents-heading">👴👵 Spouse's Parents</h3>
+                    <label class="qm-field"><span>Spouse's Father's Name</span><input type="text" id="fw-sf-name" maxlength="80" /></label>
+                    <label class="fw-deceased-check"><input type="checkbox" id="fw-sf-deceased" /><span>No longer living</span></label>
+                    <label class="qm-field"><span>Spouse's Mother's Name</span><input type="text" id="fw-sm-name" maxlength="80" /></label>
+                    <label class="fw-deceased-check"><input type="checkbox" id="fw-sm-deceased" /><span>No longer living</span></label>
+                  </div>
+                </div>
+
                 <p class="qm-summary-error" id="fw-marital-error" hidden></p>
                 <div class="qm-summary-actions">
                   <button type="button" class="qm-btn qm-btn-ghost" id="fw-marital-back-btn">← Back</button>
@@ -729,11 +776,16 @@
         <div class="dq-modal-box">
           <button type="button" class="dq-modal-back" data-close aria-label="Close" title="Close">← Close</button>
           <h3 id="ft-edit-modal-title">Add Family Member</h3>
-          <label class="qm-field"><span>Name</span><input type="text" id="ft-edit-name-input" maxlength="80" /></label>
-          <button type="button" class="qm-btn qm-btn-primary" id="ft-edit-save-name-btn">Save Name</button>
-          <p class="qm-timeline-note">— or, if they're already on Qumanity —</p>
-          <label class="qm-field"><span>Their Public ID or Account ID</span><input type="text" id="ft-edit-link-input" placeholder="e.g. X7K-RM-GMA2-ZFL-..." /></label>
-          <button type="button" class="qm-btn qm-btn-ghost" id="ft-edit-link-btn">Link This Member</button>
+
+          <label class="qm-field"><span>Enter 12-digit Public ID</span><input type="text" id="ft-edit-link-input" placeholder="e.g. 4060 2408 5969" inputmode="numeric" /></label>
+          <button type="button" class="qm-btn qm-btn-primary" id="ft-edit-link-btn">Link</button>
+
+          <button type="button" class="qm-btn qm-btn-ghost" id="ft-edit-toggle-name-btn">✏️ Edit Name</button>
+          <div id="ft-edit-name-section" hidden>
+            <label class="qm-field"><span>Name</span><input type="text" id="ft-edit-name-input" maxlength="80" /></label>
+            <button type="button" class="qm-btn qm-btn-ghost" id="ft-edit-save-name-btn">Save Name</button>
+          </div>
+
           <p class="qm-summary-error" id="ft-edit-error" hidden></p>
         </div>
       </div>

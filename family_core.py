@@ -50,6 +50,8 @@ from an edge table that no longer exists for new marriages.
 from __future__ import annotations
 
 import datetime as dt
+import json
+import re
 
 import cycle_middleware
 
@@ -350,26 +352,25 @@ def rename_node(conn, user_id: int, node_id: int, new_name) -> None:
 
 
 def _resolve_target_user_id(conn, raw) -> int:
-    """Accepts either a numeric users.id or an Account ID string (e.g. 'X7K-RM-GMA2-ZFL-...').
-    Raises ValueError if neither resolves to a real user -- never leaks which case failed, same
-    as every other identity lookup in this project."""
-    if raw is None or raw == "":
-        raise ValueError("A user or Account ID is required")
-    candidate = None
-    if isinstance(raw, int):
-        candidate = raw
-    else:
-        raw = str(raw).strip()
-        if raw.isdigit():
-            candidate = int(raw)
-        else:
-            row = conn.execute("SELECT id FROM users WHERE account_id = ?", (raw.upper(),)).fetchone()
-            if not row:
-                raise ValueError("No member found with that Account ID")
-            candidate = row["id"]
-    if not conn.execute("SELECT 1 FROM users WHERE id = ?", (candidate,)).fetchone():
-        raise ValueError("No member found with that ID")
-    return candidate
+    """Accepts the 12-digit Public Search ID only -- spaces and dashes are stripped before
+    matching, so '4060 2408 5969' and '4060-2408-5969' both normalize to the same 12 digits (a
+    real bug this fixed, 2026-10-20: the previous version had NO path for a search code at all --
+    an all-digit string was treated as a raw family_nodes/users primary key, which a real 12-digit
+    code never is, so every correctly-typed Public ID was silently rejected as 'not found').
+    Looked up the same way social_core.find_person() resolves one, via account_ids.search_code
+    (is_current=1 -- a user's search code can change, e.g. after a present-location switch; only
+    their CURRENT one is live). Raises ValueError if it isn't a valid 12-digit code or doesn't
+    resolve to a real user -- never leaks which case failed, same as every other identity lookup
+    in this project."""
+    digits = re.sub(r"\D", "", str(raw or ""))
+    if len(digits) != 12:
+        raise ValueError("Enter a 12-digit Public ID")
+    row = conn.execute(
+        "SELECT user_id FROM account_ids WHERE search_code = ? AND is_current = 1", (digits,)
+    ).fetchone()
+    if not row:
+        raise ValueError("No member found with that Public ID")
+    return row["user_id"]
 
 
 def _grant_founder_admin_if_applicable(conn, node_id: int, newly_claimed_user_id: int) -> None:
@@ -654,6 +655,45 @@ def request_join_group(conn, user_id: int, group_id: int, target_node_id=None) -
     return cur.lastrowid
 
 
+def leave_group(conn, user_id: int, group_id: int) -> None:
+    """Leaves a unit's chat membership (status='left', never a hard delete -- same convention as
+    social_core.leave_chat()). Two independent blocks:
+      - A FOUNDER (husband_node_id/wife_node_id is the user's own claimed node) can never leave
+        their own unit -- it's the unit their marriage literally founded, not something they
+        joined and could unjoin from. Checked first since it needs no further query once true.
+      - Otherwise, blocked if the user's own node has a parent OR a child who is still an approved
+        member of this SAME unit -- leaving would otherwise orphan an active family relationship
+        inside the very group meant to represent it (e.g. a plain child-member leaving their
+        parents' unit while their own child is still listed as a member here)."""
+    member_row = conn.execute(
+        "SELECT 1 FROM family_group_members WHERE group_id = ? AND user_id = ? AND status = 'approved'",
+        (group_id, user_id),
+    ).fetchone()
+    if not member_row:
+        raise LookupError("You are not a member of this group")
+
+    self_node = conn.execute("SELECT id FROM family_nodes WHERE claimed_user_id = ?", (user_id,)).fetchone()
+    if self_node:
+        group = conn.execute(
+            "SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (group_id,)
+        ).fetchone()
+        if group and self_node["id"] in (group["husband_node_id"], group["wife_node_id"]):
+            raise ValueError("You cannot leave your own family group.")
+
+        blocking = conn.execute(
+            """SELECT 1 FROM family_parent_links fpl
+               JOIN family_nodes fn ON fn.id = (CASE WHEN fpl.parent_node_id = ? THEN fpl.child_node_id ELSE fpl.parent_node_id END)
+               JOIN family_group_members fgm ON fgm.user_id = fn.claimed_user_id AND fgm.group_id = ?
+               WHERE (fpl.parent_node_id = ? OR fpl.child_node_id = ?) AND fgm.status = 'approved'""",
+            (self_node["id"], group_id, self_node["id"], self_node["id"]),
+        ).fetchone()
+        if blocking:
+            raise ValueError("You cannot leave this group because your parents/children are active members.")
+
+    conn.execute("UPDATE family_group_members SET status = 'left' WHERE group_id = ? AND user_id = ?", (group_id, user_id))
+    conn.commit()
+
+
 def notify_to_activate(conn, from_user_id: int, to_user_id: int) -> None:
     """A courtesy nudge, not a claim -- reuses social_core's own plain message-request, same as any
     other first contact. Never links anything on its own; the recipient still has to show up and
@@ -705,9 +745,80 @@ def search_suggestions(conn, viewer_user_id: int, name: str) -> list[dict]:
     ):
         results.append({"type": "unactivated_user", "user_id": r["id"], "name": r["name"]})
 
+    # 2026-10-20: real, ALREADY-ACTIVATED members nearby, by name -- a third, different discovery
+    # path from the two above (which only ever surface existing family_nodes placeholders, or
+    # users who haven't activated at all). This is for "I don't know which of my relatives already
+    # has a Qumanity account -- help me find them by name and roughly where they live," distinct
+    # from the Activation wizard's own father/mother/spouse/child slot-matching. hide_identity
+    # users are excluded outright (not masked) unless already an established family_member --
+    # consistent with is_family_member()'s own "the one relationship that still sees a hidden
+    # identity's real name" rule, which doesn't apply here since searcher and candidate aren't yet
+    # connected (that's the whole point of this search).
+    import social_core
+    viewer_row = conn.execute("SELECT present_location_json FROM users WHERE id = ?", (viewer_user_id,)).fetchone()
+    viewer_location = json.loads(viewer_row["present_location_json"] or "{}") if viewer_row and viewer_row["present_location_json"] else {}
+    viewer_district_id = (viewer_location.get("district") or {}).get("id")
+    viewer_tehsil_id = (viewer_location.get("tehsil") or {}).get("id")
+
+    if viewer_district_id:
+        my_group_ids = {r["group_id"] for r in conn.execute(
+            "SELECT group_id FROM family_group_members WHERE user_id = ? AND status = 'approved'", (viewer_user_id,)
+        )}
+        for r in conn.execute(
+            """SELECT id, name, hide_identity, present_location_json FROM users
+               WHERE name LIKE ? COLLATE NOCASE AND id != ? AND timeline_activated_at IS NOT NULL
+                 AND is_demo = 0 AND is_removed = 0""",
+            (pattern, viewer_user_id),
+        ):
+            if r["hide_identity"] and not social_core.is_family_member(conn, r["id"], viewer_user_id):
+                continue
+            candidate_location = json.loads(r["present_location_json"] or "{}") if r["present_location_json"] else {}
+            candidate_district_id = (candidate_location.get("district") or {}).get("id")
+            if candidate_district_id != viewer_district_id:
+                continue
+            candidate_tehsil_id = (candidate_location.get("tehsil") or {}).get("id")
+            candidate_group_rows = conn.execute(
+                """SELECT fgm.group_id, (fg.husband_node_id IS NOT NULL AND fn.claimed_user_id = ?)
+                          OR (fg.wife_node_id IS NOT NULL AND fn2.claimed_user_id = ?) AS is_founder
+                   FROM family_group_members fgm JOIN family_groups fg ON fg.id = fgm.group_id
+                   LEFT JOIN family_nodes fn ON fn.id = fg.husband_node_id
+                   LEFT JOIN family_nodes fn2 ON fn2.id = fg.wife_node_id
+                   WHERE fgm.user_id = ? AND fgm.status = 'approved' ORDER BY is_founder DESC""",
+                (r["id"], r["id"], r["id"]),
+            ).fetchall()
+            if not candidate_group_rows:
+                continue  # activated but belongs to no unit yet (shouldn't normally happen) -- nothing to join
+            candidate_group_ids = {g["group_id"] for g in candidate_group_rows}
+            mutual_group_ids = my_group_ids & candidate_group_ids
+            mutual_group_name = None
+            if mutual_group_ids:
+                mutual_row = conn.execute(
+                    "SELECT name FROM family_groups WHERE id = ?", (next(iter(mutual_group_ids)),)
+                ).fetchone()
+                mutual_group_name = mutual_row["name"] if mutual_row else None
+            # The join-request target: the candidate's own founded unit if they have one (most
+            # relevant for "let's connect our families"), else whichever unit they're first found
+            # in -- candidate_group_rows is already ordered founder-first.
+            target_group_id = candidate_group_rows[0]["group_id"]
+            target_group_name = conn.execute("SELECT name FROM family_groups WHERE id = ?", (target_group_id,)).fetchone()["name"]
+            results.append({
+                "type": "real_user", "user_id": r["id"], "name": r["name"],
+                "location": _location_display_brief(candidate_location),
+                "same_tehsil": candidate_tehsil_id is not None and candidate_tehsil_id == viewer_tehsil_id,
+                "mutual_group_name": mutual_group_name,
+                "group_id": target_group_id, "group_name": target_group_name,
+            })
+
     if not results:
         results.append({"type": "none"})
     return results
+
+
+def _location_display_brief(location: dict) -> str:
+    """'Village, Tehsil, District' (whatever levels are present) -- display-only, for a search
+    result card; never the full chain, and never used for anything access-control related."""
+    parts = [location.get(level, {}).get("name") for level in ("village", "tehsil", "district")]
+    return ", ".join(p for p in parts if p)
 
 
 # ---- Relation slot resolution: shared by activate_timeline() (father/mother) and
@@ -784,6 +895,31 @@ _RELATIONSHIP_TO_PROFILE_STATUS = {
 }
 
 
+def _link_known_parents_group(conn, user_id: int, child_node_id: int, group_id: int, side_column: str,
+                               father_entry, mother_entry, results: dict, father_label: str, mother_label: str):
+    """Shared by activate_timeline() (linking the user's own parents' unit to grandparents' units)
+    and marry_timeline() (linking the user's own unit to the spouse's parents' unit) -- resolves an
+    optional (father, mother) pair into a couple-unit with child_node_id as their child-member, and
+    fills side_column ('husband_parent_group_id' | 'wife_parent_group_id') on group_id ONLY if it's
+    currently unset -- never overwrites an already-known link (e.g. a sibling who activated earlier
+    and already supplied this same grandparent pair). Returns the grandparents'/spouse-parents' own
+    group_id, or None if neither entry had a name."""
+    assert side_column in ("husband_parent_group_id", "wife_parent_group_id")
+    if not father_entry and not mother_entry:
+        return None
+    father_id = _resolve_slot(conn, user_id, father_entry or {}, [], results, father_label, default_gender="male")
+    mother_id = _resolve_slot(conn, user_id, mother_entry or {}, [], results, mother_label, default_gender="female")
+    if not father_id and not mother_id:
+        return None
+    known_group_id, _ = _find_or_create_couple_group(
+        conn, user_id, husband_node_id=father_id, wife_node_id=mother_id, member_node_ids=[child_node_id],
+    )
+    current = conn.execute(f"SELECT {side_column} FROM family_groups WHERE id = ?", (group_id,)).fetchone()
+    if current and not current[side_column]:
+        conn.execute(f"UPDATE family_groups SET {side_column} = ? WHERE id = ?", (known_group_id, group_id))
+    return known_group_id
+
+
 def activate_timeline(conn, user_id: int, payload: dict) -> dict:
     """The one-time Activation gate. Raises ValueError for bad input (already activated, missing
     required fields) and LookupError if the user doesn't exist. Commits internally, same shape as
@@ -793,7 +929,13 @@ def activate_timeline(conn, user_id: int, payload: dict) -> dict:
     the wizard's Step 2 answer. Synced to users.relationship_status here, in THIS transaction,
     because activate_timeline() is the one call every wizard run always makes (a 'single' answer
     never reaches marry_timeline() at all, so syncing there would silently drop it). Omitted
-    entirely (None) by any caller that predates this field -- no sync attempted, not an error."""
+    entirely (None) by any caller that predates this field -- no sync attempted, not an error.
+
+    payload["father_father"]/["father_mother"]/["mother_father"]/["mother_mother"] (optional,
+    2026-10-20): grandparents, each shaped like father/mother. Links the newly found/created
+    parents' unit to its own two parent units (the paternal and maternal grandparents' units) --
+    the same husband_parent_group_id/wife_parent_group_id mechanism marry_timeline() already uses
+    one generation up, just run here one generation further."""
     ensure_tables(conn)
     user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     if not user:
@@ -827,6 +969,13 @@ def activate_timeline(conn, user_id: int, payload: dict) -> dict:
     )
     results["parents_group_id"] = parents_group_id
     results["parents_group_name"] = conn.execute("SELECT name FROM family_groups WHERE id = ?", (parents_group_id,)).fetchone()["name"]
+
+    _link_known_parents_group(conn, user_id, father_node_id, parents_group_id, "husband_parent_group_id",
+                               payload.get("father_father"), payload.get("father_mother"), results,
+                               "father_father", "father_mother")
+    _link_known_parents_group(conn, user_id, mother_node_id, parents_group_id, "wife_parent_group_id",
+                               payload.get("mother_father"), payload.get("mother_mother"), results,
+                               "mother_father", "mother_mother")
 
     if relationship is not None:
         conn.execute("UPDATE users SET relationship_status = ? WHERE id = ?",
@@ -921,6 +1070,12 @@ def marry_timeline(conn, user_id: int, payload: dict) -> dict:
     )
     results["marital_group_id"] = group_id
     results["marital_group_name"] = conn.execute("SELECT name FROM family_groups WHERE id = ?", (group_id,)).fetchone()["name"]
+
+    spouse_parent_side = "wife_parent_group_id" if spouse_node_id == wife_node_id else "husband_parent_group_id"
+    _link_known_parents_group(conn, user_id, spouse_node_id, group_id, spouse_parent_side,
+                               payload.get("spouse_father"), payload.get("spouse_mother"), results,
+                               "spouse_father", "spouse_mother")
+
     conn.commit()
     return results
 
@@ -930,13 +1085,28 @@ def marry_timeline(conn, user_id: int, payload: dict) -> dict:
 # (unchanged this pass) D3 frontend still calls. ----
 
 def my_family_groups(conn, user_id: int) -> list[dict]:
-    return [dict(r) for r in conn.execute(
+    """The chat group list -- deliberately narrower than "every unit this node appears in"
+    (that's what the D3 neighborhood view is for). Two rules, both 2026-10-20:
+      - Dormant units (both founders deceased -- see _group_is_dormant()) are excluded entirely.
+        They still render in the D3 tree, faded, as root ancestors -- just not as a chat to open.
+      - is_founder tags each row so the frontend can tell "My Family" (the viewer's own founded
+        unit) apart from "Joined Family" (approved into someone else's, e.g. their parents' unit)
+        -- distinct from is_admin, since the creator of a freshly-founded unit is also always
+        granted admin even when they're not a founder (see create_group())."""
+    rows = conn.execute(
         """SELECT fg.id, fg.name, fg.kind, m.is_admin,
+                  (fg.husband_node_id = sn.id OR fg.wife_node_id = sn.id) AS is_founder,
                   (SELECT COUNT(*) FROM family_group_members m2 WHERE m2.group_id = fg.id AND m2.status = 'approved') AS members
-           FROM family_group_members m JOIN family_groups fg ON fg.id = m.group_id
+           FROM family_group_members m
+           JOIN family_groups fg ON fg.id = m.group_id
+           LEFT JOIN family_nodes sn ON sn.claimed_user_id = m.user_id
            WHERE m.user_id = ? AND m.status = 'approved' ORDER BY fg.id""",
         (user_id,),
-    )]
+    ).fetchall()
+    return [
+        {**dict(r), "is_founder": bool(r["is_founder"])}
+        for r in rows if not _group_is_dormant(conn, r["id"])
+    ]
 
 
 def _person_summary(conn, node_id, viewer_user_id):
@@ -964,6 +1134,12 @@ def _person_summary(conn, node_id, viewer_user_id):
     }
 
 
+def _member_count(conn, group_id: int) -> int:
+    return conn.execute(
+        "SELECT COUNT(*) FROM family_group_members WHERE group_id = ? AND status = 'approved'", (group_id,)
+    ).fetchone()[0]
+
+
 def _group_brief(conn, group_id, viewer_user_id):
     if not group_id:
         return None
@@ -975,6 +1151,7 @@ def _group_brief(conn, group_id, viewer_user_id):
         "husband": _person_summary(conn, g["husband_node_id"], viewer_user_id),
         "wife": _person_summary(conn, g["wife_node_id"], viewer_user_id),
         "is_dormant": _group_is_dormant(conn, group_id),
+        "members": _member_count(conn, group_id),
     }
 
 
@@ -1026,6 +1203,7 @@ def neighborhood_for_group(conn, viewer_user_id: int, group_id: int):
         "wife": _person_summary(conn, group["wife_node_id"], viewer_user_id),
         "is_dormant": _group_is_dormant(conn, group_id),
         "is_admin": _is_admin_of_group(conn, viewer_user_id, group_id),
+        "members": _member_count(conn, group_id),
         "unmarried_children": unmarried_children,
         "parent_groups": parent_groups,
         "child_groups": child_groups,

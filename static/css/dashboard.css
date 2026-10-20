@@ -743,6 +743,7 @@
 
 /* ---- Personal timeline (Family/Friends/Custom), search, requests, private chats ---- */
 .pt-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 26vw); gap: 16px; align-items: start; }
+.pt-layout.pt-layout--full { grid-template-columns: 1fr; }
 .pt-main { min-width: 0; } .pt-side { display: flex; flex-direction: column; gap: 14px; }
 .pt-sub-wrap { margin-bottom: 10px; }
 .pt-main .bd { height: calc(100vh - 380px); min-height: 340px; margin-top: 10px; }
@@ -838,6 +839,19 @@
    card shows husband+wife side by side with a divider; an unmarried child is a single-person
    card. Rendered by family_tree.js. ---- */
 #family-tree-container { margin-top: 8px; }
+.ft-toolbar { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+
+/* ---- Chat group list badges (2026-10-20): "My Family" (a unit the viewer founded -- saffron dot,
+   saffron badge) vs "Joined Family" (approved into someone else's, e.g. their parents' -- muted
+   badge, with its own Admin/Member distinction). Dormant units never reach this list at all (see
+   family_core.my_family_groups()); they still render, faded, in the D3 tree below. ---- */
+.ft-group-btn { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ft-group-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--qm-saffron); flex-shrink: 0; }
+.ft-group-name { font-weight: 600; }
+.ft-group-badge { font-size: 0.72rem; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.ft-group-btn.is-my-family .ft-group-badge { background: rgba(255, 153, 51, 0.15); color: var(--qm-saffron); font-weight: 600; }
+.ft-group-btn.is-joined-family .ft-group-badge { background: var(--qm-border); color: var(--qm-text-dim); }
+.ft-group-meta { margin-left: auto; color: var(--qm-text-dim); font-size: 0.75rem; white-space: nowrap; }
 .ft-svg-wrap {
   width: 100%;
   height: 480px;
@@ -855,12 +869,17 @@
 .ft-unit-rect { fill: var(--qm-panel-bg); stroke: var(--qm-border); stroke-width: 1.5; }
 .ft-unit-divider { stroke: var(--qm-saffron); stroke-width: 2; opacity: 0.5; }
 
-.ft-unit-rect.is-current { stroke: var(--qm-gold); stroke-width: 2.5; filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.6)); }
+/* Color encodes this card's relation to the CURRENT (self) unit -- see family_tree.js's
+   roleClass(). Self = navy; husband's/wife's ascending line = saffron/gold, the Qumanity palette. */
+.ft-unit-rect.is-self { stroke: var(--qm-navy); stroke-width: 2.5; }
+.ft-unit-rect.is-husband-side { stroke: var(--qm-saffron); stroke-width: 2.5; }
+.ft-unit-rect.is-wife-side { stroke: var(--qm-gold); stroke-width: 2.5; }
 .ft-unit-rect.is-dormant { fill: rgba(10, 25, 41, 0.05); stroke: var(--qm-text-dim); stroke-dasharray: 3 3; opacity: 0.7; }
 
-/* Higher specificity than the plain person/single-card text rule below, so the dimmed uppercase
-   unit-label text (above each card) keeps its own look regardless of declaration order. */
-.ft-card .ft-unit-title { fill: var(--qm-text-dim); font-size: 11px; font-family: inherit; text-anchor: middle; text-transform: uppercase; letter-spacing: 0.04em; }
+/* Higher specificity than the plain person/single-card text rule below, so the card's own name
+   (the header) and its member-count subtitle keep their own look regardless of declaration order. */
+.ft-card .ft-unit-title { fill: var(--qm-text); font-size: 12px; font-weight: 700; font-family: inherit; text-anchor: middle; }
+.ft-card .ft-unit-subtitle { fill: var(--qm-text-dim); font-size: 10px; font-family: inherit; text-anchor: middle; }
 
 .ft-card text { fill: var(--qm-text); font-size: 12px; font-family: inherit; text-anchor: middle; dominant-baseline: middle; }
 

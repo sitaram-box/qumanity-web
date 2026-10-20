@@ -73,8 +73,16 @@
     friends: document.getElementById("pt-friends-panel"), business: document.getElementById("pt-business-panel"),
     custom: document.getElementById("pt-custom-panel"),
   };
+  var sideEl = document.querySelector(".pt-side");
+  var layoutEl = document.querySelector(".pt-layout");
   function showTab(tab) {
     Object.keys(panels).forEach(function (k) { panels[k].hidden = k !== tab; });
+    // Find & connect / Requests are shared across Friends/Business/Custom (and Self) -- hidden
+    // only for Family Tree, which has its own dedicated search (family.js) and whose D3 view
+    // wants the full panel width instead. The grid's second column track doesn't collapse just
+    // because its content is `hidden` -- .pt-layout--full (CSS) drops it to one column.
+    if (sideEl) sideEl.hidden = tab === "family";
+    if (layoutEl) layoutEl.classList.toggle("pt-layout--full", tab === "family");
     if (tab === "private") loadChats(); else if (tab !== "custom" || true) loadGroups();
   }
   topTabs.addEventListener("click", function (e) {

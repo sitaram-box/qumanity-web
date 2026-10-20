@@ -1486,7 +1486,9 @@ def api_qmail_resolve_username():
 @app.route("/api/qmail/resolve-public-id")
 @login_required
 def api_qmail_resolve_public_id():
-    code = (request.args.get("code") or "").strip()
+    # Strips spaces/dashes before matching -- a user pastes "4060 2408 5969", search_code stores
+    # plain digits only (same normalization bug fixed in family_core._resolve_target_user_id()).
+    code = re.sub(r"\D", "", request.args.get("code") or "")
     conn = get_db()
     try:
         row = conn.execute(
@@ -1917,6 +1919,18 @@ def api_family_group_join_request(group_id):
     finally:
         conn.close()
     return jsonify({"status": "requested"}), 201
+
+
+@app.route("/api/family-groups/<int:group_id>/leave", methods=["POST"])
+@login_required
+@_board_error
+def api_family_group_leave(group_id):
+    conn = _family(get_db())
+    try:
+        family_core.leave_group(conn, session["user_id"], group_id)
+    finally:
+        conn.close()
+    return jsonify({"status": "left"})
 
 
 # ---- Notifications (unread Personal-timeline chats + pending people-requests) ----
@@ -4948,10 +4962,24 @@ def _start_scheduler():
         scheduler.start()
 
 
+# 2026-10-20 audit (docs/india_location_fix.md's Haryana/Rewari finding): India's real district
+# count changes over time as new districts are notified (e.g. Charkhi Dadri, 2016), so this is a
+# best-known reference figure, not a verified, exhaustive, hardcoded name list -- this project has
+# no authoritative current source for all ~766 real district names committed anywhere, and
+# fabricating one would risk shipping wrong data under the guise of a "complete" list. The LGD
+# (Local Government Directory, https://lgdirectory.gov.in) or data.gov.in are the real sources to
+# pull from if this ever needs upgrading from a count check to a real name-by-name diff.
+EXPECTED_INDIA_DISTRICT_COUNT = 766
+
+
 def _validate_india_location_data():
     """Startup check: the website's India district/tehsil data must match Qumanity_Master.json
-    (the source of truth, per the 2026-09-28 fix -- see docs/india_location_fix.md). Only warns;
-    never blocks startup, since a stale copy is a data problem to fix, not a reason to go down."""
+    (the source of truth, per the 2026-09-28 fix -- see docs/india_location_fix.md), AND must be
+    reasonably complete against the real-world district count (added 2026-10-20, after Haryana was
+    found to be missing 11 of its 22 real districts -- the original check above only ever compared
+    the website's file against Master.json, which only catches the two drifting apart from EACH
+    OTHER; it says nothing about whether Master.json itself is complete). Only warns; never blocks
+    startup, since a data problem is a data problem to fix, not a reason to go down."""
     try:
         master_path = Path(os.environ.get("QM_EARTH_ROOT", Path(__file__).resolve().parent / "0_Earth")) / "Qumanity_Master.json"
         if not master_path.exists():
@@ -4971,6 +4999,13 @@ def _validate_india_location_data():
             print(f"[STARTUP WARNING] {mismatches} India district id/name mismatches between "
                   f"{INDIA_DISTRICTS_FILE.name} and Qumanity_Master.json -- the website's India data "
                   f"has drifted from the source of truth. Re-run the regeneration in docs/india_location_fix.md.")
+
+        district_count = sum(len(state["districts"]) for state in web["states"].values())
+        if district_count < EXPECTED_INDIA_DISTRICT_COUNT:
+            print(f"[STARTUP WARNING] India location data is incomplete. Expected "
+                  f"{EXPECTED_INDIA_DISTRICT_COUNT}, found {district_count} -- some real districts "
+                  f"are missing from Qumanity_Master.json itself (see docs/india_location_fix.md's "
+                  f"2026-10-20 Haryana/Rewari audit for how this was found and the fix pattern).")
     except Exception as e:
         print(f"[STARTUP WARNING] Could not validate India location data against Qumanity_Master.json: {e}")
 

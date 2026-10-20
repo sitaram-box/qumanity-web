@@ -293,6 +293,13 @@ body = res.get_json()
 check("resolve-public-id for a NON-activated member: clean message, not 404", res.status_code == 200 and body.get("activated") is False)
 check("that response has no address field claiming to be real", not body.get("address"))
 
+# 2026-10-20: a space-formatted code (as a user would actually paste one, e.g. "4060 2408 5969")
+# must normalize the same as the plain 12-digit string -- it didn't before this fix.
+formatted = activated_code[:4] + " " + activated_code[4:8] + " " + activated_code[8:]
+res = client.get(f"/api/qmail/resolve-public-id?code={formatted.replace(' ', '%20')}")
+body = res.get_json()
+check("resolve-public-id normalizes a SPACE-FORMATTED code the same as the plain one", res.status_code == 200 and body.get("activated") is True)
+
 print()
 print("=" * 70)
 if FAILS:
