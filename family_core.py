@@ -916,18 +916,30 @@ def neighborhood_for_group(conn, viewer_user_id: int, group_id: int):
         return None
 
     founder_ids = {group["husband_node_id"], group["wife_node_id"]}
+    child_group_rows = conn.execute(
+        "SELECT id, husband_node_id, wife_node_id FROM family_groups WHERE husband_parent_group_id = ? OR wife_parent_group_id = ?",
+        (group_id, group_id),
+    ).fetchall()
+    # A married child is structurally BOTH a plain child-member here AND a founder of their own
+    # unit below -- excluding them from unmarried_children too (not just founder_ids above) avoids
+    # showing the same person as two separate cards in the neighborhood view.
+    married_child_ids = {r["husband_node_id"] for r in child_group_rows} | {r["wife_node_id"] for r in child_group_rows}
     unmarried_children = [
         _person_summary(conn, r["node_id"], viewer_user_id)
         for r in conn.execute("SELECT node_id FROM family_group_nodes WHERE group_id = ?", (group_id,))
-        if r["node_id"] not in founder_ids
+        if r["node_id"] not in founder_ids and r["node_id"] not in married_child_ids
     ]
-    child_groups = [
-        _group_brief(conn, r["id"], viewer_user_id)
-        for r in conn.execute(
-            "SELECT id FROM family_groups WHERE husband_parent_group_id = ? OR wife_parent_group_id = ?",
-            (group_id, group_id),
-        )
-    ]
+    child_groups = [_group_brief(conn, r["id"], viewer_user_id) for r in child_group_rows]
+
+    # "side" tags which founder's own birth unit this is -- a plain list position would silently
+    # shift if only one side is known (e.g. husband's is missing but wife's exists would land at
+    # index 0), which the frontend can't tell apart from "this IS the husband's side" without it.
+    parent_groups = []
+    for side, parent_group_id in (("husband", group["husband_parent_group_id"]), ("wife", group["wife_parent_group_id"])):
+        pg = _group_brief(conn, parent_group_id, viewer_user_id)
+        if pg:
+            pg["side"] = side
+            parent_groups.append(pg)
 
     return {
         "group_id": group_id,
@@ -937,10 +949,7 @@ def neighborhood_for_group(conn, viewer_user_id: int, group_id: int):
         "is_dormant": _group_is_dormant(conn, group_id),
         "is_admin": _is_admin_of_group(conn, viewer_user_id, group_id),
         "unmarried_children": unmarried_children,
-        "parent_groups": [g for g in (
-            _group_brief(conn, group["husband_parent_group_id"], viewer_user_id),
-            _group_brief(conn, group["wife_parent_group_id"], viewer_user_id),
-        ) if g],
+        "parent_groups": parent_groups,
         "child_groups": child_groups,
     }
 

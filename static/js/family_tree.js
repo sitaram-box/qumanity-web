@@ -1,11 +1,13 @@
 /**
- * family_tree.js — Phase 2: the D3 visual Family Tree. Fetches GET /api/family-groups/<id>/tree
- * (flat nodes + parent_links + spouse_links, unchanged from Phase 1 -- see family_core.py), merges
- * each active spouse pair into one "composite" layout node (the only sane way to map a DAG where a
- * child has two parents onto d3.tree()'s strict one-parent-per-node hierarchy), lays it out with
- * d3.tree(), and renders plain SVG rects/text (not foreignObject -- simpler, and fully compatible
- * with d3-zoom's transform-based panning, which some browsers handle inconsistently for embedded
- * HTML). Exposes window.QMFamilyTree.showTree(groupId) for family.js's group list to call into.
+ * family_tree.js — the Nuclear Family Node neighborhood view (2026-10-20). A unit IS a couple, so
+ * there is no DAG to flatten here the way the old per-person tree needed (Phase 2's composite-
+ * couple merge is gone): GET /api/family/node/<group_id>/neighborhood already returns exactly
+ * three fixed rows -- up to 2 parent units above, the current unit in the middle, its unmarried
+ * children and child units below -- so this just places them directly, no d3.hierarchy()/d3.tree()
+ * layout algorithm needed. Clicking a parent OR child unit re-centers the view by fetching ITS
+ * neighborhood; the current (middle) unit is never clickable to navigate. Exposes
+ * window.QMFamilyTree.showTree(groupId) for family.js's group list to call into (name kept for
+ * compatibility with the existing call site).
  */
 (function () {
   "use strict";
@@ -16,7 +18,7 @@
   var svgEl = document.getElementById("ft-svg");
   var backBtn = document.getElementById("ft-back-btn");
 
-  var NODE_W = 120, NODE_H = 56, NODE_GAP = 10, COL_W = 200, ROW_H = 150;
+  var UNIT_W = 230, UNIT_H = 60, SINGLE_W = 130, CARD_GAP = 50, ROW_H = 180;
 
   function api(url, body) {
     var opt = body !== undefined ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {};
@@ -25,187 +27,150 @@
 
   var state = { currentGroupId: null, editingNodeId: null };
 
-  // ---- Composite-couple merge: pair every ACTIVE spouse link into one layout node, so a child's
-  // two parent_links (father + mother) both resolve to the SAME composite, satisfying
-  // d3.hierarchy()'s one-parent-per-node rule without dropping either parent. ----
-  function buildHierarchy(tree) {
-    var byId = {};
-    tree.nodes.forEach(function (n) { byId[n.id] = n; });
-
-    var compositeOf = {};
-    var composites = [];
-    function compositeFor(nodeId) {
-      if (compositeOf[nodeId]) return compositeOf[nodeId];
-      var c = { key: "c" + nodeId, people: [byId[nodeId]] };
-      compositeOf[nodeId] = c;
-      composites.push(c);
-      return c;
-    }
-    tree.nodes.forEach(function (n) { compositeFor(n.id); });
-
-    function mergeComposites(a, b) {
-      if (a === b) return a;
-      a.people = a.people.concat(b.people);
-      b.people.forEach(function (p) { compositeOf[p.id] = a; });
-      composites = composites.filter(function (c) { return c !== b; });
-      return a;
-    }
-
-    (tree.spouse_links || []).forEach(function (link) {
-      if (link.status !== "active") return;
-      var cLo = compositeOf[link.node_lo_id], cHi = compositeOf[link.node_hi_id];
-      if (cLo && cHi) mergeComposites(cLo, cHi);
-    });
-
-    // Co-parents with NO recorded spouse link (e.g. a lineage group's father + mother -- Phase 1
-    // never creates a spouse_link between them) still need pairing: if two distinct composites
-    // point at the exact same child composite(s), they're acting as joint parents and must be
-    // merged into one layout node -- otherwise d3.hierarchy() would visit that shared child once
-    // per parent branch, silently duplicating it in the render. Repeats to a fixed point since a
-    // merge can itself create a new shared-child-set match.
-    var changed = true;
-    while (changed) {
-      changed = false;
-      var childSetOf = {};
-      composites.forEach(function (c) { childSetOf[c.key] = []; });
-      (tree.parent_links || []).forEach(function (link) {
-        var parentC = compositeOf[link.parent_node_id], childC = compositeOf[link.child_node_id];
-        if (!parentC || !childC || parentC === childC) return;
-        if (childSetOf[parentC.key].indexOf(childC.key) === -1) childSetOf[parentC.key].push(childC.key);
-      });
-      var bySignature = {};
-      composites.forEach(function (c) {
-        var sig = childSetOf[c.key].slice().sort().join(",");
-        if (!sig) return;
-        bySignature[sig] = bySignature[sig] || [];
-        bySignature[sig].push(c);
-      });
-      Object.keys(bySignature).forEach(function (sig) {
-        var group = bySignature[sig];
-        if (group.length > 1) {
-          for (var i = 1; i < group.length; i++) mergeComposites(group[0], group[i]);
-          changed = true;
-        }
-      });
-    }
-
-    var childrenOf = {}, hasParent = {};
-    (tree.parent_links || []).forEach(function (link) {
-      var parentC = compositeOf[link.parent_node_id], childC = compositeOf[link.child_node_id];
-      if (!parentC || !childC || parentC === childC) return;
-      childrenOf[parentC.key] = childrenOf[parentC.key] || [];
-      if (childrenOf[parentC.key].indexOf(childC) === -1) childrenOf[parentC.key].push(childC);
-      hasParent[childC.key] = true;
-    });
-    composites.forEach(function (c) { c.children = childrenOf[c.key]; });
-
-    var roots = composites.filter(function (c) { return !hasParent[c.key]; });
-    if (roots.length === 1) return roots[0];
-    if (roots.length === 0) return composites[0] || { key: "empty", people: [] };
-    return { key: "synthetic-root", people: [], children: roots, synthetic: true };
-  }
-
-  // ---- Rendering ----
-  function nodeLabel(person) {
+  function personLabel(person) {
     return person.name + (person.is_deceased ? " 🕊️" : "");
   }
 
-  function nodeClasses(person) {
-    var cls = "ft-node";
-    if (!person.claimed) cls += " is-empty";
-    if (person.is_deceased) cls += " is-deceased";
-    if (person.is_viewer) cls += " is-viewer";
-    return cls;
+  function unitTitle(unit, role) {
+    if (role === "self") return "My Family";
+    if (role === "husband") return "Father's Family";
+    if (role === "wife") return "Mother's Family";
+    return unit.name; // a child unit -- shown by its own group name, no fixed relation label
   }
 
-  function renderTree(tree) {
-    var root = d3.hierarchy(buildHierarchy(tree));
-    var layout = d3.tree().nodeSize([COL_W, ROW_H]);
-    layout(root);
+  // ---- Layout: fixed 3 rows, centered on x=0. No hierarchy algorithm needed -- row and width are
+  // already known from the neighborhood response's own shape. ----
+  function layoutUniform(items, y, width) {
+    var n = items.length;
+    if (!n) return [];
+    var totalW = n * width + (n - 1) * CARD_GAP;
+    var x = -totalW / 2;
+    return items.map(function (item) {
+      var cx = x + width / 2;
+      x += width + CARD_GAP;
+      return { x: cx, y: y, width: width, kind: "unit", data: item };
+    });
+  }
+
+  function layoutChildren(childGroups, unmarriedChildren, y) {
+    var items = (childGroups || []).map(function (g) { return { kind: "unit", data: g, width: UNIT_W }; })
+      .concat((unmarriedChildren || []).map(function (p) { return { kind: "person", data: p, width: SINGLE_W }; }));
+    if (!items.length) return [];
+    var totalW = items.reduce(function (sum, it) { return sum + it.width; }, 0) + (items.length - 1) * CARD_GAP;
+    var x = -totalW / 2;
+    return items.map(function (it) {
+      var cx = x + it.width / 2;
+      x += it.width + CARD_GAP;
+      return { x: cx, y: y, width: it.width, kind: it.kind, data: it.data };
+    });
+  }
+
+  // ---- Rendering ----
+  function renderUnitCard(group, unit, width, isSelf, role) {
+    var rectCls = "ft-unit-rect" + (unit.is_dormant ? " is-dormant" : "") + (isSelf ? " is-current" : "");
+    group.append("rect").attr("class", rectCls)
+      .attr("x", -width / 2).attr("y", -UNIT_H / 2).attr("width", width).attr("height", UNIT_H).attr("rx", 12);
+    group.append("text").attr("class", "ft-unit-title").attr("y", -UNIT_H / 2 - 10).text(unitTitle(unit, role));
+
+    renderPersonHalf(group, unit.husband, -width / 4);
+    renderPersonHalf(group, unit.wife, width / 4);
+    group.append("line").attr("class", "ft-unit-divider").attr("x1", 0).attr("x2", 0)
+      .attr("y1", -UNIT_H / 2 + 8).attr("y2", UNIT_H / 2 - 8);
+  }
+
+  function renderPersonHalf(group, person, offsetX) {
+    var cls = "ft-person" + (!person || !person.claimed ? " is-empty" : "")
+      + (person && person.is_deceased ? " is-deceased" : "") + (person && person.is_viewer ? " is-viewer" : "");
+    var p = group.append("g").attr("class", cls).attr("transform", "translate(" + offsetX + ",0)");
+    p.append("text").attr("y", 5).text(person ? personLabel(person) : "+ Add");
+    if (person && !person.claimed) {
+      p.style("cursor", "pointer").on("click", function (event) {
+        event.stopPropagation();
+        openEditModal(person);
+      });
+    }
+  }
+
+  function renderPersonCard(group, person, width) {
+    var cls = "ft-single-rect" + (person.is_deceased ? " is-deceased" : "") + (!person.claimed ? " is-empty" : "") + (person.is_viewer ? " is-viewer" : "");
+    group.append("rect").attr("class", cls)
+      .attr("x", -width / 2).attr("y", -UNIT_H * 0.35).attr("width", width).attr("height", UNIT_H * 0.7).attr("rx", 10);
+    group.append("text").attr("y", 5).text(person ? personLabel(person) : "+ Add");
+    if (!person.claimed) {
+      group.style("cursor", "pointer").on("click", function (event) {
+        event.stopPropagation();
+        openEditModal(person);
+      });
+    }
+  }
+
+  function renderNeighborhood(nbh) {
+    var parentCards = layoutUniform(nbh.parent_groups, -ROW_H, UNIT_W).map(function (c, i) {
+      c.role = nbh.parent_groups[i].side;
+      return c;
+    });
+    var selfCard = { x: 0, y: 0, width: UNIT_W, kind: "unit", data: nbh, role: "self" };
+    var childCards = layoutChildren(nbh.child_groups, nbh.unmarried_children, ROW_H);
 
     var svg = d3.select(svgEl);
     svg.selectAll("*").remove();
     var g = svg.append("g").attr("class", "ft-zoom-layer");
-
-    var zoomBehavior = d3.zoom().scaleExtent([0.4, 2]).on("zoom", function (event) {
-      g.attr("transform", event.transform);
-    });
+    var zoomBehavior = d3.zoom().scaleExtent([0.4, 2]).on("zoom", function (event) { g.attr("transform", event.transform); });
     svg.call(zoomBehavior);
 
-    // Parent links: from each composite's bottom-center to each child composite's top-center.
+    // Connecting lines, drawn first so cards sit visually on top of them.
     var linkGen = d3.linkVertical().x(function (d) { return d.x; }).y(function (d) { return d.y; });
-    g.append("g").attr("class", "ft-links-parent")
-      .selectAll("path")
-      .data(root.links())
-      .enter().append("path")
-      .attr("class", "ft-link-parent")
-      .attr("d", function (d) {
-        return linkGen({
-          source: { x: d.source.x, y: d.source.y + NODE_H / 2 },
-          target: { x: d.target.x, y: d.target.y - NODE_H / 2 },
-        });
-      });
+    var linksLayer = g.append("g").attr("class", "ft-links-layer");
+    parentCards.forEach(function (p) {
+      linksLayer.append("path").attr("class", "ft-link").attr("d", linkGen({
+        source: { x: p.x, y: p.y + UNIT_H / 2 },
+        target: { x: selfCard.x, y: selfCard.y - UNIT_H / 2 },
+      }));
+    });
+    childCards.forEach(function (c) {
+      var targetHalfH = c.kind === "person" ? UNIT_H * 0.35 : UNIT_H / 2;
+      linksLayer.append("path").attr("class", "ft-link").attr("d", linkGen({
+        source: { x: selfCard.x, y: selfCard.y + UNIT_H / 2 },
+        target: { x: c.x, y: c.y - targetHalfH },
+      }));
+    });
 
-    // Spouse links: a short horizontal connector between the two cards of a 2-person composite.
-    g.append("g").attr("class", "ft-links-spouse")
-      .selectAll("line")
-      .data(root.descendants().filter(function (d) { return d.data.people.length === 2; }))
-      .enter().append("line")
-      .attr("class", "ft-link-spouse")
-      .attr("x1", function (d) { return d.x - NODE_GAP / 2; })
-      .attr("x2", function (d) { return d.x + NODE_GAP / 2; })
-      .attr("y1", function (d) { return d.y; })
-      .attr("y2", function (d) { return d.y; });
-
-    // Node cards: 1 or 2 person-cards per composite, centered on the composite's (x, y).
-    var cardGroups = g.append("g").attr("class", "ft-nodes")
-      .selectAll("g.ft-composite")
-      .data(root.descendants())
+    // Cards.
+    var allCards = parentCards.concat([selfCard], childCards);
+    var cardGroups = g.append("g").attr("class", "ft-cards")
+      .selectAll("g.ft-card")
+      .data(allCards)
       .enter().append("g")
-      .attr("class", "ft-composite")
+      .attr("class", function (d) { return "ft-card " + (d.kind === "unit" ? "ft-card-unit" : "ft-card-person"); })
       .attr("transform", function (d) { return "translate(" + d.x + "," + d.y + ")"; });
 
     cardGroups.each(function (d) {
       var group = d3.select(this);
-      var people = d.data.people || [];
-      var count = people.length;
-      people.forEach(function (person, i) {
-        var offsetX = count === 2 ? (i === 0 ? -(NODE_W + NODE_GAP) / 2 : (NODE_W + NODE_GAP) / 2) : 0;
-        var card = group.append("g")
-          .attr("class", nodeClasses(person))
-          .attr("transform", "translate(" + offsetX + ",0)");
-        card.append("rect")
-          .attr("x", -NODE_W / 2).attr("y", -NODE_H / 2)
-          .attr("width", NODE_W).attr("height", NODE_H)
-          .attr("rx", 10);
-        card.append("text")
-          .attr("y", 5)
-          .text(nodeLabel(person));
-        if (!person.claimed) {
-          card.style("cursor", "pointer").on("click", function () { openEditModal(person); });
-        }
-      });
+      if (d.kind === "person") {
+        renderPersonCard(group, d.data, d.width);
+      } else {
+        renderUnitCard(group, d.data, d.width, d === selfCard, d.role);
+      }
     });
 
-    // Center the initial view on the viewer's own node.
-    var viewerDescendant = root.descendants().filter(function (d) {
-      return (d.data.people || []).some(function (p) { return p.is_viewer; });
-    })[0];
+    // Click-to-navigate: any unit card except the current (self) one. A click on an empty person
+    // slot is stopped from bubbling here (see renderPersonHalf), so it opens the edit modal only.
+    cardGroups.filter(function (d) { return d.kind === "unit" && d !== selfCard; })
+      .style("cursor", "pointer")
+      .on("click", function (event, d) { showTree(d.data.group_id); });
+
+    // Center the initial view on the current unit.
     var wrapRect = svgEl.getBoundingClientRect();
-    var cx = viewerDescendant ? viewerDescendant.x : 0;
-    var cy = viewerDescendant ? viewerDescendant.y : 0;
-    var initialTransform = d3.zoomIdentity
-      .translate(wrapRect.width / 2 - cx, wrapRect.height / 2 - cy);
-    svg.call(zoomBehavior.transform, initialTransform);
+    svg.call(zoomBehavior.transform, d3.zoomIdentity.translate(wrapRect.width / 2, wrapRect.height / 2));
   }
 
   // ---- Entry point ----
   function showTree(groupId) {
     state.currentGroupId = groupId;
-    api("/api/family-groups/" + groupId + "/tree").then(function (tree) {
+    api("/api/family/node/" + groupId + "/neighborhood").then(function (nbh) {
       summaryEl.hidden = true;
       container.hidden = false;
-      renderTree(tree);
+      renderNeighborhood(nbh);
     }).catch(function (e) { alert(e.message); });
   }
 

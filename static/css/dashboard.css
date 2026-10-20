@@ -831,8 +831,10 @@
 .fw-suggestion-row p { color: var(--qm-text-dim); font-size: 0.84rem; }
 .fw-suggestion-row .qm-btn { align-self: flex-start; }
 
-/* ---- Family Tree, Phase 2 (2026-10-20): plain SVG rects/text, not foreignObject -- simpler and
-   fully compatible with d3-zoom's transform-based panning. Rendered by family_tree.js. ---- */
+/* ---- Family Tree, Nuclear Family Node neighborhood view (2026-10-20): plain SVG rects/text, not
+   foreignObject -- simpler and fully compatible with d3-zoom's transform-based panning. A unit
+   card shows husband+wife side by side with a divider; an unmarried child is a single-person
+   card. Rendered by family_tree.js. ---- */
 #family-tree-container { margin-top: 8px; }
 .ft-svg-wrap {
   width: 100%;
@@ -846,20 +848,29 @@
 #ft-svg { width: 100%; height: 100%; cursor: grab; display: block; }
 #ft-svg:active { cursor: grabbing; }
 
-.ft-link-parent { fill: none; stroke: var(--qm-text-dim); stroke-width: 1.5; opacity: 0.6; }
-.ft-link-spouse { stroke: var(--qm-saffron); stroke-width: 3; stroke-linecap: round; }
+.ft-link { fill: none; stroke: var(--qm-text-dim); stroke-width: 1.5; opacity: 0.6; }
 
-.ft-node rect { fill: var(--qm-panel-bg); stroke: var(--qm-border); stroke-width: 1.5; }
-.ft-node text { fill: var(--qm-text); font-size: 12px; font-family: inherit; text-anchor: middle; dominant-baseline: middle; }
+.ft-unit-rect { fill: var(--qm-panel-bg); stroke: var(--qm-border); stroke-width: 1.5; }
+.ft-unit-divider { stroke: var(--qm-saffron); stroke-width: 2; opacity: 0.5; }
 
-.ft-node.is-empty rect { fill: transparent; stroke: var(--qm-input-border); stroke-dasharray: 5 4; }
-.ft-node.is-empty text { fill: var(--qm-text-dim); font-style: italic; }
+.ft-unit-rect.is-current { stroke: var(--qm-gold); stroke-width: 2.5; filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.6)); }
+.ft-unit-rect.is-dormant { fill: rgba(10, 25, 41, 0.05); stroke: var(--qm-text-dim); stroke-dasharray: 3 3; opacity: 0.7; }
 
-.ft-node.is-deceased rect { fill: rgba(10, 25, 41, 0.05); stroke: var(--qm-text-dim); opacity: 0.8; }
-.ft-node.is-deceased text { fill: var(--qm-text-dim); }
+/* Higher specificity than the plain person/single-card text rule below, so the dimmed uppercase
+   unit-label text (above each card) keeps its own look regardless of declaration order. */
+.ft-card .ft-unit-title { fill: var(--qm-text-dim); font-size: 11px; font-family: inherit; text-anchor: middle; text-transform: uppercase; letter-spacing: 0.04em; }
 
-.ft-node.is-viewer rect { stroke: var(--qm-gold); stroke-width: 2.5; filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.6)); }
-.ft-node.is-viewer text { font-weight: 700; }
+.ft-card text { fill: var(--qm-text); font-size: 12px; font-family: inherit; text-anchor: middle; dominant-baseline: middle; }
+
+.ft-person.is-empty text { fill: var(--qm-text-dim); font-style: italic; }
+.ft-person.is-deceased text { fill: var(--qm-text-dim); }
+.ft-person.is-viewer text { font-weight: 700; }
+
+.ft-single-rect { fill: var(--qm-panel-bg); stroke: var(--qm-border); stroke-width: 1.5; }
+.ft-single-rect.is-empty { fill: transparent; stroke: var(--qm-input-border); stroke-dasharray: 5 4; }
+.ft-single-rect.is-empty + text { fill: var(--qm-text-dim); font-style: italic; }
+.ft-single-rect.is-deceased { fill: rgba(10, 25, 41, 0.05); stroke: var(--qm-text-dim); opacity: 0.8; }
+.ft-single-rect.is-viewer { stroke: var(--qm-gold); stroke-width: 2.5; filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.6)); }
 
 /* ---- Election sentiment (Country = Lok Sabha, State = Vidhan Sabha only) ---- */
 .bd-sentiment { margin: 0 14px 10px; padding: 10px 14px; border-radius: 12px; background: rgba(139, 123, 255, 0.08); border: 1px solid rgba(139, 123, 255, 0.3); }
