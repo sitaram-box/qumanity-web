@@ -66,6 +66,9 @@ session.
 | 022 | `qpunch_addresses`, `qpunch_queue_messages`, `qpunch_queue_actions` — Q-Punch council addresses and their shared queue (§4.8) |
 | 023 | `qmail_attachments` — compose-time file attachments, stored as SQLite BLOBs (§4.10) |
 | 024 | `qmail_drafts` — unsent compose-form state, autosaved on close (§4.7) |
+| 025 | `profile_change_requests.request_type`/`.location_level`/`.location_id`, `profile_change_attachments`, `users.birth_time_known` |
+| 026 | `family_nodes`, `family_parent_links`, `family_spouse_links`, `family_groups`, `family_group_members`, `family_group_messages`, `family_group_nodes`, `users.timeline_activated_at` — the Family Tree, Phase 1 (§4.12) |
+| 027 | `family_groups.husband_node_id`/`.wife_node_id`/`.husband_parent_group_id`/`.wife_parent_group_id`/`.marriage_status`, `people_requests.target_node_id` — the Nuclear Family Node pivot (§4.12) |
 
 **The invariant that matters most**: `board_posts.is_test = (post_kind == 'test')`, enforced by
 writing all three fields (`post_kind`, `is_test`, `is_demo_post`) in a single `INSERT`, never a
@@ -329,70 +332,79 @@ Message" button with a "Coming soon" note, even though Qmail fully exists now. W
 `/qmail`'s compose flow (or to a lighter in-place compose) is a reasonable future pass; it simply
 hasn't been done yet.
 
-### 4.12 The Family Tree (`family_core.py`, 2026-10-20)
+### 4.12 The Family Tree — Nuclear Family Node architecture (`family_core.py`, 2026-10-20)
 
-**Two deliberately separate layers**, not one. `family_nodes` / `family_parent_links` /
-`family_spouse_links` are the genealogical tree itself — a node is a person the tree knows about,
-claimed (linked to a real `users.id`) or still empty (a typed name, possibly already marked
-`is_deceased`, waiting to be claimed). `family_groups` / `family_group_members` /
-`family_group_messages` / `family_group_nodes` are a shared, joinable container on top of it — a
-chat plus a subset of nodes a specific set of real members can see drawn as one tree. A node can
-belong to more than one group; a group's nodes are not its members (an empty node has no `user_id`
-to be a chat member with). **Deliberately not built on `personal_groups`**: that table's
-`category='family'` already carries privacy-sensitive meaning for `social_core.is_family_member()`
-(which `hide_identity`'s exemption depends on) — reusing it here would have made "belongs to a
-big searchable extended Family Group" quietly satisfy "is this person's close family," a real
-privacy leak, not just a naming clash. The old Paternal/Maternal `personal_groups` still exist,
-untouched, with their own small "Legacy Family Groups" bridge section restored in the same panel
-(`static/js/family.js`'s `loadLegacyGroups()`) once their only UI entry point was replaced.
+**A `family_groups` row is a marriage unit, not a generic container.** The model went through an
+earlier "lineage vs. marital group" pass (kept below in git history, not here — it's fully retired)
+before settling on this: a unit names its two founders directly —
+`husband_node_id`/`wife_node_id` (one may still be an unclaimed placeholder) — plus
+`husband_parent_group_id`/`wife_parent_group_id` pointing at each founder's own birth unit, if the
+tree already knows it, and `marriage_status` (`active`/`separated`/`dissolved`). `family_nodes` /
+`family_parent_links` are unchanged by the pivot: a node is still just a person, claimed or empty.
+`family_spouse_links` is **deprecated** — a marriage IS the unit's own husband/wife pair now, so new
+marriages never write to it; `tree_for_group()` (the legacy whole-group view) synthesizes an
+equivalent spouse-link entry from the pair so it keeps rendering correctly. `family_group_nodes`
+still holds a unit's **unmarried** children — a couple's kids who haven't founded their own unit
+yet are plain nodes here, not units themselves. `activate_timeline()` (father+mother) and
+`marry_timeline()` (self+spouse) both now route through one shared `_find_or_create_couple_group()`
+— finding an existing unit if either side already belongs to one (e.g. a sibling activated first),
+never auto-adding members to a *found* unit so the join-request consent model stays intact.
 
-**Lineage vs. marital groups are structurally different, not just named differently.** A child has
-two parents **and** a `family_groups.kind` of `'lineage'`; a married couple founds a separate
-`'marital'` group for themselves and their children — `activate_timeline()` only ever handles
-father/mother; `marry_timeline()` is a second, later-callable action for spouse/children, kept
-deliberately apart so marital-group creation lives in exactly one place. The two group kinds use
-**different naming algorithms**: lineage keeps a generation-rank-then-DOB pick (a parent always
-outranks the activating user by generation, regardless of DOB — comparing raw DOB alone would make
-the activating user "eldest" almost every time, since their own DOB is always known while a
-freshly-typed parent's almost never is) and is deliberately deceased-blind, so a dead elder can
-still lend the group his name; marital naming is alive-and-eldest between the spouse pair only.
+**Why one couple per unit, not a full tree**: a child has two parents, and `d3.hierarchy()` allows
+exactly one — the project's original DAG problem. Making a unit *be* the couple fixes that at the
+schema level, but reintroduces the identical problem one generation up: a married unit has **two**
+parent units (husband's birth family, wife's), almost always two unrelated ancestries meeting only
+at this one marriage, so no single tree view can still render arbitrarily many generations at once.
+**The chosen fix: render one unit's own immediate neighborhood at a time** — `static/js/family_tree.js`
+fetches `GET /api/family/node/<group_id>/neighborhood` (despite the route saying "node," `<id>` is a
+`family_groups.id` — a unit — under this model) and lays out exactly three fixed rows: up to 2
+parent units above, the current unit (highlighted) in the middle, its unmarried children and child
+units below. No `d3.hierarchy()`/`d3.tree()` layout algorithm is needed any more — a unit is already
+a couple, so there's no DAG left to flatten; each row is placed directly from the response's own
+shape. Clicking any unit card except the current one re-centers the view by fetching *its*
+neighborhood, so navigating the whole tree is a sequence of one-generation steps in either
+direction, never one all-encompassing render.
 
-**`family_group_members.is_admin` is derived at decision time, never stored as intent.** When a
-join request is approved, admin status is granted only if the joiner has an *active*
-`family_spouse_links` edge to a node whose claimed user is *already* an admin of that same group —
-a spouse joining becomes co-admin; a child joining a parent's lineage group stays a plain member. A
-spousal **join** (as opposed to create) links to the group's current real admin's own self-node,
-never to the typed placeholder name the group's founder entered — claiming/merging two nodes that
-turn out to be the same real person is a harder problem, deliberately deferred (see below), and
-linking to the placeholder instead of the real admin would have silently half-solved it.
+**Dormancy is computed live, never stored** (`_group_is_dormant()`) — a unit is dormant once
+*neither* founder slot is a filled, alive node, same "never trust a stale snapshot" discipline the
+rest of this module already uses for a claimed node's name/DOB. **Admin succession walks both
+ancestral lines, with no patrilineal/matrilineal default** (`_is_admin_of_group()`): a living founder
+(or the unit's creator — see below) is always its admin while the unit is active; once dormant,
+authority for anything reached through it recurses up through *either*
+`husband_parent_group_id` or `wife_parent_group_id`, to any reachable active ancestor on either
+side — "if both the husband's parents and the wife's parents are alive, both sets of grandparents
+have admin rights over the dormant child's unit" was the explicit, approved design. This **resolves
+the handover's previous open item** ("Family Group admin succession is unsolved if a group's sole
+admin's own node is later marked deceased") — succession is no longer a speculative gap.
 
-**The D3 visual tree (`static/js/family_tree.js`) renders `GET /api/family-groups/<id>/tree`'s flat
-`nodes`/`parent_links`/`spouse_links` response (unchanged by Phase 2) via a composite-couple
-merge**, not `d3-force` (non-deterministic, no concept of generation) and not `d3.tree()` on the
-raw graph (a child's two parent edges violate `d3.hierarchy()`'s one-parent-per-node rule outright).
-Every *active* spouse link is merged into one layout node before computing the hierarchy; a
-**second merge pass** handles co-parents with no recorded spouse link at all — the normal case for
-a lineage group's father and mother — by detecting composites that point at an identical child set
-and merging those too, iterated to a fixed point. Skipping that second pass was a real bug caught
-only by rendering an actual group, not by review: `d3.hierarchy()` silently visited the shared
-child once per parent branch, duplicating the viewer's own node in the tree. Plain SVG rects/text
-render each person, not `foreignObject` — simpler, and fully compatible with `d3-zoom`'s
-transform-based panning.
+**The creator of a freshly-founded unit is also always granted admin**, additive to founder-based
+admin, not a replacement for it — a real gap, not a hypothetical: strict founder-only admin would
+leave a brand-new unit with **zero** admins the moment both founder slots start out as unclaimed
+placeholders (e.g. a child activating with parents who've never registered), unable to fix a typo or
+link a parent once they sign up. Mirrors the pre-pivot model, which granted the creator admin
+unconditionally.
 
-**Node editing is two genuinely separate actions, not two paths to the same result.**
-`POST /api/family/node/<id>/name` only ever changes an empty node's display label — it's refused
-outright on an already-claimed node (whose visible name always comes live from `users.name`, so the
-edit would silently do nothing) rather than allowed as a confusing no-op.
-`POST /api/family/node/<id>/link` claims an empty node for a real user by id or Account ID, and
-deliberately does **not** grant group membership or admin status — an admin identifying who a node
-really is is not the same as that person requesting to join, and auto-adding them would reverse the
-join-then-approve consent model used everywhere else in this project. In the UI, saving a name
-never flips a dashed card to solid; only linking one does.
+**Claiming an empty founder slot (a spousal join) swaps the unit's slot to the joiner's own
+existing self-node — it never tries to claim the placeholder node directly.** A real bug caught by
+the test suite, not by review: the joiner already has their own self-node from activation (required
+before `request_join_group()` accepts the request at all), and `family_nodes.claimed_user_id` is
+globally unique — one node per real person, not per group — so setting it on the placeholder too
+collided with that constraint. `add_member()`'s `target_node_id` path (threaded through
+`people_requests.target_node_id`, a small additive schema change) now re-points the group's
+`husband_node_id`/`wife_node_id` at the joiner's real self-node instead, leaving the original
+placeholder in place but unreferenced by that unit.
 
-**Known, deliberately unsolved edge case**: if a Family Group's sole admin's own node is later
-marked deceased (`mark_deceased()`), the group is simply left as-is — no succession, no automatic
-promotion of another member. Not built speculatively; revisit once Report/Block and
-account-deletion tools exist, or if a real user hits it.
+**Node editing is unchanged by the pivot**: `POST /api/family/node/<id>/name` only ever renames an
+empty node (refused outright on an already-claimed one, whose visible name always comes live from
+`users.name`); `POST /api/family/node/<id>/link` claims an empty node for a real user and — new
+this pass — automatically grants that person admin if the claimed node turns out to be a unit's
+founder slot (`_grant_founder_admin_if_applicable()`), the natural structural consequence of founder
+status, not a new privilege smuggled into linking.
+
+**Known, deliberately unsolved limitation**: husband/wife slot assignment is derived from
+`users.gender` (whichever side is male becomes `husband_node_id`) — a named limitation of the
+husband/wife-shaped schema for same-gender couples or `gender='both'` users, inherited directly from
+the architecture's own column naming, not silently expanded or hidden.
 
 ## 5. DPG Evidence Pack — status at this handover
 
@@ -534,15 +546,15 @@ and the row numbers below are its rows.
 - **The test scripts hard-code the owner's checkout path** (row 41). Resolving the root from each
   script's own location fixes the import for all 11; the four that also read files through the
   path need those reads changed too.
-- **`SMTP_*` environment variables are not yet set on Railway**, so the registration-notification
-  email is built but does nothing in production until they are (`docs/EMAIL.md`).
+- **The registration-notification email (now Resend, not SMTP — `email_core.py`, 2026-10-20) has
+  not yet been verified end-to-end in production.** `RESEND_API_KEY`/`RESEND_FROM_EMAIL` are
+  reportedly set on Railway; still needs a real registration run to confirm the Admin actually
+  receives it (`docs/EMAIL.md`).
 - **DMCA ticket #4870732 is awaiting action on GitHub's side**; a cached `refs/pull/1/head` still
   serves the poem files in the meantime.
 
 Also open, but not tracked in Doc 10:
 
-- **Family Group admin succession is unsolved** (§4.12) if a group's sole admin's own node is
-  later marked deceased.
 - The member-profile popup's "Send Message" button (`static/js/dashboard.js:518`) is still disabled
   with a "Coming soon" note, even though Qmail exists (§4.11).
 - Production verification at `https://qumanity.in` of the homepage, dashboard tour, Qmail, Q-Punch,
