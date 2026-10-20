@@ -580,12 +580,13 @@ def decide_request(conn, user_id, request_id, decision):
             # Reversed from kind='group' above: the REQUESTER (from_user_id) asked to join, and
             # `user_id` (== to_user_id, the Family Group's founding creator) is the one deciding --
             # so the new member is from_user_id, never the deciding user themself. group_id holds
-            # family_groups.id here (see family_core.request_join_group()). add_member() itself
-            # derives is_admin=1 when from_user_id has a spouse edge to an existing admin of this
-            # same group (2026-10-20) -- a spouse joining becomes co-admin; a child joining a
-            # parent's lineage group stays a plain member.
+            # family_groups.id here (see family_core.request_join_group()). target_node_id
+            # (2026-10-20, Nuclear Family Node pivot), when set, means this acceptance claims that
+            # specific empty founder slot as from_user_id and grants founder-admin -- see
+            # add_member(). Otherwise from_user_id joins as a plain member; only a unit's two
+            # named founders are ever admins under the new model.
             import family_core
-            family_core.add_member(conn, r["group_id"], r["from_user_id"], invited_by=None)
+            family_core.add_member(conn, r["group_id"], r["from_user_id"], invited_by=None, target_node_id=r["target_node_id"])
     conn.commit()
     return {"status": status}
 

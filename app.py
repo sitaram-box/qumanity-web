@@ -1891,6 +1891,21 @@ def api_family_group_tree(group_id):
     return jsonify(tree)
 
 
+@app.route("/api/family/node/<int:group_id>/neighborhood")
+@login_required
+def api_family_node_neighborhood(group_id):
+    # NOTE: despite the "node" in the route path, group_id here is a family_groups.id -- a unit --
+    # under the Nuclear Family Node terminology, not a family_nodes.id. Kept as specified.
+    conn = _family(get_db())
+    try:
+        neighborhood = family_core.neighborhood_for_group(conn, session["user_id"], group_id)
+    finally:
+        conn.close()
+    if neighborhood is None:
+        return jsonify({"error": "Family Group not found"}), 404
+    return jsonify(neighborhood)
+
+
 @app.route("/api/family-groups/<int:group_id>/join-request", methods=["POST"])
 @login_required
 @_board_error
