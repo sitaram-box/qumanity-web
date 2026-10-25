@@ -130,6 +130,11 @@
             {% if test_pin %}
             <button type="button" class="qm-btn qm-btn-ghost qm-test-pw" id="use-test-password" data-pw="{{ test_pin }}">🔑 Use test PIN</button>
             {% endif %}
+
+            <label class="qm-field" id="field-referred-by-wrap"><span>🔗 Referred By (Public ID)</span>
+              <input type="text" id="field-referred-by" maxlength="20" value="{{ own_public_id or '' }}" placeholder="12-digit Public ID (Optional)" />
+            </label>
+            <p class="qm-pin-hint" id="field-referred-by-hint">Leave blank if registering without a referrer.</p>
           </div>
 
           <aside class="qm-why-note">

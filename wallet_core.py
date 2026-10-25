@@ -17,6 +17,7 @@ election vote (see `unlock_user_share`, called from election_core.cast_vote).
 from __future__ import annotations
 
 import datetime as dt
+import sqlite3
 
 import cycle_middleware
 import elemental_core
@@ -343,3 +344,55 @@ def weekly_history(conn, owner_type: str, owner_id: str, include_older: bool = F
         wk["change"] += r["amount_qoins"]
     ordered = sorted(weeks.values(), key=lambda w: (w["year"], w["week"]), reverse=True)
     return {"balance_qoins": wallet_balance(conn, owner_type, owner_id), "weeks": ordered, "older_weeks_hidden": len(older_weeks)}
+
+
+# ---- Referral volume bonus (2026-10-25) ----
+# One-time Qoins for a referrer who crosses a threshold of free-registration referrals in a
+# single ISO week -- on top of the 10 paise `apply_free_registration` already credits per
+# referral, never a replacement for it. (threshold, Qoins) pairs; the highest threshold reached
+# wins each time this is checked. Approved by the founder as-is -- not meant to be tuned casually.
+BONUS_TIERS = ((3, 1), (7, 3), (15, 7))
+
+
+def check_and_award_bonus(conn, referrer_user_id: int | None) -> int | None:
+    """Call once per registration that named a referrer, right after `apply_free_registration`.
+    Counts how many users this referrer referred in the current ISO week and, if a new
+    BONUS_TIERS threshold has just been reached, mints that tier's bonus once.
+    Safe to call every time a referral lands in the same week -- `referral_bonus_awards`'
+    UNIQUE(referrer_user_id, period_type, period_key, tier) makes a repeat award a no-op, not a
+    double mint. Returns the tier number (1-based) just awarded, or None if nothing was awarded
+    (no referrer, no wallet yet, below the lowest threshold, or this tier was already awarded)."""
+    if referrer_user_id is None:
+        return None
+    iso_year, iso_week, _ = dt.date.today().isocalendar()
+    period_key = f"{iso_year}-W{iso_week:02d}"
+    monday, sunday = _week_range(iso_year, iso_week)
+    # Counts users.referred_by_user_id directly (each referred member's OWN registration
+    # timestamp), not wallet_transactions -- a single 10-paisa referral credit is sub-rupee and
+    # often never reaches wallet_transactions at all (it only lands there once paisa_balance
+    # rolls over 100), so it's not a reliable per-referral signal to count.
+    count = conn.execute(
+        """SELECT COUNT(*) FROM users
+           WHERE referred_by_user_id = ? AND date(created_at) BETWEEN date(?) AND date(?)""",
+        (referrer_user_id, monday.isoformat(), sunday.isoformat()),
+    ).fetchone()[0]
+    tier = None
+    for i, (threshold, _) in enumerate(BONUS_TIERS, start=1):
+        if count >= threshold:
+            tier = i
+    if tier is None:
+        return None
+    qoins_awarded = BONUS_TIERS[tier - 1][1]
+    try:
+        conn.execute(
+            """INSERT INTO referral_bonus_awards
+               (referrer_user_id, period_type, period_key, tier, qoins_awarded, cycle_id)
+               VALUES (?, 'week', ?, ?, ?, ?)""",
+            (referrer_user_id, period_key, tier, qoins_awarded, cycle_middleware.get_active_cycle_id(conn)),
+        )
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        return None  # this tier was already awarded for this referrer this week
+    _credit(conn, "user", str(referrer_user_id), qoins_awarded, "referral_volume_bonus")
+    conn.commit()
+    return tier

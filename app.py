@@ -235,16 +235,27 @@ def register():
     If the visitor is already signed in, they may be here to register someone else (a member
     with no smartphone) -- that person's name + Account ID is shown so the form can say who's
     registering them, and that logged-in id becomes the new member's referrer automatically
-    (see api_auth_register's `helper_user_id`) -- no referral code to type in either direction."""
+    (see api_auth_register's `helper_user_id`) -- no referral code to type in either direction.
+
+    Separately (2026-10-25), the visitor's own 12-digit Public ID is passed through as
+    `own_public_id` so the "Referred By" field on the normal (non-assisted) registration form
+    can autofill with it -- a different, lower-trust referral path than the assisted flow above;
+    see api_auth_register's `referred_by_public_id` handling."""
     helper = None
+    own_public_id = None
     if session.get("user_id"):
         conn = get_db()
         row = conn.execute("SELECT name, account_id FROM users WHERE id = ?", (session["user_id"],)).fetchone()
+        code_row = conn.execute(
+            "SELECT search_code FROM account_ids WHERE user_id = ? AND is_current = 1", (session["user_id"],)
+        ).fetchone()
         conn.close()
         if row:
             helper = {"name": row["name"], "account_id": row["account_id"]}
+        if code_row:
+            own_public_id = code_row["search_code"]
     return render_template("register.html", languages=_load_json(LANGUAGES_FILE),
-                           test_pin=os.environ.get("QM_TEST_PIN", ""), helper=helper)
+                           test_pin=os.environ.get("QM_TEST_PIN", ""), helper=helper, own_public_id=own_public_id)
 
 
 @app.route("/about")
@@ -3866,13 +3877,31 @@ def api_auth_register():
     # still minted and shared 10 paise at a time (see wallet_core.apply_free_registration).
     # the connection above was already closed once folder_connector had the user's data; reopen for this.
     conn = get_db()
-    # There is no referral code to type in any more -- the only way to be credited as a
-    # referrer is to BE the logged-in member doing the registering (helper_user_id, "Register a
-    # new member"); their Account ID is recorded automatically, nothing for either party to enter.
+    # The assisted flow (helper_user_id, "Register a new member" -- a logged-in member physically
+    # doing the registering) still wins when present. Otherwise (2026-10-25), a visible, optional
+    # "Referred By (Public ID)" field on the ordinary form lets ANYONE name a referrer who need
+    # not be present at all -- resolved the same 12-digit account_ids.search_code way every other
+    # Public ID lookup in this file is (see api_qmail_resolve_public_id above), deliberately with
+    # no PIN/identity check: naming someone as your referrer doesn't let you act as them, so it
+    # doesn't need that bar. A blank or unrecognized Public ID is never an error -- same as today.
     referrer_user_id = helper_user_id
+    if referrer_user_id is None and data.get("referred_by_public_id"):
+        referred_code = re.sub(r"\D", "", str(data["referred_by_public_id"]))
+        if referred_code:
+            row = conn.execute(
+                "SELECT user_id FROM account_ids WHERE search_code = ? AND is_current = 1", (referred_code,)
+            ).fetchone()
+            if row and row["user_id"] != user_id:
+                referrer_user_id = row["user_id"]
+                # The assisted path's referred_by_user_id write happens earlier (right after the
+                # INSERT, gated on helper_user_id); this is the equivalent write for a referrer
+                # resolved from the "Referred By" field instead, which isn't known until here.
+                conn.execute("UPDATE users SET referred_by_user_id = ? WHERE id = ?", (referrer_user_id, user_id))
+                conn.commit()
     board_core.ensure_sub_tables(conn)
     try:
         wallet_core.apply_free_registration(conn, user_id, present_location, referrer_user_id)
+        wallet_core.check_and_award_bonus(conn, referrer_user_id)
     except ValueError as e:
         print(f"[registration] free Qoin mint failed for user_id={user_id}: {e}")
     conn.close()

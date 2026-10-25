@@ -235,7 +235,7 @@
 
   // ---- Keep what was typed: a draft of Step 1 survives a page refresh (passwords are never stored) ----
   var DRAFT_KEY = "qm_reg_draft";
-  var draftFields = ["field-first-name", "field-middle-name", "field-last-name", "field-language", "field-email", "field-phone"];
+  var draftFields = ["field-first-name", "field-middle-name", "field-last-name", "field-language", "field-email", "field-phone", "field-referred-by"];
   function saveDraft() {
     try {
       var d = { gender: genderInput.value, dob: [dobDaySelect.value, dobMonthSelect.value, dobYearSelect.value], tob: document.getElementById("field-tob").value };
@@ -358,6 +358,7 @@
       email: email,
       phone: document.getElementById("field-phone").value.trim(),
       pin: password,
+      referredByPublicId: document.getElementById("field-referred-by").value.trim(),
     };
     state.zodiacPreview = null;
     fetch("/api/zodiac/preview?dob=" + encodeURIComponent(state.form.dob))
@@ -1131,6 +1132,7 @@
       birth_location: buildLocationPayload(state.birthLocation, state.birthPublic),
       present_location: buildLocationPayload(state.presentLocation, state.presentPublic),
       assisted: hasHelper,
+      referred_by_public_id: hasHelper ? "" : state.form.referredByPublicId,
     };
 
     fetch("/api/auth/register", {
@@ -1176,6 +1178,13 @@
 
   // ---- "Register New Member" assisted flow: a logged-in member is filling this in for someone else ----
   if (new URLSearchParams(location.search).get("assist") === "1") {
+    // The assisted flow's own helper_user_id already wins as the referrer server-side (see
+    // api_auth_register) -- hide the independent "Referred By" field so there's only one
+    // referral story on screen at a time.
+    var referredByWrap = document.getElementById("field-referred-by-wrap");
+    var referredByHint = document.getElementById("field-referred-by-hint");
+    if (referredByWrap) referredByWrap.hidden = true;
+    if (referredByHint) referredByHint.hidden = true;
     var banner = document.createElement("p");
     banner.className = "qm-timeline-note";
     banner.style.cssText = "margin:0 0 16px;padding:10px 14px;border-radius:10px;background:rgba(255,153,51,0.12);border:1px solid rgba(255,210,74,0.4);";
