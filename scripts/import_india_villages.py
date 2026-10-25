@@ -148,7 +148,19 @@ def do_verify(db_path: Path) -> bool:
     """Sanity check after import: village count, distinct tehsil_id count, and how many of
     those tehsil_ids are NOT present in subcontinent_districts.json (the file the
     registration dropdowns actually serve) -- should be 0. Mirrors the same check
-    app.py's _validate_india_villages_loaded() runs at boot (see docs/india_location_fix.md)."""
+    app.py's _validate_india_villages_loaded() runs at boot (see docs/india_location_fix.md).
+
+    2026-10-25: web_tehsil_ids also includes a DISTRICT's own id when that district carries
+    direct_villages (scripts/build_subcontinent_data.py's own module docstring: "tehsil_id there
+    is simply the village's parent id -- the tehsil, or the district for villages that hang
+    directly off a district" -- Afghanistan has no tehsil tier at all, and even some
+    Pakistan/Balochistan districts file a few villages directly under the district alongside
+    their real tehsils). Without this, every direct-villages district's id was flagged as
+    "orphaned" even though india_villages.tehsil_id legitimately uses it and
+    static/js/register.js's villageParent fallback already resolves it the same way -- a false
+    positive in this check, not a real data-integrity problem, confirmed by a live run that
+    found 462 such ids, all of them real district ids already present in
+    subcontinent_districts.json with a direct_villages count, none of them in India/Haryana."""
     conn = sqlite3.connect(db_path)
     village_count = conn.execute("SELECT COUNT(*) FROM india_villages").fetchone()[0]
     db_tehsil_ids = {r[0] for r in conn.execute("SELECT DISTINCT tehsil_id FROM india_villages")}
@@ -160,6 +172,7 @@ def do_verify(db_path: Path) -> bool:
         with open(districts_path, encoding="utf-8") as f:
             web = json.load(f)
         web_tehsil_ids = {t["id"] for state in web["states"].values() for d in state["districts"] for t in d["tehsils"]}
+        web_tehsil_ids |= {d["id"] for state in web["states"].values() for d in state["districts"] if d.get("direct_villages")}
 
     orphaned = db_tehsil_ids - web_tehsil_ids
     print(f"[verify] village_count: {village_count:,}")

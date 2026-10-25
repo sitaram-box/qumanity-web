@@ -1,0 +1,212 @@
+[
+  {
+    "old_district_id": "NS.HR.6",
+    "old_district_name": "Sirsa",
+    "old_tehsil_id": "NS.HR.6.3",
+    "old_tehsil_name": "Fatehabad",
+    "new_district_id": "NS.HR.B",
+    "new_district_name": "Fatehabad",
+    "new_tehsil_id": "NS.HR.B.1",
+    "new_tehsil_name": "Fatehabad"
+  },
+  {
+    "old_district_id": "NS.HR.8",
+    "old_district_name": "Rohtak",
+    "old_tehsil_id": "NS.HR.8.7",
+    "old_tehsil_name": "Jhajjar",
+    "new_district_id": "NS.HR.C",
+    "new_district_name": "Jhajjar",
+    "new_tehsil_id": "NS.HR.C.1",
+    "new_tehsil_name": "Jhajjar"
+  },
+  {
+    "old_district_id": "NS.HR.4",
+    "old_district_name": "Sonipat",
+    "old_tehsil_id": "NS.HR.4.9",
+    "old_tehsil_name": "Jind",
+    "new_district_id": "NS.HR.D",
+    "new_district_name": "Jind",
+    "new_tehsil_id": "NS.HR.D.1",
+    "new_tehsil_name": "Jind"
+  },
+  {
+    "old_district_id": "NS.HR.2",
+    "old_district_name": "Kurukshetra",
+    "old_tehsil_id": "NS.HR.2.8",
+    "old_tehsil_name": "Kaithal",
+    "new_district_id": "NS.HR.E",
+    "new_district_name": "Kaithal",
+    "new_tehsil_id": "NS.HR.E.1",
+    "new_tehsil_name": "Kaithal"
+  },
+  {
+    "old_district_id": "NS.HR.9",
+    "old_district_name": "Gurgaon",
+    "old_tehsil_id": "NS.HR.9.7",
+    "old_tehsil_name": "Nuh",
+    "new_district_id": "NS.HR.F",
+    "new_district_name": "Nuh",
+    "new_tehsil_id": "NS.HR.F.1",
+    "new_tehsil_name": "Nuh"
+  },
+  {
+    "old_district_id": "NS.HR.A",
+    "old_district_name": "Faridabad",
+    "old_tehsil_id": "NS.HR.A.3",
+    "old_tehsil_name": "Palwal",
+    "new_district_id": "NS.HR.G",
+    "new_district_name": "Palwal",
+    "new_tehsil_id": "NS.HR.G.1",
+    "new_tehsil_name": "Palwal"
+  },
+  {
+    "old_district_id": "NS.HR.1",
+    "old_district_name": "Ambala",
+    "old_tehsil_id": "NS.HR.1.2",
+    "old_tehsil_name": "Panchkula",
+    "new_district_id": "NS.HR.H",
+    "new_district_name": "Panchkula",
+    "new_tehsil_id": "NS.HR.H.1",
+    "new_tehsil_name": "Panchkula"
+  },
+  {
+    "old_district_id": "NS.HR.3",
+    "old_district_name": "Karnal",
+    "old_tehsil_id": "NS.HR.3.7",
+    "old_tehsil_name": "Panipat City",
+    "new_district_id": "NS.HR.I",
+    "new_district_name": "Panipat",
+    "new_tehsil_id": "NS.HR.I.1",
+    "new_tehsil_name": "Panipat City"
+  },
+  {
+    "old_district_id": "NS.HR.3",
+    "old_district_name": "Karnal",
+    "old_tehsil_id": "NS.HR.3.6",
+    "old_tehsil_name": "Panipat Rural",
+    "new_district_id": "NS.HR.I",
+    "new_district_name": "Panipat",
+    "new_tehsil_id": "NS.HR.I.2",
+    "new_tehsil_name": "Panipat Rural"
+  },
+  {
+    "old_district_id": "NS.HR.9",
+    "old_district_name": "Gurgaon",
+    "old_tehsil_id": "NS.HR.9.2",
+    "old_tehsil_name": "Rewari",
+    "new_district_id": "NS.HR.J",
+    "new_district_name": "Rewari",
+    "new_tehsil_id": "NS.HR.J.1",
+    "new_tehsil_name": "Rewari"
+  },
+  {
+    "old_district_id": "NS.HR.1",
+    "old_district_name": "Ambala",
+    "old_tehsil_id": "NS.HR.1.9",
+    "old_tehsil_name": "Yamunanagar",
+    "new_district_id": "NS.HR.K",
+    "new_district_name": "Yamunanagar",
+    "new_tehsil_id": "NS.HR.K.1",
+    "new_tehsil_name": "Yamunanagar"
+  },
+  {
+    "old_district_id": "NS.HR.7",
+    "old_district_name": "Bhiwani-Mahendragarh",
+    "old_tehsil_id": "NS.HR.7.4",
+    "old_tehsil_name": "Bhiwani",
+    "new_district_id": "NS.HR.L",
+    "new_district_name": "Bhiwani",
+    "new_tehsil_id": "NS.HR.L.1",
+    "new_tehsil_name": "Bhiwani"
+  },
+  {
+    "old_district_id": "NS.HR.7",
+    "old_district_name": "Bhiwani-Mahendragarh",
+    "old_tehsil_id": "NS.HR.7.5",
+    "old_tehsil_name": "Tosham",
+    "new_district_id": "NS.HR.L",
+    "new_district_name": "Bhiwani",
+    "new_tehsil_id": "NS.HR.L.2",
+    "new_tehsil_name": "Tosham"
+  },
+  {
+    "old_district_id": "NS.HR.7",
+    "old_district_name": "Bhiwani-Mahendragarh",
+    "old_tehsil_id": "NS.HR.7.1",
+    "old_tehsil_name": "Loharu",
+    "new_district_id": "NS.HR.L",
+    "new_district_name": "Bhiwani",
+    "new_tehsil_id": "NS.HR.L.3",
+    "new_tehsil_name": "Loharu"
+  },
+  {
+    "old_district_id": "NS.HR.7",
+    "old_district_name": "Bhiwani-Mahendragarh",
+    "old_tehsil_id": "NS.HR.7.A",
+    "old_tehsil_name": "Siwani",
+    "new_district_id": "NS.HR.L",
+    "new_district_name": "Bhiwani",
+    "new_tehsil_id": "NS.HR.L.4",
+    "new_tehsil_name": "Siwani"
+  },
+  {
+    "old_district_id": "NS.HR.7",
+    "old_district_name": "Bhiwani-Mahendragarh",
+    "old_tehsil_id": "NS.HR.7.7",
+    "old_tehsil_name": "Mahendragarh",
+    "new_district_id": "NS.HR.M",
+    "new_district_name": "Mahendragarh",
+    "new_tehsil_id": "NS.HR.M.1",
+    "new_tehsil_name": "Mahendragarh"
+  },
+  {
+    "old_district_id": "NS.HR.7",
+    "old_district_name": "Bhiwani-Mahendragarh",
+    "old_tehsil_id": "NS.HR.7.8",
+    "old_tehsil_name": "Narnaul",
+    "new_district_id": "NS.HR.M",
+    "new_district_name": "Mahendragarh",
+    "new_tehsil_id": "NS.HR.M.2",
+    "new_tehsil_name": "Narnaul"
+  },
+  {
+    "old_district_id": "NS.HR.7",
+    "old_district_name": "Bhiwani-Mahendragarh",
+    "old_tehsil_id": "NS.HR.7.6",
+    "old_tehsil_name": "Ateli",
+    "new_district_id": "NS.HR.M",
+    "new_district_name": "Mahendragarh",
+    "new_tehsil_id": "NS.HR.M.3",
+    "new_tehsil_name": "Ateli"
+  },
+  {
+    "old_district_id": "NS.HR.7",
+    "old_district_name": "Bhiwani-Mahendragarh",
+    "old_tehsil_id": "NS.HR.7.9",
+    "old_tehsil_name": "Nangal Chaudhry",
+    "new_district_id": "NS.HR.M",
+    "new_district_name": "Mahendragarh",
+    "new_tehsil_id": "NS.HR.M.4",
+    "new_tehsil_name": "Nangal Chaudhry"
+  },
+  {
+    "old_district_id": "NS.HR.7",
+    "old_district_name": "Bhiwani-Mahendragarh",
+    "old_tehsil_id": "NS.HR.7.3",
+    "old_tehsil_name": "Dadri",
+    "new_district_id": "NS.HR.N",
+    "new_district_name": "Charkhi Dadri",
+    "new_tehsil_id": "NS.HR.N.1",
+    "new_tehsil_name": "Dadri"
+  },
+  {
+    "old_district_id": "NS.HR.7",
+    "old_district_name": "Bhiwani-Mahendragarh",
+    "old_tehsil_id": "NS.HR.7.2",
+    "old_tehsil_name": "Badhra",
+    "new_district_id": "NS.HR.N",
+    "new_district_name": "Charkhi Dadri",
+    "new_tehsil_id": "NS.HR.N.2",
+    "new_tehsil_name": "Badhra"
+  }
+]

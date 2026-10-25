@@ -1979,6 +1979,34 @@ def api_family_group_leave(group_id):
     return jsonify({"status": "left"})
 
 
+@app.route("/api/family-groups/<int:group_id>/members")
+@login_required
+@_board_error
+def api_family_group_members(group_id):
+    conn = _family(get_db())
+    try:
+        members = family_core.group_members_for(conn, session["user_id"], group_id)
+    finally:
+        conn.close()
+    if members is None:
+        return jsonify({"error": "Family Group not found"}), 404
+    return jsonify({"members": members})
+
+
+@app.route("/api/family-groups/<int:group_id>/invite", methods=["POST"])
+@login_required
+@_board_error
+def api_family_group_invite(group_id):
+    data = request.get_json(silent=True) or {}
+    conn = _family(get_db())
+    try:
+        family_core.invite_to_group(conn, session["user_id"], group_id, data.get("user_id"))
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"status": "invited"}), 201
+
+
 # ---- Notifications (unread Personal-timeline chats + pending people-requests) ----
 
 @app.route("/api/notifications/summary")
@@ -5121,8 +5149,14 @@ def _validate_india_villages_loaded():
         # subcontinent_districts.json, not from india_villages directly -- if a tehsil_id in
         # india_villages doesn't exist there, that tehsil's villages are orphaned (either from
         # the retired SITAXML import, or subcontinent_districts.json itself drifting).
+        # A district with direct_villages (no tehsil tier at all -- Afghanistan -- or a few
+        # villages filed directly under the district alongside its real tehsils -- some
+        # Pakistan/Balochistan districts) legitimately uses its OWN id as tehsil_id, not a
+        # genuine mismatch -- see scripts/import_india_villages.py's do_verify(), same fix,
+        # 2026-10-25, after a live run falsely flagged 462 of these as orphaned.
         web = _load_json(SUBCONTINENT_DISTRICTS_FILE)
         web_tehsil_ids = {t["id"] for state in web["states"].values() for d in state["districts"] for t in d["tehsils"]}
+        web_tehsil_ids |= {d["id"] for state in web["states"].values() for d in state["districts"] if d.get("direct_villages")}
         orphaned = db_tehsil_ids - web_tehsil_ids
         if orphaned:
             print(f"[boot] WARNING: {len(orphaned)} tehsil_ids in india_villages are not present "
