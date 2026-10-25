@@ -364,7 +364,10 @@ def check_and_award_bonus(conn, referrer_user_id: int | None) -> int | None:
     (no referrer, no wallet yet, below the lowest threshold, or this tier was already awarded)."""
     if referrer_user_id is None:
         return None
-    iso_year, iso_week, _ = dt.date.today().isocalendar()
+    # UTC, not local dt.date.today() -- users.created_at is stored via SQLite's CURRENT_TIMESTAMP
+    # (UTC). Near UTC midnight (~5:30am IST) local-today and the stored date disagree, so a
+    # local-today boundary here would miscount referrals right at the week edge.
+    iso_year, iso_week, _ = dt.datetime.now(dt.timezone.utc).date().isocalendar()
     period_key = f"{iso_year}-W{iso_week:02d}"
     monday, sunday = _week_range(iso_year, iso_week)
     # Counts users.referred_by_user_id directly (each referred member's OWN registration
