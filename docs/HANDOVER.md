@@ -74,6 +74,7 @@ session.
 | 027 | `family_groups.husband_node_id`/`.wife_node_id`/`.husband_parent_group_id`/`.wife_parent_group_id`/`.marriage_status`, `people_requests.target_node_id` — the Nuclear Family Node pivot (§4.12) |
 | 028 | `users.profile_picture` (BLOB), `.profile_picture_updated_at` — profile pictures (§4.13) |
 | 029 | `users.middle_name` — optional, feeds the Family Group naming code (§4.13) |
+| 030 | `referral_bonus_awards` — one-time weekly referral-volume bonus Qoins (§4.16) |
 
 **The invariant that matters most**: `board_posts.is_test = (post_kind == 'test')`, enforced by
 writing all three fields (`post_kind`, `is_test`, `is_demo_post`) in a single `INSERT`, never a
@@ -495,6 +496,83 @@ neutral icon + Account ID initials, never the real name/photo) exists in the fun
 no current call site feeds it `hide_identity: true` — `social_core.py`'s own docstring documents
 board posts as "unaffected by design," and chat/Qmail participants are already-connected contexts,
 so there was no existing precedent to retrofit onto.
+
+### 4.15 Group Member Lists and Public ID invites (`family_core.py`, `social_core.py`, 2026-10-25)
+
+A proper member directory (avatar, name, Admin/Member role) plus an "Add Member by Public ID"
+search box, for both group kinds in this project — they stayed two separate code paths rather than
+being unified, since their membership models genuinely differ:
+
+- **Personal groups** (Friends/Business/Custom, `social_core.py`): single-owner admin model.
+  `group_messages()`'s existing `members` list gained an `is_admin` field (`user_id ==
+  owner_user_id`) and `find_person()` now also returns `profile_picture_url`, feeding the Avatar
+  Sweep (§4.14). No new invite mechanism — reuses the existing `/api/people/invite` +
+  `people_requests(kind='group')` flow, already admin-initiated.
+- **Family Groups** (`family_core.py`): multi-admin model (`family_group_members.is_admin`). New
+  `invite_to_group(conn, admin_user_id, group_id, target_user_id)` and `group_members_for(conn,
+  viewer_user_id, group_id)`. `invite_to_group` takes an **already-resolved `user_id`**, not a raw
+  Public ID string — the caller (the frontend) confirms a name/avatar via `/api/people/search`
+  first, exactly matching `social_core.send_group_invite()`'s own signature convention. Rejects:
+  self-invite, a target that doesn't exist (404), a duplicate pending invite, and a non-admin
+  caller (403). Non-members get 404 (not 403) on the member list, the same scoped-404 convention
+  used throughout `family_core.py`.
+
+  New `people_requests` kind, `'family_group_invite'` (admin-initiated, symmetric to the existing
+  self-initiated `'family_group_join'` — the two differ in which side is `from_user_id`).
+  `social_core.decide_request()` gained a branch for it: accepting adds the **decider** (not the
+  sender) as a plain member, with no founder-admin grant. `inbox()`'s join condition and
+  text-rendering both had to cover the new kind — the text-rendering fix also incidentally repaired
+  a pre-existing bug where `'family_group_join'` rows rendered `undefined` (the frontend read a
+  field name the backend never actually returned).
+
+Two new routes: `GET /api/family-groups/<id>/members`, `POST /api/family-groups/<id>/invite`.
+
+**Caught live, not by the automated tests**: the first `invite_to_group()` signature took a raw
+Public ID string (via `_resolve_target_user_id()`), matching `link_node_to_user()`'s convention
+instead of `send_group_invite()`'s — the automated test happened to always pass a real 12-digit
+code, so it never exercised the mismatch. A live browser test (clicking "Send Invite" in the
+Family Tree's own members modal) surfaced it immediately — a silent `400 Enter a 12-digit Public
+ID`, because the frontend was already passing a resolved `user_id` from its own
+`/api/people/search` step. Fixed by changing the signature to match `send_group_invite()`'s.
+
+### 4.16 The Referral & Qoin Engine (`wallet_core.py`, `app.py`, 2026-10-25)
+
+Two things that sound like a new subsystem turned out to already be ~90% built. Both are
+deliberately thin additions on top of what existed, not a parallel system:
+
+**The Qoin split was already live.** `wallet_core.apply_free_registration()` has, since before
+this pass, minted a single ₹1-reference Qoin at every registration and split it 10 paise at a
+time across 10 shares: the 8 location tiers (80%), the referrer (10%), and the new member (10% —
+or 20% if there's no referrer, the referrer's share folding into the new member's). This pass
+**did not touch that function or its split** — the founder's ruling was to keep 80/10/10 exactly
+as-is, since changing it would retroactively alter every past registration's intended economics
+and the DPG evidence pack's own description of the economy.
+
+**What was missing was a way to NAME a referrer without being the one physically registering
+them.** Before this pass, the only way to be credited as a referrer was `helper_user_id` — a
+logged-in member filling the form in for someone else (`?assist=1`, "Register a new member"); a
+typed referral code had been deliberately removed earlier in the project's history (an
+`app.py` comment said so explicitly: "There is no referral code to type in any more"). This pass
+reverses that: a visible, optional **"Referred By (Public ID)"** field on the *ordinary*
+registration form (hidden during `?assist=1`, where `helper_user_id` already wins), auto-filled
+server-side with the signed-in visitor's own Public ID (`/register`'s new `own_public_id` context
+var, from `account_ids.search_code`), clearable, resolved the same way every other Public ID
+lookup in `app.py` is — deliberately **no PIN/identity check**, since naming someone as your
+referrer doesn't let you act as them. A blank or unrecognized Public ID is never an error, same as
+having no referrer today.
+
+**The weekly volume bonus is new** (migration 030, `referral_bonus_awards`). Tiers: 3
+referrals/week → +1 Qoin, 7 → +3 Qoins, 15 → +7 Qoins (`wallet_core.BONUS_TIERS`) — a flat,
+one-time award per tier per referrer per ISO week, checked by
+`wallet_core.check_and_award_bonus()` right after every `apply_free_registration()` call.
+**Deliberately counts `users.referred_by_user_id` + `users.created_at` directly, not
+`wallet_transactions`** — a single 10-paisa referral credit is sub-rupee and very often never
+produces a `wallet_transactions` row at all (`_credit_paisa()` only writes one once a wallet's
+accumulated paisa rolls over 100), so counting transaction rows silently undercounts and would
+have meant the bonus tier rarely fired. `referral_bonus_awards`' own
+`UNIQUE(referrer_user_id, period_type, period_key, tier)` is the actual idempotency guard, not a
+pre-check — safe to call on every qualifying registration, a repeat award is just a caught
+`sqlite3.IntegrityError`, not a double mint.
 
 ## 5. DPG Evidence Pack — status at this handover
 

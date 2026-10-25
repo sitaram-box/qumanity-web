@@ -873,11 +873,16 @@
 
 /* ---- Members modal (2026-10-25): the member list + "Add Member by Public ID" box, shared
    markup conventions with family.js's suggestion rows (.fw-suggestion-row/-top/-text). ---- */
-.ft-members-list { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.ft-member-row { display: flex; align-items: center; gap: 10px; padding: 6px 4px; }
-.ft-member-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.ft-member-role { font-size: 0.75rem; color: var(--qm-text-dim); }
-.ft-member-role.is-admin { color: var(--qm-saffron); font-weight: 600; }
+/* Member List (2026-10-25): a two-column contact-list grid on desktop, one column on mobile --
+   avatar left, name + age group + location stacked in the middle, role badge pinned right. */
+.ft-members-list { list-style: none; margin: 0 0 16px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
+@media (max-width: 600px) { .ft-members-list { grid-template-columns: 1fr; } }
+.ft-member-row { display: flex; align-items: center; gap: 10px; padding: 6px 4px; border-radius: 10px; }
+.ft-member-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.ft-member-text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ft-member-meta { font-size: 0.75rem; color: var(--qm-text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ft-member-role { flex-shrink: 0; font-size: 0.75rem; color: var(--qm-text-dim); padding: 2px 8px; border-radius: 999px; background: rgba(10, 25, 41, 0.06); }
+.ft-member-role.is-admin { color: var(--qm-saffron); font-weight: 600; background: rgba(255, 153, 51, 0.12); }
 .ft-svg-wrap {
   width: 100%;
   height: 480px;

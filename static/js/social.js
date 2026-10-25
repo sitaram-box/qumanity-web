@@ -8,6 +8,7 @@
   if (!panel) return;
 
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+  var GENDER_LABEL = { male: "Male", female: "Female", both: "Third Gender" };
   function api(url, body) {
     var opt = body !== undefined ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {};
     return fetch(url, opt).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || "Something went wrong"); return j; }); });
@@ -204,11 +205,13 @@
       membersList.innerHTML = "";
       d.members.forEach(function (m) {
         var li = el("li", "ft-member-row");
-        if (window.QMAvatar) li.appendChild(QMAvatar.render(m, 32));
+        if (window.QMAvatar) li.appendChild(QMAvatar.render(m, 40));
         var textWrap = el("div", "ft-member-text");
         textWrap.appendChild(el("b", "", m.name + (m.you ? " (You)" : "")));
-        textWrap.appendChild(el("span", "ft-member-role" + (m.is_admin ? " is-admin" : ""), m.is_admin ? "Admin" : "Member"));
+        var meta = [GENDER_LABEL[m.gender] || m.gender, m.age_group, m.present_location].filter(Boolean).join(" · ");
+        textWrap.appendChild(el("span", "ft-member-meta", meta));
         li.appendChild(textWrap);
+        li.appendChild(el("span", "ft-member-role" + (m.is_admin ? " is-admin" : ""), m.is_admin ? "Admin" : "Member"));
         membersList.appendChild(li);
       });
     }).catch(function (e) { membersErrorEl.textContent = e.message; membersErrorEl.hidden = false; });

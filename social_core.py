@@ -272,16 +272,26 @@ def display_identity(conn, user_id, viewer_user_id=None) -> dict:
     name + present village/country. When hidden and the viewer doesn't qualify: name is replaced
     by their Account ID, place is capped at State, and age_category/sun_element are filled in
     (gender was already shown everywhere this is used) -- the exact fields the Founder's own
-    privacy request asked to keep visible."""
+    privacy request asked to keep visible.
+
+    `gender`, `dob`, `present_location_json` and `has_picture` are always included too (additive,
+    2026-10-25) -- member_display_row() builds the Member List modal's richer row (age group, full
+    present location) off these rather than re-querying `users`, while every pre-existing caller
+    here just ignores the extra keys."""
     import json
-    u = conn.execute("SELECT id, name, gender, present_location_json, account_id, hide_identity, dob FROM users WHERE id = ?", (user_id,)).fetchone()
+    u = conn.execute(
+        "SELECT id, name, gender, present_location_json, account_id, hide_identity, dob, "
+        "profile_picture IS NOT NULL AS has_picture FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
     if not u:
         return None
     hidden = bool(u["hide_identity"]) and not is_family_member(conn, user_id, viewer_user_id)
+    extra = {"gender": u["gender"], "dob": u["dob"], "present_location_json": u["present_location_json"],
+             "has_picture": bool(u["has_picture"])}
     loc = json.loads(u["present_location_json"])
     if not hidden:
         village = (loc.get("village") or {}).get("name") or (loc.get("country") or {}).get("name")
-        return {"name": u["name"], "place": village, "hidden": False}
+        return {"name": u["name"], "place": village, "hidden": False, **extra}
     capped = _capped_location(u["present_location_json"])
     place = (capped.get("state") or capped.get("country") or capped.get("continent") or {}).get("name") or "Earth"
     import id_generator
@@ -289,7 +299,59 @@ def display_identity(conn, user_id, viewer_user_id=None) -> dict:
     z = conn.execute("SELECT sun_element FROM user_zodiac WHERE user_id = ?", (user_id,)).fetchone()
     return {
         "name": u["account_id"], "place": place, "hidden": True,
-        "age_category": age_category, "sun_element": z["sun_element"] if z else None,
+        "age_category": age_category, "sun_element": z["sun_element"] if z else None, **extra,
+    }
+
+
+def _age_group(dob_str: str) -> str:
+    """Child (0-12) / Teen (13-19) / Adult (20-59) / Senior (60+) -- the plain-English age-range
+    label for a Member List row. Deliberately separate from id_generator.age_code()'s A1-A4
+    Private ID scheme and display_identity()'s Balak/Yuvak/Vridh/Mentor age_category -- those serve
+    ID generation and the hidden-identity reveal respectively; this one is purely for display, and
+    like age_category it's never masked by hide_identity -- only name and exact location are."""
+    dob = dt.date.fromisoformat(dob_str)
+    today = dt.date.today()
+    age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    if age <= 12:
+        return "Child (0-12)"
+    if age <= 19:
+        return "Teen (13-19)"
+    if age <= 59:
+        return "Adult (20-59)"
+    return "Senior (60+)"
+
+
+def _full_present_location(location_json: str) -> str:
+    """'Village, District, State' (or however many of those tiers a member's location actually
+    carries -- e.g. a non-Indian member only has continent/country) for a Member List row. Never
+    used for a hide_identity member -- display_identity()'s own State-capped `place` covers that."""
+    import json
+    loc = json.loads(location_json or "{}")
+    parts = [p for p in ((loc.get(tier) or {}).get("name") for tier in ("village", "district", "state")) if p]
+    if not parts:
+        for tier in ("country", "continent"):
+            name = (loc.get(tier) or {}).get("name")
+            if name:
+                parts = [name]
+                break
+    return ", ".join(parts) or "Unknown"
+
+
+def member_display_row(conn, user_id, viewer_user_id, is_admin) -> dict:
+    """The one row shape both the personal-group and Family Group Member List modals render:
+    avatar, name, gender, age group, present location and role. Name and location are masked for
+    a hide_identity member exactly like display_identity() masks them everywhere else a stranger
+    might see this member (State-capped place, Account ID instead of name); gender and age group
+    are never masked, matching display_identity()'s own age_category precedent."""
+    identity = display_identity(conn, user_id, viewer_user_id)
+    if not identity:
+        return None
+    place = identity["place"] if identity["hidden"] else _full_present_location(identity["present_location_json"])
+    return {
+        "user_id": user_id, "name": identity["name"], "gender": identity["gender"],
+        "age_group": _age_group(identity["dob"]), "present_location": place,
+        "profile_picture_url": _picture_url(user_id, identity["has_picture"]),
+        "is_admin": bool(is_admin), "you": user_id == viewer_user_id,
     }
 
 
@@ -460,16 +522,13 @@ def group_messages(conn, user_id, group_id):
         "SELECT m.id, m.text, m.created_at, m.user_id, u.name, u.gender, u.account_id, "
         "u.profile_picture IS NOT NULL AS has_picture FROM personal_messages m JOIN users u ON u.id = m.user_id "
         "WHERE m.group_id = ? ORDER BY m.id DESC LIMIT 200", (group_id,)).fetchall()))
-    members = [{"user_id": u2["id"], "name": u2["name"], "gender": u2["gender"],
-                "profile_picture_url": _picture_url(u2["id"], u2["has_picture"]), "you": u2["id"] == user_id,
-                # A personal group has exactly one admin -- its owner -- not the multi-admin model
-                # family_groups uses; is_admin here is just "is this the owner", for a consistent
-                # member-dict shape across both kinds of group list.
-                "is_admin": u2["id"] == g["owner_user_id"]}
+    # A personal group has exactly one admin -- its owner -- not the multi-admin model
+    # family_groups uses; is_admin here is just "is this the owner", for a consistent member-dict
+    # shape across both kinds of group list (see member_display_row()).
+    members = [member_display_row(conn, u2["id"], user_id, u2["id"] == g["owner_user_id"])
                for u2 in conn.execute(
-        """SELECT u.id, u.name, u.gender, u.profile_picture IS NOT NULL AS has_picture FROM personal_group_members m
-           JOIN users u ON u.id = m.user_id WHERE m.group_id = ? AND m.status = 'approved'
-           UNION SELECT u.id, u.name, u.gender, u.profile_picture IS NOT NULL FROM users u WHERE u.id = ?""", (group_id, g["owner_user_id"]))]
+        """SELECT user_id AS id FROM personal_group_members WHERE group_id = ? AND status = 'approved'
+           UNION SELECT ? AS id""", (group_id, g["owner_user_id"]))]
     reactions = reactions_core.counts_for(conn, "personal", [r["id"] for r in rows], user_id)
     return {"id": g["id"], "category": g["category"], "name": g["name"], "is_owner": g["owner_user_id"] == user_id, "members": members,
             "business": {"name": g["business_name"], "sector": g["business_sector"], "services": g["business_services"]} if g["category"] == "business" else None,

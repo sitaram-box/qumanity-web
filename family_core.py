@@ -825,9 +825,12 @@ def invite_to_group(conn, admin_user_id: int, group_id: int, target_user_id: int
 
 def group_members_for(conn, viewer_user_id: int, group_id: int):
     """The full approved member list for a unit's own Members modal: user_id, name, gender,
-    profile_picture_url, is_admin, you -- admins first, then alphabetical. None if the group
-    doesn't exist or the viewer isn't an approved member, same 404-not-403 convention as
-    neighborhood_for_group()/tree_for_group()."""
+    age_group, present_location, profile_picture_url, is_admin, you -- admins first, then
+    alphabetical. Name/present_location are masked for a hide_identity member exactly like
+    everywhere else a stranger might see them (social_core.member_display_row() -> display_identity()).
+    None if the group doesn't exist or the viewer isn't an approved member, same 404-not-403
+    convention as neighborhood_for_group()/tree_for_group()."""
+    import social_core
     group = conn.execute("SELECT 1 FROM family_groups WHERE id = ?", (group_id,)).fetchone()
     if not group:
         return None
@@ -838,16 +841,12 @@ def group_members_for(conn, viewer_user_id: int, group_id: int):
     if not member_row:
         return None
     rows = conn.execute(
-        """SELECT u.id, u.name, u.gender, u.profile_picture IS NOT NULL AS has_picture, m.is_admin
+        """SELECT u.id, u.name, m.is_admin
            FROM family_group_members m JOIN users u ON u.id = m.user_id
            WHERE m.group_id = ? AND m.status = 'approved' ORDER BY m.is_admin DESC, u.name""",
         (group_id,),
     ).fetchall()
-    return [{
-        "user_id": r["id"], "name": r["name"], "gender": r["gender"],
-        "profile_picture_url": _profile_picture_url(r["id"]) if r["has_picture"] else None,
-        "is_admin": bool(r["is_admin"]), "you": r["id"] == viewer_user_id,
-    } for r in rows]
+    return [social_core.member_display_row(conn, r["id"], viewer_user_id, bool(r["is_admin"])) for r in rows]
 
 
 def leave_group(conn, user_id: int, group_id: int) -> None:
