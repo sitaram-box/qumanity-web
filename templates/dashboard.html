@@ -578,6 +578,7 @@
             <div id="family-tree-container" hidden>
               <div class="ft-toolbar">
                 <button type="button" class="qm-btn qm-btn-ghost" id="ft-back-btn">← Back to groups</button>
+                <button type="button" class="qm-btn qm-btn-ghost" id="ft-members-btn">👥 Members</button>
                 <button type="button" class="qm-btn qm-btn-ghost" id="ft-leave-btn">🚪 Leave this unit</button>
               </div>
               <p class="qm-summary-error" id="ft-leave-error" hidden></p>
@@ -780,6 +781,22 @@
           <section class="bd" id="pt-group-chat"></section>
         </div>
       </div>
+      <div class="dq-modal" id="pt-members-modal" hidden role="dialog" aria-modal="true">
+        <div class="dq-modal-box">
+          <button type="button" class="dq-modal-back" data-close aria-label="Close" title="Close">← Close</button>
+          <h3>Members</h3>
+          <ul class="ft-members-list" id="pt-members-list"></ul>
+
+          <div id="pt-members-add-section" hidden>
+            <h4 class="qm-form-section-title">Add Member by Public ID</h4>
+            <label class="qm-field"><span>Enter 12-digit Public ID</span><input type="text" id="pt-members-search-input" placeholder="e.g. 4060 2408 5969" inputmode="numeric" /></label>
+            <button type="button" class="qm-btn qm-btn-ghost" id="pt-members-search-btn">Find</button>
+            <div id="pt-members-search-result"></div>
+          </div>
+
+          <p class="qm-summary-error" id="pt-members-error" hidden></p>
+        </div>
+      </div>
       <div class="dq-modal" id="ft-edit-modal" hidden role="dialog" aria-modal="true">
         <div class="dq-modal-box">
           <button type="button" class="dq-modal-back" data-close aria-label="Close" title="Close">← Close</button>
@@ -819,6 +836,21 @@
 
           <button type="button" class="qm-btn qm-btn-primary" id="ft-add-save-btn">Add</button>
           <p class="qm-summary-error" id="ft-add-error" hidden></p>
+        </div>
+      </div>
+
+      <div class="dq-modal" id="ft-members-modal" hidden role="dialog" aria-modal="true">
+        <div class="dq-modal-box">
+          <button type="button" class="dq-modal-back" data-close aria-label="Close" title="Close">← Close</button>
+          <h3>Members</h3>
+          <ul class="ft-members-list" id="ft-members-list"></ul>
+
+          <h4 class="qm-form-section-title">Add Member by Public ID</h4>
+          <label class="qm-field"><span>Enter 12-digit Public ID</span><input type="text" id="ft-members-search-input" placeholder="e.g. 4060 2408 5969" inputmode="numeric" /></label>
+          <button type="button" class="qm-btn qm-btn-ghost" id="ft-members-search-btn">Find</button>
+          <div id="ft-members-search-result"></div>
+
+          <p class="qm-summary-error" id="ft-members-error" hidden></p>
         </div>
       </div>
     </section>

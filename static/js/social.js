@@ -148,9 +148,12 @@
   var groupModal = document.getElementById("pt-group-modal"), groupRoot = document.getElementById("pt-group-chat");
   groupModal.addEventListener("click", function (e) { if (e.target === groupModal || e.target.hasAttribute("data-close")) groupModal.hidden = true; });
 
+  var currentGroup = { id: null, cat: null, isOwner: false };
+
   function openGroupChat(groupId, cat) {
     groupModal.hidden = false;
     api("/api/people/groups/" + groupId + "/messages").then(function (d) {
+      currentGroup = { id: groupId, cat: cat, isOwner: d.is_owner };
       var extra = null;
       if (cat === "business") {
         extra = el("button", "sg-btn", "✏️ Business details"); extra.type = "button";
@@ -162,17 +165,10 @@
           api("/api/people/groups/" + groupId + "/rename", { name: name }).then(function () { openGroupChat(groupId, cat); loadGroups(); }).catch(function (e) { alert(e.message); });
         });
       }
-      if (d.is_owner) {
-        var inviteBtn = el("button", "sg-btn", "➕ Add member"); inviteBtn.type = "button";
-        inviteBtn.addEventListener("click", function () {
-          var code = window.prompt("Their 12-digit search ID or Account ID:"); if (!code) return;
-          api("/api/people/search?q=" + encodeURIComponent(code)).then(function (p) {
-            return api("/api/people/invite", { group_id: groupId, user_id: p.user_id });
-          }).then(function () { alert("Invitation sent."); }).catch(function (e) { alert(e.message); });
-        });
-        var wrap = el("span"); wrap.appendChild(inviteBtn); if (extra) wrap.appendChild(extra); extra = wrap;
-      }
-      var sub = d.members.length + " member" + (d.members.length === 1 ? "" : "s") + ": " + d.members.map(function (m) { return m.you ? "You" : m.name; }).join(", ");
+      var membersBtn = el("button", "sg-btn", "👥 Members"); membersBtn.type = "button";
+      membersBtn.addEventListener("click", openMembersModal);
+      var wrap = el("span"); wrap.appendChild(membersBtn); if (extra) wrap.appendChild(extra); extra = wrap;
+      var sub = d.members.length + " member" + (d.members.length === 1 ? "" : "s");
       var bizNote = d.business && d.business.name ? d.business.name + (d.business.sector ? " · " + d.business.sector : "") : "";
       var ui = renderChatShell(groupRoot, { title: d.name, sub: bizNote ? sub + " · " + bizNote : sub, headExtra: extra, placeholder: "Message " + d.name + "…" });
       renderMessages(ui.feed, d.messages, "No messages yet — say hello.", d.members.length, function () { openGroupChat(groupId, cat); });
@@ -182,6 +178,69 @@
       });
     }).catch(function (e) { groupRoot.innerHTML = ""; groupRoot.appendChild(el("p", "bd-empty", e.message)); });
   }
+
+  // ---- Members modal (2026-10-25): avatar + name + role for every approved member, plus an
+  // "Add Member by Public ID" box (owner only) -- replaces the old window.prompt()-based
+  // "➕ Add member" flow and the plain comma-joined name list in the chat subtitle. ----
+  var membersModal = document.getElementById("pt-members-modal");
+  var membersList = document.getElementById("pt-members-list");
+  var membersAddSection = document.getElementById("pt-members-add-section");
+  var membersSearchInput = document.getElementById("pt-members-search-input");
+  var membersSearchResult = document.getElementById("pt-members-search-result");
+  var membersErrorEl = document.getElementById("pt-members-error");
+
+  membersModal.addEventListener("click", function (e) {
+    if (e.target === membersModal || e.target.hasAttribute("data-close")) membersModal.hidden = true;
+  });
+
+  function openMembersModal() {
+    if (!currentGroup.id) return;
+    membersErrorEl.hidden = true;
+    membersSearchInput.value = "";
+    membersSearchResult.innerHTML = "";
+    membersAddSection.hidden = !currentGroup.isOwner;
+    membersModal.hidden = false;
+    api("/api/people/groups/" + currentGroup.id + "/messages").then(function (d) {
+      membersList.innerHTML = "";
+      d.members.forEach(function (m) {
+        var li = el("li", "ft-member-row");
+        if (window.QMAvatar) li.appendChild(QMAvatar.render(m, 32));
+        var textWrap = el("div", "ft-member-text");
+        textWrap.appendChild(el("b", "", m.name + (m.you ? " (You)" : "")));
+        textWrap.appendChild(el("span", "ft-member-role" + (m.is_admin ? " is-admin" : ""), m.is_admin ? "Admin" : "Member"));
+        li.appendChild(textWrap);
+        membersList.appendChild(li);
+      });
+    }).catch(function (e) { membersErrorEl.textContent = e.message; membersErrorEl.hidden = false; });
+  }
+
+  document.getElementById("pt-members-search-btn").addEventListener("click", function () {
+    var code = membersSearchInput.value.trim();
+    membersErrorEl.hidden = true;
+    membersSearchResult.innerHTML = "";
+    if (!code) { membersErrorEl.textContent = "Enter a 12-digit Public ID."; membersErrorEl.hidden = false; return; }
+    api("/api/people/search?q=" + encodeURIComponent(code)).then(function (p) {
+      var card = el("div", "fw-suggestion-row");
+      var top = el("div", "fw-suggestion-top");
+      if (window.QMAvatar) top.appendChild(QMAvatar.render(p, 40));
+      var textWrap = el("div", "fw-suggestion-text");
+      textWrap.appendChild(el("p", "", p.name + " · " + p.gender));
+      top.appendChild(textWrap);
+      card.appendChild(top);
+      var inviteBtn = el("button", "qm-btn qm-btn-primary", "Send Invite"); inviteBtn.type = "button";
+      inviteBtn.addEventListener("click", function () {
+        inviteBtn.disabled = true; inviteBtn.textContent = "Inviting…";
+        api("/api/people/invite", { group_id: currentGroup.id, user_id: p.user_id }).then(function () {
+          inviteBtn.textContent = "✓ Invited"; membersSearchInput.value = "";
+        }).catch(function (e) {
+          inviteBtn.disabled = false; inviteBtn.textContent = "Send Invite";
+          membersErrorEl.textContent = e.message; membersErrorEl.hidden = false;
+        });
+      });
+      card.appendChild(inviteBtn);
+      membersSearchResult.appendChild(card);
+    }).catch(function (e) { membersErrorEl.textContent = e.message; membersErrorEl.hidden = false; });
+  });
 
   function openBusinessEditor(groupId, biz) {
     var name = window.prompt("Business name", (biz && biz.name) || ""); if (name === null) return;
@@ -221,7 +280,12 @@
       inboxList.innerHTML = ""; inboxEmpty.hidden = d.requests.length > 0;
       d.requests.forEach(function (r) {
         var li = el("li", "pt-inbox-item");
-        var text = r.kind === "message" ? r.from_name + ": “" + r.first_message + "”" : r.from_name + " invites you to " + r.group_name;
+        var text;
+        if (r.kind === "message") text = r.from_name + ": “" + r.first_message + "”";
+        else if (r.kind === "rejoin") text = r.from_name + " wants back into " + r.chat_name;
+        else if (r.kind === "family_group_join") text = r.from_name + " wants to join " + r.family_group_name;
+        else if (r.kind === "family_group_invite") text = r.from_name + " invites you to join " + r.family_group_name;
+        else text = r.from_name + " invites you to " + r.group_name;  // kind === "group"
         li.appendChild(el("div", "", text)); li.appendChild(el("small", "", ago(r.created_at)));
         var row = el("div", "pt-person-actions");
         [["accept", "✓ Accept"], ["decline", "✕ Decline"], ["waiting", "… Later"]].forEach(function (a) {

@@ -408,5 +408,82 @@
     }
   });
 
+  // ---- Members modal (2026-10-25): who's actually in this unit, with their role, plus an
+  // "Add Member by Public ID" box -- previously the only way to see a unit's membership was the
+  // D3 cards themselves, and there was no admin-initiated invite at all for Family Groups (only
+  // the self-service "request to join" flow). ----
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+
+  var membersModal = document.getElementById("ft-members-modal");
+  var membersList = document.getElementById("ft-members-list");
+  var membersSearchInput = document.getElementById("ft-members-search-input");
+  var membersSearchResult = document.getElementById("ft-members-search-result");
+  var membersErrorEl = document.getElementById("ft-members-error");
+
+  membersModal.addEventListener("click", function (e) {
+    if (e.target === membersModal || e.target.hasAttribute("data-close")) membersModal.hidden = true;
+  });
+
+  function renderMembersList(members) {
+    membersList.innerHTML = "";
+    members.forEach(function (m) {
+      var li = el("li", "ft-member-row");
+      if (window.QMAvatar) li.appendChild(QMAvatar.render(m, 32));
+      var textWrap = el("div", "ft-member-text");
+      textWrap.appendChild(el("b", "", m.name + (m.you ? " (You)" : "")));
+      textWrap.appendChild(el("span", "ft-member-role" + (m.is_admin ? " is-admin" : ""), m.is_admin ? "Admin" : "Member"));
+      li.appendChild(textWrap);
+      membersList.appendChild(li);
+    });
+  }
+
+  function openMembersModal() {
+    if (!state.currentGroupId) return;
+    membersErrorEl.hidden = true;
+    membersSearchInput.value = "";
+    membersSearchResult.innerHTML = "";
+    membersModal.hidden = false;
+    api("/api/family-groups/" + state.currentGroupId + "/members").then(function (d) {
+      renderMembersList(d.members);
+    }).catch(function (e) {
+      membersErrorEl.textContent = e.message;
+      membersErrorEl.hidden = false;
+    });
+  }
+
+  var membersBtn = document.getElementById("ft-members-btn");
+  if (membersBtn) membersBtn.addEventListener("click", openMembersModal);
+
+  document.getElementById("ft-members-search-btn").addEventListener("click", function () {
+    var code = membersSearchInput.value.trim();
+    membersErrorEl.hidden = true;
+    membersSearchResult.innerHTML = "";
+    if (!code) { membersErrorEl.textContent = "Enter a 12-digit Public ID."; membersErrorEl.hidden = false; return; }
+    api("/api/people/search?q=" + encodeURIComponent(code)).then(function (p) {
+      var card = el("div", "fw-suggestion-row");
+      var top = el("div", "fw-suggestion-top");
+      if (window.QMAvatar) top.appendChild(QMAvatar.render(p, 40));
+      var textWrap = el("div", "fw-suggestion-text");
+      textWrap.appendChild(el("p", "", p.name + " · " + p.gender));
+      top.appendChild(textWrap);
+      card.appendChild(top);
+      var inviteBtn = el("button", "qm-btn qm-btn-primary", "Send Invite"); inviteBtn.type = "button";
+      inviteBtn.addEventListener("click", function () {
+        inviteBtn.disabled = true; inviteBtn.textContent = "Inviting…";
+        api("/api/family-groups/" + state.currentGroupId + "/invite", { user_id: p.user_id }).then(function () {
+          inviteBtn.textContent = "✓ Invited"; membersSearchInput.value = "";
+        }).catch(function (e) {
+          inviteBtn.disabled = false; inviteBtn.textContent = "Send Invite";
+          membersErrorEl.textContent = e.message; membersErrorEl.hidden = false;
+        });
+      });
+      card.appendChild(inviteBtn);
+      membersSearchResult.appendChild(card);
+    }).catch(function (e) {
+      membersErrorEl.textContent = e.message;
+      membersErrorEl.hidden = false;
+    });
+  });
+
   window.QMFamilyTree = { showTree: showTree };
 })();

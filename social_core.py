@@ -311,11 +311,15 @@ def find_person(conn, query, viewer_user_id=None):
         ).fetchone()
     if not row:
         return None
-    u = conn.execute("SELECT id, gender FROM users WHERE id = ?", (row["user_id"],)).fetchone()
+    u = conn.execute("SELECT id, gender, profile_picture IS NOT NULL AS has_picture FROM users WHERE id = ?", (row["user_id"],)).fetchone()
     if not u:
         return None
     identity = display_identity(conn, u["id"], viewer_user_id)
-    result = {"user_id": u["id"], "name": identity["name"], "gender": u["gender"], "place": identity["place"], "account_id": row["account_id"]}
+    result = {
+        "user_id": u["id"], "name": identity["name"], "gender": u["gender"], "place": identity["place"],
+        "account_id": row["account_id"],
+        "profile_picture_url": f"/api/users/{u['id']}/profile-picture" if u["has_picture"] else None,
+    }
     if identity["hidden"]:
         result["age_category"] = identity["age_category"]
         result["sun_element"] = identity["sun_element"]
@@ -457,7 +461,11 @@ def group_messages(conn, user_id, group_id):
         "u.profile_picture IS NOT NULL AS has_picture FROM personal_messages m JOIN users u ON u.id = m.user_id "
         "WHERE m.group_id = ? ORDER BY m.id DESC LIMIT 200", (group_id,)).fetchall()))
     members = [{"user_id": u2["id"], "name": u2["name"], "gender": u2["gender"],
-                "profile_picture_url": _picture_url(u2["id"], u2["has_picture"]), "you": u2["id"] == user_id}
+                "profile_picture_url": _picture_url(u2["id"], u2["has_picture"]), "you": u2["id"] == user_id,
+                # A personal group has exactly one admin -- its owner -- not the multi-admin model
+                # family_groups uses; is_admin here is just "is this the owner", for a consistent
+                # member-dict shape across both kinds of group list.
+                "is_admin": u2["id"] == g["owner_user_id"]}
                for u2 in conn.execute(
         """SELECT u.id, u.name, u.gender, u.profile_picture IS NOT NULL AS has_picture FROM personal_group_members m
            JOIN users u ON u.id = m.user_id WHERE m.group_id = ? AND m.status = 'approved'
@@ -528,7 +536,7 @@ def inbox(conn, user_id):
            FROM people_requests r JOIN users u ON u.id = r.from_user_id
            LEFT JOIN personal_groups pg ON pg.id = r.group_id AND r.kind = 'group'
            LEFT JOIN private_chats pc ON pc.id = r.group_id AND r.kind = 'rejoin'
-           LEFT JOIN family_groups fg ON fg.id = r.group_id AND r.kind = 'family_group_join'
+           LEFT JOIN family_groups fg ON fg.id = r.group_id AND r.kind IN ('family_group_join', 'family_group_invite')
            WHERE r.to_user_id = ? AND r.status IN ('pending', 'waiting') ORDER BY r.id DESC""", (user_id,)).fetchall()
     out = []
     for r in rows:
@@ -597,6 +605,14 @@ def decide_request(conn, user_id, request_id, decision):
             # named founders are ever admins under the new model.
             import family_core
             family_core.add_member(conn, r["group_id"], r["from_user_id"], invited_by=None, target_node_id=r["target_node_id"])
+        elif r["kind"] == "family_group_invite":
+            # Same shape as kind='group' above, not family_group_join: an ADMIN (from_user_id)
+            # sent this, and `user_id` (== to_user_id, the invitee) is the one deciding -- so the
+            # new member is user_id themself, via family_core.add_member()'s plain-member path
+            # (target_node_id always None here; this is a generic "join as a member" invite, not
+            # claiming a specific empty tree node -- see family_core.invite_to_group()).
+            import family_core
+            family_core.add_member(conn, r["group_id"], user_id, invited_by=r["from_user_id"])
     conn.commit()
     return {"status": status}
 

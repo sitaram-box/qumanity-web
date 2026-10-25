@@ -787,6 +787,69 @@ def request_join_group(conn, user_id: int, group_id: int, target_node_id=None) -
     return cur.lastrowid
 
 
+def invite_to_group(conn, admin_user_id: int, group_id: int, target_user_id: int) -> int:
+    """An admin invites a specific real user to join this unit as a plain member -- the
+    admin-initiated counterpart to request_join_group()'s self-initiated "let me join." Takes an
+    already-resolved target_user_id, not a raw Public ID: the caller (the frontend's "Add Member
+    by Public ID" box) always resolves the ID via /api/people/search first, so the admin confirms
+    a real name/avatar before inviting -- matching social_core.send_group_invite()'s own
+    signature exactly, not link_node_to_user()'s (which takes a raw Public ID because it has no
+    separate confirm-first search step). Queues a people_requests row (kind='family_group_invite')
+    the target must accept; nothing is added until they do, the same join-then-approve model as
+    every other group invite in this project. Returns the new request's id."""
+    if not _is_admin_of_group(conn, admin_user_id, group_id):
+        raise PermissionError("Only an admin of this group can invite members")
+    group = conn.execute("SELECT 1 FROM family_groups WHERE id = ?", (group_id,)).fetchone()
+    if not group:
+        raise LookupError("Family Group not found")
+    if not conn.execute("SELECT 1 FROM users WHERE id = ?", (target_user_id,)).fetchone():
+        raise LookupError("Member not found")
+    if target_user_id == admin_user_id:
+        raise ValueError("You can't invite yourself")
+    if conn.execute(
+        "SELECT 1 FROM family_group_members WHERE group_id = ? AND user_id = ? AND status = 'approved'",
+        (group_id, target_user_id),
+    ).fetchone():
+        raise ValueError("They are already a member of this group")
+    if conn.execute(
+        "SELECT 1 FROM people_requests WHERE from_user_id = ? AND to_user_id = ? AND group_id = ? AND kind = 'family_group_invite' AND status = 'pending'",
+        (admin_user_id, target_user_id, group_id),
+    ).fetchone():
+        raise ValueError("An invitation is already waiting for them")
+    cur = conn.execute(
+        "INSERT INTO people_requests (from_user_id, to_user_id, kind, group_id, created_at, cycle_id) VALUES (?, ?, 'family_group_invite', ?, ?, ?)",
+        (admin_user_id, target_user_id, group_id, _now(), cycle_middleware.get_active_cycle_id(conn)),
+    )
+    return cur.lastrowid
+
+
+def group_members_for(conn, viewer_user_id: int, group_id: int):
+    """The full approved member list for a unit's own Members modal: user_id, name, gender,
+    profile_picture_url, is_admin, you -- admins first, then alphabetical. None if the group
+    doesn't exist or the viewer isn't an approved member, same 404-not-403 convention as
+    neighborhood_for_group()/tree_for_group()."""
+    group = conn.execute("SELECT 1 FROM family_groups WHERE id = ?", (group_id,)).fetchone()
+    if not group:
+        return None
+    member_row = conn.execute(
+        "SELECT 1 FROM family_group_members WHERE group_id = ? AND user_id = ? AND status = 'approved'",
+        (group_id, viewer_user_id),
+    ).fetchone()
+    if not member_row:
+        return None
+    rows = conn.execute(
+        """SELECT u.id, u.name, u.gender, u.profile_picture IS NOT NULL AS has_picture, m.is_admin
+           FROM family_group_members m JOIN users u ON u.id = m.user_id
+           WHERE m.group_id = ? AND m.status = 'approved' ORDER BY m.is_admin DESC, u.name""",
+        (group_id,),
+    ).fetchall()
+    return [{
+        "user_id": r["id"], "name": r["name"], "gender": r["gender"],
+        "profile_picture_url": _profile_picture_url(r["id"]) if r["has_picture"] else None,
+        "is_admin": bool(r["is_admin"]), "you": r["id"] == viewer_user_id,
+    } for r in rows]
+
+
 def leave_group(conn, user_id: int, group_id: int) -> None:
     """Leaves a unit's chat membership (status='left', never a hard delete -- same convention as
     social_core.leave_chat()). Two independent blocks:

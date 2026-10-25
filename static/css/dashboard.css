@@ -870,6 +870,14 @@
 .ft-group-btn.is-my-family .ft-group-badge { background: rgba(255, 153, 51, 0.15); color: var(--qm-saffron); font-weight: 600; }
 .ft-group-btn.is-joined-family .ft-group-badge { background: var(--qm-border); color: var(--qm-text-dim); }
 .ft-group-meta { margin-left: auto; color: var(--qm-text-dim); font-size: 0.75rem; white-space: nowrap; }
+
+/* ---- Members modal (2026-10-25): the member list + "Add Member by Public ID" box, shared
+   markup conventions with family.js's suggestion rows (.fw-suggestion-row/-top/-text). ---- */
+.ft-members-list { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ft-member-row { display: flex; align-items: center; gap: 10px; padding: 6px 4px; }
+.ft-member-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ft-member-role { font-size: 0.75rem; color: var(--qm-text-dim); }
+.ft-member-role.is-admin { color: var(--qm-saffron); font-weight: 600; }
 .ft-svg-wrap {
   width: 100%;
   height: 480px;
