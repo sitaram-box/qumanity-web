@@ -387,6 +387,49 @@ def _grant_founder_admin_if_applicable(conn, node_id: int, newly_claimed_user_id
         )
 
 
+def _repoint_founder_slot(conn, group_id: int, old_node_id: int, new_node_id: int) -> None:
+    """Swaps which node fills ONE unit's husband_node_id/wife_node_id -- just that column.
+    family_group_nodes and family_parent_links are handled uniformly by _swap_node_references(),
+    called alongside this, never by this function, so the two compose instead of overlapping."""
+    group = conn.execute("SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (group_id,)).fetchone()
+    if not group:
+        return
+    slot_col = "husband_node_id" if group["husband_node_id"] == old_node_id else "wife_node_id"
+    conn.execute(f"UPDATE family_groups SET {slot_col} = ? WHERE id = ?", (new_node_id, group_id))
+
+
+def _swap_node_references(conn, old_node_id: int, new_node_id: int, acted_by_user_id: int) -> None:
+    """Re-points every family_group_nodes and family_parent_links row that references an
+    unclaimed placeholder node to a real person's own existing node instead -- needed whenever
+    that real person already has a node elsewhere, so the placeholder can never be claimed
+    directly (family_nodes.claimed_user_id is globally unique). Row-by-row INSERT-then-DELETE,
+    not a bulk UPDATE: a row that would collide with one new_node_id already has (either table's
+    own UNIQUE constraint) is silently skipped (INSERT OR IGNORE) rather than crashing the whole
+    swap. Global, not scoped to one group -- a placeholder being linked may already carry its own
+    family_parent_links (e.g. a father placeholder linked as a parent during activate_timeline()),
+    and those must move too, not just the founder-slot column a caller may separately update via
+    _repoint_founder_slot(). The placeholder node itself is left in the database afterwards, just
+    unreferenced by anything."""
+    for row in conn.execute("SELECT group_id, added_by_user_id FROM family_group_nodes WHERE node_id = ?", (old_node_id,)).fetchall():
+        conn.execute(
+            "INSERT OR IGNORE INTO family_group_nodes (group_id, node_id, added_by_user_id, added_at) VALUES (?, ?, ?, ?)",
+            (row["group_id"], new_node_id, row["added_by_user_id"], _now()),
+        )
+    conn.execute("DELETE FROM family_group_nodes WHERE node_id = ?", (old_node_id,))
+
+    for row in conn.execute("SELECT child_node_id, created_by_user_id FROM family_parent_links WHERE parent_node_id = ?", (old_node_id,)).fetchall():
+        conn.execute(
+            "INSERT OR IGNORE INTO family_parent_links (parent_node_id, child_node_id, created_by_user_id, created_at) VALUES (?, ?, ?, ?)",
+            (new_node_id, row["child_node_id"], row["created_by_user_id"], _now()),
+        )
+    for row in conn.execute("SELECT parent_node_id, created_by_user_id FROM family_parent_links WHERE child_node_id = ?", (old_node_id,)).fetchall():
+        conn.execute(
+            "INSERT OR IGNORE INTO family_parent_links (parent_node_id, child_node_id, created_by_user_id, created_at) VALUES (?, ?, ?, ?)",
+            (row["parent_node_id"], new_node_id, row["created_by_user_id"], _now()),
+        )
+    conn.execute("DELETE FROM family_parent_links WHERE parent_node_id = ? OR child_node_id = ?", (old_node_id, old_node_id))
+
+
 def link_node_to_user(conn, user_id: int, node_id: int, target) -> None:
     """Links an EMPTY node to a real user -- an admin unilaterally identifying who this person
     really is. If that node is a unit's founder slot, the newly-linked person becomes that unit's
@@ -395,11 +438,23 @@ def link_node_to_user(conn, user_id: int, node_id: int, target) -> None:
     request/consent would reverse the join-then-approve model used everywhere else in this
     project. The linked person can still separately request to join if they want to.
 
-    Only claims a node that is still empty, and only a target who isn't already claimed anywhere
-    else -- family_nodes.claimed_user_id is globally unique (idx_family_nodes_claimed_user), not
-    just unique within this one group, so this check is broader than "the same group" on purpose:
-    the database would reject the narrower case anyway, just with a confusing IntegrityError
-    instead of a clean message."""
+    Only ever claims a node that is still empty -- a placeholder someone else already claimed
+    stays refused outright, same as before.
+
+    2026-10-25: a target who ALREADY has their own self-node elsewhere (they registered and
+    activated independently, e.g. a parent who joined Qumanity before their child's activation
+    wizard tried to link them) is no longer blocked with "already has their own profile node
+    elsewhere". family_nodes.claimed_user_id staying globally unique means the placeholder can
+    never be claimed a second time, so instead every reference to the placeholder is re-pointed
+    to the target's own real node -- the exact mechanism the spousal-join flow (add_member()'s
+    target_node_id path) already uses for the identical situation one role over. A founder-slot
+    placeholder (husband_node_id/wife_node_id of some unit) also re-points that column and grants
+    founder-admin, same as any fresh founder claim; a plain child-member placeholder only needs
+    _swap_node_references(). This does NOT attempt to unify the viewer's and the target's own
+    separate units into one tree beyond that -- a deliberately separate, harder decision. The
+    target is sent the same courtesy ping notify_to_activate() already sends for any other
+    identity match; this is never consent-gated, consistent with every other admin-initiated link
+    in this module."""
     row = conn.execute("SELECT claimed_user_id FROM family_nodes WHERE id = ?", (node_id,)).fetchone()
     if not row:
         raise LookupError("Node not found")
@@ -408,8 +463,24 @@ def link_node_to_user(conn, user_id: int, node_id: int, target) -> None:
     if not _is_admin_of_node_group(conn, user_id, node_id):
         raise PermissionError("Only an admin of a group this person belongs to can change this")
     target_user_id = _resolve_target_user_id(conn, target)
-    if conn.execute("SELECT 1 FROM family_nodes WHERE claimed_user_id = ?", (target_user_id,)).fetchone():
-        raise ValueError("That member already has their own profile node elsewhere")
+
+    existing_self_node = conn.execute(
+        "SELECT id FROM family_nodes WHERE claimed_user_id = ?", (target_user_id,)
+    ).fetchone()
+    if existing_self_node:
+        real_node_id = existing_self_node["id"]
+        founder_groups = conn.execute(
+            "SELECT id FROM family_groups WHERE husband_node_id = ? OR wife_node_id = ?", (node_id, node_id)
+        ).fetchall()
+        for g in founder_groups:
+            _repoint_founder_slot(conn, g["id"], node_id, real_node_id)
+        _swap_node_references(conn, node_id, real_node_id, user_id)
+        if founder_groups:
+            _grant_founder_admin_if_applicable(conn, real_node_id, target_user_id)
+        notify_to_activate(conn, user_id, target_user_id)
+        conn.commit()
+        return
+
     conn.execute(
         "UPDATE family_nodes SET claimed_user_id = ?, status = 'claimed', claimed_at = ? WHERE id = ?",
         (target_user_id, _now(), node_id),
@@ -658,21 +729,16 @@ def add_member(conn, group_id: int, user_id: int, invited_by=None, target_node_i
     OWN self-node, and family_nodes.claimed_user_id is globally unique (one node per real person,
     not just per group). Claiming the placeholder node directly would collide with that. Instead,
     this re-points the GROUP's founder slot at the joiner's own existing self-node (swapping out
-    the placeholder, which stays in the DB, just no longer referenced by this group) and grants
-    founder-admin -- the approval itself IS the authorization a third-party admin-initiated
-    link_node_to_user() would otherwise need."""
+    the placeholder, which stays in the DB, just no longer referenced by anything -- see
+    _repoint_founder_slot()/_swap_node_references(), shared with link_node_to_user()'s identical
+    2026-10-25 case) and grants founder-admin -- the approval itself IS the authorization a
+    third-party admin-initiated link_node_to_user() would otherwise need."""
     if target_node_id:
         node = conn.execute("SELECT claimed_user_id FROM family_nodes WHERE id = ?", (target_node_id,)).fetchone()
         self_node = conn.execute("SELECT id FROM family_nodes WHERE claimed_user_id = ?", (user_id,)).fetchone()
         if node and not node["claimed_user_id"] and self_node:
-            group = conn.execute("SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (group_id,)).fetchone()
-            slot_col = "husband_node_id" if group and group["husband_node_id"] == target_node_id else "wife_node_id"
-            conn.execute(f"UPDATE family_groups SET {slot_col} = ? WHERE id = ?", (self_node["id"], group_id))
-            conn.execute("DELETE FROM family_group_nodes WHERE group_id = ? AND node_id = ?", (group_id, target_node_id))
-            conn.execute(
-                "INSERT OR IGNORE INTO family_group_nodes (group_id, node_id, added_by_user_id, added_at) VALUES (?, ?, ?, ?)",
-                (group_id, self_node["id"], user_id, _now()),
-            )
+            _repoint_founder_slot(conn, group_id, target_node_id, self_node["id"])
+            _swap_node_references(conn, target_node_id, self_node["id"], user_id)
             _grant_founder_admin_if_applicable(conn, self_node["id"], user_id)
             return
 

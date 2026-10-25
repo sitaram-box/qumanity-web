@@ -373,14 +373,80 @@ check("re-linking an already-claimed node is rejected (400)", res.status_code ==
 jill = register("Jill Patel")
 logout()
 login(greg["private_code"])  # registering jill switched the session to jill -- switch back to the admin
-res = client.post(f"/api/family/node/{father_node['id']}/link", json={"user_id": hank_search_code})
-check("linking a user who's already claimed elsewhere is rejected (400)", res.status_code == 400)
 
-res = client.post(f"/api/family/node/{father_node['id']}/link", json={"user_id": "999999999999"})
+# 2026-10-25: linking a FOUNDER-SLOT placeholder to a target who already has their own node
+# elsewhere no longer blocks with "already has their own profile node elsewhere" -- it re-points
+# every reference to the placeholder at the target's real node instead (the exact bug report
+# scenario: a father's Public ID can't be linked because he already activated independently).
+res = client.post(f"/api/family/node/{father_node['id']}/link", json={"user_id": hank_search_code})
+check("linking a founder-slot node to an already-claimed target now SUCCEEDS (merge, not block) (200)", res.status_code == 200)
+
+hank_self_node = raw("SELECT id FROM family_nodes WHERE claimed_user_id = ?", (hank["user_id"],))
+greg_group_row = raw("SELECT husband_node_id FROM family_groups WHERE id = ?", (greg_body["parents_group_id"],))
+check("the unit's husband_node_id now points at hank's REAL self-node, not the old placeholder",
+      greg_group_row["husband_node_id"] == hank_self_node["id"])
+check("hank's real node inherits the placeholder's family_parent_links row (parent of greg's self-node)",
+      bool(raw("SELECT 1 FROM family_parent_links WHERE parent_node_id = ? AND child_node_id = ?",
+                (hank_self_node["id"], greg_body["self_node_id"]))))
+check("the OLD placeholder no longer carries that parent_link",
+      not raw("SELECT 1 FROM family_parent_links WHERE parent_node_id = ? AND child_node_id = ?",
+               (father_node["id"], greg_body["self_node_id"])))
+check("the old placeholder is left in the database but orphaned -- no family_group_nodes row references it any more",
+      not raw("SELECT 1 FROM family_group_nodes WHERE node_id = ?", (father_node["id"],)))
+check("the target (hank) gets the same courtesy 'might be related' ping as any other identity match",
+      bool(raw("SELECT 1 FROM people_requests WHERE from_user_id = ? AND to_user_id = ? AND kind = 'message'",
+                (greg["user_id"], hank["user_id"]))))
+
+# The Public-ID validation checks need a FRESH, still-attached empty node -- father_node above is
+# now deliberately orphaned by the merge, so re-using it here would hit the "not an admin of any
+# group this node belongs to" 403 instead of the validation path being tested.
+validation_user = register("Validation Parent Test")
+login(validation_user["private_code"])
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Validation Father", "action": "create"}, "mother": {"name": "Validation Mother", "action": "create"},
+})
+validation_tree = client.get(f"/api/family-groups/{res.get_json()['parents_group_id']}/tree").get_json()
+validation_father_node = next(n for n in validation_tree["nodes"] if n["name"] == "Validation Father")
+
+res = client.post(f"/api/family/node/{validation_father_node['id']}/link", json={"user_id": "999999999999"})
 check("a well-formed but non-existent 12-digit Public ID is rejected (400)", res.status_code == 400)
 
-res = client.post(f"/api/family/node/{father_node['id']}/link", json={"user_id": "4060-2408"})
+res = client.post(f"/api/family/node/{validation_father_node['id']}/link", json={"user_id": "4060-2408"})
 check("an incomplete/malformed Public ID is rejected (400)", res.status_code == 400)
+
+# A PLAIN child-member placeholder (not a founder slot) takes the generalized swap path --
+# _swap_node_references() only; no family_groups column to touch, and -- unlike the founder-slot
+# case above -- no founder-admin grant, since the target isn't becoming a unit founder.
+plain_parent = register("Plain Member Parent")
+login(plain_parent["private_code"])
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Plain Father", "action": "create"}, "mother": {"name": "Plain Mother", "action": "create"},
+    "relationship": "married",
+})
+res = client.post("/api/family/marry", json={"spouse": {"name": "Plain Spouse", "action": "create"}, "marriage_status": "active"})
+plain_marital_id = res.get_json()["marital_group_id"]
+res = client.post(f"/api/family/node/{plain_marital_id}/add-child", json={"name": "Plain Child Placeholder", "gender": "female"})
+plain_child_node_id = res.get_json()["node_id"]
+
+independent_user = register("Independent Already Activated")
+login(independent_user["private_code"])
+res = client.post("/api/family/activate", json={"father": {"name": "Indep Father", "action": "create"}, "mother": {"name": "Indep Mother", "action": "create"}})
+independent_self_node_id = res.get_json()["self_node_id"]
+independent_search_code = client.get("/api/people/me").get_json()["search_code"]
+
+logout()
+login(plain_parent["private_code"])
+res = client.post(f"/api/family/node/{plain_child_node_id}/link", json={"user_id": independent_search_code})
+check("linking a PLAIN (non-founder) placeholder to an already-claimed target also succeeds (200)", res.status_code == 200)
+check("the plain-member placeholder's family_group_nodes row moved to the real self-node",
+      bool(raw("SELECT 1 FROM family_group_nodes WHERE group_id = ? AND node_id = ?", (plain_marital_id, independent_self_node_id))))
+check("the old placeholder no longer appears in that unit's family_group_nodes",
+      not raw("SELECT 1 FROM family_group_nodes WHERE group_id = ? AND node_id = ?", (plain_marital_id, plain_child_node_id)))
+check("linking a plain (non-founder) node grants no founder-admin -- no family_group_members row was created for the target",
+      raw("SELECT 1 FROM family_group_members WHERE group_id = ? AND user_id = ?", (plain_marital_id, independent_user["user_id"])) is None)
+
+logout()
+login(greg["private_code"])
 
 print()
 print("=" * 70)
