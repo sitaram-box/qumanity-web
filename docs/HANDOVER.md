@@ -3,7 +3,10 @@
 Written 17 October 2026, refreshed 18 October 2026 to cover Qmail, Q-Punch council addresses, the
 Admin Panel's scope evolution, attachments, drafts, and the standalone `/qmail` mailbox page, and
 refreshed again later on 18 October 2026 after the DPG evidence pack pass (§5), which led to two
-code fixes and a README correction. This is a snapshot for whoever picks up the project next — it is not a replacement for the detailed
+code fixes and a README correction. Refreshed again 25 October 2026 to cover explicit tree growth,
+the Family Group naming code, the Middle Name field, profile pictures, and the Avatar Sweep
+(§4.13, §4.14) — §5 (DPG Evidence Pack) was deliberately left untouched in that pass; the pack is
+submitted and frozen. This is a snapshot for whoever picks up the project next — it is not a replacement for the detailed
 design docs already in this folder (linked throughout), and it will go stale as the code moves;
 treat it as a map, not a source of truth for exact current state.
 
@@ -69,6 +72,8 @@ session.
 | 025 | `profile_change_requests.request_type`/`.location_level`/`.location_id`, `profile_change_attachments`, `users.birth_time_known` |
 | 026 | `family_nodes`, `family_parent_links`, `family_spouse_links`, `family_groups`, `family_group_members`, `family_group_messages`, `family_group_nodes`, `users.timeline_activated_at` — the Family Tree, Phase 1 (§4.12) |
 | 027 | `family_groups.husband_node_id`/`.wife_node_id`/`.husband_parent_group_id`/`.wife_parent_group_id`/`.marriage_status`, `people_requests.target_node_id` — the Nuclear Family Node pivot (§4.12) |
+| 028 | `users.profile_picture` (BLOB), `.profile_picture_updated_at` — profile pictures (§4.13) |
+| 029 | `users.middle_name` — optional, feeds the Family Group naming code (§4.13) |
 
 **The invariant that matters most**: `board_posts.is_test = (post_kind == 'test')`, enforced by
 writing all three fields (`post_kind`, `is_test`, `is_demo_post`) in a single `INSERT`, never a
@@ -406,6 +411,91 @@ status, not a new privilege smuggled into linking.
 husband/wife-shaped schema for same-gender couples or `gender='both'` users, inherited directly from
 the architecture's own column naming, not silently expanded or hidden.
 
+### 4.13 Explicit tree growth and the Family Group naming code (`family_core.py`, 2026-10-20)
+
+**The D3 neighborhood view grows the tree by hand, not just through the Activation/Marriage
+wizards.** Two new routes: `POST /api/family/node/<group_id>/add-parents` (`side`:
+`husband`/`wife`, plus `father`/`mother` name entries) wraps the existing
+`_link_known_parents_group()` — the same mechanism the wizards already use one generation at a
+time — and rejects if that side's parents' unit is already known. `POST
+/api/family/node/<group_id>/add-child` is one primitive serving **both** "+ Add Child" and "+ Add
+Sibling" in the UI: a plain unclaimed placeholder, linked as a child-member of `group_id`'s two
+founders — "Add Child" passes the viewer's own unit, "Add Sibling" (an in-law, structurally a
+child of the *spouse's* parents' unit, not a peer of the viewer) passes that unit's `group_id`
+instead. `static/js/family_tree.js`'s top row always renders exactly 2 slots (a real unit card or
+a dashed "+ Add Father's/Mother's Family" placeholder); the bottom row always trails a dashed "+
+Add Child"; a dashed "+ Add Sibling" attaches beside the spouse's parent card only once that
+card is real.
+
+**Family Group naming replaced the old "name after the single eldest-and-alive founder" rule**
+(`_group_name_from()`, now dead code) **with a code built from *both* founders**:
+`_group_name_from_couple()` → `[HusbandCode]-[WifeCode]-[Surname] Family`. Per founder,
+`_name_code(first, middle, last, fallback_last="")`: `pool = first + middle` (spaces stripped);
+the code's first 2 characters are `pool[:2]` (First's own letters, reaching into Middle only once
+First alone is under 2 characters); the last 2 are `last[-2:]`, or — **only if this side has no
+last name at all** — `fallback_last[-2:]` (a wife with no surname of her own borrows the
+husband's — the one asymmetric rule in the spec), or, failing both, `pool[2:4]` (a bare single
+name like "Amit" self-pads to a stable 4-character code: "AMIT"). Verified byte-for-byte against
+every worked example given for this feature, including `"A P J Abdul Kalam"` → `APAM` and
+`"Sakshi"` (no surname, husband "Kumar") → `SAAR`. The trailing surname is the husband's, or the
+wife's if he has none, or `"[HusbandLast] & [WifeLast]"` if they have different surnames, or
+omitted if neither has one. `_name_parts_for_node()` resolves (first, middle, last) for a
+`family_nodes.id`: live from `users.name` + the new `users.middle_name` column once claimed
+(`_pick_unit_eldest()` is untouched — a separate concept, still used only for
+`family_groups.eldest_node_id`); an unclaimed placeholder has no `middle_name` column at all, so
+its Middle comes from whatever tokens fall between the first and last word of its single
+`display_name` string — the same mechanism that makes `"A P J Abdul Kalam"` typed as one string
+produce the right code without ever touching a dedicated field.
+
+**`users.middle_name`** (migration 029) is optional, a plain third field alongside `name` — never
+required at registration, routed through the same council-approval queue as name/email/phone when
+edited later (`PROFILE_CHANGE_FIELDS` in `app.py`), self-service nowhere.
+
+### 4.14 Profile pictures and the Avatar Sweep (`profile_picture_core.py`, `static/js/avatar.js`, 2026-10-20)
+
+**Stored as a BLOB directly on `users`** (migration 028: `profile_picture`,
+`profile_picture_updated_at`), the same precedent as `qmail_attachments` (migration 023) and
+`profile_change_attachments` — the database already carries the volume-persistence guarantee a
+disk path on Railway would need a separately-configured mount to earn. One picture per user, so a
+direct column beats a whole new table.
+
+**Every upload is unconditionally re-encoded server-side, never stored as-is**:
+`profile_picture_core.process_image()` applies `ImageOps.exif_transpose()` (bakes in rotation
+*before* EXIF is discarded — many phones store rotation in EXIF rather than rotating the pixels),
+strips all EXIF (a phone photo's EXIF routinely carries GPS coordinates — a real location leak for
+an app already careful never to expose more location precision than a feature needs),
+center-crops to square, resizes to a fixed 256×256, and re-saves as JPEG (quality 85). Upload cap:
+3 MB raw, under `app.py`'s existing global `MAX_CONTENT_LENGTH` (also 3 MB) by design, so the two
+limits coincide rather than needing separate tuning; allowlist is png/jpg/jpeg/webp only, extension
+and declared content-type must agree (mirrors `qmail_core.allowed_attachment_type()`'s pattern,
+narrowed to images). Self-service (`POST /api/profile/picture`) — immediate, never routed through
+the `/api/dashboard/edit-request` council-approval queue, since a picture is cosmetic, not a
+foundational identity fact. Served via `GET /api/users/<id>/profile-picture`
+(`as_attachment=False`, since it renders inline in `<img>` tags, with the same `nosniff` header
+every other served file in this project carries) — **404s if the owner has `hide_identity` set and
+the viewer isn't an established family member** (`social_core.is_family_member()`), the exact same
+rule that already masks a hidden user's real name.
+
+**`window.QMAvatar.render(user, size)`** (`static/js/avatar.js`, loaded on both `dashboard.html`
+and `qmail.html`) is the one reusable avatar renderer every surface now calls instead of its own
+ad-hoc "letter in a colored circle" markup: an `<img>` if `user.profile_picture_url` is set
+(falling back to the colored-initials div on a 404, e.g. a `hide_identity` photo the viewer isn't
+entitled to), else a flat-colored div keyed by `user.gender` with the name's initials. Returns a
+real `HTMLElement`, so it works both in plain DOM (chat bubbles, board posts, Qmail rows, admin
+replies) and inside the Family Tree's SVG canvas via a `<foreignObject>`
+(`family_tree.js`'s `renderAvatar()`, which replaced its own earlier SVG-only
+clip-path/circle/text implementation). Backend listing queries updated to carry
+`user_id`/`gender`/`profile_picture_url` for this: `social_core.group_messages()` /
+`my_chats()` / `chat_messages()`, `board_core`'s post/comment/star/subgroup-chat queries,
+`/api/qmail/inbox` and `/api/qmail/sent`, and `admin_queries_core.replies_for()`. **Not yet
+wired**: the Admin Panel's combined feed row and the report/ID-recovery/council ticket detail
+views (their backends — the feed merge route, `reports_core.py`, `recovery_core.py` — weren't
+touched in this pass) still show plain text. `QMAvatar.render()`'s `hide_identity` branch (a
+neutral icon + Account ID initials, never the real name/photo) exists in the function itself, but
+no current call site feeds it `hide_identity: true` — `social_core.py`'s own docstring documents
+board posts as "unaffected by design," and chat/Qmail participants are already-connected contexts,
+so there was no existing precedent to retrofit onto.
+
 ## 5. DPG Evidence Pack — status at this handover
 
 The master copy of the pack is a non-git directory on the owner's Mac, `~/Desktop/My Mac/DPG/`:
@@ -516,8 +606,11 @@ at `7fda4cb`. As it says of itself, it will go stale as the code moves.
   revision), `065cecc` (the README and `docs/API.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`), and
   the two code fixes before them, `c09b91f` and `f1edd55` (§5). The commit that adds this file
   comes after them.
-- Migration range: 001–003, 007–024 (024 is `qmail_drafts`). Tables: 74 on boot, 76 in a running
-  database (§2).
+- Migration range: 001–003, 007–024 (024 is `qmail_drafts`) as of this handover's original
+  17-18 October baseline; 028/029 (profile pictures, middle name) were added in the 25 October
+  refresh (§3) without re-verifying the rest of this "Current state" section, which otherwise
+  reflects the 18 October snapshot. Tables: 74 on boot, 76 in a running database (§2), also not
+  re-counted in the 25 October pass.
 - 11 test scripts in `tests/`, all passing at `c09b91f` (`065cecc` changed docs only). Each is a
   standalone script that prints PASS or FAIL; each hard-codes the owner's checkout path, so run
   them with `PYTHONPATH=.`, and four of them also read files through that path (§9).

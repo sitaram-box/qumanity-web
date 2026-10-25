@@ -133,6 +133,9 @@
 .qm-form { display: flex; flex-direction: column; gap: 16px; }
 .qm-field { display: flex; flex-direction: column; gap: 6px; font-size: 0.82rem; color: var(--qm-text-dim); }
 .qm-field[hidden] { display: none; }
+/* Mandatory-field marker (2026-10-25): a plain "*" next to the label, subtle but legible --
+   optional fields get no label marker at all, just "(Optional)" worked into their placeholder. */
+.req-star { color: #d9534f; margin-left: 3px; font-weight: 600; }
 .qm-field input,
 .qm-field select {
   font-family: inherit;

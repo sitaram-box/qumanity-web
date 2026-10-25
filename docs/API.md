@@ -2,6 +2,8 @@
 
 Every JSON route in qumanity-web's `app.py`, read from the code on 11 October 2026, updated 14 October 2026, 17 October 2026 and 18 October 2026: 178 routes under `/api`, counted as rules in the Flask URL map at commit c09b91f. Seven of those rules accept two methods (shown as `GET/POST`), so the tables hold 185 method-and-path pairs; on 18 October 2026 the pairs in the tables were compared with the pairs in the URL map, and the two sets are identical. The website and the phone app call the same routes. `docs/phone_app_api.md` describes only the routes the phone app uses; this file covers all of them.
 
+**25 October 2026**: re-counted against a live `url_map` — 195 routes under `/api`, 7 of them `GET/POST`, 202 method-and-path pairs. This pass added table rows for the Family Tree section's full route set (13 routes, most pre-dating this pass but never previously documented here) and the new Profile pictures section (2 routes); the remaining gap between 185 and 202 is routes added by other, earlier work this count did not individually trace — flagged here rather than silently left at the stale 178/185 figure.
+
 ## Conventions
 
 - **Base URL:** `https://qumanity.in` in production, `http://localhost:5000` locally.
@@ -167,17 +169,46 @@ Added 18 October 2026. Internal messaging between members only: `@qumanity.in` i
 | POST | `/api/qmail/activate` | Member | body: `username` (8–15 characters: letters, numbers, `.`, `_`, `-`) | `address` |
 | GET | `/api/qmail/status` | Member |  | `activated`, `address`, `changed` |
 | POST | `/api/qmail/compose` | Member who has activated Qmail | body: `to`, `subject`, `body`, optional `draft_id`. As multipart form data, also an optional `attachment` file: at most 2 MB, and only png, jpg, jpeg, gif, webp, pdf, txt, csv, doc, docx, xls, xlsx, ppt, pptx or zip, with a declared type that matches the extension (400 otherwise, 413 if too large). `to` is resolved on the server; an unknown address, or a council address that cannot yet receive, returns 404 | `status` |
-| GET | `/api/qmail/inbox` | Member |  | `messages` (each with an `attachments` list of metadata) |
-| GET | `/api/qmail/sent` | Member |  | `messages` (to members, plus this member's own messages to council addresses); each has `kind`, `member` or `council`, because the two kinds' ids come from different tables |
+| GET | `/api/qmail/inbox` | Member |  | `messages` (each with an `attachments` list of metadata, plus `from_user_id`/`from_gender`/`from_profile_picture_url` for `window.QMAvatar.render()`, added 25 October 2026) |
+| GET | `/api/qmail/sent` | Member |  | `messages` (to members, plus this member's own messages to council addresses); each has `kind`, `member` or `council`, because the two kinds' ids come from different tables. A member-kind row also carries `to_user_id`/`to_gender`/`to_profile_picture_url` (added 25 October 2026); a council row has none, since the recipient isn't a person |
 | GET | `/api/qmail/sent/council/<int:message_id>` | Member (the message's sender only; anyone else, a council head or the Admin included, gets 404) |  | `id`, `subject`, `body`, `created_at`, `to_name`, `to_address`, `attachments`, `replies` (each only `message` and `created_at`). Never the action log or who replied. Marks the reply notification read. Added in c09b91f |
 | POST | `/api/qmail/messages/<int:message_id>/read` | Member (the recipient only) |  | `status` |
 | GET | `/api/qmail/attachments/<int:attachment_id>` | Member: the sender or recipient, or for a council message its sender or Admin Panel scope for that village. Anyone else gets 404 |  | The file, always as a download (`Content-Disposition: attachment`) with `X-Content-Type-Options: nosniff` |
 | GET | `/api/qmail/resolve-username` | Member | query: `q` | `matches` (only members the caller is connected to through groups or chats) |
-| GET | `/api/qmail/resolve-public-id` | Member | query: `code` (a 12-digit Public ID) | `activated`, `name`, `address` |
+| GET | `/api/qmail/resolve-public-id` | Member | query: `code` (a 12-digit Public ID, spaces/dashes stripped before matching) | `activated`, `name`, `address`, `profile_picture_url` (added 25 October 2026) |
 | GET | `/api/qmail/drafts` | Member |  | `drafts` (the caller's own) |
 | POST | `/api/qmail/drafts` | Member | body: `to`, `subject`, `body` (at least one) | `id` |
 | POST | `/api/qmail/drafts/<int:draft_id>` | Member (the draft's owner; anyone else gets 404) | body: `to`, `subject`, `body` | `id` |
 | POST | `/api/qmail/drafts/<int:draft_id>/delete` | Member (the draft's owner; anyone else gets 404) |  | `status` |
+
+### Family Tree
+
+Added across several passes through 20 October 2026; this table added 25 October 2026 (the subsystem itself was previously undocumented here, though it is covered in `docs/HANDOVER.md` §4.12–4.13). A `family_groups` row is a marriage unit, not a generic container; `<group_id>` below is always a `family_groups.id`, including in the `/api/family/node/...` paths despite the "node" in the path (kept for backward compatibility with the route's original name). Full design: `docs/HANDOVER.md` §4.12–4.13.
+
+| Method | Path | Access | Parameters | Response fields |
+|---|---|---|---|---|
+| GET | `/api/family/status` | Member |  | `activated`, `activated_at`, `relationship_status`, `has_children`, `sons_count`, `daughters_count`, `groups` (the caller's own units — dormant units excluded, each tagged `is_founder`) |
+| GET | `/api/family/suggest` | Member | query: `name` | `results` (three types: `group`, `unactivated_user`, `real_user` — the latter two carry `gender`/`profile_picture_url` for `window.QMAvatar.render()`, added 25 October 2026) |
+| POST | `/api/family/activate` | Member, not yet activated | body: `father`, `mother` (required), optional `father_father`/`father_mother`/`mother_father`/`mother_mother` (grandparents), optional `relationship` | `self_node_id`, `parents_group_id`, `parents_group_name`, `created_node_ids`, `joined_requests`, `notified` |
+| POST | `/api/family/marry` | Member, activated, `relationship_status` married or divorced/widowed, no active marriage yet | body: `spouse` (required), optional `spouse_father`/`spouse_mother`, optional `children`, `marriage_status` | `marital_group_id`, `marital_group_name`, `created_node_ids`, `joined_requests`, `notified` |
+| POST | `/api/family/node/<int:node_id>/mark-deceased` | Member: an admin of a group this node belongs to | body: `is_deceased` (default true) | `status` |
+| POST | `/api/family/node/<int:node_id>/name` | Member: an admin of a group this node belongs to; refused on an already-claimed node | body: `name` | `status` |
+| POST | `/api/family/node/<int:node_id>/link` | Member: an admin of a group this node belongs to | body: `user_id` (a 12-digit Public ID, spaces/dashes stripped before matching) | `status` |
+| POST | `/api/family/node/<int:group_id>/add-parents` | Member: an admin of `group_id`. Added 20 October 2026 | body: `side` (`husband` or `wife`), `father`, `mother` (at least one named; rejected if that side already has a parents' unit) | `parent_group_id`, `created_node_ids`, `joined_requests`, `notified` |
+| POST | `/api/family/node/<int:group_id>/add-child` | Member: an admin of `group_id`. Added 20 October 2026. One primitive for both "+ Add Child" and "+ Add Sibling" in the UI — the caller just picks which unit's `group_id` to target | body: `name`, optional `gender` | `node_id`, `name` |
+| GET | `/api/family-groups/<int:group_id>/tree` | Member: an approved member of `group_id` (404, not 403, otherwise) | | Legacy whole-group view: `nodes`, `parent_links`, `spouse_links` (synthesized from the unit's own founder pair), `kind`, `is_admin` |
+| GET | `/api/family/node/<int:group_id>/neighborhood` | Member: an approved member of `group_id` (404, not 403, otherwise) | | The current D3 view's source: `group_id`, `name`, `husband`, `wife`, `is_dormant`, `is_admin`, `members`, `unmarried_children`, `parent_groups` (up to 2, each tagged `side`), `child_groups` |
+| POST | `/api/family-groups/<int:group_id>/join-request` | Member | | `status` |
+| POST | `/api/family-groups/<int:group_id>/leave` | Member: an approved member, not a founder, with no active parent/child co-members in the unit | | `status` |
+
+### Profile pictures
+
+Added 25 October 2026. Stored as a BLOB on `users`, re-encoded server-side on every upload (EXIF stripped, center-cropped, resized to 256×256 JPEG) — see `docs/HANDOVER.md` §4.14 and `profile_picture_core.py`.
+
+| Method | Path | Access | Parameters | Response fields |
+|---|---|---|---|---|
+| POST | `/api/profile/picture` | Member | multipart form data: `picture` (png/jpg/jpeg/webp, at most 3 MB) | `status` |
+| GET | `/api/users/<int:user_id>/profile-picture` | Anyone signed in, or signed out (no `@login_required`, so a stale page's `<img>` degrades to 404 rather than a login redirect). 404 if `user_id` has no picture, or has `hide_identity` set and the caller isn't an established family member | | The JPEG bytes, `Content-Type: image/jpeg`, `X-Content-Type-Options: nosniff` |
 
 ### Elections, Q-Punch and perception
 

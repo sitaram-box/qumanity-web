@@ -50,14 +50,14 @@
           <div class="qm-private-col">
             <h3 class="qm-form-section-title">✏️ Personal Details</h3>
             <div class="qm-row2">
-              <label class="qm-field"><span>👤 First Name</span><input type="text" id="field-first-name" required minlength="2" autocomplete="given-name" placeholder="e.g. Asha" /></label>
-              <label class="qm-field"><span>👤 Last Name</span><input type="text" id="field-last-name" required minlength="2" autocomplete="family-name" placeholder="e.g. Kumar" /></label>
+              <label class="qm-field"><span>👤 First Name<span class="req-star">*</span></span><input type="text" id="field-first-name" required minlength="2" autocomplete="given-name" placeholder="e.g. Asha" /></label>
+              <label class="qm-field"><span>👤 Last Name<span class="req-star">*</span></span><input type="text" id="field-last-name" required minlength="2" autocomplete="family-name" placeholder="e.g. Kumar" /></label>
             </div>
 
-            <label class="qm-field"><span>👤 Middle Name <small class="pv-hint">optional</small></span><input type="text" id="field-middle-name" autocomplete="additional-name" placeholder="e.g. Kumar (leave blank if none)" /></label>
+            <label class="qm-field"><span>👤 Middle Name</span><input type="text" id="field-middle-name" autocomplete="additional-name" placeholder="e.g. Kumar (Optional)" /></label>
 
             <div class="qm-field">
-              <span>⚧️ Gender</span>
+              <span>⚧️ Gender<span class="req-star">*</span></span>
               <div class="qm-gender-group" id="gender-group">
                 <button type="button" class="qm-gender-btn" data-gender="male">👨<span>Male</span></button>
                 <button type="button" class="qm-gender-btn" data-gender="female">👩<span>Female</span></button>
@@ -68,7 +68,7 @@
 
             <div class="qm-row2 qm-row-dobtob">
               <div class="qm-field qm-dob-field">
-                <span>📅 Date of Birth</span>
+                <span>📅 Date of Birth<span class="req-star">*</span></span>
                 <div class="qm-dob-row">
                   <select id="field-dob-day" aria-label="Day"><option value="">Day</option></select>
                   <select id="field-dob-month" aria-label="Month"><option value="">Month</option></select>
@@ -93,7 +93,7 @@
               </div>
             </div>
 
-            <label class="qm-field"><span>🌐 Mother Tongue</span>
+            <label class="qm-field"><span>🌐 Mother Tongue<span class="req-star">*</span></span>
               <select id="field-language" aria-label="Mother tongue">
                 <option value="">Select your mother tongue…</option>
                 {% for group in ["common", "indian", "subcontinent"] %}
@@ -108,17 +108,17 @@
           <div class="qm-private-col">
             <h3 class="qm-form-section-title">🔐 Security</h3>
             <div class="qm-row2">
-              <label class="qm-field"><span>📧 Email (recommended)</span><input type="email" id="field-email" autocomplete="email" placeholder="e.g. asha@example.com" /></label>
-              <label class="qm-field"><span>📱 Phone (recommended)</span><input type="text" id="field-phone" autocomplete="tel" placeholder="e.g. 9876543210" /></label>
+              <label class="qm-field"><span>📧 Email</span><input type="email" id="field-email" autocomplete="email" placeholder="e.g. asha@example.com (Optional)" /></label>
+              <label class="qm-field"><span>📱 Phone</span><input type="text" id="field-phone" autocomplete="tel" placeholder="e.g. 9876543210 (Optional)" /></label>
             </div>
             <div class="qm-row2">
-              <label class="qm-field"><span>🔑 Choose a 5-character PIN</span>
+              <label class="qm-field"><span>🔑 Choose a 5-character PIN<span class="req-star">*</span></span>
                 <div class="qm-pin-input-wrap">
                   <input type="password" id="field-password" required pattern="(?=.*[A-Za-z0-9])[A-Za-z0-9!@#$%^&amp;*()_+\-=\[\]{}|;:'&quot;,.&lt;&gt;/?]{5}" maxlength="5" autocomplete="new-password" placeholder="5 characters" />
                   <button type="button" class="qm-pin-eye-btn" data-target="field-password" aria-label="Show PIN">👁️</button>
                 </div>
               </label>
-              <label class="qm-field"><span>✅ Confirm PIN</span>
+              <label class="qm-field"><span>✅ Confirm PIN<span class="req-star">*</span></span>
                 <div class="qm-pin-input-wrap">
                   <input type="password" id="field-password-confirm" required pattern="(?=.*[A-Za-z0-9])[A-Za-z0-9!@#$%^&amp;*()_+\-=\[\]{}|;:'&quot;,.&lt;&gt;/?]{5}" maxlength="5" autocomplete="new-password" placeholder="5 characters" />
                   <button type="button" class="qm-pin-eye-btn" data-target="field-password-confirm" aria-label="Show PIN">👁️</button>
