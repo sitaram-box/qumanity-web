@@ -116,3 +116,42 @@ Every month belongs to one sun sign. The election for that sign runs in 4 weeks:
   - `GET /api/founder-message?lang=`;
   - `POST /api/user/languages {preferred: code}`;
   - `/api/me` adds `birth_location_struct` and `preferred_language`.
+
+## 2026-10-26 sync: profile pictures, middle names, referral by Public ID, Family Tree
+
+### Profile pictures
+- **Upload:** `POST /api/profile/picture`, multipart/form-data, field **`picture`**.
+  - png/jpg/jpeg/webp only, max **3 MB**; the extension and the declared type must agree.
+  - It takes effect immediately; no council approval.
+  - The website re-encodes every upload to a 256×256 JPEG and strips EXIF data, including GPS location.
+  - App: `Q.uploadProfilePicture({uri, name, type})` uses `client.upload()`. It doesn't set a JSON Content-Type, so fetch adds the multipart boundary.
+- **Serve:** `GET /api/users/<id>/profile-picture`.
+  - The website decides **per viewer**: for a member with `hide_identity`, only their family gets the picture; everyone else gets a 404.
+  - So the app always sends the sign-in token (`authHeaders()`) on image requests, and `<Avatar>` falls back to initials on a 404.
+- **Where the URLs come from:**
+  - `/api/me` → `profile_picture_url` (added 2026-10-26, website `ca3a10f`), plus `profile_picture_updated_at`, used to refresh the cached image after an upload;
+  - board posts → `author_profile_picture_url`; comments, chat messages and member rows → `profile_picture_url`;
+  - private chats → `with_profile_picture_url`; people search → `profile_picture_url`.
+  - Inbox rows carry only `from_user_id`; the app builds the URL with `Q.pictureUrlFor(id)`.
+
+### Middle name
+- `POST /api/auth/register` accepts an optional `middle_name`, and `/api/me` returns it. The website shows `name` unchanged and keeps the middle name as a separate field.
+- To change it later: `POST /api/dashboard/edit-request {middle_name, reason}`, approved by the council like the other name fields.
+
+### Referral by Public ID
+- `POST /api/auth/register` accepts `referred_by_public_id` (the 12-digit search code). A blank or unknown value is ignored, never an error.
+- In an assisted registration the helper always wins, so the app hides the field while "I'm registering someone else" is on.
+- The app remembers the signed-in member's Public ID on the phone (`lib/remembered.ts`, key `qm_public_id`) and pre-fills "Referred By" with it. The member can clear it.
+
+### Family Tree (family units)
+- `GET /api/family/status` → `{activated, groups:[{id, name, is_admin, is_founder, members}]}`.
+  - Activation (the 6-step wizard, `POST /api/family/activate`) **stays on the website**. Until a member has activated, the app's Family Tree screen links them there.
+- `GET /api/family/node/<unit id>/neighborhood` → `{group_id, name, husband, wife, is_dormant, is_admin, members, unmarried_children[], parent_groups[] (with side), child_groups[]}`.
+  - Despite "node" in the path, the id is a family unit. A non-member gets **404** (not 403), and the app shows "Ask to join".
+- `GET /api/family-groups/<id>/members` → `{members: MemberRow[]}`, with admins first.
+  - Personal group chats (`/api/people/groups/<id>/messages`) return the same `members` row shape.
+- **Invite:** `POST /api/family-groups/<id>/invite {user_id}`. It takes a **resolved user_id, never a Public ID**: first `GET /api/people/search?q=<12 digits>`, show the person, then invite. Admins only.
+  - The invite arrives in `/api/people/inbox` as `kind: "family_group_invite"`, with `family_group_name`; accepting adds the invited person.
+- `POST /api/family-groups/<id>/join-request` (the inbox kind is `family_group_join`) and `POST /api/family-groups/<id>/leave`.
+
+Checks for all of the above are in `tools/website-check/check_app_api.py` (138 pass as of 2026-10-26).
