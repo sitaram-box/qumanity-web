@@ -1822,10 +1822,14 @@ def api_family_status():
             "FROM users WHERE id = ?", (session["user_id"],),
         ).fetchone()
         groups = family_core.my_family_groups(conn, session["user_id"])
+        linked = not row["timeline_activated_at"] and family_core.linked_with_parents(conn, session["user_id"])
     finally:
         conn.close()
     return jsonify({
         "activated": bool(row["timeline_activated_at"]), "activated_at": row["timeline_activated_at"],
+        # Not activated, but a relative already placed them in a tree with parents: the app skips
+        # the wizard and calls /api/family/activate with {} (returns already_activated).
+        "linked_into_tree": linked,
         "relationship_status": row["relationship_status"],
         "has_children": bool(row["has_children"]) if row["has_children"] is not None else None,
         "sons_count": row["sons_count"] or 0, "daughters_count": row["daughters_count"] or 0,

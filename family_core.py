@@ -1467,6 +1467,14 @@ def _sync_family_membership(conn, user_id: int) -> None:
             _ensure_member(g["husband_parent_group_id"])
 
 
+def linked_with_parents(conn, user_id: int) -> bool:
+    """True when a relative already placed this member in a tree WITH parents (their claimed node
+    has parent links) -- they need no activation wizard; see activate_timeline()."""
+    return bool(conn.execute(
+        """SELECT 1 FROM family_nodes fn JOIN family_parent_links pl ON pl.child_node_id = fn.id
+           WHERE fn.claimed_user_id = ? LIMIT 1""", (user_id,)).fetchone())
+
+
 def activate_timeline(conn, user_id: int, payload: dict) -> dict:
     """The one-time Activation gate. Raises ValueError for bad input (already activated, missing
     required fields) and LookupError if the user doesn't exist. Commits internally, same shape as
@@ -1490,6 +1498,19 @@ def activate_timeline(conn, user_id: int, payload: dict) -> dict:
     if user["timeline_activated_at"]:
         raise ValueError("Family Timeline is already activated")
 
+    # Linked into a tree WITH parents by a relative (e.g. a parent linked their child by Public ID):
+    # their place, parents and memberships already exist, and the wizard could never add a second
+    # set of parents -- so they are simply activated now and shown their tree (2026-10-26; this used
+    # to be a 400 that locked them out for good). A linked node WITHOUT parents (e.g. a spouse
+    # linked into their partner's unit) still goes through the wizard below, which reuses the node
+    # and adds their own parents.
+    if linked_with_parents(conn, user_id):
+        conn.execute("UPDATE users SET timeline_activated_at = ? WHERE id = ?", (_now(), user_id))
+        _sync_family_membership(conn, user_id)
+        conn.commit()
+        return {"already_activated": True, "groups": my_family_groups(conn, user_id),
+                "joined_requests": [], "notified": [], "created_node_ids": []}
+
     relationship = payload.get("relationship")
     if relationship is not None and relationship not in _RELATIONSHIP_TO_PROFILE_STATUS:
         raise ValueError("Unknown relationship status")
@@ -1501,10 +1522,7 @@ def activate_timeline(conn, user_id: int, payload: dict) -> dict:
     # IntegrityError (a 500) -- reuse the existing one instead (2026-10-26, found by the app).
     existing_self = conn.execute("SELECT id FROM family_nodes WHERE claimed_user_id = ?", (user_id,)).fetchone()
     if existing_self:
-        self_node_id = existing_self["id"]
-        if conn.execute("SELECT 1 FROM family_parent_links WHERE child_node_id = ?", (self_node_id,)).fetchone():
-            raise ValueError("You are already in a family tree with your parents. Ask an admin of that family to "
-                             "add any missing relatives instead of activating again.")
+        self_node_id = existing_self["id"]  # has no parents yet (linked_with_parents() handled that above)
     else:
         self_node_id = create_node(conn, user_id, user["name"], gender=user["gender"], claimed_user_id=user_id)
     results["self_node_id"] = self_node_id
