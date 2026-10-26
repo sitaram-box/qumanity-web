@@ -390,11 +390,16 @@ def find_person(conn, query, viewer_user_id=None):
             "SELECT user_id, account_id FROM account_ids WHERE account_id = ? AND is_current = 1", (query.upper(),)
         ).fetchone()
         if not row:
-            name_row = conn.execute(
-                """SELECT id FROM users WHERE name LIKE ? COLLATE NOCASE AND id != ? AND is_demo = 0 AND is_removed = 0
-                   ORDER BY LENGTH(name) LIMIT 1""",
+            candidates = conn.execute(
+                """SELECT id, hide_identity FROM users WHERE name LIKE ? COLLATE NOCASE AND id != ? AND is_demo = 0 AND is_removed = 0
+                   ORDER BY LENGTH(name)""",
                 (f"%{query}%", viewer_user_id or 0),
-            ).fetchone()
+            ).fetchall()
+            # A private (hide_identity) member is never found by their real name -- only by exact
+            # Public ID -- unless the searcher is already their family; otherwise a name search
+            # would tie that real name to their Account ID. Same rule as family_core.search_suggestions().
+            name_row = next((r for r in candidates
+                             if not r["hide_identity"] or is_family_member(conn, r["id"], viewer_user_id)), None)
             if name_row:
                 row = conn.execute(
                     "SELECT user_id, account_id FROM account_ids WHERE user_id = ? AND is_current = 1", (name_row["id"],)
