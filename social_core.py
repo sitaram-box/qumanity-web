@@ -377,10 +377,23 @@ def find_person(conn, query, viewer_user_id=None):
     if not u:
         return None
     identity = display_identity(conn, u["id"], viewer_user_id)
+    # 2026-10-26 (phone app profile card): age_group is never masked (same as member_display_row);
+    # `hidden` lets a client show "private until you are family" instead of the Account ID that
+    # stands in for a hidden member's name here; `location` is village + state, or state only when
+    # hidden (identity["place"] is already capped). A hidden member's photo is withheld too.
+    import json
+    if identity["hidden"]:
+        location = identity["place"]
+    else:
+        state = (json.loads(identity.get("present_location_json") or "{}").get("state") or {}).get("name")
+        location = ", ".join(dict.fromkeys(x for x in (identity["place"], state) if x))  # no "Delhi, Delhi"
     result = {
         "user_id": u["id"], "name": identity["name"], "gender": u["gender"], "place": identity["place"],
         "account_id": row["account_id"],
-        "profile_picture_url": f"/api/users/{u['id']}/profile-picture" if u["has_picture"] else None,
+        "profile_picture_url": f"/api/users/{u['id']}/profile-picture" if u["has_picture"] and not identity["hidden"] else None,
+        "age_group": _age_group(identity["dob"]) if identity.get("dob") else None,
+        "location": location,
+        "hidden": bool(identity["hidden"]),
     }
     if identity["hidden"]:
         result["age_category"] = identity["age_category"]

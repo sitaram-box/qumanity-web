@@ -351,7 +351,10 @@
     api("/api/people/search?q=" + encodeURIComponent(q)).then(function (person) {
       state.spouse = { name: person.name, viaExactId: true, resolvedUserId: person.user_id, resolvedAccountId: person.account_id };
       resultEl.innerHTML = "";
-      resultEl.appendChild(el("p", "qm-dash-empty", "✅ Found: " + person.name + " (" + person.account_id + ")"));
+      // Never show an ID (2026-10-26): a hidden member's "name" here IS their Account ID.
+      var who = person.hidden ? "Private until you are family" : person.name;
+      var details = [genderLabel(person.gender), person.age_group, person.location].filter(Boolean).join(" · ");
+      resultEl.appendChild(el("p", "qm-dash-empty", "✅ Found: " + who + (details ? " — " + details : "")));
     }).catch(function (e) {
       resultEl.innerHTML = "";
       resultEl.appendChild(el("p", "qm-summary-error", e.message));

@@ -988,6 +988,62 @@ def remove_member(conn, admin_user_id: int, group_id: int, target_user_id: int) 
     conn.commit()
 
 
+# ---- Family unit chat (2026-10-26): the unit's own message board, readable and writable by its
+# APPROVED members only -- the same roster the Members list shows (family_group_members). Anyone
+# who left or was removed loses both at once. Non-members get the scoped 404 used throughout this
+# module, never a 403 that would confirm the unit exists. ----
+
+FAMILY_MESSAGE_MAX_CHARS = 4000
+
+
+def _is_approved_member(conn, group_id: int, user_id: int) -> bool:
+    return bool(conn.execute(
+        "SELECT 1 FROM family_group_members WHERE group_id = ? AND user_id = ? AND status = 'approved'",
+        (group_id, user_id),
+    ).fetchone())
+
+
+def family_messages(conn, viewer_user_id: int, group_id: int):
+    """The unit's last 200 messages, oldest first, plus its member list -- the same shape as a
+    personal group's /messages (social_core.group_messages) so one chat screen can show both.
+    None if the unit doesn't exist or the viewer isn't an approved member."""
+    import social_core
+    group = conn.execute("SELECT id, name FROM family_groups WHERE id = ?", (group_id,)).fetchone()
+    if not group or not _is_approved_member(conn, group_id, viewer_user_id):
+        return None
+    rows = list(reversed(conn.execute(
+        """SELECT m.id, m.user_id, m.text, m.created_at FROM family_group_messages m
+           WHERE m.group_id = ? ORDER BY m.id DESC LIMIT 200""", (group_id,)).fetchall()))
+    who = {}
+    for r in rows:
+        if r["user_id"] not in who:
+            ident = social_core.display_identity(conn, r["user_id"], viewer_user_id) or {}
+            who[r["user_id"]] = ident
+    return {
+        "id": group["id"], "name": group["name"], "is_admin": _is_admin_of_group(conn, viewer_user_id, group_id),
+        "members": group_members_for(conn, viewer_user_id, group_id),
+        "messages": [{
+            "id": r["id"], "user_id": r["user_id"], "mine": r["user_id"] == viewer_user_id,
+            "who": who[r["user_id"]].get("name") or "Member", "gender": who[r["user_id"]].get("gender"),
+            "profile_picture_url": _profile_picture_url(r["user_id"]) if who[r["user_id"]].get("has_picture") and not who[r["user_id"]].get("hidden") else None,
+            "text": r["text"], "at": r["created_at"],
+        } for r in rows],
+    }
+
+
+def post_family_message(conn, user_id: int, group_id: int, text: str) -> int:
+    """Approved members only (LookupError -> 404 otherwise, same as reading). Returns the new id."""
+    if not conn.execute("SELECT 1 FROM family_groups WHERE id = ?", (group_id,)).fetchone() or not _is_approved_member(conn, group_id, user_id):
+        raise LookupError("Family Group not found")
+    text = (text or "").strip()
+    if not text or len(text) > FAMILY_MESSAGE_MAX_CHARS:
+        raise ValueError(f"Write a message (up to {FAMILY_MESSAGE_MAX_CHARS} characters)")
+    cur = conn.execute("INSERT INTO family_group_messages (group_id, user_id, text, created_at) VALUES (?, ?, ?, ?)",
+                       (group_id, user_id, text, _now()))
+    conn.commit()
+    return cur.lastrowid
+
+
 def notify_to_activate(conn, from_user_id: int, to_user_id: int) -> None:
     """A courtesy nudge, not a claim -- reuses social_core's own plain message-request, same as any
     other first contact. Never links anything on its own; the recipient still has to show up and

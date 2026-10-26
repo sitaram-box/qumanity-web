@@ -2018,6 +2018,24 @@ def api_family_group_invite(group_id):
     return jsonify({"status": "invited"}), 201
 
 
+@app.route("/api/family-groups/<int:group_id>/messages", methods=["GET", "POST"])
+@login_required
+@_board_error
+def api_family_group_messages(group_id):
+    """A family unit's chat: approved members read and write; anyone else gets 404."""
+    conn = _family(get_db())
+    try:
+        if request.method == "POST":
+            message_id = family_core.post_family_message(conn, session["user_id"], group_id, (request.get_json(silent=True) or {}).get("text"))
+            return jsonify({"status": "sent", "id": message_id}), 201
+        data = family_core.family_messages(conn, session["user_id"], group_id)
+    finally:
+        conn.close()
+    if data is None:
+        return jsonify({"error": "Family Group not found"}), 404
+    return jsonify(data)
+
+
 @app.route("/api/family-groups/<int:group_id>/remove-member", methods=["POST"])
 @login_required
 @_board_error
