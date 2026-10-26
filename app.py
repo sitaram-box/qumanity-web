@@ -2614,6 +2614,7 @@ def api_me():
     for hidden in ("private_id", "account_id", "kundali_view", "element_bars", "planets"):
         profile.pop(hidden, None)
     profile["is_admin"] = _is_admin()
+    profile["profile_picture_url"] = f"/api/users/{session['user_id']}/profile-picture" if profile.get("has_profile_picture") else None
     return jsonify(profile)
 
 
