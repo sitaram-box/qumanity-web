@@ -1222,7 +1222,18 @@ def activate_timeline(conn, user_id: int, payload: dict) -> dict:
         raise ValueError("Unknown relationship status")
 
     results = {"joined_requests": [], "notified": [], "created_node_ids": []}
-    self_node_id = create_node(conn, user_id, user["name"], gender=user["gender"], claimed_user_id=user_id)
+    # The member may ALREADY own a node before activating: someone else's tree can contain them
+    # (e.g. a spouse added them and then linked that node to their account, or approved their
+    # join). family_nodes.claimed_user_id is UNIQUE, so creating a second node crashed with an
+    # IntegrityError (a 500) -- reuse the existing one instead (2026-10-26, found by the app).
+    existing_self = conn.execute("SELECT id FROM family_nodes WHERE claimed_user_id = ?", (user_id,)).fetchone()
+    if existing_self:
+        self_node_id = existing_self["id"]
+        if conn.execute("SELECT 1 FROM family_parent_links WHERE child_node_id = ?", (self_node_id,)).fetchone():
+            raise ValueError("You are already in a family tree with your parents. Ask an admin of that family to "
+                             "add any missing relatives instead of activating again.")
+    else:
+        self_node_id = create_node(conn, user_id, user["name"], gender=user["gender"], claimed_user_id=user_id)
     results["self_node_id"] = self_node_id
 
     father = payload.get("father")
@@ -1243,6 +1254,14 @@ def activate_timeline(conn, user_id: int, payload: dict) -> dict:
     )
     results["parents_group_id"] = parents_group_id
     results["parents_group_name"] = conn.execute("SELECT name FROM family_groups WHERE id = ?", (parents_group_id,)).fetchone()["name"]
+    if existing_self:
+        # A reused node may already be a founder of a couple unit someone else created (e.g. the
+        # spouse's); hang that unit under these newly known parents so the tree stays connected.
+        # Only fills an EMPTY link -- never overwrites a parent unit someone already set.
+        conn.execute("UPDATE family_groups SET husband_parent_group_id = ? WHERE husband_node_id = ? AND husband_parent_group_id IS NULL",
+                     (parents_group_id, self_node_id))
+        conn.execute("UPDATE family_groups SET wife_parent_group_id = ? WHERE wife_node_id = ? AND wife_parent_group_id IS NULL",
+                     (parents_group_id, self_node_id))
 
     _link_known_parents_group(conn, user_id, father_node_id, parents_group_id, "husband_parent_group_id",
                                payload.get("father_father"), payload.get("father_mother"), results,
