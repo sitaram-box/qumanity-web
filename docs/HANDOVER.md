@@ -574,6 +574,105 @@ have meant the bonus tier rarely fired. `referral_bonus_awards`' own
 pre-check — safe to call on every qualifying registration, a repeat award is just a caught
 `sqlite3.IntegrityError`, not a double mint.
 
+### 4.17 Automatic family membership (`family_core.py`, 2026-10-26)
+
+Real-world family structure, not just the tree's genealogical facts: a marriage is a declared
+mutual fact between two people, so joining a *spouse's* family unit doesn't go through the
+approval queue every other join in this module uses (§4.12/§4.15) -- and once joined, a person's
+*active* membership in the units around them (their own birth unit, their in-laws, their
+grandparents) is now a **live-computed function** of the tree's current shape and marital status,
+the same "computed live, never stored" philosophy this module already used for dormancy (§4.12),
+rather than a set of one-off grants made by hand at the moment a wizard runs.
+
+**`_sync_family_membership(conn, user_id)`** is that single computation. It looks up the person's
+own node, then applies four bounded rules (not a general recursive walk of arbitrary tree depth):
+founder units they belong to get admin membership; their birth unit (and, transitively, its own
+two parent units -- the grandparent units, one generation further up) get plain membership,
+*unless* they've founded a marital unit of their own, in which case those birth-side memberships
+move to `'left'` instead (see §4.18 for the exit-side rules this enables); and, patrilocal only (a
+deliberate, non-configurable choice matching this schema's existing husband/wife-shaped columns
+and this project's real-world context), a wife founder's unit auto-grants her plain membership in
+her husband's parents' unit. It's called at the end of `activate_timeline()`, every exit path of
+`marry_timeline()`, `add_member()`'s founder-slot-claim branch, and both branches of
+`link_node_to_user()` -- every point a person's node identity or marital status can change.
+Idempotent and safe to call repeatedly; it never demotes an existing admin and never touches the
+tree itself (`family_group_nodes`/`family_parent_links`), only active chat membership
+(`family_group_members`).
+
+**The automatic in-law join**: when Sakshi marries Rohit -- whether by naming him fresh, by
+finding him via Public ID, or by claiming an open founder slot in a unit he (or someone else)
+already started -- `marry_timeline()` no longer routes a spousal join through
+`request_join_group()`'s approval queue. `_claim_founder_slot()` (the exact re-pointing mechanics
+`add_member()`'s accept branch already used for a generic approved join, extracted so both share
+one implementation) claims the slot synchronously, and `_sync_family_membership()` then grants her
+plain membership in Rohit's parents' unit in the same call -- no request, no approval, she's in
+both units before the API call returns.
+
+**The automatic grandparent join**: a claimed child doesn't wait to be invited into their
+grandparents' units either. The moment a child's placeholder node is linked to a real account
+(`link_node_to_user()`, or the founder-slot-claim branch of `add_member()`) --
+`_sync_family_membership()` runs for that child and finds their parents' own unit's
+`husband_parent_group_id`/`wife_parent_group_id` (set back when the parents' own marriage was
+recorded, via `marry_timeline()`'s own `spouse_father`/`spouse_mother` known-parent linking, or
+the activation wizard's grandparent fields one generation up) and grants plain membership in both,
+paternal and maternal, in one pass.
+
+**The spouse notification, not a request**: the other founder is never asked to approve the join
+-- they're told it already happened. `_notify_marriage()` reuses the same plain
+`social_core.send_message_request()` precedent `notify_to_activate()` already established for
+every other identity-match courtesy ping in this module ("Sakshi has joined your family unit as
+your spouse."), landing in their inbox as an ordinary message, not a `people_requests` row with an
+accept/decline decision attached. The join has already happened by the time they read it.
+
+### 4.18 Family membership exit rules (`family_core.py`, 2026-10-26)
+
+§4.17 above covers getting *into* a unit automatically. This section covers the other half --
+when someone can **leave** one again, since "automatically added" and "automatically stuck" turned
+out to be two different design questions with two different answers per unit type.
+
+**The core fix, and the bug it fixes**: `leave_group()`'s old block -- refuse to leave if the
+user's own parent or child is *also* an active member of this same unit -- was written for exactly
+one case (a birth unit) but applied unconditionally to *every* non-founder membership. Once a
+child could be auto-joined to their mother's in-laws' unit as a grandchild, that same check started
+firing there too: a wife trying to voluntarily leave her in-laws' unit got refused, because her own
+child (now also a member of that unit) looked exactly like an "active relative" the check exists to
+protect. The fix is `_classify_membership(conn, self_node_id, group_id)` -- `'founder'` |
+`'birth'` | `'other'` -- and scoping the parent/child check to only ever run for `'birth'`.
+
+**Three real-world exit rules**, all keyed off that one classification:
+
+1. **In-laws unit (and any other non-birth membership) — voluntary leave, always allowed.** No
+   check at all. The unit's admin (e.g. a father-in-law or mother-in-law, but really any admin of
+   that unit — see point 4 below) can also remove her directly via the new `remove_member()`.
+2. **Birth unit — cannot leave voluntarily while unmarried.** The existing parent/child-active
+   check, now correctly scoped to `'birth'` only. "Cannot leave while unmarried" isn't a separate
+   marriage check — it falls out for free, since your parents are definitionally active members of
+   your own birth unit while you're both there. Once you marry, `_sync_family_membership()` has
+   already auto-moved this membership to `'left'` for you — *unless* it's a creator-admin row (you
+   activated before your parents ever registered, so you're that unit's unconditional creator-admin,
+   additive to the ordinary founder grant). A married creator-admin isn't locked in by this rule —
+   the accident of registration order that made them admin there isn't a permanent lock, so they can
+   still leave by hand if they choose.
+3. **Founder — never, full stop.** The one rule with no exception at all, not even marriage or
+   admin status. It's the unit their own marriage founded, not something they joined. `remove_member()`
+   enforces the identical boundary from the admin side — a founder can't be removed by a co-admin
+   either; removing one isn't a membership action, it would mean dissolving the marriage, which
+   this pass doesn't build a route for.
+4. **Rejoining after a leave or a removal requires an admin invite — never self-service.**
+   `request_join_group()` (the self-initiated "let me join" path) now explicitly refuses a user
+   whose row is `'left'` ("ask an admin to invite you back"), rather than queuing a normal join
+   request. `invite_to_group()` (admin-initiated) is the only way back in: it now writes the
+   target's row from `'left'` to a new third status, `'pending'`, at the moment the invite is
+   sent — previously the row sat at `'left'` showing nothing had changed until they actually
+   accepted. `add_member()`'s existing accept-time `UPDATE ... SET status = 'approved'` already
+   overwrites `'pending'` the same unconditional way it already overwrote `'left'`, so no change
+   was needed there. `family_group_members.status` is now `approved | left | pending`.
+
+New route: `POST /api/family-groups/<id>/remove-member` with `{"user_id": <int>}`, admin-only
+(`_is_admin_of_group()`, checked generically — deliberately not scoped to in-laws units, so a
+birth unit's admin can remove a plain, non-founder member too; the member's node stays in the
+tree, only their active chat membership is revoked).
+
 ## 5. DPG Evidence Pack — status at this handover
 
 The master copy of the pack is a non-git directory on the owner's Mac, `~/Desktop/My Mac/DPG/`:
