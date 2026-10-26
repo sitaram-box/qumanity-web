@@ -568,17 +568,24 @@
       return;
     }
 
+    // A marriage is a declared mutual fact (2026-10-26 ruling) -- joining a SPOUSE's unit is
+    // instant, no approval needed, unlike every other "join" here (a parent/grandparent match
+    // still queues a request the unit's creator must accept). Same button, same slot pipeline,
+    // different copy so the user isn't told to expect a wait that will never happen.
+    var isSpouseSlot = slot.key === "spouse";
     groupMatches.forEach(function (m) {
       var row = el("div", "fw-suggestion-row");
       row.appendChild(el("p", "", "We found " + m.group_name + " (" + m.member_count +
         " member" + (m.member_count === 1 ? "" : "s") + ") — matched via " + m.matched_name + "."));
-      var joinBtn = el("button", "qm-btn qm-btn-primary", "Request to Join");
+      var joinBtn = el("button", "qm-btn qm-btn-primary", isSpouseSlot ? "Join Instantly" : "Request to Join");
       joinBtn.type = "button";
       joinBtn.addEventListener("click", function () {
         state.slots[slotIndex].action = "join";
         state.slots[slotIndex].group_id = m.group_id;
         state.slots[slotIndex].matched_node_id = m.matched_node_id;
-        markSlotResolved(card, "Will request to join " + m.group_name + ".");
+        markSlotResolved(card, isSpouseSlot
+          ? "You'll join " + m.group_name + " immediately as their spouse — no approval needed. They'll be notified."
+          : "Will request to join " + m.group_name + ".");
       });
       row.appendChild(joinBtn);
       body.appendChild(row);
@@ -635,10 +642,9 @@
     return out;
   }
 
-  function actionLabel(action) {
-    return action === "join" ? "Request to join an existing group"
-      : action === "notify" ? "Notify an existing member"
-      : "Create a new profile";
+  function actionLabel(action, slotKey) {
+    if (action === "join") return slotKey === "spouse" ? "Join instantly — no approval needed" : "Request to join an existing group";
+    return action === "notify" ? "Notify an existing member" : "Create a new profile";
   }
 
   function renderReview() {
@@ -656,7 +662,7 @@
       var detail = slot.name
         + (slot.gender ? " (" + GENDER_LABELS[slot.gender] + ")" : "")
         + (slot.is_deceased ? " (deceased)" : "")
-        + " — " + actionLabel(slot.action);
+        + " — " + actionLabel(slot.action, slot.key);
       row.appendChild(el("dd", "", detail));
       listEl.appendChild(row);
     });

@@ -186,6 +186,7 @@ res = client.post("/api/family/activate", json={
     "mother": {"name": "Carla Mehta", "action": "create"},
 })
 check("carl activates (parents' unit only)", res.status_code == 201)
+carl_activate_body = res.get_json()
 
 res = client.post("/api/family/marry", json={
     "spouse": {"name": "Diana Mehta", "action": "create"},
@@ -227,8 +228,22 @@ check("no-match search returns type=none", res.get_json()["results"] == [{"type"
 
 print()
 print("=" * 70)
-print("6. Spousal join: claims the OTHER (open) founder slot directly, grants founder-admin")
+print("6. Spousal join (2026-10-26, automatic): claims the OTHER (open) founder slot directly, no "
+      "approval, grants founder-admin, auto-joins the husband's parents' unit, notifies the husband, "
+      "and auto-leaves the wife's own birth unit")
 print("=" * 70)
+
+logout()
+# Dana's own birth unit is created by a SIBLING first, so Dana herself joins it as a plain
+# (non-admin) child-member -- the realistic case, and the one the "leave on marriage" rule needs:
+# if Dana instead created the unit herself (fresh father+mother placeholders), she'd ALSO be its
+# unconditional creator-admin (create_group()'s own additive grant), and _sync_family_membership()
+# deliberately never revokes an admin row on marriage -- only a plain membership moves to 'left'.
+dana_sibling = register("Dana Sibling")
+login(dana_sibling["private_code"])
+res = client.post("/api/family/activate", json={"father": {"name": "Dana Father", "action": "create"}, "mother": {"name": "Dana Mother", "action": "create"}})
+dana_sibling_body = res.get_json()
+dana_birth_unit_id = dana_sibling_body["parents_group_id"]
 
 logout()
 dana = register("Dana Mehta")
@@ -237,27 +252,37 @@ login(dana["private_code"])
 res = client.get("/api/family/suggest", query_string={"name": "Diana Mehta"})
 spouse_match = next(r for r in res.get_json()["results"] if r["type"] == "group")
 check("dana finds carl's unit via the spouse name", spouse_match["group_name"] is not None)
+res = client.get("/api/family/suggest", query_string={"name": "Dana Father"})
+dana_father_match = next(r for r in res.get_json()["results"] if r["type"] == "group")
 
-res = client.post("/api/family/activate", json={"father": {"name": "Dana Father", "action": "create"}, "mother": {"name": "Dana Mother", "action": "create"}})
-check("dana activates (parents' unit) before marrying in", res.status_code == 201)
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Dana Father", "action": "join", "group_id": dana_father_match["group_id"], "matched_node_id": dana_father_match["matched_node_id"]},
+    "mother": {"name": "Dana Mother 2", "action": "create"},
+})
+check("dana activates (joining her sibling's existing Dana Father unit, pending approval)", res.status_code == 201)
+
+login(dana_sibling["private_code"])
+res = client.get("/api/people/inbox")
+dana_join_req = next(r for r in res.get_json()["requests"] if r["kind"] == "family_group_join")
+res = client.post(f"/api/people/inbox/{dana_join_req['id']}/decide", json={"decision": "accept"})
+check("dana's sibling accepts her join request (generic joins stay approval-gated, only marriage is automatic)", res.status_code == 200)
+
+login(dana["private_code"])
+dana_birth_member_row = raw(
+    "SELECT status, is_admin FROM family_group_members WHERE group_id = ? AND user_id = ?", (dana_birth_unit_id, dana["user_id"])
+)
+check("dana is now an approved, PLAIN (non-admin) member of her own birth unit before marrying",
+      dana_birth_member_row["status"] == "approved" and dana_birth_member_row["is_admin"] == 0)
+
 res = client.post("/api/family/marry", json={
     "spouse": {"name": "Diana Mehta", "action": "join", "group_id": spouse_match["group_id"], "matched_node_id": spouse_match["matched_node_id"]},
 })
-check("dana's marry-join request into carl's unit succeeds", res.status_code == 201)
+check("dana's marry-join into carl's unit succeeds immediately (201, no pending request)", res.status_code == 201)
+marry_body = res.get_json()
+check("the response reports an instant auto_joined result, not a joined_requests entry", marry_body.get("auto_joined", {}).get("group_id") == carl_body["marital_group_id"])
 
 res = client.get(f"/api/family-groups/{carl_body['marital_group_id']}/tree")
-check("dana cannot see carl's unit before approval (404)", res.status_code == 404)
-
-login(carl["private_code"])
-res = client.get("/api/people/inbox")
-join_req = next(r for r in res.get_json()["requests"] if r["kind"] == "family_group_join")
-check("carl's inbox shows the family_group_join request", join_req is not None)
-res = client.post(f"/api/people/inbox/{join_req['id']}/decide", json={"decision": "accept"})
-check("carl accepts dana's join request", res.status_code == 200)
-
-login(dana["private_code"])
-res = client.get(f"/api/family-groups/{carl_body['marital_group_id']}/tree")
-check("dana can now see the unit (200)", res.status_code == 200)
+check("dana can see carl's unit immediately -- no approval wait at all", res.status_code == 200)
 dana_view = res.get_json()
 check("dana is flagged as admin (her own self-node now fills the open founder slot)", dana_view["is_admin"] is True)
 placeholder_row = raw("SELECT claimed_user_id FROM family_nodes WHERE id = ?", (spouse_match["matched_node_id"],))
@@ -270,6 +295,34 @@ dana_self_node_row = raw(
 )
 check("the unit's wife_node_id now points at dana's OWN self-node, not the old placeholder",
       dana_self_node_row["wife_node_id"] != spouse_match["matched_node_id"])
+
+dana_birth_member_row = raw(
+    "SELECT status FROM family_group_members WHERE group_id = ? AND user_id = ?", (dana_birth_unit_id, dana["user_id"])
+)
+check("dana's membership in her OWN birth unit moved to 'left' now that she's founded her marital unit",
+      dana_birth_member_row["status"] == "left")
+dana_birth_tree_row = raw(
+    "SELECT 1 FROM family_group_nodes fgn JOIN family_nodes fn ON fn.id = fgn.node_id "
+    "WHERE fgn.group_id = ? AND fn.claimed_user_id = ?", (dana_birth_unit_id, dana["user_id"]),
+)
+check("dana's node is still VISIBLE in her birth unit's tree -- only chat membership moved, never the genealogy",
+      dana_birth_tree_row is not None)
+
+dana_inlaw_member_row = raw(
+    "SELECT status, is_admin FROM family_group_members WHERE group_id = ? AND user_id = ?",
+    (carl_activate_body["parents_group_id"], dana["user_id"]),
+)
+check("dana automatically joined carl's PARENTS' unit (her in-laws) as a plain member -- no request, no approval",
+      dana_inlaw_member_row is not None and dana_inlaw_member_row["status"] == "approved")
+check("...and that membership is NOT admin -- joining as an in-law, not a founder",
+      dana_inlaw_member_row["is_admin"] == 0)
+
+login(carl["private_code"])
+res = client.get("/api/people/inbox")
+notify_req = next((r for r in res.get_json()["requests"] if r["kind"] == "message" and r["from_user_id"] == dana["user_id"]), None)
+check("carl received a notification that dana joined, not a blocking approval request", notify_req is not None)
+check("the notification text names dana and says she joined as his spouse",
+      notify_req is not None and "joined your family unit as your spouse" in notify_req["first_message"])
 
 # Contrast: a CHILD joining their PARENTS' unit must stay a plain member, never admin.
 logout()
@@ -1061,6 +1114,189 @@ no_mn_user_name = raw("SELECT name FROM users WHERE id = ?", (no_mn_user["user_i
 expected = _expected_name(no_mn_user_name, "NMN Spouse", husband_middle="Prasad")
 check("the claimed founder's approved middle_name feeds the naming code via the DB join, not a guess",
       marital_name == expected)
+
+print()
+print("=" * 70)
+print("19. Grandparent auto-membership (2026-10-26): a claimed child joins BOTH sets of grandparents")
+print("=" * 70)
+
+hubby = register("Hubby Rao")
+login(hubby["private_code"])
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Hubby Father", "action": "create"}, "mother": {"name": "Hubby Mother", "action": "create"},
+    "relationship": "married",
+})
+hubby_body = res.get_json()
+paternal_grandparents_group_id = hubby_body["parents_group_id"]
+
+res = client.post("/api/family/marry", json={
+    "spouse": {"name": "Wifey Rao", "action": "create"},
+    "spouse_father": {"name": "Wifey Father", "action": "create"}, "spouse_mother": {"name": "Wifey Mother", "action": "create"},
+    "children": [{"name": "Kid Placeholder", "action": "create"}],
+    "marriage_status": "active",
+})
+check("hubby marries, sets BOTH sides' parent units, and adds a child placeholder in one call", res.status_code == 201)
+marry_body = res.get_json()
+marital_group_id = marry_body["marital_group_id"]
+marital_row = raw("SELECT husband_parent_group_id, wife_parent_group_id FROM family_groups WHERE id = ?", (marital_group_id,))
+maternal_grandparents_group_id = marital_row["wife_parent_group_id"]
+check("husband_parent_group_id (paternal grandparents) is set", marital_row["husband_parent_group_id"] == paternal_grandparents_group_id)
+check("wife_parent_group_id (maternal grandparents) is set", maternal_grandparents_group_id is not None)
+
+child_node = raw("SELECT id FROM family_nodes WHERE display_name = 'Kid Placeholder'")
+
+logout()
+kid = register("Kid Rao")
+kid_search_code = client.get("/api/people/me").get_json()["search_code"]  # session is kid's right after registering
+
+login(hubby["private_code"])
+res = client.post(f"/api/family/node/{child_node['id']}/link", json={"user_id": kid_search_code})
+check("hubby (admin of the marital unit) links the child placeholder to kid's real account", res.status_code == 200)
+
+kid_paternal_row = raw(
+    "SELECT status, is_admin FROM family_group_members WHERE group_id = ? AND user_id = ?",
+    (paternal_grandparents_group_id, kid["user_id"]),
+)
+check("kid automatically joined the PATERNAL grandparents' unit as a plain member",
+      kid_paternal_row is not None and kid_paternal_row["status"] == "approved" and kid_paternal_row["is_admin"] == 0)
+kid_maternal_row = raw(
+    "SELECT status, is_admin FROM family_group_members WHERE group_id = ? AND user_id = ?",
+    (maternal_grandparents_group_id, kid["user_id"]),
+)
+check("kid automatically joined the MATERNAL grandparents' unit as a plain member",
+      kid_maternal_row is not None and kid_maternal_row["status"] == "approved" and kid_maternal_row["is_admin"] == 0)
+kid_marital_row = raw(
+    "SELECT status, is_admin FROM family_group_members WHERE group_id = ? AND user_id = ?", (marital_group_id, kid["user_id"])
+)
+check("kid is also a plain member of their own parents' (hubby+wifey's) marital unit",
+      kid_marital_row is not None and kid_marital_row["status"] == "approved" and kid_marital_row["is_admin"] == 0)
+
+print()
+print("=" * 70)
+print("20. The three real-world exit rules (2026-10-26): in-laws unit (voluntary leave), birth unit "
+      "(locked while unmarried), founder (never), and the admin-initiated rejoin flow")
+print("=" * 70)
+
+# 20a. THE IN-LAWS UNIT (voluntary leave) -- the exact bug scenario: a wife auto-joins her
+# husband's parents' unit, her own child is LATER auto-joined there too (as a grandchild), and she
+# must still be free to leave it -- the old unscoped parent/child-block would have refused this.
+ravi = register("Ravi Founder")
+login(ravi["private_code"])
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Ravi Father", "action": "create"}, "mother": {"name": "Ravi Mother", "action": "create"},
+    "relationship": "married",
+})
+ravi_body = res.get_json()
+ravi_birth_unit_id = ravi_body["parents_group_id"]  # Ravi's OWN parents' unit -- Meera's future in-laws unit
+res = client.post("/api/family/marry", json={
+    "spouse": {"name": "Meera Wife", "action": "create"},
+    "children": [{"name": "Arjun Kid", "action": "create"}],
+    "marriage_status": "active",
+})
+ravi_marry_body = res.get_json()
+ravi_marital_id = ravi_marry_body["marital_group_id"]
+meera_placeholder_node = raw("SELECT id FROM family_nodes WHERE display_name = 'Meera Wife'")
+arjun_placeholder_node = raw("SELECT id FROM family_nodes WHERE display_name = 'Arjun Kid'")
+
+logout()
+meera = register("Meera Wife Real")
+login(meera["private_code"])
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Meera Father", "action": "create"}, "mother": {"name": "Meera Mother", "action": "create"},
+    "relationship": "married",
+})
+res = client.post("/api/family/marry", json={
+    "spouse": {"name": "Meera Wife", "action": "join", "group_id": ravi_marital_id, "matched_node_id": meera_placeholder_node["id"]},
+})
+check("meera auto-joins ravi's unit as his wife (instant, no approval)", res.status_code == 201)
+meera_inlaw_row = raw("SELECT status, is_admin FROM family_group_members WHERE group_id = ? AND user_id = ?", (ravi_birth_unit_id, meera["user_id"]))
+check("meera automatically joined ravi's PARENTS' unit (her in-laws) as a plain member",
+      meera_inlaw_row is not None and meera_inlaw_row["status"] == "approved" and meera_inlaw_row["is_admin"] == 0)
+
+logout()
+arjun = register("Arjun Kid Real")
+arjun_search_code = client.get("/api/people/me").get_json()["search_code"]  # session is arjun's right after registering
+login(ravi["private_code"])  # ravi (admin of his own marital unit) links the child placeholder
+res = client.post(f"/api/family/node/{arjun_placeholder_node['id']}/link", json={"user_id": arjun_search_code})
+check("ravi links arjun's placeholder to his real account", res.status_code == 200)
+arjun_inlaw_row = raw("SELECT status FROM family_group_members WHERE group_id = ? AND user_id = ?", (ravi_birth_unit_id, arjun["user_id"]))
+check("arjun (the grandchild) is ALSO now an active member of ravi's parents' unit -- the exact "
+      "condition that used to wrongly block meera from leaving it",
+      arjun_inlaw_row is not None and arjun_inlaw_row["status"] == "approved")
+
+login(meera["private_code"])
+res = client.post(f"/api/family-groups/{ravi_birth_unit_id}/leave", json={})
+check("meera CAN voluntarily leave her in-laws' unit, even though her own child is also active there (the fix)",
+      res.status_code == 200)
+meera_inlaw_row = raw("SELECT status FROM family_group_members WHERE group_id = ? AND user_id = ?", (ravi_birth_unit_id, meera["user_id"]))
+check("meera's in-laws membership is now 'left'", meera_inlaw_row["status"] == "left")
+
+# 20c. THE FOUNDER (never) -- meera cannot leave her OWN marital unit, the one her marriage founded.
+res = client.post(f"/api/family-groups/{ravi_marital_id}/leave", json={})
+check("meera (a founder of her OWN marital unit) cannot leave it (400)", res.status_code == 400)
+check("the error names the founder rule specifically", res.get_json().get("error") == "You cannot leave your own family group.")
+
+# 20b. THE BIRTH UNIT (cannot leave voluntarily while unmarried) -- a plain, unmarried child-member
+# whose real, claimed parent is also active in that SAME unit (the technique section 13 already
+# established: match a FOUNDER's own self-node as "father", so the parent is a real family_group_members
+# row, not an unclaimed placeholder the blocking JOIN could never match).
+priya = register("Priya Solo")
+login(priya["private_code"])
+res = client.get("/api/family/suggest", query_string={"name": "Ravi Founder"})
+ravi_match = next(r for r in res.get_json()["results"] if r["type"] == "group" and r["group_id"] == ravi_marital_id)
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Ravi Founder", "action": "join", "group_id": ravi_match["group_id"], "matched_node_id": ravi_match["matched_node_id"]},
+    "mother": {"name": "Priya Solo Mother", "action": "create"},
+})
+check("priya's activation (joining ravi's marital unit as his child) succeeds", res.status_code == 201)
+login(ravi["private_code"])
+res = client.get("/api/people/inbox")
+priya_req = next(r for r in res.get_json()["requests"] if r["kind"] == "family_group_join")
+client.post(f"/api/people/inbox/{priya_req['id']}/decide", json={"decision": "accept"})
+
+login(priya["private_code"])
+res = client.post(f"/api/family-groups/{ravi_marital_id}/leave", json={})
+check("priya (unmarried, plain member of her BIRTH unit, her real father still active there) cannot leave it (400)",
+      res.status_code == 400)
+check("the error names parents/children specifically", "parents/children" in res.get_json().get("error", ""))
+
+# 20d. THE REJOIN FLOW -- a removed member cannot self-request back in; only an admin invite (which
+# flips their row to 'pending', not silently leaving it at 'left') followed by their own acceptance
+# restores 'approved'.
+res = client.post(f"/api/family-groups/{ravi_marital_id}/remove-member", json={"user_id": priya["user_id"]})
+check("priya cannot remove herself via remove-member (403, not admin)", res.status_code == 403)
+
+login(ravi["private_code"])
+res = client.post(f"/api/family-groups/{ravi_marital_id}/remove-member", json={"user_id": priya["user_id"]})
+check("ravi (admin of his own unit) removes priya", res.status_code == 200)
+priya_row = raw("SELECT status FROM family_group_members WHERE group_id = ? AND user_id = ?", (ravi_marital_id, priya["user_id"]))
+check("priya's membership is now 'left'", priya_row["status"] == "left")
+
+login(meera["private_code"])  # meera is still a co-admin of ravi's unit via her own founder grant
+res = client.post(f"/api/family-groups/{ravi_marital_id}/remove-member", json={"user_id": ravi["user_id"]})
+check("removing a founder is rejected, even by a co-admin (400)", res.status_code == 400)
+check("the error names the founder-removal rule specifically",
+      res.get_json().get("error") == "A founder cannot be removed from their own family group.")
+
+login(priya["private_code"])
+res = client.post(f"/api/family-groups/{ravi_marital_id}/join-request", json={})
+check("priya cannot self-request back in after being removed (400) -- rejoin is admin-initiated only",
+      res.status_code == 400)
+
+login(ravi["private_code"])
+res = client.post(f"/api/family-groups/{ravi_marital_id}/invite", json={"user_id": priya["user_id"]})
+check("ravi invites priya back", res.status_code == 201)
+priya_row = raw("SELECT status FROM family_group_members WHERE group_id = ? AND user_id = ?", (ravi_marital_id, priya["user_id"]))
+check("priya's row flips from 'left' to 'pending' the moment the invite is sent, not silently left at 'left'",
+      priya_row["status"] == "pending")
+
+login(priya["private_code"])
+res = client.get("/api/people/inbox")
+rejoin_req = next(r for r in res.get_json()["requests"] if r["kind"] == "family_group_invite")
+res = client.post(f"/api/people/inbox/{rejoin_req['id']}/decide", json={"decision": "accept"})
+check("priya accepts the re-invite", res.status_code == 200)
+priya_row = raw("SELECT status FROM family_group_members WHERE group_id = ? AND user_id = ?", (ravi_marital_id, priya["user_id"]))
+check("priya's membership is 'approved' again", priya_row["status"] == "approved")
 
 print()
 print("=" * 70)

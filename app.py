@@ -2018,6 +2018,19 @@ def api_family_group_invite(group_id):
     return jsonify({"status": "invited"}), 201
 
 
+@app.route("/api/family-groups/<int:group_id>/remove-member", methods=["POST"])
+@login_required
+@_board_error
+def api_family_group_remove_member(group_id):
+    data = request.get_json(silent=True) or {}
+    conn = _family(get_db())
+    try:
+        family_core.remove_member(conn, session["user_id"], group_id, data.get("user_id"))
+    finally:
+        conn.close()
+    return jsonify({"status": "removed"})
+
+
 # ---- Notifications (unread Personal-timeline chats + pending people-requests) ----
 
 @app.route("/api/notifications/summary")

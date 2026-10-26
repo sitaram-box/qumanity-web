@@ -46,6 +46,19 @@ means "let me claim this unit's still-empty founder slot," which is a *request t
 which node the requester means to become, on the request itself, is the explicit, simple way to
 thread that through social_core.decide_request()'s existing accept flow without re-deriving intent
 from an edge table that no longer exists for new marriages.
+
+Real-world family structure (2026-10-26): the paragraph above still describes the generic
+self-service join (a parent/grandparent placeholder a child's activation wizard matched, still
+approval-gated via request_join_group()/decide_request()). A MARRIAGE is no longer this -- the
+founder's ruling is that a declared mutual fact between two people doesn't need a third party's
+sign-off, unlike every other join here. marry_timeline()'s two founder-slot-claiming branches call
+_claim_founder_slot() directly instead (the exact same re-pointing mechanics add_member()'s accept
+branch already used, just invoked synchronously instead of behind an approval queue), and the
+other founder gets a courtesy notification (_notify_marriage()), never a blocking request. Active
+unit membership (family_group_members -- never the tree itself) is now a live-computed function of
+the tree shape and marital status, not a one-off grant made at the moment a wizard runs -- see
+_sync_family_membership(), called at the end of activate_timeline(), every marry_timeline() exit
+path, add_member()'s founder-slot claim, and link_node_to_user().
 """
 from __future__ import annotations
 
@@ -116,7 +129,7 @@ CREATE INDEX IF NOT EXISTS idx_family_groups_creator ON family_groups(created_by
 CREATE TABLE IF NOT EXISTS family_group_members (
     group_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
-    status TEXT NOT NULL DEFAULT 'approved',  -- approved | left
+    status TEXT NOT NULL DEFAULT 'approved',  -- approved | left | pending (re-invited after leaving/removal)
     is_admin INTEGER NOT NULL DEFAULT 0,
     invited_by INTEGER,
     created_at TEXT NOT NULL,
@@ -430,6 +443,27 @@ def _swap_node_references(conn, old_node_id: int, new_node_id: int, acted_by_use
     conn.execute("DELETE FROM family_parent_links WHERE parent_node_id = ? OR child_node_id = ?", (old_node_id, old_node_id))
 
 
+def _claim_founder_slot(conn, target_node_id: int, user_id: int) -> None:
+    """Instantly claims an unclaimed founder-slot placeholder (target_node_id) as user_id's own
+    self-node -- re-points whichever unit's husband_node_id/wife_node_id column holds it, swaps
+    every other reference to the placeholder onto the real node, and grants founder-admin. Shared
+    by add_member()'s approval-gated 'claim this slot' accept branch and marry_timeline()'s
+    automatic, unapproved marriage-join path (2026-10-26 ruling: marriage is a declared mutual
+    fact, not a claim needing a third party's sign-off, unlike every other join in this module --
+    see this module's docstring). Caller's responsibility: confirm target_node_id is actually
+    still unclaimed before calling."""
+    self_node = conn.execute("SELECT id FROM family_nodes WHERE claimed_user_id = ?", (user_id,)).fetchone()
+    if not self_node:
+        raise ValueError("Activate your Family Timeline before joining a Family Group")
+    group = conn.execute(
+        "SELECT id FROM family_groups WHERE husband_node_id = ? OR wife_node_id = ?", (target_node_id, target_node_id)
+    ).fetchone()
+    if group:
+        _repoint_founder_slot(conn, group["id"], target_node_id, self_node["id"])
+    _swap_node_references(conn, target_node_id, self_node["id"], user_id)
+    _grant_founder_admin_if_applicable(conn, self_node["id"], user_id)
+
+
 def link_node_to_user(conn, user_id: int, node_id: int, target) -> None:
     """Links an EMPTY node to a real user -- an admin unilaterally identifying who this person
     really is. If that node is a unit's founder slot, the newly-linked person becomes that unit's
@@ -478,6 +512,7 @@ def link_node_to_user(conn, user_id: int, node_id: int, target) -> None:
         if founder_groups:
             _grant_founder_admin_if_applicable(conn, real_node_id, target_user_id)
         notify_to_activate(conn, user_id, target_user_id)
+        _sync_family_membership(conn, target_user_id)
         conn.commit()
         return
 
@@ -486,6 +521,7 @@ def link_node_to_user(conn, user_id: int, node_id: int, target) -> None:
         (target_user_id, _now(), node_id),
     )
     _grant_founder_admin_if_applicable(conn, node_id, target_user_id)
+    _sync_family_membership(conn, target_user_id)
     conn.commit()
 
 
@@ -730,16 +766,15 @@ def add_member(conn, group_id: int, user_id: int, invited_by=None, target_node_i
     not just per group). Claiming the placeholder node directly would collide with that. Instead,
     this re-points the GROUP's founder slot at the joiner's own existing self-node (swapping out
     the placeholder, which stays in the DB, just no longer referenced by anything -- see
-    _repoint_founder_slot()/_swap_node_references(), shared with link_node_to_user()'s identical
-    2026-10-25 case) and grants founder-admin -- the approval itself IS the authorization a
+    _claim_founder_slot(), shared with link_node_to_user()'s identical 2026-10-25 case and
+    marry_timeline()'s automatic marriage-join) and grants founder-admin -- the approval itself IS the authorization a
     third-party admin-initiated link_node_to_user() would otherwise need."""
     if target_node_id:
         node = conn.execute("SELECT claimed_user_id FROM family_nodes WHERE id = ?", (target_node_id,)).fetchone()
         self_node = conn.execute("SELECT id FROM family_nodes WHERE claimed_user_id = ?", (user_id,)).fetchone()
         if node and not node["claimed_user_id"] and self_node:
-            _repoint_founder_slot(conn, group_id, target_node_id, self_node["id"])
-            _swap_node_references(conn, target_node_id, self_node["id"], user_id)
-            _grant_founder_admin_if_applicable(conn, self_node["id"], user_id)
+            _claim_founder_slot(conn, target_node_id, user_id)
+            _sync_family_membership(conn, user_id)
             return
 
     conn.execute(
@@ -762,7 +797,12 @@ def request_join_group(conn, user_id: int, group_id: int, target_node_id=None) -
     family_groups.id, same overloading convention 'rejoin' already uses for private_chats.id).
     target_node_id (optional): this request is specifically "let me claim this empty founder
     slot," not just "let me join as a plain member" -- see add_member(). social_core.decide_request()
-    has the matching accept-side branch. Returns the new request's id."""
+    has the matching accept-side branch. Returns the new request's id.
+
+    2026-10-26 (the rejoin rule): a user whose status here is 'left' CANNOT self-request back in
+    -- rejoin after a leave or a removal is admin-initiated only (see invite_to_group()); this
+    keeps that a deliberate decision by the group's admin, not something the ex-member can just
+    undo themselves. A user who was never a member at all is unaffected."""
     if not conn.execute("SELECT 1 FROM family_nodes WHERE claimed_user_id = ?", (user_id,)).fetchone():
         raise ValueError("Activate your Family Timeline before joining a Family Group")
     group = conn.execute("SELECT * FROM family_groups WHERE id = ?", (group_id,)).fetchone()
@@ -775,6 +815,8 @@ def request_join_group(conn, user_id: int, group_id: int, target_node_id=None) -
     ).fetchone()
     if existing and existing["status"] == "approved":
         raise ValueError("You are already a member of this group")
+    if existing and existing["status"] == "left":
+        raise ValueError("You previously left this group — ask an admin to invite you back")
     if conn.execute(
         "SELECT 1 FROM people_requests WHERE from_user_id=? AND to_user_id=? AND kind='family_group_join' AND group_id=? AND status='pending'",
         (user_id, group["created_by_user_id"], group_id),
@@ -795,8 +837,16 @@ def invite_to_group(conn, admin_user_id: int, group_id: int, target_user_id: int
     a real name/avatar before inviting -- matching social_core.send_group_invite()'s own
     signature exactly, not link_node_to_user()'s (which takes a raw Public ID because it has no
     separate confirm-first search step). Queues a people_requests row (kind='family_group_invite')
-    the target must accept; nothing is added until they do, the same join-then-approve model as
-    every other group invite in this project. Returns the new request's id."""
+    the target must accept; nothing is APPROVED until they do, the same join-then-approve model
+    as every other group invite in this project.
+
+    2026-10-26 (the rejoin rule): if the target previously left (or was removed from) this group,
+    their family_group_members row moves from 'left' to 'pending' right here, at invite time --
+    not silently left at 'left' until they accept. 'pending' is a visibility marker only (a
+    re-invite is in flight); add_member()'s own accept-time upsert already overwrites ANY prior
+    status with 'approved', so this needs no change there. A target with NO row yet (never a
+    member before) is untouched -- still no family_group_members row until they accept, same as
+    today. Returns the new request's id."""
     if not _is_admin_of_group(conn, admin_user_id, group_id):
         raise PermissionError("Only an admin of this group can invite members")
     group = conn.execute("SELECT 1 FROM family_groups WHERE id = ?", (group_id,)).fetchone()
@@ -816,6 +866,10 @@ def invite_to_group(conn, admin_user_id: int, group_id: int, target_user_id: int
         (admin_user_id, target_user_id, group_id),
     ).fetchone():
         raise ValueError("An invitation is already waiting for them")
+    conn.execute(
+        "UPDATE family_group_members SET status = 'pending' WHERE group_id = ? AND user_id = ? AND status = 'left'",
+        (group_id, target_user_id),
+    )
     cur = conn.execute(
         "INSERT INTO people_requests (from_user_id, to_user_id, kind, group_id, created_at, cycle_id) VALUES (?, ?, 'family_group_invite', ?, ?, ?)",
         (admin_user_id, target_user_id, group_id, _now(), cycle_middleware.get_active_cycle_id(conn)),
@@ -849,16 +903,40 @@ def group_members_for(conn, viewer_user_id: int, group_id: int):
     return [social_core.member_display_row(conn, r["id"], viewer_user_id, bool(r["is_admin"])) for r in rows]
 
 
+def _classify_membership(conn, self_node_id: int, group_id: int) -> str:
+    """'founder' | 'birth' | 'other' -- how self_node_id relates to group_id, the single
+    classification leave_group()/remove_member() both key their rules off (2026-10-26, the three
+    real-world exit rules). 'other' covers an in-laws unit, a grandparent unit, or any other plain
+    membership not earned by birth -- those carry no special exit restriction at all."""
+    group = conn.execute("SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (group_id,)).fetchone()
+    if group and self_node_id in (group["husband_node_id"], group["wife_node_id"]):
+        return "founder"
+    if _find_parents_group_for_node(conn, self_node_id) == group_id:
+        return "birth"
+    return "other"
+
+
 def leave_group(conn, user_id: int, group_id: int) -> None:
     """Leaves a unit's chat membership (status='left', never a hard delete -- same convention as
-    social_core.leave_chat()). Two independent blocks:
-      - A FOUNDER (husband_node_id/wife_node_id is the user's own claimed node) can never leave
-        their own unit -- it's the unit their marriage literally founded, not something they
-        joined and could unjoin from. Checked first since it needs no further query once true.
-      - Otherwise, blocked if the user's own node has a parent OR a child who is still an approved
-        member of this SAME unit -- leaving would otherwise orphan an active family relationship
-        inside the very group meant to represent it (e.g. a plain child-member leaving their
-        parents' unit while their own child is still listed as a member here)."""
+    social_core.leave_chat()). Three real-world exit rules (2026-10-26), keyed off
+    _classify_membership():
+      - FOUNDER: never allowed -- it's the unit their marriage literally founded, not something
+        they joined and could unjoin from. The only people who can never leave at all.
+      - BIRTH unit: blocked if the user's own node has a parent OR a child who is still an
+        approved member of THIS SAME unit -- leaving would otherwise orphan an active family
+        relationship inside the very group meant to represent it. While unmarried this is
+        effectively always true (their parents are definitionally active in their own birth
+        unit), which is exactly how "cannot leave while unmarried" falls out of this check without
+        a separate marriage test. Once married, _sync_family_membership() has already auto-left
+        this membership UNLESS it's a creator-admin row (deliberately preserved, see that
+        function) -- a married creator-admin may still choose to leave by hand; nothing locks them
+        in beyond the founder rule above.
+      - Anything else (in-laws unit, grandparent unit, ...): always allowed, no check at all --
+        this is the fix for the real bug this same check used to cause: a wife auto-joined to her
+        in-laws' unit, whose own child was LATER also auto-joined there as a grandchild, could not
+        voluntarily leave her in-laws' unit, because the old unscoped check saw her child as an
+        "active relative in this same group" and blocked her -- even though this was never her
+        birth unit at all."""
     member_row = conn.execute(
         "SELECT 1 FROM family_group_members WHERE group_id = ? AND user_id = ? AND status = 'approved'",
         (group_id, user_id),
@@ -868,23 +946,45 @@ def leave_group(conn, user_id: int, group_id: int) -> None:
 
     self_node = conn.execute("SELECT id FROM family_nodes WHERE claimed_user_id = ?", (user_id,)).fetchone()
     if self_node:
-        group = conn.execute(
-            "SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (group_id,)
-        ).fetchone()
-        if group and self_node["id"] in (group["husband_node_id"], group["wife_node_id"]):
+        classification = _classify_membership(conn, self_node["id"], group_id)
+        if classification == "founder":
             raise ValueError("You cannot leave your own family group.")
-
-        blocking = conn.execute(
-            """SELECT 1 FROM family_parent_links fpl
-               JOIN family_nodes fn ON fn.id = (CASE WHEN fpl.parent_node_id = ? THEN fpl.child_node_id ELSE fpl.parent_node_id END)
-               JOIN family_group_members fgm ON fgm.user_id = fn.claimed_user_id AND fgm.group_id = ?
-               WHERE (fpl.parent_node_id = ? OR fpl.child_node_id = ?) AND fgm.status = 'approved'""",
-            (self_node["id"], group_id, self_node["id"], self_node["id"]),
-        ).fetchone()
-        if blocking:
-            raise ValueError("You cannot leave this group because your parents/children are active members.")
+        if classification == "birth":
+            blocking = conn.execute(
+                """SELECT 1 FROM family_parent_links fpl
+                   JOIN family_nodes fn ON fn.id = (CASE WHEN fpl.parent_node_id = ? THEN fpl.child_node_id ELSE fpl.parent_node_id END)
+                   JOIN family_group_members fgm ON fgm.user_id = fn.claimed_user_id AND fgm.group_id = ?
+                   WHERE (fpl.parent_node_id = ? OR fpl.child_node_id = ?) AND fgm.status = 'approved'""",
+                (self_node["id"], group_id, self_node["id"], self_node["id"]),
+            ).fetchone()
+            if blocking:
+                raise ValueError("You cannot leave this group because your parents/children are active members.")
 
     conn.execute("UPDATE family_group_members SET status = 'left' WHERE group_id = ? AND user_id = ?", (group_id, user_id))
+    conn.commit()
+
+
+def remove_member(conn, admin_user_id: int, group_id: int, target_user_id: int) -> None:
+    """Admin-initiated removal (2026-10-26, the in-laws-unit "the father-in-law can remove her"
+    rule, generalized): sets the target's membership to 'left', same column, same convention as a
+    voluntary leave_group(). Deliberately NOT scoped to in-laws units only -- _is_admin_of_group()
+    is checked generically, so a birth unit's admin can remove a plain (non-founder) member too
+    (e.g. a father removing an adult son's active chat membership); the son's node stays in the
+    tree, only his active membership is revoked. A FOUNDER can never be removed -- removing one
+    isn't a membership action, it's dissolving the marriage, out of scope here, same boundary
+    leave_group() draws for the founder themselves."""
+    if not _is_admin_of_group(conn, admin_user_id, group_id):
+        raise PermissionError("Only an admin of this group can remove members")
+    if target_user_id == admin_user_id:
+        raise ValueError("Use Leave Group to remove yourself")
+    target_node = conn.execute("SELECT id FROM family_nodes WHERE claimed_user_id = ?", (target_user_id,)).fetchone()
+    if target_node and _classify_membership(conn, target_node["id"], group_id) == "founder":
+        raise ValueError("A founder cannot be removed from their own family group.")
+    if not conn.execute(
+        "SELECT 1 FROM family_group_members WHERE group_id = ? AND user_id = ? AND status = 'approved'", (group_id, target_user_id)
+    ).fetchone():
+        raise LookupError("That member isn't in this group")
+    conn.execute("UPDATE family_group_members SET status = 'left' WHERE group_id = ? AND user_id = ?", (group_id, target_user_id))
     conn.commit()
 
 
@@ -898,6 +998,20 @@ def notify_to_activate(conn, from_user_id: int, to_user_id: int) -> None:
         social_core.send_message_request(conn, from_user_id, to_user_id, text)
     except ValueError:
         pass  # already connected, or a request is already pending -- the ping isn't the point, the node still gets created
+
+
+def _notify_marriage(conn, new_spouse_user_id: int, other_founder_user_id: int) -> None:
+    """Tells the OTHER founder their spouse just auto-joined their unit -- informational only,
+    never gates the join itself (2026-10-26 ruling: marriage is automatic, see this module's
+    docstring and marry_timeline()'s instant-join branches). Same plain-message-request mechanism
+    notify_to_activate() already established for every other identity-match courtesy ping here."""
+    import social_core
+    name = conn.execute("SELECT name FROM users WHERE id = ?", (new_spouse_user_id,)).fetchone()["name"]
+    text = f"{name} has joined your family unit as your spouse."
+    try:
+        social_core.send_message_request(conn, new_spouse_user_id, other_founder_user_id, text)
+    except ValueError:
+        pass  # already connected, or a request is already pending -- the notification isn't the point, the join already happened
 
 
 # ---- Search: the three-way suggestion logic (Section A of the approved architecture) ----
@@ -1204,6 +1318,99 @@ def add_child_to_group(conn, user_id: int, group_id: int, name: str, gender=None
     return {"node_id": node_id, "name": name}
 
 
+# ---- Real-world family membership (2026-10-26): which units a person should ACTIVELY belong to
+# (family_group_members) is now a live-computed function of the tree shape + marital status, same
+# "computed live, never stored" philosophy this module already uses for dormancy -- not a set of
+# one-off grants hand-threaded into each mutation. See _sync_family_membership(). ----
+
+def _sync_family_membership(conn, user_id: int) -> None:
+    """Recomputes and applies this person's correct set of ACTIVE family unit memberships from the
+    tree's current shape -- the single place that decides "which units does X actively belong to,"
+    called at the end of activate_timeline(), marry_timeline() (all three of its exit paths),
+    add_member()'s founder-slot claim, and link_node_to_user() -- every point a person's node
+    identity or marital status can change. Idempotent and safe to call repeatedly; never demotes an
+    existing admin, never touches the TREE itself (family_group_nodes/family_parent_links) -- only
+    chat membership (family_group_members) moves.
+
+    Bounded to exactly the three rules the founder has signed off on (2026-10-26), not a general
+    recursive walk of arbitrary tree depth:
+      1. FOUNDER units (any unit where this person is husband_node_id/wife_node_id) -> admin
+         member. Re-confirms _grant_founder_admin_if_applicable()'s own grant; harmless to repeat.
+      2. BIRTH unit (_find_parents_group_for_node() -- the unit where this person is a plain
+         child-member) -> plain member, UNLESS rule 1 found at least one founder unit (they've
+         founded their own marital unit, i.e. they're married), in which case this membership
+         moves to 'left' instead. Marriage_status of a past/dissolved marriage isn't distinguished
+         here -- once you've founded any unit, your birth-unit chat has moved, full stop; reverting
+         that on a later divorce isn't handled and would need a separate pass.
+      3. GRANDPARENT units -- the birth unit's OWN husband_parent_group_id/wife_parent_group_id,
+         one generation further up -- same member-or-left rule as #2, for the same reason (a
+         married person has moved out of their whole birth lineage's active chats, not just their
+         parents' own unit).
+      4. IN-LAWS, patrilocal only (2026-10-26 ruling -- matches this schema's existing
+         husband/wife-shaped columns and this project's real-world context; not configurable): if
+         this person is the WIFE founder of an ACTIVE marital unit, that unit's
+         husband_parent_group_id (her father-in-law's unit) -> plain member. Nothing extra for a
+         husband founder -- he's already a member of that same unit from his own birth/activation.
+    """
+    self_node = conn.execute("SELECT id FROM family_nodes WHERE claimed_user_id = ?", (user_id,)).fetchone()
+    if not self_node:
+        return
+    node_id = self_node["id"]
+
+    def _ensure_member(group_id) -> None:
+        if not group_id:
+            return
+        conn.execute(
+            """INSERT INTO family_group_members (group_id, user_id, status, is_admin, invited_by, created_at)
+               VALUES (?, ?, 'approved', 0, NULL, ?)
+               ON CONFLICT(group_id, user_id) DO UPDATE SET status = 'approved'""",
+            (group_id, user_id, _now()),
+        )
+
+    def _ensure_left(group_id) -> None:
+        if not group_id:
+            return
+        # is_admin = 0 guard is load-bearing: a birth unit's own creator (e.g. the activating user,
+        # when their parents hadn't registered yet) is ALSO unconditionally admin there per
+        # create_group()'s creator-admin grant, additive to founder-admin -- a real administrative
+        # role, not a side effect of being a plain child-member. Marrying moves plain CHILD
+        # membership out; it must never silently strip an unrelated admin grant on the same row.
+        conn.execute(
+            "UPDATE family_group_members SET status = 'left' WHERE group_id = ? AND user_id = ? AND status = 'approved' AND is_admin = 0",
+            (group_id, user_id),
+        )
+
+    # Rule 1: founder units -> admin.
+    founder_groups = conn.execute(
+        """SELECT id, husband_node_id, wife_node_id, husband_parent_group_id, marriage_status
+           FROM family_groups WHERE husband_node_id = ? OR wife_node_id = ?""",
+        (node_id, node_id),
+    ).fetchall()
+    for g in founder_groups:
+        conn.execute(
+            """INSERT INTO family_group_members (group_id, user_id, status, is_admin, invited_by, created_at)
+               VALUES (?, ?, 'approved', 1, NULL, ?)
+               ON CONFLICT(group_id, user_id) DO UPDATE SET status = 'approved', is_admin = 1""",
+            (g["id"], user_id, _now()),
+        )
+    is_married = bool(founder_groups)
+
+    # Rules 2 & 3: birth unit, then its own two parent (grandparent) units.
+    birth_unit_id = _find_parents_group_for_node(conn, node_id)
+    (_ensure_left if is_married else _ensure_member)(birth_unit_id)
+    if birth_unit_id:
+        birth_unit = conn.execute(
+            "SELECT husband_parent_group_id, wife_parent_group_id FROM family_groups WHERE id = ?", (birth_unit_id,)
+        ).fetchone()
+        for grandparent_group_id in (birth_unit["husband_parent_group_id"], birth_unit["wife_parent_group_id"]):
+            (_ensure_left if is_married else _ensure_member)(grandparent_group_id)
+
+    # Rule 4: patrilocal in-laws -- wife founder of an active unit joins her husband's parents' unit.
+    for g in founder_groups:
+        if g["wife_node_id"] == node_id and g["marriage_status"] == "active":
+            _ensure_member(g["husband_parent_group_id"])
+
+
 def activate_timeline(conn, user_id: int, payload: dict) -> dict:
     """The one-time Activation gate. Raises ValueError for bad input (already activated, missing
     required fields) and LookupError if the user doesn't exist. Commits internally, same shape as
@@ -1285,6 +1492,7 @@ def activate_timeline(conn, user_id: int, payload: dict) -> dict:
                      (_RELATIONSHIP_TO_PROFILE_STATUS[relationship], user_id))
 
     conn.execute("UPDATE users SET timeline_activated_at = ? WHERE id = ?", (_now(), user_id))
+    _sync_family_membership(conn, user_id)
     conn.commit()
     return results
 
@@ -1292,6 +1500,33 @@ def activate_timeline(conn, user_id: int, payload: dict) -> dict:
 # ---- Marriage: self + spouse -> find-or-create THEIR OWN couple-unit, with children added as its
 # (unmarried) child-members, and husband_parent_group_id/wife_parent_group_id set from whichever
 # side already has a known birth unit. Callable any time after activation. ----
+
+def _attach_children_to_group(conn, user_id: int, group_id: int, husband_node_id, wife_node_id,
+                               children_payload, results: dict) -> list[int]:
+    """Resolves each {"name", "gender"?, ...} entry in children_payload into a family_nodes
+    placeholder, links it as a child of both husband_node_id/wife_node_id, and grants
+    family_group_nodes (tree visibility) in group_id. Used by marry_timeline()'s two instant
+    marriage-join branches (2026-10-26), which previously couldn't attach children at all -- there
+    was nothing yet to attach them to before the join became instant. The main (non-join)
+    marry_timeline() path still resolves children inline before group_id exists, since it needs
+    their node ids UP FRONT to pass as _find_or_create_couple_group()'s member_node_ids."""
+    child_node_ids = []
+    for i, child in enumerate(children_payload or []):
+        if not child or not (child.get("name") or "").strip():
+            continue
+        label = f"child_{i + 1}"
+        child_node_id = _resolve_slot(conn, user_id, child, [], results, label)
+        child_node_ids.append(child_node_id)
+        if husband_node_id:
+            link_parent(conn, husband_node_id, child_node_id, user_id)
+        if wife_node_id:
+            link_parent(conn, wife_node_id, child_node_id, user_id)
+        conn.execute(
+            "INSERT OR IGNORE INTO family_group_nodes (group_id, node_id, added_by_user_id, added_at) VALUES (?, ?, ?, ?)",
+            (group_id, child_node_id, user_id, _now()),
+        )
+    return child_node_ids
+
 
 def marry_timeline(conn, user_id: int, payload: dict) -> dict:
     ensure_tables(conn)
@@ -1327,11 +1562,11 @@ def marry_timeline(conn, user_id: int, payload: dict) -> dict:
     results = {"joined_requests": [], "notified": [], "created_node_ids": []}
 
     if spouse.get("action") == "join":
-        # A spousal join is "let me claim this unit's still-empty founder slot," a self-service
-        # request to BE LINKED, approval-gated -- not the admin-initiated, instant
-        # link_node_to_user(). target_node_id on the queued request (see request_join_group())
-        # tells add_member()'s accept branch exactly which empty node to claim once approved;
-        # nothing is linked or granted here, only requested.
+        # 2026-10-26 ruling: a marriage is a declared MUTUAL fact, not a claim on someone else's
+        # unit that needs a third party's sign-off -- unlike every other join in this module (see
+        # this module's docstring). Claims the empty founder slot immediately via
+        # _claim_founder_slot() instead of queuing a people_requests row for the group's creator to
+        # approve; the other founder is notified afterward, never blocked.
         group_id = spouse.get("group_id")
         group = conn.execute("SELECT * FROM family_groups WHERE id = ?", (group_id,)).fetchone()
         if not group:
@@ -1351,8 +1586,16 @@ def marry_timeline(conn, user_id: int, payload: dict) -> dict:
             target_node_id = matched
         else:
             raise ValueError("That person's partner place in their family unit is already taken")
-        request_join_group(conn, user_id, group_id, target_node_id=target_node_id)
-        results["joined_requests"].append({"label": "spouse", "name": spouse["name"].strip(), "group_id": group_id})
+        other_founder_node_id = group["husband_node_id"] if target_node_id == group["wife_node_id"] else group["wife_node_id"]
+        other_founder_user_id = _claimed_user_for_node(conn, other_founder_node_id)
+        _claim_founder_slot(conn, target_node_id, user_id)
+        group = conn.execute("SELECT * FROM family_groups WHERE id = ?", (group_id,)).fetchone()  # re-read: the slot just moved
+        _sync_family_membership(conn, user_id)
+        if other_founder_user_id:
+            _notify_marriage(conn, user_id, other_founder_user_id)
+        results["auto_joined"] = {"label": "spouse", "name": spouse["name"].strip(), "group_id": group_id}
+        _attach_children_to_group(conn, user_id, group_id, group["husband_node_id"], group["wife_node_id"],
+                                   payload.get("children"), results)
         conn.commit()
         return results
 
@@ -1361,8 +1604,9 @@ def marry_timeline(conn, user_id: int, payload: dict) -> dict:
     # 2026-10-26: the spouse may be an EXISTING person (e.g. found by Public ID) who already founds
     # an active marriage. Creating or reusing a unit here either duplicated that marriage or
     # silently "succeeded" without adding this member. Instead: if their partner place is still an
-    # unclaimed placeholder, ask to claim it (same approval-gated path as a spouse "join" -- on
-    # approval this member becomes that unit's founder-admin); if it is claimed, refuse.
+    # unclaimed placeholder, claim it immediately (same automatic, unapproved marriage-join as the
+    # "join" action above -- on claim this member becomes that unit's founder-admin); if it is
+    # claimed, refuse.
     their_marriage = conn.execute(
         "SELECT * FROM family_groups WHERE (husband_node_id = ? OR wife_node_id = ?) AND marriage_status = 'active'",
         (spouse_node_id, spouse_node_id),
@@ -1373,10 +1617,15 @@ def marry_timeline(conn, user_id: int, payload: dict) -> dict:
             raise ValueError(f"{spouse['name'].strip()} already has a recorded marriage in another family unit")
         if not partner_node_id:
             raise ValueError("That person's family unit has no partner place to claim")
-        request_join_group(conn, user_id, their_marriage["id"], target_node_id=partner_node_id)
-        results["joined_requests"].append({"label": "spouse", "name": spouse["name"].strip(), "group_id": their_marriage["id"]})
-        if payload.get("children"):
-            results["children_not_added"] = len([c for c in payload["children"] if c and (c.get("name") or "").strip()])
+        other_founder_user_id = _claimed_user_for_node(conn, spouse_node_id)
+        _claim_founder_slot(conn, partner_node_id, user_id)
+        group = conn.execute("SELECT * FROM family_groups WHERE id = ?", (their_marriage["id"],)).fetchone()
+        _sync_family_membership(conn, user_id)
+        if other_founder_user_id:
+            _notify_marriage(conn, user_id, other_founder_user_id)
+        results["auto_joined"] = {"label": "spouse", "name": spouse["name"].strip(), "group_id": their_marriage["id"]}
+        _attach_children_to_group(conn, user_id, their_marriage["id"], group["husband_node_id"], group["wife_node_id"],
+                                   payload.get("children"), results)
         conn.commit()
         return results
 
@@ -1413,6 +1662,7 @@ def marry_timeline(conn, user_id: int, payload: dict) -> dict:
                                payload.get("spouse_father"), payload.get("spouse_mother"), results,
                                "spouse_father", "spouse_mother")
 
+    _sync_family_membership(conn, user_id)
     conn.commit()
     return results
 
