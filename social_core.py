@@ -679,15 +679,18 @@ def _shares_approved_group(conn, a, b) -> bool:
     than is_family_member() (which only looks at a personal 'family'-category group, the one
     relationship that still sees a hidden identity's real name) -- this is about chat access, not
     identity masking, so ANY shared group -- Friends, Business, a Family Tree unit -- counts."""
+    # A personal group's OWNER isn't a personal_group_members row (group_messages() adds them with
+    # its own UNION), so each side's personal groups = approved memberships + groups they own --
+    # otherwise an owner never "shares" their own Friends/Business group with its members.
+    personal = """SELECT group_id FROM personal_group_members WHERE user_id = ? AND status = 'approved'
+                   UNION SELECT id FROM personal_groups WHERE owner_user_id = ?"""
     return bool(conn.execute(
-        """SELECT 1 FROM personal_group_members m1 JOIN personal_group_members m2
-             ON m1.group_id = m2.group_id AND m1.status = 'approved' AND m2.status = 'approved'
-           WHERE m1.user_id = ? AND m2.user_id = ?
+        f"""SELECT 1 FROM ({personal}) g1 JOIN ({personal}) g2 ON g1.group_id = g2.group_id
            UNION
            SELECT 1 FROM family_group_members m1 JOIN family_group_members m2
              ON m1.group_id = m2.group_id AND m1.status = 'approved' AND m2.status = 'approved'
            WHERE m1.user_id = ? AND m2.user_id = ?""",
-        (a, b, a, b),
+        (a, a, b, b, a, b),
     ).fetchone())
 
 
