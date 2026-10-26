@@ -730,3 +730,14 @@ Also open, but not tracked in Doc 10:
   with a "Coming soon" note, even though Qmail exists (§4.11).
 - Production verification at `https://qumanity.in` of the homepage, dashboard tour, Qmail, Q-Punch,
   Admin Panel and attachment changes; only local verification was done for them.
+- **Self-registration response no longer carries the `donation` object** (found 2026-10-26 by the
+  phone app's `Qumanity_App/tools/website-check/check_app_api.py`). The check expects
+  `donation.kind == "free"` after a free registration; the response now has no `donation`
+  key. Probably a field renamed or dropped when the payment code was removed. Decide which
+  side is right, then fix the response or the check. Not fixed yet, on purpose.
+- **Week-4 election results lose the winners** (same check, a simulated Libra 2026 cycle on a DB
+  copy). After voting closes, `election_core.election_summary()` returns
+  `winners = {male: None, female: None, male_votes: 0, female_votes: 0}` while the candidates show
+  15 and 11 votes. That points at the closing tally (`_ensure_tallied` / the
+  `male_winner_user_id`/`female_winner_user_id` columns) rather than the vote counting. Not fixed
+  yet, on purpose.
