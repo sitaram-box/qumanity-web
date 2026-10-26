@@ -125,6 +125,21 @@
     renderPersonHalf(group, unit.wife, width / 4);
     group.append("line").attr("class", "ft-unit-divider").attr("x1", 0).attr("x2", 0)
       .attr("y1", -UNIT_H / 2 + 8).attr("y2", UNIT_H / 2 - 8);
+
+    // 2026-10-27: the SELF card's own click opens its chat directly (see the click-wiring below)
+    // -- but a neighbor unit card's click still NAVIGATES (re-centers the tree there), since
+    // losing that would make a multi-generation tree unusable. This icon is the explicit
+    // "open this neighbor's chat without navigating away" escape hatch.
+    if (!isSelf) {
+      var chatIcon = group.append("g").attr("class", "ft-chat-icon")
+        .attr("transform", "translate(" + (width / 2 - 18) + "," + (-UNIT_H / 2 + 18) + ")")
+        .on("click", function (event) {
+          event.stopPropagation();
+          openFamilyChat(unit.group_id);
+        });
+      chatIcon.append("circle").attr("r", 13);
+      chatIcon.append("text").attr("class", "ft-chat-icon-glyph").attr("y", 5).text("💬");
+    }
   }
 
   function renderPersonHalf(group, person, offsetX) {
@@ -232,10 +247,17 @@
 
     // Click-to-navigate: any real unit card except the current (self) one. A click on an empty
     // person slot is stopped from bubbling here (see renderPersonHalf), so it opens the edit
-    // modal only.
+    // modal only. A click on the small 💬 icon (see renderUnitCard()) also stops propagation, so
+    // it opens that neighbor's chat instead of navigating.
     cardGroups.filter(function (d) { return d.kind === "unit" && d !== selfCard; })
       .style("cursor", "pointer")
       .on("click", function (event, d) { showTree(d.data.group_id); });
+
+    // Click-to-chat: the SELF (center) card opens its own chat directly -- no separate "Chat"
+    // button anywhere in the toolbar (2026-10-27).
+    cardGroups.filter(function (d) { return d === selfCard; })
+      .style("cursor", "pointer")
+      .on("click", function () { openFamilyChat(nbh.group_id); });
 
     // Click-to-grow: the dashed "+Add" buttons each open ft-add-modal in the right mode.
     cardGroups.filter(function (d) { return d.kind === "add-parents"; })
@@ -286,6 +308,110 @@
     });
   }
 
+  // ---- Group chat (2026-10-27): GET/POST /api/family-groups/<id>/messages already existed as a
+  // backend route with no frontend screen to open it from at all -- clicking a unit node is now
+  // that screen. Built standalone here (not a shared helper with social.js's personal-group
+  // renderChatShell()/renderMessages(), which are module-private to that file) -- reuses the same
+  // .bd-*/QMAvatar markup conventions for visual consistency, at the cost of a little duplication. ----
+  var chatModal = document.getElementById("ft-chat-modal");
+  var chatBody = document.getElementById("ft-chat-body");
+  chatModal.addEventListener("click", function (e) {
+    if (e.target === chatModal || e.target.hasAttribute("data-close")) chatModal.hidden = true;
+  });
+
+  function openFamilyChat(groupId) {
+    chatModal.hidden = false;
+    chatBody.innerHTML = "";
+    chatBody.appendChild(el("p", "qm-dash-empty", "Loading…"));
+    api("/api/family-groups/" + groupId + "/messages").then(function (d) {
+      chatBody.innerHTML = "";
+      var head = el("div", "bd-head");
+      var ht = el("div", "bd-headtext");
+      ht.appendChild(el("b", "bd-title", d.name));
+      var memberCount = (d.members || []).length;
+      ht.appendChild(el("small", "bd-sub", memberCount + " member" + (memberCount === 1 ? "" : "s")));
+      head.appendChild(ht);
+      chatBody.appendChild(head);
+
+      var feed = el("div", "bd-feed"); feed.setAttribute("aria-live", "polite"); chatBody.appendChild(feed);
+      if (!d.messages.length) {
+        feed.appendChild(el("p", "bd-empty", "No messages yet — say hello."));
+      } else {
+        d.messages.forEach(function (m) {
+          var row = el("div", "bd-msg" + (m.mine ? " is-mine" : ""));
+          if (!m.mine) {
+            var msgHead = el("div", "bd-msg-head");
+            if (window.QMAvatar) msgHead.appendChild(QMAvatar.render({ name: m.who, gender: m.gender, profile_picture_url: m.profile_picture_url }, 24));
+            msgHead.appendChild(el("b", "", m.who));
+            row.appendChild(msgHead);
+          }
+          row.appendChild(document.createTextNode(m.text));
+          feed.appendChild(row);
+        });
+        feed.scrollTop = feed.scrollHeight;
+      }
+
+      var form = el("form", "bd-compose"), ta = document.createElement("textarea");
+      ta.rows = 2; ta.maxLength = 1000; ta.placeholder = "Message " + d.name + "…"; ta.required = true;
+      var send = el("button", "", "Send"); send.type = "submit";
+      form.appendChild(ta); form.appendChild(send);
+      chatBody.appendChild(form);
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        api("/api/family-groups/" + groupId + "/messages", { text: ta.value }).then(function () {
+          ta.value = ""; openFamilyChat(groupId);
+        }).catch(function (er) { alert(er.message); });
+      });
+    }).catch(function (e) {
+      chatBody.innerHTML = "";
+      chatBody.appendChild(el("p", "bd-empty", e.message));
+    });
+  }
+
+  // ---- Shared auto-search (2026-10-27): types a 12-digit Public ID, debounced search fires on
+  // its own (no "Find" button anywhere), and the match renders as a profile-card preview with a
+  // single action button -- "Link" (editing a specific empty placeholder node, see openEditModal()
+  // below) or "Invite" (the Members modal's general "Add Member," no specific node in play). Both
+  // call sites share this exact search/preview UI; only what the button DOES differs, via
+  // `onAction(person, btn, code)` -- `code` is the raw digits typed, since /link needs the 12-digit
+  // Public ID itself, not any field off the resolved profile. ----
+  function debounce(fn, ms) {
+    var t;
+    return function () {
+      var args = arguments, ctx = this;
+      clearTimeout(t);
+      t = setTimeout(function () { fn.apply(ctx, args); }, ms);
+    };
+  }
+
+  function wireAutoSearch(inputEl, resultEl, errorEl, actionLabel, onAction) {
+    var run = debounce(function () {
+      var code = inputEl.value.replace(/\D/g, "");
+      resultEl.innerHTML = "";
+      if (errorEl) errorEl.hidden = true;
+      if (code.length !== 12) return;
+      resultEl.appendChild(el("p", "qm-dash-empty", "Searching…"));
+      api("/api/people/search?q=" + encodeURIComponent(code)).then(function (p) {
+        resultEl.innerHTML = "";
+        var card = el("div", "fw-suggestion-row");
+        var top = el("div", "fw-suggestion-top");
+        if (window.QMAvatar) top.appendChild(QMAvatar.render(p, 40));
+        var textWrap = el("div", "fw-suggestion-text");
+        textWrap.appendChild(el("p", "", p.name + " · " + (GENDER_LABEL[p.gender] || p.gender)));
+        top.appendChild(textWrap);
+        card.appendChild(top);
+        var btn = el("button", "qm-btn qm-btn-primary", actionLabel); btn.type = "button";
+        btn.addEventListener("click", function () { onAction(p, btn, code); });
+        card.appendChild(btn);
+        resultEl.appendChild(card);
+      }).catch(function (e) {
+        resultEl.innerHTML = "";
+        if (errorEl) { errorEl.textContent = e.message; errorEl.hidden = false; }
+      });
+    }, 400);
+    inputEl.addEventListener("input", run);
+  }
+
   // ---- Click-an-empty-node modal (2026-10-20 redesign): a clicked node already HAS a typed
   // name (e.g. "Pardeep Sharma") -- the modal's default, primary action is linking it to a real
   // Qumanity member by their 12-digit Public ID, not re-typing a name that's already there. The
@@ -311,6 +437,7 @@
     document.getElementById("ft-edit-modal-title").textContent = person.name;
     nameInput.value = person.name;
     linkInput.value = "";
+    document.getElementById("ft-edit-link-result").innerHTML = "";
     nameSection.hidden = true; // defaults to the Link view -- see the redesign note above
     errorEl.hidden = true;
     editModal.hidden = false;
@@ -330,12 +457,15 @@
       .catch(function (e) { errorEl.textContent = e.message; errorEl.hidden = false; });
   });
 
-  document.getElementById("ft-edit-link-btn").addEventListener("click", function () {
-    var val = linkInput.value.trim();
-    if (!val) { errorEl.textContent = "Enter a 12-digit Public ID."; errorEl.hidden = false; return; }
-    api("/api/family/node/" + state.editingNodeId + "/link", { user_id: val })
+  var linkResultEl = document.getElementById("ft-edit-link-result");
+  wireAutoSearch(linkInput, linkResultEl, errorEl, "Link", function (p, btn, code) {
+    btn.disabled = true; btn.textContent = "Linking…";
+    api("/api/family/node/" + state.editingNodeId + "/link", { user_id: code })
       .then(reloadAfterEdit)
-      .catch(function (e) { errorEl.textContent = e.message; errorEl.hidden = false; });
+      .catch(function (e) {
+        btn.disabled = false; btn.textContent = "Link";
+        errorEl.textContent = e.message; errorEl.hidden = false;
+      });
   });
 
   // ---- "+Add" modal (2026-10-20): grows the tree by hand. 'parents' mode fills a missing
@@ -414,6 +544,10 @@
   // the self-service "request to join" flow). ----
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
   var GENDER_LABEL = { male: "Male", female: "Female", both: "Third Gender" };
+  // 'founder' | 'admin' | 'member' (2026-10-27) -- the honest three-way label. A unit's creator
+  // is also always granted admin even when they're just a plain child (create_group()'s own
+  // additive grant), so is_admin alone can't tell them apart from an actual husband/wife founder.
+  var ROLE_LABEL = { founder: "Founder", admin: "Admin", member: "Member" };
 
   var membersModal = document.getElementById("ft-members-modal");
   var membersList = document.getElementById("ft-members-list");
@@ -435,7 +569,7 @@
       var meta = [GENDER_LABEL[m.gender] || m.gender, m.age_group, m.present_location].filter(Boolean).join(" · ");
       textWrap.appendChild(el("span", "ft-member-meta", meta));
       li.appendChild(textWrap);
-      li.appendChild(el("span", "ft-member-role" + (m.is_admin ? " is-admin" : ""), m.is_admin ? "Admin" : "Member"));
+      li.appendChild(el("span", "ft-member-role" + (m.role !== "member" ? " is-admin" : ""), ROLE_LABEL[m.role] || "Member"));
       membersList.appendChild(li);
     });
   }
@@ -457,34 +591,17 @@
   var membersBtn = document.getElementById("ft-members-btn");
   if (membersBtn) membersBtn.addEventListener("click", openMembersModal);
 
-  document.getElementById("ft-members-search-btn").addEventListener("click", function () {
-    var code = membersSearchInput.value.trim();
-    membersErrorEl.hidden = true;
-    membersSearchResult.innerHTML = "";
-    if (!code) { membersErrorEl.textContent = "Enter a 12-digit Public ID."; membersErrorEl.hidden = false; return; }
-    api("/api/people/search?q=" + encodeURIComponent(code)).then(function (p) {
-      var card = el("div", "fw-suggestion-row");
-      var top = el("div", "fw-suggestion-top");
-      if (window.QMAvatar) top.appendChild(QMAvatar.render(p, 40));
-      var textWrap = el("div", "fw-suggestion-text");
-      textWrap.appendChild(el("p", "", p.name + " · " + p.gender));
-      top.appendChild(textWrap);
-      card.appendChild(top);
-      var inviteBtn = el("button", "qm-btn qm-btn-primary", "Send Invite"); inviteBtn.type = "button";
-      inviteBtn.addEventListener("click", function () {
-        inviteBtn.disabled = true; inviteBtn.textContent = "Inviting…";
-        api("/api/family-groups/" + state.currentGroupId + "/invite", { user_id: p.user_id }).then(function () {
-          inviteBtn.textContent = "✓ Invited"; membersSearchInput.value = "";
-        }).catch(function (e) {
-          inviteBtn.disabled = false; inviteBtn.textContent = "Send Invite";
-          membersErrorEl.textContent = e.message; membersErrorEl.hidden = false;
-        });
-      });
-      card.appendChild(inviteBtn);
-      membersSearchResult.appendChild(card);
+  // 2026-10-27: no specific placeholder node is in play here (this is the general "Add Member,"
+  // not editing a known Father/Mother/Spouse/Child slot) -- so the shared auto-search's action is
+  // always "Invite" (POST .../invite), never "Link". See wireAutoSearch()'s own note for why the
+  // two call sites share this search/preview UI but differ in what the button does.
+  wireAutoSearch(membersSearchInput, membersSearchResult, membersErrorEl, "Send Invite", function (p, btn) {
+    btn.disabled = true; btn.textContent = "Inviting…";
+    api("/api/family-groups/" + state.currentGroupId + "/invite", { user_id: p.user_id }).then(function () {
+      btn.textContent = "✓ Invited"; membersSearchInput.value = "";
     }).catch(function (e) {
-      membersErrorEl.textContent = e.message;
-      membersErrorEl.hidden = false;
+      btn.disabled = false; btn.textContent = "Send Invite";
+      membersErrorEl.textContent = e.message; membersErrorEl.hidden = false;
     });
   });
 

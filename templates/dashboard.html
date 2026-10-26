@@ -753,9 +753,9 @@
         <aside class="pt-side">
           <div class="qm-dash-card">
             <h2>🔎 Find &amp; connect</h2>
-            <p class="qm-dash-empty">Search a 12-digit search ID or an Account ID.</p>
+            <p class="qm-dash-empty">Search a 12-digit search ID, an Account ID, or a name.</p>
             <div class="pt-search-row">
-              <input type="text" class="qm-explorer-search" id="pt-search-input" placeholder="e.g. 123456789012" />
+              <input type="text" class="qm-explorer-search" id="pt-search-input" placeholder="e.g. 123456789012 or a name" />
               <button type="button" class="qm-btn qm-btn-ghost" id="pt-search-btn">Search</button>
             </div>
             <div id="pt-search-result"></div>
@@ -803,7 +803,7 @@
           <h3 id="ft-edit-modal-title">Add Family Member</h3>
 
           <label class="qm-field"><span>Enter 12-digit Public ID</span><input type="text" id="ft-edit-link-input" placeholder="e.g. 4060 2408 5969" inputmode="numeric" /></label>
-          <button type="button" class="qm-btn qm-btn-primary" id="ft-edit-link-btn">Link</button>
+          <div id="ft-edit-link-result"></div>
 
           <button type="button" class="qm-btn qm-btn-ghost" id="ft-edit-toggle-name-btn">✏️ Edit Name</button>
           <div id="ft-edit-name-section" hidden>
@@ -847,10 +847,16 @@
 
           <h4 class="qm-form-section-title">Add Member by Public ID</h4>
           <label class="qm-field"><span>Enter 12-digit Public ID</span><input type="text" id="ft-members-search-input" placeholder="e.g. 4060 2408 5969" inputmode="numeric" /></label>
-          <button type="button" class="qm-btn qm-btn-ghost" id="ft-members-search-btn">Find</button>
           <div id="ft-members-search-result"></div>
 
           <p class="qm-summary-error" id="ft-members-error" hidden></p>
+        </div>
+      </div>
+
+      <div class="dq-modal" id="ft-chat-modal" hidden role="dialog" aria-modal="true">
+        <div class="dq-modal-box dq-modal-wide">
+          <button type="button" class="dq-modal-back" data-close aria-label="Close" title="Close">← Close</button>
+          <section class="bd" id="ft-chat-body"></section>
         </div>
       </div>
     </section>

@@ -337,29 +337,47 @@ def _full_present_location(location_json: str) -> str:
     return ", ".join(parts) or "Unknown"
 
 
-def member_display_row(conn, user_id, viewer_user_id, is_admin) -> dict:
+def member_display_row(conn, user_id, viewer_user_id, is_admin, is_founder=False) -> dict:
     """The one row shape both the personal-group and Family Group Member List modals render:
     avatar, name, gender, age group, present location and role. Name and location are masked for
     a hide_identity member exactly like display_identity() masks them everywhere else a stranger
     might see this member (State-capped place, Account ID instead of name); gender and age group
-    are never masked, matching display_identity()'s own age_category precedent."""
+    are never masked, matching display_identity()'s own age_category precedent.
+
+    `role` (2026-10-27): 'founder' | 'admin' | 'member' -- the honest three-way label. is_admin
+    alone used to render "Admin" for a Family Group's CREATOR too (create_group()'s deliberate,
+    additive grant to whoever first founded a unit with unclaimed placeholder slots), which looks
+    like a bug when that creator is a plain child, not a husband/wife -- see family_core.py
+    §4.18's note. A creator-admin really can act with admin authority (rename nodes, remove
+    members), so 'member' would be a lie; 'founder' is reserved for an actual husband/wife, passed
+    in by the caller (personal groups have no founder concept at all, so is_founder defaults False
+    there and this just degrades to the old admin/member binary). `is_admin` is kept on the
+    response too, unchanged, for any caller still keying off it."""
     identity = display_identity(conn, user_id, viewer_user_id)
     if not identity:
         return None
     place = identity["place"] if identity["hidden"] else _full_present_location(identity["present_location_json"])
+    role = "founder" if is_founder else ("admin" if is_admin else "member")
     return {
         "user_id": user_id, "name": identity["name"], "gender": identity["gender"],
         "age_group": _age_group(identity["dob"]), "present_location": place,
         "profile_picture_url": _picture_url(user_id, identity["has_picture"]),
-        "is_admin": bool(is_admin), "you": user_id == viewer_user_id,
+        "is_admin": bool(is_admin), "role": role, "you": user_id == viewer_user_id,
     }
 
 
 def find_person(conn, query, viewer_user_id=None):
-    """Search by 12-digit search code or by a readable Account ID string. Returns a public-safe profile or None.
-    Never returns the private (9-digit) ID, email or phone -- matches the village-member-list privacy scoping.
-    A hide_identity account (see display_identity()) never gives up its real name or village/
-    tehsil/district here, no matter who's searching -- the Account ID itself becomes the "name"."""
+    """Search by 12-digit search code, a readable Account ID string, or (2026-10-27) a NAME --
+    tried in that order, falling through to the next only when the one before found nothing.
+    Returns a public-safe profile or None. Never returns the private (9-digit) ID, email or phone
+    -- matches the village-member-list privacy scoping. A hide_identity account (see
+    display_identity()) never gives up its real name or village/tehsil/district here, no matter
+    who's searching -- the Account ID itself becomes the "name".
+
+    The name match returns the single best (shortest-name) candidate, not a list -- this function
+    has always returned one profile or None, and a full multi-result name search already exists
+    (family_core.search_suggestions()) for the case that actually needs a list; this is just
+    "start a private chat by typing a name," which only ever shows one profile card."""
     query = (query or "").strip()
     if not query:
         return None
@@ -371,6 +389,16 @@ def find_person(conn, query, viewer_user_id=None):
         row = conn.execute(
             "SELECT user_id, account_id FROM account_ids WHERE account_id = ? AND is_current = 1", (query.upper(),)
         ).fetchone()
+        if not row:
+            name_row = conn.execute(
+                """SELECT id FROM users WHERE name LIKE ? COLLATE NOCASE AND id != ? AND is_demo = 0 AND is_removed = 0
+                   ORDER BY LENGTH(name) LIMIT 1""",
+                (f"%{query}%", viewer_user_id or 0),
+            ).fetchone()
+            if name_row:
+                row = conn.execute(
+                    "SELECT user_id, account_id FROM account_ids WHERE user_id = ? AND is_current = 1", (name_row["id"],)
+                ).fetchone()
     if not row:
         return None
     u = conn.execute("SELECT id, gender, profile_picture IS NOT NULL AS has_picture FROM users WHERE id = ?", (row["user_id"],)).fetchone()
@@ -394,6 +422,9 @@ def find_person(conn, query, viewer_user_id=None):
         "age_group": _age_group(identity["dob"]) if identity.get("dob") else None,
         "location": location,
         "hidden": bool(identity["hidden"]),
+        # 2026-10-27: lets the private-chat search bar skip the message-request-and-wait step for
+        # someone already mutually connected -- see _shares_approved_group()/open_chat_with().
+        "can_open_chat": viewer_user_id is not None and _shares_approved_group(conn, viewer_user_id, u["id"]),
     }
     if identity["hidden"]:
         result["age_category"] = identity["age_category"]
@@ -634,6 +665,40 @@ def _open_chat(conn, a, b):
                       (lo, hi, _now(), cycle_middleware.get_active_cycle_id(conn)))
     conn.commit()
     return cur.lastrowid
+
+
+def _shares_approved_group(conn, a, b) -> bool:
+    """True if a and b are both APPROVED members of the same group, personal or family -- the bar
+    for skipping the message-request-and-wait step and opening a private chat with someone
+    directly (2026-10-27, find_person()'s `can_open_chat`/open_chat_with()). Deliberately broader
+    than is_family_member() (which only looks at a personal 'family'-category group, the one
+    relationship that still sees a hidden identity's real name) -- this is about chat access, not
+    identity masking, so ANY shared group -- Friends, Business, a Family Tree unit -- counts."""
+    return bool(conn.execute(
+        """SELECT 1 FROM personal_group_members m1 JOIN personal_group_members m2
+             ON m1.group_id = m2.group_id AND m1.status = 'approved' AND m2.status = 'approved'
+           WHERE m1.user_id = ? AND m2.user_id = ?
+           UNION
+           SELECT 1 FROM family_group_members m1 JOIN family_group_members m2
+             ON m1.group_id = m2.group_id AND m1.status = 'approved' AND m2.status = 'approved'
+           WHERE m1.user_id = ? AND m2.user_id = ?""",
+        (a, b, a, b),
+    ).fetchone())
+
+
+def open_chat_with(conn, a_user_id: int, b_user_id: int) -> int:
+    """Opens (or finds) a direct private chat between two users who already share an approved
+    group -- skips the message-request-then-accept flow entirely, since they're already mutually
+    connected. _open_chat() is the exact same mechanism decide_request() already uses the moment
+    a message request IS accepted; this just makes it reachable immediately instead of gated
+    behind that step, for people who don't need the introduction."""
+    if a_user_id == b_user_id:
+        raise ValueError("You can't chat with yourself")
+    if not conn.execute("SELECT 1 FROM users WHERE id = ?", (b_user_id,)).fetchone():
+        raise LookupError("Member not found")
+    if not _shares_approved_group(conn, a_user_id, b_user_id):
+        raise PermissionError("You can only open a direct chat with someone you already share a group with")
+    return _open_chat(conn, a_user_id, b_user_id)
 
 
 def decide_request(conn, user_id, request_id, decision):

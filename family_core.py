@@ -879,13 +879,17 @@ def invite_to_group(conn, admin_user_id: int, group_id: int, target_user_id: int
 
 def group_members_for(conn, viewer_user_id: int, group_id: int):
     """The full approved member list for a unit's own Members modal: user_id, name, gender,
-    age_group, present_location, profile_picture_url, is_admin, you -- admins first, then
-    alphabetical. Name/present_location are masked for a hide_identity member exactly like
-    everywhere else a stranger might see them (social_core.member_display_row() -> display_identity()).
-    None if the group doesn't exist or the viewer isn't an approved member, same 404-not-403
-    convention as neighborhood_for_group()/tree_for_group()."""
+    age_group, present_location, profile_picture_url, is_admin, role, you -- every admin (founders
+    and creator-admins alike) before plain members, alphabetical within each. Name/present_location
+    are masked for a hide_identity member
+    exactly like everywhere else a stranger might see them (social_core.member_display_row() ->
+    display_identity()). `role` ('founder'|'admin'|'member', 2026-10-27) is the honest label --
+    is_admin alone can't tell a unit's actual husband/wife apart from its creator-admin (see
+    create_group()'s own additive creator grant), which rendered a plain child as "Admin" in their
+    parents' unit. None if the group doesn't exist or the viewer isn't an approved member, same
+    404-not-403 convention as neighborhood_for_group()/tree_for_group()."""
     import social_core
-    group = conn.execute("SELECT 1 FROM family_groups WHERE id = ?", (group_id,)).fetchone()
+    group = conn.execute("SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (group_id,)).fetchone()
     if not group:
         return None
     member_row = conn.execute(
@@ -894,13 +898,20 @@ def group_members_for(conn, viewer_user_id: int, group_id: int):
     ).fetchone()
     if not member_row:
         return None
+    founder_node_ids = {nid for nid in (group["husband_node_id"], group["wife_node_id"]) if nid}
     rows = conn.execute(
-        """SELECT u.id, u.name, m.is_admin
+        """SELECT u.id, u.name, m.is_admin, fn.id AS node_id
            FROM family_group_members m JOIN users u ON u.id = m.user_id
+           LEFT JOIN family_nodes fn ON fn.claimed_user_id = u.id
            WHERE m.group_id = ? AND m.status = 'approved' ORDER BY m.is_admin DESC, u.name""",
         (group_id,),
     ).fetchall()
-    return [social_core.member_display_row(conn, r["id"], viewer_user_id, bool(r["is_admin"])) for r in rows]
+    return [
+        social_core.member_display_row(
+            conn, r["id"], viewer_user_id, bool(r["is_admin"]), is_founder=r["node_id"] in founder_node_ids,
+        )
+        for r in rows
+    ]
 
 
 def _classify_membership(conn, self_node_id: int, group_id: int) -> str:
@@ -1753,7 +1764,11 @@ def my_family_groups(conn, user_id: int) -> list[dict]:
       - is_founder tags each row so the frontend can tell "My Family" (the viewer's own founded
         unit) apart from "Joined Family" (approved into someone else's, e.g. their parents' unit)
         -- distinct from is_admin, since the creator of a freshly-founded unit is also always
-        granted admin even when they're not a founder (see create_group())."""
+        granted admin even when they're not a founder (see create_group()).
+      - `role` (2026-10-27, additive): 'founder'|'admin'|'member', the same three-way label
+        group_members_for() returns -- the honest version of is_admin alone, which rendered a
+        plain child as "Admin" in their own parents' unit just because they happened to be the
+        one who created it."""
     rows = conn.execute(
         """SELECT fg.id, fg.name, fg.kind, m.is_admin,
                   (fg.husband_node_id = sn.id OR fg.wife_node_id = sn.id) AS is_founder,
@@ -1764,10 +1779,14 @@ def my_family_groups(conn, user_id: int) -> list[dict]:
            WHERE m.user_id = ? AND m.status = 'approved' ORDER BY fg.id""",
         (user_id,),
     ).fetchall()
-    return [
-        {**dict(r), "is_founder": bool(r["is_founder"])}
-        for r in rows if not _group_is_dormant(conn, r["id"])
-    ]
+    out = []
+    for r in rows:
+        if _group_is_dormant(conn, r["id"]):
+            continue
+        is_founder = bool(r["is_founder"])
+        role = "founder" if is_founder else ("admin" if r["is_admin"] else "member")
+        out.append({**dict(r), "is_founder": is_founder, "role": role})
+    return out
 
 
 def _person_summary(conn, node_id, viewer_user_id):

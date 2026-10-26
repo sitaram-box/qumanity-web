@@ -1720,6 +1720,19 @@ def api_people_message_request():
     return jsonify({"status": "sent"}), 201
 
 
+@app.route("/api/people/open-chat", methods=["POST"])
+@login_required
+@_board_error
+def api_people_open_chat():
+    data = request.get_json(silent=True) or {}
+    conn = _social(get_db())
+    try:
+        chat_id = social_core.open_chat_with(conn, session["user_id"], int(data.get("user_id", 0)))
+    finally:
+        conn.close()
+    return jsonify({"chat_id": chat_id}), 201
+
+
 @app.route("/api/people/inbox")
 @login_required
 def api_people_inbox():

@@ -90,7 +90,20 @@
       if (!wizardEl.hidden) return;
       gateEl.hidden = status.activated;
       summaryEl.hidden = !status.activated;
-      if (status.activated) renderGroupsList(status.groups);
+      if (status.activated) {
+        renderGroupsList(status.groups);
+        // 2026-10-27: jump straight into the D3 tree for the obvious unit, instead of making
+        // every visit start on this flat "pick a group" screen -- the viewer's own founded unit
+        // if they have exactly one, or their one-and-only unit if there's nothing else to choose
+        // from. This screen stays reachable (its own "← Back to groups" button, inside the tree
+        // view) for genuine ambiguity -- e.g. remarried, with more than one active founded unit.
+        var founded = status.groups.filter(function (g) { return g.is_founder; });
+        var primary = founded.length === 1 ? founded[0] : (status.groups.length === 1 ? status.groups[0] : null);
+        if (primary && window.QMFamilyTree) {
+          summaryEl.hidden = true;
+          window.QMFamilyTree.showTree(primary.id);
+        }
+      }
     }).catch(function () {});
   }
 
@@ -109,7 +122,7 @@
       btn.type = "button";
       if (g.is_founder) btn.appendChild(el("span", "ft-group-dot"));
       btn.appendChild(el("span", "ft-group-name", g.name));
-      var badgeText = g.is_founder ? "My Family" : (g.is_admin ? "Joined Family · Admin" : "Joined Family · Member");
+      var badgeText = g.is_founder ? "My Family" : (g.role === "admin" ? "Joined Family · Admin" : "Joined Family · Member");
       btn.appendChild(el("span", "ft-group-badge", badgeText));
       btn.appendChild(el("span", "ft-group-meta", g.members + " member" + (g.members === 1 ? "" : "s") + "  🌳"));
       btn.addEventListener("click", function () {

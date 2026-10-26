@@ -9,6 +9,9 @@
 
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
   var GENDER_LABEL = { male: "Male", female: "Female", both: "Third Gender" };
+  // Personal groups have no founder concept, so this only ever shows admin/member -- but reading
+  // the same `role` field family groups use (2026-10-27) keeps both renderers in sync.
+  var ROLE_LABEL = { founder: "Founder", admin: "Admin", member: "Member" };
   function api(url, body) {
     var opt = body !== undefined ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {};
     return fetch(url, opt).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || "Something went wrong"); return j; }); });
@@ -211,7 +214,7 @@
         var meta = [GENDER_LABEL[m.gender] || m.gender, m.age_group, m.present_location].filter(Boolean).join(" · ");
         textWrap.appendChild(el("span", "ft-member-meta", meta));
         li.appendChild(textWrap);
-        li.appendChild(el("span", "ft-member-role" + (m.is_admin ? " is-admin" : ""), m.is_admin ? "Admin" : "Member"));
+        li.appendChild(el("span", "ft-member-role" + (m.role !== "member" ? " is-admin" : ""), ROLE_LABEL[m.role] || "Member"));
         membersList.appendChild(li);
       });
     }).catch(function (e) { membersErrorEl.textContent = e.message; membersErrorEl.hidden = false; });
@@ -262,12 +265,22 @@
       var card = el("div", "pt-person");
       card.appendChild(el("b", "", p.name)); card.appendChild(el("small", "", " " + p.gender + " · " + (p.place || "")));
       var actions = el("div", "pt-person-actions");
-      var msgBtn = el("button", "sg-btn", "✉️ Message"); msgBtn.type = "button";
-      msgBtn.addEventListener("click", function () {
-        var text = window.prompt("Your one-time message to " + p.name + ":"); if (!text) return;
-        api("/api/people/message", { user_id: p.user_id, text: text }).then(function () { alert("Sent — waiting for them to accept."); }).catch(function (e) { alert(e.message); });
-      });
-      actions.appendChild(msgBtn);
+      // 2026-10-27: already mutually connected (shares an approved group) -> skip the
+      // message-request-and-wait step entirely and open a real chat immediately.
+      if (p.can_open_chat) {
+        var openBtn = el("button", "sg-btn", "💬 Open Chat"); openBtn.type = "button";
+        openBtn.addEventListener("click", function () {
+          api("/api/people/open-chat", { user_id: p.user_id }).then(function (d) { openChat(d.chat_id); loadChats(); }).catch(function (e) { alert(e.message); });
+        });
+        actions.appendChild(openBtn);
+      } else {
+        var msgBtn = el("button", "sg-btn", "✉️ Message"); msgBtn.type = "button";
+        msgBtn.addEventListener("click", function () {
+          var text = window.prompt("Your one-time message to " + p.name + ":"); if (!text) return;
+          api("/api/people/message", { user_id: p.user_id, text: text }).then(function () { alert("Sent — waiting for them to accept."); }).catch(function (e) { alert(e.message); });
+        });
+        actions.appendChild(msgBtn);
+      }
       card.appendChild(actions);
       card.appendChild(el("p", "qm-dash-empty", "To add them to a group, open the group (Family/Friends/Business/Custom) and use “➕ Add member” with this same ID."));
       searchResult.appendChild(card);

@@ -907,6 +907,14 @@
 .ft-unit-rect.is-wife-side { stroke: var(--qm-gold); stroke-width: 2.5; }
 .ft-unit-rect.is-dormant { fill: rgba(10, 25, 41, 0.05); stroke: var(--qm-text-dim); stroke-dasharray: 3 3; opacity: 0.7; }
 
+/* The small "open this neighbor's chat without navigating" icon (2026-10-27) -- sits in a unit
+   card's own top-right corner; its own click handler stops propagation before the card's
+   click-to-navigate handler ever runs. */
+.ft-chat-icon { cursor: pointer; }
+.ft-chat-icon circle { fill: var(--qm-panel-bg); stroke: var(--qm-border); stroke-width: 1; }
+.ft-chat-icon:hover circle { fill: var(--qm-saffron); opacity: 0.2; }
+.ft-chat-icon-glyph { font-size: 13px; text-anchor: middle; }
+
 /* Higher specificity than the plain person/single-card text rule below, so the card's own name
    (the header) and its member-count subtitle keep their own look regardless of declaration order. */
 .ft-card .ft-unit-title { fill: var(--qm-text); font-size: 12px; font-weight: 700; font-family: inherit; text-anchor: middle; }
