@@ -928,9 +928,19 @@ def search_suggestions(conn, viewer_user_id: int, name: str) -> list[dict]:
         member_count = conn.execute(
             "SELECT COUNT(*) FROM family_group_members WHERE group_id = ? AND status = 'approved'", (r["group_id"],)
         ).fetchone()[0]
+        founders = conn.execute("SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (r["group_id"],)).fetchone()
+        role = "husband" if founders["husband_node_id"] == r["node_id"] else "wife" if founders["wife_node_id"] == r["node_id"] else "child"
+        partner_node_id = founders["wife_node_id"] if role == "husband" else founders["husband_node_id"] if role == "wife" else None
         results.append({
             "type": "group", "group_id": r["group_id"], "group_name": r["group_name"], "group_kind": r["group_kind"],
             "matched_node_id": r["node_id"], "matched_name": r["matched_name"], "member_count": member_count,
+            # 2026-10-26: units can share a name (e.g. a person's parents' unit and their own), so
+            # say who founded each one, and how the matched person sits in it. A spouse may only
+            # join a unit the matched person FOUNDED, into the partner slot nobody has claimed yet.
+            "husband_name": _node_display_name(conn, founders["husband_node_id"]) if founders["husband_node_id"] else None,
+            "wife_name": _node_display_name(conn, founders["wife_node_id"]) if founders["wife_node_id"] else None,
+            "matched_role": role,
+            "partner_slot_open": role != "child" and (partner_node_id is None or not _claimed_user_for_node(conn, partner_node_id)),
         })
 
     for r in conn.execute(
@@ -1326,15 +1336,49 @@ def marry_timeline(conn, user_id: int, payload: dict) -> dict:
         group = conn.execute("SELECT * FROM family_groups WHERE id = ?", (group_id,)).fetchone()
         if not group:
             raise ValueError("That Family Group doesn't exist")
-        target_node_id = group["wife_node_id"] if group["husband_node_id"] and _claimed_user_for_node(conn, group["husband_node_id"]) else group["husband_node_id"]
-        if not target_node_id or _claimed_user_for_node(conn, target_node_id):
-            raise ValueError("That group has no open founder slot to claim")
+        # Never "whichever founder slot is empty" (2026-10-26: matching a man inside his PARENTS'
+        # unit, where he is a child, made his wife claim his father's slot). The matched node must
+        # be one of this unit's founders, and there are two legitimate cases: (a) it is the SPOUSE
+        # -> claim the partner place next to them; (b) it is an unclaimed placeholder that already
+        # stands for THIS member (their spouse entered them first) -> claim that placeholder.
+        matched = spouse.get("matched_node_id")
+        if matched not in (group["husband_node_id"], group["wife_node_id"]) or not matched:
+            raise ValueError("You can only join as the spouse of one of that family unit's two founders")
+        partner_node_id = group["wife_node_id"] if matched == group["husband_node_id"] else group["husband_node_id"]
+        if partner_node_id and not _claimed_user_for_node(conn, partner_node_id):
+            target_node_id = partner_node_id
+        elif not _claimed_user_for_node(conn, matched):
+            target_node_id = matched
+        else:
+            raise ValueError("That person's partner place in their family unit is already taken")
         request_join_group(conn, user_id, group_id, target_node_id=target_node_id)
         results["joined_requests"].append({"label": "spouse", "name": spouse["name"].strip(), "group_id": group_id})
         conn.commit()
         return results
 
     spouse_node_id = _resolve_slot(conn, user_id, spouse, [], results, "spouse")
+
+    # 2026-10-26: the spouse may be an EXISTING person (e.g. found by Public ID) who already founds
+    # an active marriage. Creating or reusing a unit here either duplicated that marriage or
+    # silently "succeeded" without adding this member. Instead: if their partner place is still an
+    # unclaimed placeholder, ask to claim it (same approval-gated path as a spouse "join" -- on
+    # approval this member becomes that unit's founder-admin); if it is claimed, refuse.
+    their_marriage = conn.execute(
+        "SELECT * FROM family_groups WHERE (husband_node_id = ? OR wife_node_id = ?) AND marriage_status = 'active'",
+        (spouse_node_id, spouse_node_id),
+    ).fetchone()
+    if their_marriage:
+        partner_node_id = their_marriage["wife_node_id"] if their_marriage["husband_node_id"] == spouse_node_id else their_marriage["husband_node_id"]
+        if partner_node_id and _claimed_user_for_node(conn, partner_node_id):
+            raise ValueError(f"{spouse['name'].strip()} already has a recorded marriage in another family unit")
+        if not partner_node_id:
+            raise ValueError("That person's family unit has no partner place to claim")
+        request_join_group(conn, user_id, their_marriage["id"], target_node_id=partner_node_id)
+        results["joined_requests"].append({"label": "spouse", "name": spouse["name"].strip(), "group_id": their_marriage["id"]})
+        if payload.get("children"):
+            results["children_not_added"] = len([c for c in payload["children"] if c and (c.get("name") or "").strip()])
+        conn.commit()
+        return results
 
     child_node_ids = []
     for i, child in enumerate(payload.get("children") or []):
