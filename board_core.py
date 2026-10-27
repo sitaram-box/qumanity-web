@@ -318,6 +318,11 @@ def cast_vote(conn, user_id, present_location, post_id, value, now=None):
         raise PermissionError("Voting has closed on this post")
     if not _is_resident(chain_of(present_location), post):
         raise PermissionError("Only people living in this group can vote")
+    # 2026-10-27: nobody votes on their own post -- was never actually enforced here (only
+    # board_view()'s can_vote flag tried to hide the buttons client-side, and that flag had its
+    # own bug -- see board_view()'s own note). Enforced server-side now, not just by hiding UI.
+    if post["author_id"] == user_id:
+        raise PermissionError("You cannot vote on your own post")
     old = conn.execute("SELECT value FROM board_votes WHERE post_id=? AND user_id=?", (post_id, user_id)).fetchone()
     conn.execute(
         "INSERT OR REPLACE INTO board_votes (post_id, user_id, value, cycle_id, voted_at) VALUES (?, ?, ?, ?, ?)",
@@ -414,6 +419,21 @@ def board_view(conn, user_id, present_location, level, now=None, is_admin=False)
             test_ids,
         ):
             demo_voter_counts[r["post_id"]] = r["n"]
+    # 2026-10-27 (Frozen Posts: the missing reward amount): a REAL (non-test) post's reward is
+    # never stored on the post row itself -- settle() just calls wallet_core.credit_qoins(),
+    # which writes it to wallet_transactions (related_post_id = this exact post's own id, one row
+    # per level a post actually cleared, since elevation creates a NEW post row per level -- see
+    # settle()'s own docstring). Batch-fetched once here, same shape as demo_voter_counts above,
+    # rather than a per-post query.
+    settled_ids = [p["id"] for p in rows if p["post_kind"] != "test" and p["status"] in ("frozen", "elevated") and p["score"] > 0]
+    reward_by_post: dict[int, dict] = {}
+    if settled_ids:
+        qmarks = ",".join("?" * len(settled_ids))
+        for r in conn.execute(
+            f"SELECT related_post_id, amount_qoins, rupee_value FROM wallet_transactions WHERE related_post_id IN ({qmarks})",
+            settled_ids,
+        ):
+            reward_by_post[r["related_post_id"]] = {"qoins": r["amount_qoins"], "inr": r["rupee_value"]}
     posts = []
     for p in rows:
         active = p["status"] == "active"
@@ -427,7 +447,11 @@ def board_view(conn, user_id, present_location, level, now=None, is_admin=False)
         origin = None
         if p["origin_post_id"]:
             o = conn.execute("SELECT level, score FROM board_posts WHERE id=?", (p["origin_post_id"],)).fetchone()
-            origin = {"level": LEVEL_LABEL[o["level"]], "score": o["score"]} if o else None
+            # "from_level"/"to_level" (2026-10-27): the raw level codes, not just the display
+            # label, so the frontend can render "Escalated from Village to Tehsil" -- the CURRENT
+            # level (this view's own `level`) without a second lookup.
+            origin = {"level": LEVEL_LABEL[o["level"]], "score": o["score"],
+                      "from_level": LEVEL_LABEL[o["level"]], "to_level": LEVEL_LABEL[level]} if o else None
         nxt = None
         if p["elevated_to"]:
             e = conn.execute("SELECT level FROM board_posts WHERE id=?", (p["elevated_to"],)).fetchone()
@@ -438,7 +462,12 @@ def board_view(conn, user_id, present_location, level, now=None, is_admin=False)
             "mine": p["author_id"] == user_id, "content": p["content"], "status": p["status"],
             "score": p["score"], "my_vote": p["my_vote"], "created_at": p["created_at"], "voting_end": p["voting_end"],
             "threshold": THRESHOLD[level], "window_days": WINDOW_DAYS[level], "origin": origin, "elevated_to": nxt, "comments": comments,
-            "can_vote": active and p["post_kind"] == "member", "can_comment": not active, "post_kind": p["post_kind"],
+            # 2026-10-27: test posts are votable too (cast_vote() already allowed this -- this
+            # flag just never matched it, which is exactly why an escalated test post couldn't be
+            # voted on at its new level: the vote buttons were hidden client-side even though the
+            # backend would have accepted the vote). Also now excludes the post's own author.
+            "can_vote": active and p["post_kind"] in ("member", "test") and p["author_id"] != user_id,
+            "can_comment": not active, "post_kind": p["post_kind"],
             "is_demo_post": bool(p["is_demo_post"]),
         }
         if p["post_kind"] == "council_update":
@@ -451,6 +480,11 @@ def board_view(conn, user_id, present_location, level, now=None, is_admin=False)
                 "voting_start": p["created_at"], "voting_end": p["voting_end"], "final_score": p["score"],
                 "reward_inr": p["test_reward_inr"], "demo_voter_count": demo_voter_counts.get(p["id"], 0),
             }
+        elif p["id"] in reward_by_post:
+            # 2026-10-27 (Frozen Posts: the missing reward amount) -- the real, credited
+            # equivalent of test_record above, for an ordinary member post that actually earned
+            # Qoins when its own voting window closed.
+            post_dict["reward"] = reward_by_post[p["id"]]
         posts.append(post_dict)
     post_price = None if level not in PAID_LEVELS else qoin_core.post_price(level, "text")
     currency_code, currency_symbol, currency_name = qoin_core.currency_for((present_location.get("country") or {}).get("code"))

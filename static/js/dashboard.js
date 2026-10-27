@@ -96,7 +96,15 @@
     if (!el) return;
     fetch("/api/wallet/balance/" + locationType + "/" + encodeURIComponent(locationId))
       .then(function (r) { return r.json(); })
-      .then(function (data) { el.textContent = data.balance_qoins + " Qoins"; })
+      .then(function (data) {
+        // 2026-10-27: qoin_count is the PUBLIC figure every viewer gets back (board_core.py's own
+        // board header already keys off it, never the private balance_qoins -- council/admin
+        // only, and simply absent from this response for anyone else, which is why this used to
+        // render the literal string "undefined Qoins"). 1 Qoin = ₹1 flat (wallet_core.py), so
+        // the currency value is the identical number, just relabeled.
+        var n = data.qoin_count || 0;
+        el.textContent = n.toLocaleString() + " Qoins ≈ ₹" + n.toLocaleString() + ".00";
+      })
       .catch(function (err) { console.error("Failed to load wallet balance for " + prefix, err); });
   }
 
@@ -108,6 +116,44 @@
       .then(function (data) { el.textContent = data.points; })
       .catch(function (err) { console.error("Failed to load collective karma for " + prefix, err); });
   }
+
+  // ==================== Detailed Stats modal (2026-10-27) ====================
+  // The "📊 Stats" button on a board used to just scroll to this same data already loading,
+  // cramped, in the permanent explorer sidebar (qm-dp-stats/qm-dg-stats) -- it still does that
+  // job for the explorer tree itself, untouched. This is a SEPARATE, spacious view of the exact
+  // same three endpoints (loadStatsFor/loadWalletBalanceFor/loadCollectiveKarmaFor, reused
+  // unchanged -- they're already generic over `prefix`), reusing the `stat_block` Jinja macro a
+  // second time with prefix "qm-stats-modal" so no new rendering code was needed, just a new
+  // target.
+  var statsModal = document.getElementById("qm-stats-modal");
+  if (statsModal) {
+    statsModal.addEventListener("click", function (e) {
+      if (e.target === statsModal || e.target.hasAttribute("data-close")) statsModal.hidden = true;
+    });
+  }
+
+  function openStatsModal(level, locationId, name) {
+    if (!statsModal) return;
+    document.getElementById("qm-stats-modal-heading").textContent = name ? "📊 " + name : "Statistics";
+    // stat_block's Announcements/Report Inbox sections are only ever populated by board.js's
+    // renderAnnouncements()/renderReportInbox(), which are hardcoded to the sidebar's own two
+    // prefixes -- nothing fills them in for this modal's prefix, so they'd just sit empty
+    // forever. Hidden here rather than shown stale, keeping this view to the five items it's
+    // actually for (the explorer sidebar still carries both, unaffected).
+    ["announce", "reportinbox"].forEach(function (s) {
+      var section = document.getElementById("qm-stats-modal-" + s + "-section");
+      if (section) section.hidden = true;
+    });
+    statsModal.hidden = false;
+    // "earth" has its own dedicated endpoint (no karma/wallet-shape difference -- just not part
+    // of _LOCATION_STATS_LEVELS in app.py, the same special case renderGlobalExplorer() already
+    // carves out for the sidebar version of this exact data).
+    var statsUrl = level === "earth" ? "/api/earth/stats" : "/api/location/stats/" + level + "/" + encodeURIComponent(locationId) + "?basis=present";
+    loadStatsFor("qm-stats-modal", statsUrl);
+    loadWalletBalanceFor("qm-stats-modal", level, locationId);
+    loadCollectiveKarmaFor("qm-stats-modal", level, locationId);
+  }
+  window.QMOpenStatsModal = openStatsModal;
 
   // ==================== Location explorer (Global / Public tabs) ====================
   // A left-sidebar tree scoped to the user's own present-location lineage

@@ -22,6 +22,9 @@
     return d ? d + "d " + h + "h left" : h ? h + "h " + m + "m left" : m + "m left";
   }
   function fmt(n) { return (n > 0 ? "+" : "") + n.toLocaleString(); }
+  // "Oct 20 – Oct 27" (2026-10-27, Frozen Posts' missing exact timeline) -- the precise voting
+  // window, alongside (not instead of) the existing relative "closed X ago" phrasing.
+  function fmtDate(iso) { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
 
   var REACTION_ICON = { agree: "\uD83D\uDC4D", disagree: "\uD83D\uDC4E", read: "\uD83D\uDC41\uFE0F" };
   function reactionBar(m, scope, memberCount, onChange) {
@@ -242,6 +245,14 @@
     root.querySelector(".bd-qp").addEventListener("click", function () { openQp(level); });
     var reportBtn = root.querySelector(".bd-report-btn");
     reportBtn.addEventListener("click", function (e) { e.preventDefault(); openPostOrReportChoice(); });
+    // 2026-10-27: opens the detailed Stats modal (dashboard.js) for THIS board's current
+    // level/location, in place of the old scroll-to-sidebar behaviour -- `level` and `lastView`
+    // are already tracked right here in this closure (lastView is set at the top of every
+    // render()), so no new state or re-fetch is needed.
+    var statsBtn = root.querySelector(".bd-stats");
+    if (statsBtn) statsBtn.addEventListener("click", function () {
+      if (lastView && window.QMOpenStatsModal) window.QMOpenStatsModal(level, lastView.group_id, lastView.group);
+    });
 
     function section(text, small) { var h = el("div", "bd-sec", text); if (small) h.appendChild(el("small", "", small)); return h; }
 
@@ -289,32 +300,13 @@
       }
       renderAnnouncements(v);
       renderReportInbox(v);
-      renderStars(v);
     }
 
-    // ---- Recognition stars (2026-10-17): a permanent, independent record of every positively-
-    // recognised post at this location -- written once at freeze/elevate time, so it keeps
-    // showing here even after the lunar pipeline eventually archives the post itself. No reward
-    // flows from a star; it is recognition only, separate from the author's own Qoin credit. ----
-    var starsBox = root.querySelector(".bd-stars");
-    function renderStars(v) {
-      if (!starsBox) return;
-      var stars = v.stars || [];
-      starsBox.innerHTML = "";
-      if (!stars.length) { starsBox.hidden = true; return; }
-      starsBox.hidden = false;
-      starsBox.appendChild(section("⭐ Recognised", stars.length + " star" + (stars.length === 1 ? "" : "s")));
-      var list = el("div", "bd-stars-list");
-      stars.forEach(function (s) {
-        var row = el("div", "bd-star-row");
-        row.appendChild(el("span", "bd-star-ico", "⭐"));
-        if (window.QMAvatar) row.appendChild(window.QMAvatar.render({ name: s.author, gender: s.gender, profile_picture_url: s.profile_picture_url }, 22));
-        row.appendChild(el("b", "", s.author));
-        row.appendChild(el("small", "", "score " + fmt(s.score) + " · " + ago(s.at)));
-        list.appendChild(row);
-      });
-      starsBox.appendChild(list);
-    }
+    // Recognition stars (2026-10-17 - removed from this board's own UI 2026-10-27, per the
+    // founder's ruling): recognition_stars rows are still written by settle() (board_core.py) --
+    // that's an independent, permanent record other surfaces may still read -- this board itself
+    // just no longer renders a "Recognised" block for them. The Frozen Posts section (below) is
+    // the one place a positively-recognised post's own outcome shows now.
 
     // ---- Item 8: Announcements -- pinned banner (this panel) + right-sidebar card ----
     function showBannerItem() {
@@ -431,6 +423,19 @@
       return box;
     }
 
+    // The real, credited equivalent of testRecordBlock() above (2026-10-27, Frozen Posts'
+    // missing data) -- only ever present (p.reward) for an ordinary member post that actually
+    // earned Qoins when its own voting window closed; see board_core.py's board_view().
+    function rewardBlock(p) {
+      var box = el("div", "bd-test-record");
+      box.appendChild(el("div", "bd-test-record-row",
+        "Voted " + fmtDate(p.created_at) + " – " + fmtDate(p.voting_end)));
+      box.appendChild(el("div", "bd-test-record-row",
+        "Reward: " + p.reward.qoins.toLocaleString() + " Qoin" + (p.reward.qoins === 1 ? "" : "s")
+        + (p.reward.inr != null ? " (₹" + p.reward.inr.toLocaleString() + ")" : "")));
+      return box;
+    }
+
     function bubble(p, v, rank) {
       var b = el("article", "bd-post" + (p.mine ? " is-mine" : "") + " is-" + p.status);
       var head = el("div", "bd-post-head");
@@ -441,7 +446,7 @@
       if (badge) head.appendChild(el("span", "bd-badge bd-badge-" + p.post_kind, badge));
       head.appendChild(el("small", "", ago(p.created_at)));
       b.appendChild(head);
-      if (p.origin) b.appendChild(el("div", "bd-origin", "⬆️ Elevated from " + p.origin.level + " · final score " + fmt(p.origin.score)));
+      if (p.origin) b.appendChild(el("div", "bd-origin", "⬆️ Escalated from " + p.origin.from_level + " to " + p.origin.to_level + " · final score " + fmt(p.origin.score)));
       b.appendChild(el("p", "bd-text", p.content));
 
       if (p.post_kind === "council_update") {
@@ -475,6 +480,8 @@
       bar.appendChild(fill); b.appendChild(bar);
 
       if (p.test_record) b.appendChild(testRecordBlock(p.test_record));
+      else if (p.reward) b.appendChild(rewardBlock(p));
+      else if (p.status !== "active") b.appendChild(el("div", "bd-meta-timeline", "Voted " + fmtDate(p.created_at) + " – " + fmtDate(p.voting_end)));
 
       if (p.can_vote) {
         var votes = el("div", "bd-votes");
@@ -718,14 +725,8 @@
     var drawer = panel.querySelector(".dr"), back = panel.querySelector(".dr-backdrop");
     function setDrawer(open) { drawer.classList.toggle("is-open", open); back.hidden = !open; if (open && cfg[0] === "bd-public") loadSubgroups(); }
     root.querySelector(".bd-groups").addEventListener("click", function () { setDrawer(!drawer.classList.contains("is-open")); });
-    // Stats lives in its own always-rendered column beside the board (qm-stats-col) -- on a
-    // narrow/stacked layout that column ends up far down the page, so this button's whole job is
-    // just making it easy to find: scroll straight to it (the data itself is already loading there).
-    var statsBtn = root.querySelector(".bd-stats");
-    if (statsBtn) statsBtn.addEventListener("click", function () {
-      var statsCol = panel.querySelector(".qm-stats-col");
-      if (statsCol) statsCol.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    // .bd-stats is now wired inside Board(root) itself, right after .bd-qp above -- opens the
+    // detailed Stats modal instead of scrolling to the sidebar (2026-10-27).
     panel.querySelector(".dr-close").addEventListener("click", function () { setDrawer(false); });
     back.addEventListener("click", function () { setDrawer(false); });
     document.addEventListener("keydown", function (e) { if (e.key === "Escape") setDrawer(false); });

@@ -689,12 +689,6 @@
 .pv-hintline { margin: 2px 0 0; }
 .bd-foot { display: flex; justify-content: flex-end; padding: 8px 12px 0; background: #FBF9F4; }
 .bd-foot[hidden] { display: none; }
-.bd-stars { padding: 10px 14px 12px; background: #FBF9F4; border-top: 1px solid rgba(201, 150, 12, 0.15); }
-.bd-stars[hidden] { display: none; }
-.bd-stars-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; max-height: 140px; overflow-y: auto; }
-.bd-star-row { display: flex; align-items: center; gap: 8px; font-size: 0.86rem; color: var(--qm-text); }
-.bd-star-ico { font-size: 0.95rem; }
-.bd-star-row small { color: var(--qm-text-dim); margin-left: auto; white-space: nowrap; }
 .bd-toggle { padding: 7px 16px; border-radius: 10px; cursor: pointer; background: #FFF3E0; color: #B8860B; border: 2px solid #ff9933; font: 700 0.82rem "Inter", system-ui, sans-serif; transition: background 0.2s, color 0.2s; }
 .bd-toggle:hover { background: #ff9933; color: #fff; }
 .bd-crown { font-size: 1rem; }
@@ -706,6 +700,10 @@
 
 .bd-test-record { margin: 6px 0; padding: 8px 10px; border-radius: 10px; background: rgba(201, 150, 12, 0.08); border: 1px dashed rgba(201, 150, 12, 0.4); display: flex; flex-direction: column; gap: 3px; }
 .bd-test-record-row { margin: 0; font-size: 0.8rem; color: var(--qm-text); }
+/* The exact voting-window line (2026-10-27) for a frozen/elevated post with no reward of its own
+   (score 0, or not yet settled itself) -- rewardBlock()/testRecordBlock() above already carry
+   their own copy of this same line when there IS something to report alongside it. */
+.bd-meta-timeline { margin: 4px 0; font-size: 0.78rem; color: var(--qm-text-dim); }
 
 .bd-reactions { display: flex; gap: 8px; margin-top: 4px; }
 .bd-react { padding: 5px 12px; border-radius: 999px; cursor: pointer; border: 1px solid var(--qm-input-border); background: var(--qm-panel-bg); color: var(--qm-text); font: 600 0.8rem "Inter", system-ui, sans-serif; }

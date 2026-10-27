@@ -404,7 +404,6 @@
         <div class="bd-announce-banner-full" hidden></div>
       </div>
       <div class="bd-feed" aria-live="polite"></div>
-      <div class="bd-stars" hidden></div>
       <div class="bd-foot"><button type="button" class="bd-toggle" title="Switch between live voting and frozen posts">❄️ <span>Frozen posts</span></button></div>
       <form class="bd-compose" hidden>
         <textarea rows="2" maxlength="1000" placeholder="Post to your village — it is voted on for 7 days…" required></textarea>
@@ -861,6 +860,17 @@
       </div>
     </section>
   </main>
+
+  <!-- Detailed Stats modal (2026-10-27): the "📊 Stats" button on a Global/Public board opens
+       this instead of just scrolling to the cramped, always-on explorer sidebar -- same
+       stat_block macro, a second time, with its own "qm-stats-modal" prefix (see dashboard.js's
+       openStatsModal()). The sidebar itself is untouched -- it still serves the explorer tree. -->
+  <div class="dq-modal" id="qm-stats-modal" hidden role="dialog" aria-modal="true">
+    <div class="dq-modal-box dq-modal-wide">
+      <button type="button" class="dq-modal-back" data-close aria-label="Close" title="Close">← Close</button>
+      {{ stat_block("qm-stats-modal") }}
+    </div>
+  </div>
 
   <div class="qm-gate-message qm-edit-modal" id="edit-profile-modal" hidden>
     <h3>Edit Profile</h3>
