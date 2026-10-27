@@ -28,6 +28,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 import cycle_middleware
 import election_core
+import election_test_scheduler
 import email_core
 import family_core
 import pipeline_core
@@ -4609,6 +4610,26 @@ def api_admin_election_auto_vote():
         conn.close()
 
 
+@app.route("/api/admin/election-test/tick", methods=["POST"])
+@login_required
+def api_admin_election_test_tick():
+    """Body: {"simulate_date": "2027-04-15"} (optional) -- runs election_test_scheduler.daily_tick
+    immediately, same manual-override shape as /api/admin/pipeline/tick. Without simulate_date
+    this runs against the REAL current date -- on the real DB, only use this when you actually
+    mean to; every test always passes simulate_date."""
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        result = election_test_scheduler.daily_tick(conn, simulate_date=data.get("simulate_date"))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify(result)
+
+
 @app.route("/api/election/council")
 def api_election_council():
     conn = get_db()
@@ -5344,6 +5365,11 @@ pipeline_scheduler.init_scheduler(app)
 # instance from the lunar pipeline's own, above -- entirely independent and independently
 # removable once the test year is over.
 test_cycle_scheduler.init_scheduler(app)
+
+# Q-Punch council election automation for the pilot village (2026-10-27): a THIRD, independent
+# BackgroundScheduler instance -- see election_test_scheduler.py's own docstring for why this is
+# a daily tick, not a calendar cron like test_cycle_scheduler's above.
+election_test_scheduler.init_scheduler(app)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
