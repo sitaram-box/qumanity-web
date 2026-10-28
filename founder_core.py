@@ -15,6 +15,9 @@ English only: no translations are seeded. `_seed_or_refresh()` writes only the '
 from __future__ import annotations
 
 import datetime as dt
+import os
+
+import board_core
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS founder_messages (
@@ -68,6 +71,59 @@ def _seed_or_refresh(conn) -> None:
         ("Qumanity Story", PREVIEW_EN, FULL_TEXT_EN, dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")),
     )
     conn.commit()
+
+
+# ---- Empty-village welcome post (2026-10-28, "first impression" upgrade) -----------------------
+# A village with nobody posting yet reads as broken, not quiet -- board_core.board_view()'s own
+# `empty_prompt` field (computed in board_view(), not here) is what actually fixes that feeling in
+# the UI; this function is the separate, permanent half of the same fix: one real board_posts row
+# per village, so the village's own record isn't literally empty the first time anyone opens it.
+# post_kind='council_update' (board_core.create_council_update()) -- reaction-only, never enters
+# the vote/threshold/reward pipeline, exactly like a real council's own announcements.
+WELCOME_POST_TEXT = (
+    "Welcome to your village's own page. Every post here is voted on by the people who live here "
+    "— seven days of votes decide whether it climbs to the Tehsil and beyond, or stays here as "
+    "part of your village's own record. Nothing is posted for you. Be the first to propose a "
+    "change in your village."
+)
+
+
+def _resolve_author(conn) -> int | None:
+    """The one account QM_ADMIN_PRIVATE_IDS actually names (same env var _is_admin() in app.py
+    reads, read directly here rather than threading an author_id through every caller) -- None
+    when the env var is unset or empty (local dev's placeholder value, or a DB with no matching
+    user yet), in which case seed_welcome_post() below is a no-op rather than guessing an author."""
+    allowed = [pid.strip() for pid in os.environ.get("QM_ADMIN_PRIVATE_IDS", "").split(",") if pid.strip()]
+    if not allowed:
+        return None
+    qmarks = ",".join("?" * len(allowed))
+    row = conn.execute(f"SELECT id FROM users WHERE private_id_9digit IN ({qmarks}) ORDER BY id LIMIT 1", allowed).fetchone()
+    return row["id"] if row else None
+
+
+def seed_welcome_post(conn, present_location: dict, level: str = "village", now: dt.datetime | None = None) -> int | None:
+    """Idempotent (content-keyed, not a new column -- the exact WELCOME_POST_TEXT match at this
+    group_id/level is itself the "already seeded" check, so re-calling this on every empty-board
+    view is safe and cheap). Village-only: Tehsil and above are paid, elevation-only pages with no
+    "be the first" framing to seed (board_core.board_view()'s own empty_prompt is village-only for
+    the same reason). Returns the new post's id, or None if nothing was created (no admin resolved,
+    no group at this level, or already seeded)."""
+    if level != "village":
+        return None
+    author_id = _resolve_author(conn)
+    if author_id is None:
+        return None
+    chain = board_core.chain_of(present_location)
+    g = board_core.group_for(chain, level)
+    if not g:
+        return None
+    already = conn.execute(
+        "SELECT 1 FROM board_posts WHERE group_id = ? AND level = ? AND post_kind = 'council_update' AND content = ? LIMIT 1",
+        (g["id"], level, WELCOME_POST_TEXT),
+    ).fetchone()
+    if already:
+        return None
+    return board_core.create_council_update(conn, author_id, present_location, WELCOME_POST_TEXT, level=level, now=now)
 
 
 def get_message(conn, language: str = "en") -> dict | None:

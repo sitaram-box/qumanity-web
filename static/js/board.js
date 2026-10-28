@@ -26,6 +26,20 @@
   // window, alongside (not instead of) the existing relative "closed X ago" phrasing.
   function fmtDate(iso) { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
 
+  // 2026-10-28 ("first impression" upgrade, empty-state problem): v.empty_prompt (board_core.py's
+  // board_view()) replaces the old bare "Nothing is being voted on" string with the Founder's own
+  // framing + a named call to action -- shown ABOVE the compose box, not instead of it. A real,
+  // permanent welcome post also exists by this point (founder_core.seed_welcome_post(), called
+  // from the same board route) under Frozen & elevated posts, same as any other council update;
+  // this block is the live-tab half of the fix, independent of where that post itself sits.
+  function emptyPromptBlock(prompt) {
+    var box = el("div", "bd-empty-prompt");
+    box.appendChild(el("p", "bd-empty-prompt-headline", "🌱 " + prompt.headline));
+    box.appendChild(el("p", "bd-empty-prompt-body", prompt.body));
+    box.appendChild(el("p", "bd-empty-prompt-cta", prompt.cta));
+    return box;
+  }
+
   var REACTION_ICON = { agree: "\uD83D\uDC4D", disagree: "\uD83D\uDC4E", read: "\uD83D\uDC41\uFE0F" };
   function reactionBar(m, scope, memberCount, onChange) {
     var bar = el("div", "bd-reactions");
@@ -284,13 +298,22 @@
       note.textContent = "Posts are made in your Village and rise here through votes. You can read, vote and — after voting ends — comment.";
       feed.innerHTML = "";
       lastView = v;
+      // 2026-10-28 (tutorial impact-framing): the one thing tutorial.js reads from outside this
+      // closure -- the last board payload this panel loaded, keyed by the panel's own id ("bd-
+      // public-board"/"bd-global-board") so the tour can quote a live number (or empty_prompt's
+      // own CTA) without a fetch of its own. Read-only from outside; nothing here ever reads it back.
+      window.QMBoardLastView = window.QMBoardLastView || {};
+      window.QMBoardLastView[root.id] = v;
       var live = v.posts.filter(function (p) { return p.status === "active"; });
       var done = v.posts.filter(function (p) { return p.status !== "active"; }).sort(function (a, b) { return b.score - a.score; });
       foot.hidden = false;
       if (view === "live") {
         toggle.querySelector("span").textContent = "Frozen posts (" + done.length + ")";
         feed.appendChild(section("🗳️ Open for live voting", live.length + " post" + (live.length === 1 ? "" : "s")));
-        if (!live.length) feed.appendChild(el("p", "bd-empty", v.can_post ? "Nothing is being voted on — start the conversation below." : "Nothing is open for voting at this level."));
+        if (!live.length) {
+          if (v.empty_prompt) feed.appendChild(emptyPromptBlock(v.empty_prompt));
+          else feed.appendChild(el("p", "bd-empty", v.can_post ? "Nothing is being voted on — start the conversation below." : "Nothing is open for voting at this level."));
+        }
         live.forEach(function (p) { feed.appendChild(bubble(p, v)); });
       } else {
         toggle.querySelector("span").textContent = "← Back to live voting";

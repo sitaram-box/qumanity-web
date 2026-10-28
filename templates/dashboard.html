@@ -500,6 +500,25 @@
           <p><strong id="qm-election-sign">—</strong> cycle · <span id="qm-election-phase">—</span></p>
           <p class="qm-dash-empty" id="qm-election-window"></p>
 
+          <!-- 2026-10-28 (Q-Punch transparency): GET /api/election/summary already computed this
+               (turnout, the 4-week timeline, winners) but nothing on the website ever called it.
+               Only turnout/timeline/winners are read from it here -- never summary.candidates
+               while the cycle is open, which would leak sign-restricted candidate identity (see
+               /api/election/candidates' own gate) even though election_summary() itself doesn't
+               apply that gate. Per-candidate vote counts stay untouched until status is "closed",
+               same rule election_summary() itself already enforces server-side (show_votes). -->
+          <div id="qm-election-weeks"></div>
+          <div id="qm-election-turnout" hidden>
+            <p class="qp-turnout-label"><span id="qm-election-turnout-text"></span></p>
+            <div class="qp-turnout-bar"><div class="qp-turnout-fill" id="qm-election-turnout-fill"></div></div>
+            <p class="qm-dash-empty" id="qm-election-turnout-note">Votes are counted live — results stay sealed until voting closes.</p>
+          </div>
+
+          <div id="qm-election-results" hidden>
+            <h3 class="qm-panel-subhead">🏆 Results</h3>
+            <div id="qm-election-results-body"></div>
+          </div>
+
           <div id="qm-election-nominate-block" hidden>
             <h3 class="qm-panel-subhead">Stand for election</h3>
             <form id="qm-election-nominate-form" class="qm-form">
@@ -765,6 +784,17 @@
             <ul class="pt-inbox" id="pt-inbox-list"></ul>
             <p class="qm-dash-empty" id="pt-inbox-empty" hidden>No pending requests.</p>
           </div>
+
+          <!-- 2026-10-28 ("living map" upgrade): a Family Tree node's chat used to open as a
+               centered dq-modal, covering the D3 graph entirely. It now slides in here instead --
+               the SAME .pt-side column the tree hides for itself (social.js's showTab()) now
+               reappears, showing only this panel, the moment a node's chat is opened
+               (family_tree.js's openFamilyChat()/closeFamilyChat()), so the graph stays visible
+               and pannable beside it the whole time. -->
+          <div class="ft-chat-panel" id="ft-chat-panel" hidden>
+            <button type="button" class="qm-btn qm-btn-ghost ft-chat-panel-close" id="ft-chat-panel-close">← Back to tree</button>
+            <section class="bd" id="ft-chat-body"></section>
+          </div>
         </aside>
       </div>
 
@@ -852,12 +882,6 @@
         </div>
       </div>
 
-      <div class="dq-modal" id="ft-chat-modal" hidden role="dialog" aria-modal="true">
-        <div class="dq-modal-box dq-modal-wide">
-          <button type="button" class="dq-modal-back" data-close aria-label="Close" title="Close">← Close</button>
-          <section class="bd" id="ft-chat-body"></section>
-        </div>
-      </div>
     </section>
   </main>
 

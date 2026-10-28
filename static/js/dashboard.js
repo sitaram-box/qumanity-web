@@ -11,6 +11,8 @@
 (function () {
   "use strict";
 
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+
   var tabs = Array.prototype.slice.call(document.querySelectorAll(".qm-dash-tab"));
   var panels = {
     private: document.getElementById("qm-dash-private"),
@@ -799,6 +801,7 @@
                     if (!result.ok) throw new Error(result.body.error || "Could not vote");
                     loadElectionStatus();
                     loadElectionCandidates();
+                    loadElectionSummary();
                   })
                   .catch(function (err) { alert(err.message); });
               });
@@ -872,9 +875,84 @@
       .catch(function (err) { console.error("Failed to load election status", err); });
   }
 
+  // 2026-10-28 (Q-Punch transparency): turnout while voting is open, a results bar chart once the
+  // cycle closes, and the 4-week progress strip. election_core.election_summary() already backs
+  // the Q-Punch POPUP's own electionBlock() (static/js/board.js, via GET /api/qpunch/<level>) in
+  // plain text -- turnout as a sentence, winners/candidates as a "N votes" suffix, no chart -- but
+  // GET /api/election/summary, the dedicated endpoint for this same data, was never called from
+  // the main board page at all. This reuses .qp-elec-weeks/.qp-elec-week (board.js's own classes
+  // for the identical concept) rather than inventing a second visual language for it.
+  function renderElectionWeeks(summary) {
+    var box = document.getElementById("qm-election-weeks");
+    box.innerHTML = "";
+    var tl = el("div", "qp-elec-weeks");
+    (summary.weeks || []).forEach(function (w) {
+      var s = el("div", "qp-elec-week" + (w.week === summary.week ? " is-now" : w.week < summary.week ? " is-done" : ""));
+      s.appendChild(el("b", "", w.week < summary.week ? "✓" : String(w.week)));
+      s.appendChild(el("span", "", w.title));
+      tl.appendChild(s);
+    });
+    box.appendChild(tl);
+  }
+
+  function renderElectionTurnout(summary) {
+    var box = document.getElementById("qm-election-turnout");
+    if (summary.status === "nomination") { box.hidden = true; return; }
+    box.hidden = false;
+    var pct = summary.eligible_voters > 0 ? Math.round((summary.turnout / summary.eligible_voters) * 100) : 0;
+    document.getElementById("qm-election-turnout-text").textContent =
+      "👥 Turnout: " + summary.turnout.toLocaleString() + " / " + summary.eligible_voters.toLocaleString() +
+      " eligible voted (" + pct + "%)";
+    document.getElementById("qm-election-turnout-fill").style.width = pct + "%";
+    var note = document.getElementById("qm-election-turnout-note");
+    note.textContent = summary.status === "closed"
+      ? "Voting closed — final turnout for " + summary.sign + " " + summary.year + "."
+      : "Votes are counted live — results stay sealed until voting closes.";
+  }
+
+  function renderElectionResults(summary) {
+    var box = document.getElementById("qm-election-results");
+    if (summary.status !== "closed") { box.hidden = true; return; }
+    box.hidden = false;
+    var body = document.getElementById("qm-election-results-body");
+    body.innerHTML = "";
+    var winners = summary.winners || {};
+    ["male", "female"].forEach(function (gender) {
+      var cands = (summary.candidates && summary.candidates[gender]) || [];
+      if (!cands.length) return;
+      var maxVotes = Math.max.apply(null, cands.map(function (c) { return c.votes || 0; }).concat([1]));
+      var seat = gender === "male" ? "Nayak" : "Nayika";
+      body.appendChild(el("h4", "qp-results-seat", seat + (winners[gender] ? " — " + winners[gender] : "")));
+      cands.slice().sort(function (a, b) { return (b.votes || 0) - (a.votes || 0); }).forEach(function (c) {
+        var votes = c.votes || 0;
+        var row = el("div", "qp-results-row");
+        row.appendChild(el("span", "qp-results-name", c.name));
+        var bar = el("div", "qp-results-bar");
+        var fill = el("div", "qp-results-fill");
+        fill.style.width = Math.round((votes / maxVotes) * 100) + "%";
+        bar.appendChild(fill);
+        row.appendChild(bar);
+        row.appendChild(el("span", "qp-results-count", votes.toLocaleString() + " vote" + (votes === 1 ? "" : "s")));
+        body.appendChild(row);
+      });
+    });
+  }
+
+  function loadElectionSummary() {
+    fetch("/api/election/summary")
+      .then(function (r) { return r.json(); })
+      .then(function (summary) {
+        renderElectionWeeks(summary);
+        renderElectionTurnout(summary);
+        renderElectionResults(summary);
+      })
+      .catch(function (err) { console.error("Failed to load election summary", err); });
+  }
+
   if (electionsCard) {
     loadElectionStatus();
     loadElectionCouncil();
+    loadElectionSummary();
 
     var nominateForm = document.getElementById("qm-election-nominate-form");
     nominateForm.addEventListener("submit", function (e) {

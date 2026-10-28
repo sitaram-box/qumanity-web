@@ -13,6 +13,12 @@
 
   function $(sel, root) { return (root || document).querySelector(sel); }
 
+  // 2026-10-28 ("purpose tour" upgrade): bodies now name what CHANGES because of the action, not
+  // just the rule that governs it -- "a post that climbs reaches Earth" instead of "posts are
+  // voted on for seven days." `stat`, where present, is a function (not a static string) called
+  // fresh at render() time, reading data another part of the page already loaded (board.js's own
+  // window.QMBoardLastView, set every time its board panel renders) -- no fetch of its own, and it
+  // genuinely varies: an empty village gets the Founder's own empty_prompt CTA instead of a count.
   var STEPS = [
     {
       key: "tabs", tab: null, selector: ".qm-dash-tabs",
@@ -22,22 +28,30 @@
     {
       key: "board", tab: "public", selector: "#bd-public-board .bd-feed",
       title: "Your village has a voice. This is it.",
-      body: "Post something, and your neighbours vote it up or down for seven days. A strong score carries it past the village, all the way up to Earth.",
+      body: "A post that holds up for seven days doesn't stay a village matter — it climbs to the Tehsil, then higher, carrying your name with it the whole way.",
+      stat: function () {
+        var v = window.QMBoardLastView && window.QMBoardLastView["bd-public-board"];
+        if (!v) return null;
+        if (v.empty_prompt) return "🌱 " + v.empty_prompt.cta + " — right now, it would be the very first.";
+        var live = (v.posts || []).filter(function (p) { return p.status === "active"; }).length;
+        if (!live) return null;
+        return "📊 Right now: " + live + " post" + (live === 1 ? " is" : "s are") + " being voted on in " + v.group + ".";
+      },
     },
     {
       key: "reports", tab: "private", selector: "#qm-myreports-card",
       title: "When something needs fixing, say so.",
-      body: "File a Citizen Report here when something needs the council's attention — they have ten days to reply, and you'll watch it happen right on this page. Council announcements reach you the same way, through the bell at the top of your screen.",
+      body: "A Citizen Report isn't a suggestion box nobody reads — the council has ten days to answer, and you watch that answer land right here, not somewhere you have to go looking for it.",
     },
     {
       key: "wallet", tab: "private", selector: "#qm-wallet-card",
       title: "What you give, kept.",
-      body: "Qoins for the work you do, Karma for how your village sees you — both counted here, in your own ledger. Nothing in it is ever quietly rewritten.",
+      body: "Every Qoin you earn and every point of Karma your village gives you lands in this same ledger — permanent, visible to you alone, and never quietly rewritten by anyone, including the people who run this place.",
     },
     {
       key: "next", tab: "public", selector: "#bd-public-board",
       title: "Now make it real.",
-      body: "Write your first post, cast a vote on someone else's, or file a report — whichever feels most like you today. This whole board is waiting for exactly that.",
+      body: "A post, a vote, a report — any one of them is a real mark your village will carry forward. Nothing here happens without you making it happen first.",
       nextLabel: "Let's go →",
     },
   ];
@@ -119,6 +133,19 @@
     var body = document.createElement("p");
     body.textContent = step.body;
     popup.appendChild(body);
+
+    // 2026-10-28: the live stat line, when step.stat() has something to say right now -- omitted
+    // entirely (not shown empty) when there's no board data loaded yet or nothing to report, so
+    // this never shows a stale or placeholder number.
+    if (typeof step.stat === "function") {
+      var statText = step.stat();
+      if (statText) {
+        var stat = document.createElement("p");
+        stat.className = "qm-tour-stat";
+        stat.textContent = statText;
+        popup.appendChild(stat);
+      }
+    }
 
     var actions = document.createElement("div");
     actions.className = "qm-tour-actions";

@@ -488,9 +488,22 @@ def board_view(conn, user_id, present_location, level, now=None, is_admin=False)
         posts.append(post_dict)
     post_price = None if level not in PAID_LEVELS else qoin_core.post_price(level, "text")
     currency_code, currency_symbol, currency_name = qoin_core.currency_for((present_location.get("country") or {}).get("code"))
+    # 2026-10-28 ("first impression" upgrade, empty-state problem): a village with nobody posting
+    # yet reads as broken, not quiet. Village-only (Tehsil+ is paid/elevation-only -- "be the
+    # first" doesn't fit a page nobody free-posts to) and keyed on the same `active` set board.js
+    # itself already renders as "live voting" -- a frozen/elevated/removed post, or a reaction-only
+    # council_update (the seeded Founder post among them, see founder_core.seed_welcome_post()),
+    # doesn't count as "something is happening here" for this purpose.
+    empty_prompt = None
+    if level == "village" and not any(p["status"] == "active" for p in rows):
+        empty_prompt = {
+            "headline": "This village hasn't spoken yet.",
+            "body": "“Every voice starts somewhere. Yours could be the first.” — The Founder",
+            "cta": "Be the first to propose a change in your village",
+        }
     return {
         "level": level, "label": LEVEL_LABEL[level], "group": g["name"], "group_id": g["id"],
-        "members": member_count, "qoins": qoins,
+        "members": member_count, "qoins": qoins, "empty_prompt": empty_prompt,
         "can_post": level == "village", "can_pay_post": level in PAID_LEVELS,
         # A paid post is priced in local currency and paid in the Qoins that make it up (qoin_core.to_qoins) --
         # the price shown to the user must always name BOTH, never a bare Qoin count (docs/qoins_wallet_system.md).

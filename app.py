@@ -494,6 +494,12 @@ def api_board(level):
     conn, user, loc = _board_user()
     view = board_core.board_view(conn, user["id"], loc, level, is_admin=_is_admin())
     if view is not None:
+        # 2026-10-28: seed the Founder's welcome post the first time anyone finds this village's
+        # board empty -- gated on board_view()'s own empty_prompt (not re-checked here), so this
+        # never writes once a village has real activity. seed_welcome_post() is itself idempotent
+        # (content-keyed), so calling it on every empty view until someone actually posts is safe.
+        if view["empty_prompt"] is not None:
+            founder_core.seed_welcome_post(conn, loc, level)
         can_publish = announcements_core.can_publish_announcement(conn, user["id"], view["group_id"], view["level"], _is_admin())
         view["can_publish_announcement"] = can_publish
         view["announcements"] = announcements_core.list_for_location(conn, user["id"], view["level"], view["group_id"], limit=5)

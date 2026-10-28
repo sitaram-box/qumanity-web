@@ -313,14 +313,31 @@
   // that screen. Built standalone here (not a shared helper with social.js's personal-group
   // renderChatShell()/renderMessages(), which are module-private to that file) -- reuses the same
   // .bd-*/QMAvatar markup conventions for visual consistency, at the cost of a little duplication. ----
-  var chatModal = document.getElementById("ft-chat-modal");
+  // 2026-10-28 ("living map" upgrade): slides in over .pt-side (the same column social.js's
+  // showTab() hides for the Family Tree tab, since the D3 view wants the full panel width when
+  // no chat is open) instead of a centered dq-modal that used to cover the whole tree.
+  var chatPanel = document.getElementById("ft-chat-panel");
   var chatBody = document.getElementById("ft-chat-body");
-  chatModal.addEventListener("click", function (e) {
-    if (e.target === chatModal || e.target.hasAttribute("data-close")) chatModal.hidden = true;
-  });
+  var ptSide = document.querySelector(".pt-side");
+  var ptLayout = document.querySelector(".pt-layout");
+  document.getElementById("ft-chat-panel-close").addEventListener("click", closeFamilyChat);
+
+  function closeFamilyChat() {
+    chatPanel.classList.remove("is-open");
+    chatPanel.hidden = true;
+    if (ptSide) { ptSide.hidden = true; ptSide.classList.remove("is-chat-mode"); }
+    if (ptLayout) ptLayout.classList.add("pt-layout--full");
+  }
 
   function openFamilyChat(groupId) {
-    chatModal.hidden = false;
+    if (ptSide) { ptSide.hidden = false; ptSide.classList.add("is-chat-mode"); }
+    if (ptLayout) ptLayout.classList.remove("pt-layout--full");
+    chatPanel.hidden = false;
+    // Slide-in: unhidden at opacity 0/translateX first, then .is-open added a frame later so the
+    // CSS transition actually has something to animate from (adding the class in the same tick
+    // hidden was cleared would just jump straight to the end state).
+    chatPanel.classList.remove("is-open");
+    requestAnimationFrame(function () { requestAnimationFrame(function () { chatPanel.classList.add("is-open"); }); });
     chatBody.innerHTML = "";
     chatBody.appendChild(el("p", "qm-dash-empty", "Loading…"));
     api("/api/family-groups/" + groupId + "/messages").then(function (d) {
@@ -605,5 +622,8 @@
     });
   });
 
-  window.QMFamilyTree = { showTree: showTree };
+  // closeChat (2026-10-28): social.js's showTab() calls this when navigating away from the
+  // Family Tree tab, so the slide-in chat panel never stays open (and .pt-side's is-chat-mode
+  // never stays set) under a different tab's own content.
+  window.QMFamilyTree = { showTree: showTree, closeChat: closeFamilyChat };
 })();

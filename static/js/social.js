@@ -93,12 +93,20 @@
   var layoutEl = document.querySelector(".pt-layout");
   function showTab(tab) {
     Object.keys(panels).forEach(function (k) { panels[k].hidden = k !== tab; });
+    // 2026-10-28: navigating away from Family Tree always closes its slide-in chat panel first
+    // (family_tree.js's closeFamilyChat(), which itself re-hides .pt-side) -- otherwise .pt-side
+    // would reappear under Friends/Business/Custom still showing the LAST group's chat instead of
+    // Find & connect / Requests.
+    if (tab !== "family" && window.QMFamilyTree && window.QMFamilyTree.closeChat) window.QMFamilyTree.closeChat();
     // Find & connect / Requests are shared across Friends/Business/Custom (and Self) -- hidden
-    // only for Family Tree, which has its own dedicated search (family.js) and whose D3 view
-    // wants the full panel width instead. The grid's second column track doesn't collapse just
-    // because its content is `hidden` -- .pt-layout--full (CSS) drops it to one column.
-    if (sideEl) sideEl.hidden = tab === "family";
-    if (layoutEl) layoutEl.classList.toggle("pt-layout--full", tab === "family");
+    // for Family Tree, which has its own dedicated search (family.js) and whose D3 view wants the
+    // full panel width -- UNLESS its own slide-in chat panel is open (is-chat-mode, set by
+    // family_tree.js's openFamilyChat()), which reuses this same column instead of a modal. The
+    // grid's second column track doesn't collapse just because its content is `hidden` --
+    // .pt-layout--full (CSS) drops it to one column.
+    var chatOpen = sideEl && sideEl.classList.contains("is-chat-mode");
+    if (sideEl) sideEl.hidden = tab === "family" && !chatOpen;
+    if (layoutEl) layoutEl.classList.toggle("pt-layout--full", tab === "family" && !chatOpen);
     if (tab === "private") loadChats(); else if (tab !== "custom" || true) loadGroups();
   }
   topTabs.addEventListener("click", function (e) {
