@@ -19,9 +19,6 @@
     personal: document.getElementById("qm-dash-personal"),
     public: document.getElementById("qm-dash-public"),
     global: document.getElementById("qm-dash-global"),
-    // qm-dash-admin only exists in the DOM at all for is_admin_panel_user -- `panels.admin` is
-    // null for every other viewer, so every loop over `panels` below guards with `if (panel)`.
-    admin: document.getElementById("qm-dash-admin"),
   };
 
   tabs.forEach(function (tab) {
@@ -32,7 +29,6 @@
         var panel = panels[key];
         if (panel) panel.hidden = key !== name;
       });
-      if (name === "admin") loadAdminPanel();
     });
   });
 
@@ -1141,7 +1137,6 @@
   var apRefreshFeed = null;
   var apList = document.getElementById("ap-list");
   if (apList) {
-    var apListEmpty = document.getElementById("ap-list-empty");
     var apDetail = document.getElementById("ap-detail");
     var apFilterBtns = Array.prototype.slice.call(document.querySelectorAll(".ap-filter"));
     var apRefreshBtn = document.querySelector(".ap-refresh-btn");
@@ -1155,7 +1150,13 @@
     function apRenderList() {
       apList.innerHTML = "";
       var filtered = apCurrentFilter === "all" ? apItemsCache : apItemsCache.filter(function (it) { return it.source === apCurrentFilter; });
-      apListEmpty.hidden = filtered.length !== 0;
+      // 2026-10-28 fix: apList.innerHTML = "" (above) deletes #ap-list-empty too -- it's a child
+      // of #ap-list in the template, not a sibling -- so the OLD cached `apListEmpty` reference
+      // (document.getElementById, read once at page load) pointed at a detached node from the
+      // very first render onward; toggling .hidden on it had no visible effect. Building this
+      // fresh each render, the same way every other node in this list already is, instead of
+      // relying on a template node surviving innerHTML wipes it sits inside.
+      if (!filtered.length) apList.appendChild(apEl("p", "qm-dash-empty", "Nothing open right now."));
       filtered.forEach(function (it) {
         var row = apEl("button", "ap-row");
         row.type = "button";
@@ -1363,4 +1364,8 @@
   function loadAdminPanel() {
     if (apRefreshFeed) apRefreshFeed();
   }
+  // 2026-10-28 (Hierarchical Explorer redesign): the Admin Queue moved from its own top-level tab
+  // into the explorer modal's second sub-tab -- multiview.js calls this the first time that
+  // sub-tab opens, same lazy-load-once pattern the old "admin" tab click used.
+  window.QMLoadAdminPanel = loadAdminPanel;
 })();

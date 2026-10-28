@@ -12,6 +12,7 @@ frontend contract.
 """
 
 import base64
+import collections
 import csv
 import datetime as dt
 import functools
@@ -20,6 +21,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, redirect, render_template, request, send_file, session, url_for
@@ -1476,6 +1478,23 @@ def api_qmail_sent_council_thread(message_id):
     return jsonify(thread)
 
 
+@app.route("/api/queries/mine")
+@login_required
+def api_my_queries():
+    """"My Tickets" (2026-10-28): every query/ticket this logged-in member has ever submitted,
+    newest first -- including ones they opened through the public AI Support widget while NOT yet
+    logged in and then... no: an anonymous ticket has user_id = NULL forever, it can never
+    retroactively become "theirs" just because they later log in with the same name. This only
+    ever lists tickets created with their own session already active (api_support_ticket's
+    optional auto-link, same as api_queries_mine itself always has)."""
+    conn = get_db()
+    try:
+        queries = admin_queries_core.list_mine(conn, session["user_id"])
+    finally:
+        conn.close()
+    return jsonify({"queries": queries})
+
+
 @app.route("/api/queries/mine/<int:query_id>")
 @login_required
 def api_my_query_thread(query_id):
@@ -2437,9 +2456,22 @@ def api_admin_query_reply(query_id):
     if not scope or scope["scope"] != "global":
         return jsonify({"error": "Admin access required"}), 403
     data = request.get_json(silent=True) or {}
+    message = data.get("message")
     conn = get_db()
     try:
-        admin_queries_core.reply(conn, session["user_id"], query_id, data.get("message"))
+        query = admin_queries_core.get(conn, query_id)
+        admin_queries_core.reply(conn, session["user_id"], query_id, message)
+        # 2026-10-28: an anonymous AI Support ticket (user_id IS NULL) has no in-app notification
+        # to receive this reply through -- email is the only channel back to them at all, so this
+        # tries it whenever guest_contact looks like an email. A logged-in member's ticket is
+        # unaffected either way: they see replies in "My Tickets" (notify_core's existing "query"
+        # kind), this never emails them. send_ticket_reply() itself no-ops quietly if Resend isn't
+        # configured or guest_contact isn't email-shaped -- never raised as this route's own error.
+        if query and query["user_id"] is None and query.get("guest_contact"):
+            try:
+                email_core.send_ticket_reply(query["guest_contact"], query_id, query["subject"], message)
+            except Exception as e:
+                print(f"[support] ticket #{query_id} reply email failed: {e}")
     except (ValueError, LookupError) as e:
         return jsonify({"error": str(e)}), 400
     finally:
@@ -2461,6 +2493,94 @@ def api_admin_query_close(query_id):
     finally:
         conn.close()
     return jsonify({"status": "ok"})
+
+
+# ---- Public AI Support ticketing + referral-ID autocomplete (2026-10-28) ----
+# Two UNAUTHENTICATED routes, the only ones in this file that write/read member data without
+# @login_required -- both get the same small in-memory sliding-window rate limiter (no new
+# dependency; safe only because this deploy runs a single gunicorn worker, Procfile `--workers 1`,
+# the same single-worker caveat every other in-process scheduler/cache in this codebase already
+# carries). Resets on every process restart -- acceptable for an abuse guard on a prototype, not
+# meant to survive a deploy.
+_RATE_LIMIT_HITS: dict[str, list[float]] = collections.defaultdict(list)
+
+
+def _rate_limited(bucket: str, key: str, max_calls: int, window_seconds: float) -> bool:
+    """True if `key` (e.g. the caller's IP) has already made `max_calls` calls to `bucket` within
+    the last `window_seconds` -- the caller should return 429 without doing any real work. Prunes
+    old timestamps on every call rather than running a separate cleanup task."""
+    now = time.monotonic()
+    hits = _RATE_LIMIT_HITS[f"{bucket}:{key}"]
+    while hits and now - hits[0] > window_seconds:
+        hits.pop(0)
+    if len(hits) >= max_calls:
+        return True
+    hits.append(now)
+    return False
+
+
+def _client_ip() -> str:
+    # Railway (this deploy's host) terminates TLS in front of the app and forwards the real
+    # client address in X-Forwarded-For; request.remote_addr alone would just be the proxy's own
+    # address for every visitor, making the rate limit a no-op. Only the FIRST address in the
+    # header is the actual client -- the rest, if present, are intermediate proxies.
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    return (forwarded.split(",")[0].strip() if forwarded else None) or request.remote_addr or "unknown"
+
+
+@app.route("/api/support/ticket", methods=["POST"])
+def api_support_ticket():
+    """The AI Support widget's submit call (templates/home.html) -- public, no login required.
+    A logged-in visitor's session auto-links the ticket to their account (user_id set, guest_name/
+    guest_contact left NULL, exactly like every other authenticated action in this file); anyone
+    else must give a name, and may optionally give an email or their own Private ID as
+    guest_contact (stored as typed, never validated as real -- see admin_queries_core.create()).
+    10 tickets per IP per hour: generous for a real visitor filing one query, enough friction to
+    make flooding the Admin Panel feed pointless."""
+    if _rate_limited("support_ticket", _client_ip(), max_calls=10, window_seconds=3600):
+        return jsonify({"error": "Too many tickets from this connection — please try again later"}), 429
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        user_id = session.get("user_id")
+        guest_name = None if user_id else data.get("name")
+        guest_contact = None if user_id else data.get("contact")
+        ticket_id = admin_queries_core.create(
+            conn, user_id, data.get("category"), data.get("subject") or "AI Support", data.get("body"),
+            guest_name=guest_name, guest_contact=guest_contact,
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"ticket_id": ticket_id, "message": f"Your ticket #{ticket_id} has been received."}), 201
+
+
+@app.route("/api/public-ids/suggest")
+def api_public_ids_suggest():
+    """Referral-field autocomplete (templates/register.html) -- public (registration itself
+    happens logged out), deliberately narrow: a minimum 6-digit prefix before any match is even
+    attempted, and the response is the bare 12-digit code ONLY -- never a name, never a location,
+    matching social_core.find_person()'s own privacy posture but tighter, since THAT route at
+    least requires a session and an exact code; this one takes neither. 30 requests per IP per
+    minute -- loose enough for normal typing (a few requests as someone types past 6 digits), tight
+    enough that scripting a full sweep of the id space is impractically slow."""
+    q = (request.args.get("q") or "").strip()
+    if not q.isdigit() or len(q) < 6:
+        return jsonify({"suggestions": []})
+    if _rate_limited("public_ids_suggest", _client_ip(), max_calls=30, window_seconds=60):
+        return jsonify({"error": "Too many requests — please slow down"}), 429
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """SELECT a.search_code FROM account_ids a JOIN users u ON u.id = a.user_id
+               WHERE a.search_code LIKE ? AND a.is_current = 1 AND u.is_demo = 0 AND u.is_removed = 0
+               ORDER BY a.search_code LIMIT 8""",
+            (q + "%",),
+        ).fetchall()
+    finally:
+        conn.close()
+    return jsonify({"suggestions": [r["search_code"] for r in rows]})
 
 
 def _qpunch_message_in_scope(conn, scope, message_id):
@@ -2891,6 +3011,7 @@ def _profile_for(user_id):
         "present_location": _location_display(json.loads(user["present_location_json"])),
         "birth_location_struct": json.loads(user["birth_location_json"]),
         "present_location_struct": json.loads(user["present_location_json"]),
+        "birth_time_known": bool(user["birth_time_known"]),
         "has_profile_picture": bool(user["profile_picture"]),
         "profile_picture_updated_at": user["profile_picture_updated_at"] or "",
     }
@@ -3303,65 +3424,111 @@ def _marquee_flag():
     return {"marquee_enabled": QM_MARQUEE_ENABLED}
 
 
-# One JSON file per language in Poems/, each a list of {id, marker, text} with the
-# same ids in the same order. To add a translation, drop its file in Poems/ and add
-# an entry here: code -> (file name, label shown on the language toggle).
+# One JSON file per language per religion in Poems/<religion>/, each a list of {id, marker,
+# text} with the same ids in the same order within that religion. Personalized by the signed-in
+# member's users.religion_belief (2026-10-28, Part 4 of the homepage-redesign brief) --
+# logged-out visitors and members who haven't set one yet see DEFAULT_MARQUEE_RELIGION.
+#
+# Only religions with a confirmed public-domain or cleanly-licensed text are listed here; every
+# other religion_belief value (muslim/sikh/buddhist/jain/other/prefer_not_to_say) shows
+# "coming soon" (api_poems_meta's coming_soon branch) rather than nothing. In particular "hindu"
+# is NOT backed by real files right now -- the Hindi Vinaya Patrika translation was pulled from
+# this repository for an active copyright reason, see docs/marquee_poems_archive/README.md --
+# it stays wired up under the same file names so it needs no code change to re-enable once a
+# cleanly-licensed translation is dropped into Poems/hindu/.
 POEMS_DIR = BASE_DIR / "Poems"
-POEM_LANGUAGES = {
-    "hi": ("poems_hindi.json", "हिन्दी"),
-    "en": ("poems_english.json", "English"),
+RELIGION_MARQUEE_SOURCES = {
+    "hindu": {
+        "dir": "hindu",
+        "languages": {
+            "hi": ("poems_hindi.json", "हिन्दी"),
+            "en": ("poems_english.json", "English"),
+        },
+    },
+    "christian": {
+        # Psalms, King James Version -- public domain worldwide (1611; the Crown's printing
+        # patent is a UK-only restriction on commercial printing, not a copyright, and doesn't
+        # reach this non-commercial, non-UK-printed use). See Poems/christian/README.md.
+        "dir": "christian",
+        "languages": {
+            "en": ("psalms_kjv_en.json", "English"),
+        },
+    },
 }
+DEFAULT_MARQUEE_RELIGION = "hindu"
 _poem_cache = {}
 
 
-def _poems(lang):
-    if lang not in POEM_LANGUAGES:
+def _poems(religion, lang):
+    source = RELIGION_MARQUEE_SOURCES.get(religion)
+    if not source or lang not in source["languages"]:
         return None
-    if lang not in _poem_cache:
-        path = POEMS_DIR / POEM_LANGUAGES[lang][0]
-        _poem_cache[lang] = sorted(_load_json(path), key=lambda p: p["id"]) if path.exists() else None
-    return _poem_cache[lang]
+    cache_key = (religion, lang)
+    if cache_key not in _poem_cache:
+        path = POEMS_DIR / source["dir"] / source["languages"][lang][0]
+        _poem_cache[cache_key] = sorted(_load_json(path), key=lambda p: p["id"]) if path.exists() else None
+    return _poem_cache[cache_key]
 
 
-def _poem_languages():
-    return [{"code": c, "label": label, "available": True} for c, (_, label) in POEM_LANGUAGES.items() if _poems(c)]
+def _poem_languages(religion):
+    source = RELIGION_MARQUEE_SOURCES.get(religion)
+    if not source:
+        return []
+    return [{"code": c, "label": label, "available": True} for c, (_, label) in source["languages"].items() if _poems(religion, c)]
+
+
+def _marquee_religion_for_session():
+    """(religion, user_row) for this request. A signed-in member whose religion_belief names a
+    religion we have no source for yet gets THAT religion back (not silently swapped to the
+    default), so the caller can tell them their own path specifically is coming soon."""
+    if not session.get("user_id"):
+        return DEFAULT_MARQUEE_RELIGION, None
+    conn = get_db()
+    user = _current_user_row(conn)
+    conn.close()
+    if not user or not user["religion_belief"]:
+        return DEFAULT_MARQUEE_RELIGION, user
+    return user["religion_belief"], user
 
 
 @app.route("/api/poems/meta")
 def api_poems_meta():
     if not QM_MARQUEE_ENABLED:
         return jsonify({"error": "Poems marquee is disabled"}), 404
-    langs = _poem_languages()
+    religion, user = _marquee_religion_for_session()
+    langs = _poem_languages(religion)
     if not langs:
+        if religion != DEFAULT_MARQUEE_RELIGION:
+            return jsonify({"coming_soon": True, "religion": religion})
         return jsonify({"error": "No poems available"}), 404
-    count = min(len(_poems(l["code"])) for l in langs)
-    result = {"count": count, "languages": langs, "personal": False}
-    if session.get("user_id"):
-        conn = get_db()
-        user = _current_user_row(conn)
-        conn.close()
-        if user:
-            have = {l["code"] for l in langs}
-            # the user's own languages; ones without a poem translation yet are listed as "coming soon"
-            result["languages"] = [
-                {"code": u["code"], "label": u["native"], "available": u["code"] in have} for u in _user_languages(user)
-            ]
-            result["personal"] = True
-            result["default"] = next((u["code"] for u in _user_languages(user) if u["code"] in have), langs[0]["code"])
+    count = min(len(_poems(religion, l["code"])) for l in langs)
+    result = {"count": count, "languages": langs, "personal": False, "religion": religion}
+    if user:
+        have = {l["code"] for l in langs}
+        # the user's own languages; ones without a poem translation yet are listed as "coming soon"
+        result["languages"] = [
+            {"code": u["code"], "label": u["native"], "available": u["code"] in have} for u in _user_languages(user)
+        ]
+        result["personal"] = True
+        result["default"] = next((u["code"] for u in _user_languages(user) if u["code"] in have), langs[0]["code"])
     return jsonify(result)
 
 
 @app.route("/api/poems/<lang>/<int:index>")
 def api_poem(lang, index):
-    """One poem by 0-based position (the same position is the same poem in every language)."""
+    """One poem by 0-based position (the same position is the same poem in every language) in
+    the signed-in member's own religion's source -- see _marquee_religion_for_session."""
     if not QM_MARQUEE_ENABLED:
         return jsonify({"error": "Poems marquee is disabled"}), 404
-    poems = _poems(lang)
+    religion, _user = _marquee_religion_for_session()
+    poems = _poems(religion, lang)
     if not poems or not 0 <= index < len(poems):
         return jsonify({"error": "Poem not found"}), 404
     poem = poems[index]
     resp = jsonify({"index": index, "id": poem["id"], "marker": poem["marker"], "text": poem["text"]})
-    resp.headers["Cache-Control"] = "public, max-age=3600"
+    # Content now varies by the caller's own session (religion/language), so it must never be
+    # cached as a single shared "public" response the way the single-source version was.
+    resp.headers["Cache-Control"] = "private, max-age=3600"
     return resp
 
 
@@ -4293,28 +4460,39 @@ def _flatten_location_chain(location: dict) -> str:
     return ", ".join(parts)
 
 
-# ---- Founder/Council multi-view dashboard (2026-10-28) ----
-# "Build what the data supports, extension-point the rest" (the approved scope decision): the
-# Founder can monitor ANY location (village data is real for all 9 Sub-continent countries,
-# country-level only everywhere else); a currently-serving VILLAGE council head can monitor
-# sibling villages in their own Tehsil, but only during their OWN birth sign's month -- reviving
-# the spirit of the old training/leadership split (docs/zodiac_council_voting.md) without
-# reverting election_core._winner_term()'s own "leads immediately" decision: they're council all
-# year, multi-view access just doesn't open until their own zodiac month arrives within it.
-# Tehsil/District/State council members don't exist in any form yet (village_council has no
-# equivalent table at those levels) -- _viewable_locations_scope() returns scope "none" for them,
-# the same shape a real implementation would fill in later, not a different contract.
+# ---- Founder/Council Hierarchical Explorer (2026-10-28, redesigned from the earlier Multi-View
+# panel) ----
+# "Build what the data supports, extension-point the rest" (the approved scope decision, still
+# in force): the Founder can monitor ANY location (village data is real for all 9 Sub-continent
+# countries, country-level only everywhere else); a currently-serving VILLAGE council head can
+# monitor sibling villages in their own Tehsil, but only during their OWN birth sign's month --
+# reviving the spirit of the old training/leadership split (docs/zodiac_council_voting.md)
+# without reverting election_core._winner_term()'s own "leads immediately" decision: they're
+# council all year, Explorer access just doesn't open until their own zodiac month arrives within
+# it. Country/Zone/State/District/Tehsil council members don't exist in any form yet
+# (village_council has no equivalent table at those levels) -- _viewable_locations_scope()
+# returns scope "none" for them, the same shape a real implementation would fill in later, not a
+# different contract.
+#
+# `root` (2026-10-28 redesign) replaces the old village-only `parent`/`locations` pair: the
+# Explorer's frontend (multiview.js) now drills down GENERICALLY from `root` using the same
+# location-data endpoints the old map-based picker already called (/api/world-data,
+# /api/subcontinent, /api/subcontinent/districts, /api/india-villages/<tehsil_id>) -- this
+# function no longer needs to pre-compute a sibling list itself, just the one root node to start
+# from, which for a village council head is the SAME Tehsil their old `parent` field already named.
 
 
 def _viewable_locations_scope() -> dict:
-    """{"scope": "global"} (Founder/Admin, _is_admin()) | {"scope": "limited", level, parent,
-    locations, access_window} (a village council head, inside their own sign's month) |
-    {"scope": "none", "reason": "not_eligible" | "training", access_window?}. Re-derived fresh on
-    every call -- no caching -- so a head whose own zodiac month just ended loses multi-view
+    """{"scope": "global", "root": {level:"earth", id:"EARTH", name:"Earth"}} (Founder/Admin,
+    _is_admin()) | {"scope": "limited", "root": {level:"tehsil", id, name}, "access_window"}
+    (a village council head, inside their own sign's month -- root is their own Tehsil; the
+    Explorer lists its villages as root's own children, same as browsing any other Tehsil) |
+    {"scope": "none", "reason": "not_eligible" | "training", "access_window"?}. Re-derived fresh
+    on every call -- no caching -- so a head whose own zodiac month just ended loses Explorer
     access on their very next request, same guarantee _is_admin_panel_user() already makes for
     the admin panel's own location scope."""
     if _is_admin():
-        return {"scope": "global"}
+        return {"scope": "global", "root": {"level": "earth", "id": "EARTH", "name": "Earth"}}
     panel = _is_admin_panel_user()
     if not panel or panel["scope"] != "location" or panel["level"] != "village":
         return {"scope": "none", "reason": "not_eligible"}
@@ -4333,14 +4511,9 @@ def _viewable_locations_scope() -> dict:
         tehsil = present.get("tehsil") or {}
         if not tehsil.get("id"):
             return {"scope": "none", "reason": "not_eligible"}
-        rows = conn.execute(
-            "SELECT id, name FROM india_villages WHERE tehsil_id = ? ORDER BY name", (tehsil["id"],)
-        ).fetchall()
-        locations = [{"id": r["id"], "name": r["name"], "is_own": r["id"] == panel["location_id"]} for r in rows]
         return {
-            "scope": "limited", "level": "village",
-            "parent": {"level": "tehsil", "id": tehsil["id"], "name": tehsil.get("name")},
-            "locations": locations, "access_window": window,
+            "scope": "limited", "root": {"level": "tehsil", "id": tehsil["id"], "name": tehsil.get("name")},
+            "access_window": window,
         }
     finally:
         conn.close()
@@ -4352,15 +4525,43 @@ def api_admin_viewable_locations():
     return jsonify(_viewable_locations_scope())
 
 
+def _within_scope_root(present_location: dict, level: str, root: dict) -> bool:
+    """Is the location actually being opened at or below `scope["root"]`?
+
+    Checks ONLY `present_location[level]`'s own id -- the one field board_core.board_view()
+    itself ever reads to resolve which group this call opens (chain_of() builds every ancestor
+    entry independently and group_for() picks out just the `level` one; nothing anywhere cross-
+    checks that a submitted "tehsil" entry is the REAL parent of a submitted "village" entry).
+    An earlier version of this check validated `present_location[root["level"]]` instead (e.g. the
+    "tehsil" entry) -- that trusts a self-reported ancestor field board_view() never actually
+    uses for resolution, so a request could claim a truthful tehsil ancestor while asking to open
+    an entirely different village elsewhere. Found and fixed during this feature's own live
+    verification, before ever being committed.
+
+    The Sub-continent's ids already encode ancestry in the string itself (a village id like
+    "CS.DL.3.4.1A" literally starts with its own Tehsil's id "CS.DL.3.4" plus a dot) -- that
+    prefix, checked against the id actually being requested, is what makes this unforgeable: the
+    attacker doesn't get to invent a village id, the real one is what determines which board
+    opens, and only real ids for real villages under the viewer's own root have that prefix."""
+    if root["level"] == "earth":
+        return True  # everything is under Earth
+    target = (present_location.get(level) or {}).get("id")
+    if not target:
+        return False
+    if level == root["level"]:
+        return target == root["id"]
+    return target == root["id"] or target.startswith(root["id"] + ".")
+
+
 @app.route("/api/admin/board/<level>", methods=["POST"])
 @login_required
 @_board_error
 def api_admin_board(level):
-    """Opens a board for a location OTHER than the viewer's own present_location -- the Founder's/
-    council member's multi-view tabs. The picker already walked the full hierarchy to make its
-    selection (section 3 of the research: no reverse id->chain lookup exists anywhere, so none is
-    built here either) -- the client sends that same chain back whole, this route only validates
-    it against _viewable_locations_scope(), never trusts it blind.
+    """Opens a board for a location OTHER than the viewer's own present_location -- the
+    Hierarchical Explorer's dock tabs. The Explorer already drilled down the full hierarchy to
+    make its selection (no reverse id->chain lookup exists anywhere, so none is built here
+    either) -- the client sends that same chain back whole, this route only validates it against
+    a freshly recomputed _viewable_locations_scope(), never trusts it blind.
 
     Always read-only, regardless of scope: can_post/can_pay_post/every post's can_vote are forced
     False on the way out. This is a monitoring view -- a Founder "visiting" a village they don't
@@ -4378,15 +4579,12 @@ def api_admin_board(level):
     if scope["scope"] == "global":
         pass
     elif scope["scope"] == "limited":
-        if level != scope["level"]:
-            return jsonify({"error": "Not permitted at this level"}), 403
-        requested_id = (present_location.get(level) or {}).get("id")
-        if not any(loc["id"] == requested_id for loc in scope["locations"]):
-            return jsonify({"error": "That location is outside your Tehsil"}), 403
+        if not _within_scope_root(present_location, level, scope["root"]):
+            return jsonify({"error": "That location is outside your " + scope["root"]["level"].capitalize()}), 403
     else:
         reason = scope.get("reason")
-        return jsonify({"error": "Multi-view access is not open for you right now"
-                         if reason == "training" else "Multi-view is for Admins and serving council heads"}), 403
+        return jsonify({"error": "Explorer access is not open for you right now"
+                         if reason == "training" else "The Explorer is for Admins and serving council heads"}), 403
     conn, user, _loc = _board_user()
     view = board_core.board_view(conn, user["id"], present_location, level, is_admin=(scope["scope"] == "global"))
     conn.close()

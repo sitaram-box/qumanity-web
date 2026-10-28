@@ -132,7 +132,13 @@
             {% endif %}
 
             <label class="qm-field" id="field-referred-by-wrap"><span>🔗 Referred By (Public ID)</span>
-              <input type="text" id="field-referred-by" maxlength="20" value="{{ own_public_id or '' }}" placeholder="12-digit Public ID (Optional)" />
+              <!-- 2026-10-28: list= wires this plain text input to the browser's own native
+                   autocomplete UI -- static/js/register.js fills #field-referred-by-suggestions
+                   with up to 8 matching codes (GET /api/public-ids/suggest) once 6+ digits are
+                   typed; no custom dropdown component needed. -->
+              <input type="text" id="field-referred-by" maxlength="20" value="{{ own_public_id or '' }}"
+                     placeholder="12-digit Public ID (Optional)" list="field-referred-by-suggestions" autocomplete="off" />
+              <datalist id="field-referred-by-suggestions"></datalist>
             </label>
             <p class="qm-pin-hint" id="field-referred-by-hint">Leave blank if registering without a referrer.</p>
           </div>

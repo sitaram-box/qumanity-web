@@ -15,6 +15,14 @@
 .pm-bar[hidden] { display: none; }
 body.pm-on { padding-bottom: var(--pm-h); }
 
+/* Homepage only: the fixed Shivalinga (home.css) sits bottom-left, so the poems bar starts to
+   its right instead of spanning the full width. Inert everywhere else, and inert here too while
+   QM_MARQUEE_ENABLED stays off (app.py) -- ready for whenever it's re-enabled. */
+body.hm .pm-bar { left: 140px; }
+@media (max-width: 620px) {
+  body.hm .pm-bar { left: 108px; }
+}
+
 .pm-chip {
   flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;
   padding: 4px 16px 5px; border-radius: 14px; min-width: 112px;
@@ -49,6 +57,9 @@ body.pm-on { padding-bottom: var(--pm-h); }
   margin-right: 1.1rem; padding: 2px 14px; border-radius: 999px; font-size: 0.82em; font-weight: 700; color: #1a1205;
   background: linear-gradient(120deg, #ff8a1f, #ffd24a);
 }
+/* "Coming soon" notice for a religion with no verses yet -- a static single line, not a
+   scrolling poem, so it drops the between-poems trailing padding. */
+.pm-coming-soon { padding-right: 0; }
 
 .pm-ctl { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
 

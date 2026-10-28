@@ -401,6 +401,115 @@
       .catch(function (e) { alert(e.message); });
   });
 
+  // ---- Update Birth Location (members with birth_time_known = 0 only) ----
+  // Not self-service: queues identity_core's id_change_a ticket via /api/dashboard/identity-
+  // request, same endpoint and payload shape register.js's own buildLocationPayload() already
+  // builds. Continent/country are plain dropdowns (/api/world-data); for the 9 Sub-continent
+  // countries, QMLocationWizard (location_select.js) takes over for Zone through Village --
+  // the exact same widget the standalone /location-select demo and the registration wizard's
+  // India map step already use, just fed subcontinent_states.json instead of india_states.json
+  // so it also covers the other 8 countries.
+  var blBtn = $("update-birth-location-btn"), blModal = $("birth-location-modal");
+  if (blBtn && blModal) {
+    var SUBCONTINENT_CODES = ["IND", "NPL", "BTN", "BGD", "MMR", "LKA", "PAK", "BLC", "AFG", "MDV"];
+    var blContinent = $("bl-continent-select"), blCountry = $("bl-country-select"), blWizardBox = $("bl-wizard-container");
+    var blForm = $("birth-location-form"), blError = $("bl-error"), blSuccess = $("bl-success");
+    var blSubcontinentCache = null, blDistrictsCache = null, blConfirmedSel = null;
+
+    function blResetForm() {
+      blConfirmedSel = null;
+      blWizardBox.hidden = true;
+      blWizardBox.innerHTML = "";
+      blCountry.innerHTML = '<option value="">Select a country…</option>';
+      blCountry.disabled = true;
+      blContinent.value = "";
+      $("bl-reason").value = "";
+      blError.hidden = true;
+      blSuccess.hidden = true;
+      // .qm-form sets its own `display: flex` (register.css), which an author rule always wins
+      // over the UA default for [hidden] -- plain `.hidden = true/false` silently does nothing
+      // on a form element with that class, so the display is toggled explicitly here instead.
+      blForm.hidden = false;
+      blForm.style.display = "";
+    }
+
+    blBtn.addEventListener("click", function () {
+      blResetForm();
+      openModal(blModal);
+      if (blContinent.options.length <= 1) {
+        fetch("/api/world-data").then(function (r) { return r.json(); }).then(function (d) {
+          d.continents.forEach(function (c) {
+            var o = document.createElement("option");
+            o.value = c.id; o.textContent = c.name; o.dataset.countries = JSON.stringify(c.countries);
+            blContinent.appendChild(o);
+          });
+        });
+      }
+    });
+
+    blContinent.addEventListener("change", function () {
+      blWizardBox.hidden = true; blWizardBox.innerHTML = ""; blConfirmedSel = null;
+      blCountry.innerHTML = '<option value="">Select a country…</option>';
+      blCountry.disabled = !blContinent.value;
+      if (!blContinent.value) return;
+      var countries = JSON.parse(blContinent.options[blContinent.selectedIndex].dataset.countries || "[]");
+      countries.forEach(function (c) {
+        var o = document.createElement("option");
+        o.value = c.id; o.textContent = c.name; o.dataset.code = c.code;
+        blCountry.appendChild(o);
+      });
+    });
+
+    blCountry.addEventListener("change", function () {
+      blWizardBox.hidden = true; blWizardBox.innerHTML = ""; blConfirmedSel = null;
+      if (!blCountry.value) return;
+      var code = blCountry.options[blCountry.selectedIndex].dataset.code;
+      if (SUBCONTINENT_CODES.indexOf(code) === -1) return; // continent + country is enough
+      blWizardBox.hidden = false;
+      Promise.all([
+        blSubcontinentCache || fetch("/api/subcontinent").then(function (r) { return r.json(); }),
+        blDistrictsCache || fetch("/api/subcontinent/districts").then(function (r) { return r.json(); }),
+      ]).then(function (res) {
+        blSubcontinentCache = res[0]; blDistrictsCache = res[1];
+        var countryData = null;
+        blSubcontinentCache.countries.forEach(function (c) { if (c.id === blCountry.value) countryData = c; });
+        if (!countryData) return;
+        QMLocationWizard.create(blWizardBox, {
+          zonesData: { zones: countryData.zones },
+          districtsData: blDistrictsCache,
+          fetchVillages: function (tehsilId) { return fetch("/api/india-villages/" + encodeURIComponent(tehsilId)).then(function (r) { return r.json(); }); },
+          onCancel: function () { blConfirmedSel = null; },
+          onConfirm: function (sel) { blConfirmedSel = sel; },
+        });
+      });
+    });
+
+    $("birth-location-cancel").addEventListener("click", function () { closeModal(blModal); });
+
+    blForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      blError.hidden = true;
+      if (!blContinent.value || !blCountry.value) { blError.textContent = "Pick a continent and country."; blError.hidden = false; return; }
+      var countryOpt = blCountry.options[blCountry.selectedIndex];
+      var isSubcontinent = SUBCONTINENT_CODES.indexOf(countryOpt.dataset.code) !== -1;
+      if (isSubcontinent && !blConfirmedSel) { blError.textContent = "Finish choosing your Zone through Village below."; blError.hidden = false; return; }
+      var birthLocation = {
+        continent: { id: blContinent.value, name: blContinent.options[blContinent.selectedIndex].textContent },
+        country: { id: blCountry.value, name: countryOpt.textContent },
+      };
+      if (isSubcontinent && blConfirmedSel) {
+        birthLocation.zone = blConfirmedSel.zone; birthLocation.state = blConfirmedSel.state;
+        birthLocation.district = blConfirmedSel.district; birthLocation.tehsil = blConfirmedSel.tehsil; birthLocation.village = blConfirmedSel.village;
+      }
+      var submitBtn = blForm.querySelector("button[type=submit]");
+      submitBtn.disabled = true;
+      api("/api/dashboard/identity-request", { request_type: "id_change_a", birth_location: birthLocation, reason: $("bl-reason").value })
+        .then(function () { blForm.hidden = true; blForm.style.display = "none"; blSuccess.hidden = false; })
+        .catch(function (err) { blError.textContent = err.message; blError.hidden = false; })
+        .finally(function () { submitBtn.disabled = false; });
+    });
+  }
+
   // ---- Daily-use (third) language ----
   var saveBtn = $("daily-lang-save");
   if (saveBtn) saveBtn.addEventListener("click", function () {

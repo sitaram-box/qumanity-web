@@ -102,6 +102,37 @@ body.hm {
 .hm-trust li { display: inline-flex; align-items: center; gap: 8px; font-size: 0.86rem; color: var(--qm-text-dim); }
 .hm-trust svg { width: 18px; height: 18px; fill: none; stroke: var(--qm-green); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
+/* ---------- Hero scene + wordmark (2026-10-28) ---------- */
+.hm-hero-scene { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.hm-hero-stars {
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(1.5px 1.5px at 10% 20%, rgba(10, 25, 41, 0.25), transparent),
+    radial-gradient(1.5px 1.5px at 80% 15%, rgba(10, 25, 41, 0.2), transparent),
+    radial-gradient(1px 1px at 60% 35%, rgba(10, 25, 41, 0.18), transparent),
+    radial-gradient(1.5px 1.5px at 30% 45%, rgba(10, 25, 41, 0.15), transparent),
+    radial-gradient(1px 1px at 90% 50%, rgba(10, 25, 41, 0.15), transparent);
+  background-size: 100% 100%;
+  opacity: 0.5;
+}
+.hm-hero-orbit {
+  position: absolute; left: 50%; top: 10%; width: 620px; height: 620px; margin-left: -310px;
+  border-radius: 50%; border: 1.5px dashed rgba(255, 153, 51, 0.25);
+  animation: hm-orbit-spin 60s linear infinite;
+}
+.hm-hero-orbit::before, .hm-hero-orbit::after {
+  content: ""; position: absolute; width: 10px; height: 10px; border-radius: 50%;
+  background: radial-gradient(circle, var(--qm-gold), var(--qm-saffron)); box-shadow: 0 0 14px rgba(255, 215, 0, 0.6);
+}
+.hm-hero-orbit::before { top: -5px; left: 50%; margin-left: -5px; }
+.hm-hero-orbit::after { bottom: 8%; right: 6%; }
+@keyframes hm-orbit-spin { to { transform: rotate(360deg); } }
+.hm-hero-wordmark { position: relative; z-index: 1; text-align: center; padding-top: 12px; }
+.hm-hero-wordmark-en { display: block; font-family: var(--hm-display); font-weight: 700; font-size: clamp(2.6rem, 7vw, 5rem); line-height: 1; letter-spacing: -0.02em; background: linear-gradient(120deg, var(--qm-saffron), var(--qm-gold)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hm-hero-wordmark-hi { display: block; margin-top: 6px; font-family: "Noto Sans Devanagari", "Kohinoor Devanagari", "Mangal", sans-serif; font-weight: 600; font-size: clamp(1.1rem, 2.6vw, 1.6rem); color: var(--qm-text-dim); letter-spacing: 0.04em; }
+.hm-hero-inner { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) { .hm-hero-orbit { animation: none; } }
+
 /* Hero sign-in box — the natural next step, directly beneath the CTA, not a competing panel */
 .hm-signin-wrap { margin: 36px auto 0; max-width: 420px; }
 .hm-signin-panel { text-align: left; }
@@ -112,6 +143,21 @@ body.hm {
 .hm-signin-forgot-btn:hover { color: var(--qm-gold-text); }
 .hm-signin-forgot-links:not([hidden]) { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; }
 .hm-signin-forgot-links a { color: var(--qm-gold-text); }
+
+/* ---------- Shivalinga (fixed, bottom-left, this page only) ---------- */
+.hm-shivalinga {
+  position: fixed; left: 14px; bottom: 10px; z-index: 95;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 999px;
+  background: var(--qm-panel-bg); border: 1px solid var(--qm-border); box-shadow: var(--hm-shadow-sm);
+}
+.hm-shivalinga svg { display: block; flex: 0 0 auto; }
+.hm-shivalinga-ram { font-family: "Noto Sans Devanagari", "Kohinoor Devanagari", "Devanagari Sangam MN", "Mangal", sans-serif; font-weight: 700; font-size: 1.15rem; color: var(--qm-gold-text); }
+@media (max-width: 620px) {
+  .hm-shivalinga { left: 10px; bottom: 8px; padding: 6px 10px; gap: 6px; }
+  .hm-shivalinga svg { width: 40px; height: 62px; }
+  .hm-shivalinga-ram { font-size: 0.95rem; }
+}
 
 /* Marquee */
 .hm-marquee { position: relative; overflow: hidden; padding: 16px 0; margin-top: 44px; border-top: 1px solid var(--qm-border); background: var(--qm-panel-bg); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
@@ -219,6 +265,48 @@ body.hm {
   .hm-sb-cols { grid-template-columns: 1fr; }
 }
 
+/* ---------- Statistics carousel (2026-10-28) ---------- */
+.hm-carousel-section { padding-top: 0; }
+.hm-carousel { display: flex; gap: 16px; overflow-x: auto; padding: 4px var(--hm-gutter) 18px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+.hm-carousel-loading { padding: 20px 0; }
+.hm-carousel-card {
+  flex: 0 0 auto; scroll-snap-align: start; min-width: 170px; padding: 18px 20px; text-align: left;
+  border-radius: 16px; background: var(--qm-panel-bg); border: 1px solid var(--qm-border); box-shadow: var(--hm-shadow-sm);
+  cursor: pointer; font: inherit; color: inherit; transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.hm-carousel-card:hover { transform: translateY(-3px); border-color: var(--qm-saffron); }
+.hm-carousel-card-name { display: block; font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--qm-text-dim); margin-bottom: 6px; }
+.hm-carousel-card-count { display: block; font-family: var(--hm-display); font-size: 1.9rem; line-height: 1; color: var(--qm-gold-text); }
+.hm-carousel-card-label { display: block; margin-top: 4px; font-size: 0.78rem; color: var(--qm-text-dim); }
+
+/* ---------- Action icons (2026-10-28) ---------- */
+.hm-actions-section { padding: 48px 0; }
+.hm-actions-row { display: flex; justify-content: center; gap: 48px; }
+.hm-action-icon { display: flex; flex-direction: column; align-items: center; gap: 10px; background: none; border: none; cursor: pointer; text-decoration: none; color: inherit; }
+.hm-action-glyph {
+  display: grid; place-items: center; width: 68px; height: 68px; border-radius: 50%; font-size: 1.8rem;
+  background: linear-gradient(145deg, var(--qm-panel-bg), var(--qm-input-bg)); border: 1px solid var(--qm-border); box-shadow: var(--hm-shadow-sm);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.hm-action-icon:hover .hm-action-glyph { transform: translateY(-4px) scale(1.04); border-color: var(--qm-saffron); }
+.hm-action-label { font-size: 0.86rem; font-weight: 600; color: var(--qm-text); }
+
+/* ---------- AI Support ticket widget (2026-10-28) ---------- */
+/* .dq-modal/.dq-modal-box/.dq-modal-close duplicated here (not imported from dashboard.css,
+   which this public page never loads -- that file carries far more than this one modal needs)
+   using the SAME shared tokens dashboard.css's own copy uses, so both render identically. */
+.dq-modal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 16px; background: rgba(10, 17, 28, 0.55); backdrop-filter: blur(4px); }
+.dq-modal[hidden] { display: none; }
+.dq-modal-box { position: relative; width: min(420px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 20px 22px; border-radius: 18px; background: var(--qm-panel-bg); color: var(--qm-text); border: 1px solid rgba(201, 150, 12, 0.4); box-shadow: 0 24px 70px rgba(10, 25, 41, 0.35); }
+.dq-modal-box h3 { margin: 0 34px 12px 0; font-family: var(--hm-display); color: var(--qm-gold-text); font-size: 1.1rem; }
+.dq-modal-close { position: absolute; top: 10px; right: 12px; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--qm-input-border); background: var(--qm-input-bg); color: var(--qm-text); font-size: 1.3rem; line-height: 1; cursor: pointer; }
+.hm-support-chat { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.hm-support-msg { max-width: 85%; padding: 9px 13px; border-radius: 14px; font-size: 0.9rem; line-height: 1.45; }
+.hm-support-msg.is-bot { align-self: flex-start; background: var(--qm-input-bg); border-radius: 4px 14px 14px 14px; }
+.hm-support-msg.is-user { align-self: flex-end; background: rgba(255, 153, 51, 0.14); border-radius: 14px 4px 14px 14px; }
+.hm-support-form { display: flex; gap: 8px; }
+.hm-support-form input { flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--qm-input-border); background: var(--qm-input-bg); color: var(--qm-text); font: inherit; }
+
 /* ---------- Founder's Message ---------- */
 .hm-founder-panel { padding: 40px; text-align: center; max-width: 720px; margin: 0 auto; }
 .hm-founder-panel h2 { margin: 0 0 18px; font-family: var(--hm-display); font-size: 1.7rem; color: var(--qm-text); }
@@ -243,6 +331,13 @@ body.hm {
 .hm-foot-grid a:not(.hm-brand) { display: block; padding: 4px 0; font-size: 0.9rem; color: rgba(255, 255, 255, 0.68); text-decoration: none; }
 .hm-foot-grid a:not(.hm-brand):hover { color: var(--qm-gold); }
 .hm-foot-base { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 40px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.1); font-size: 0.8rem; color: rgba(255, 255, 255, 0.45); }
+
+/* The fixed Shivalinga chip sits over this footer's bottom-left corner on scroll-to-end;
+   reserve space so it never covers the copyright line instead of just hoping it fits. */
+.hm-footer { padding-bottom: 110px; }
+@media (max-width: 620px) {
+  .hm-footer { padding-bottom: 96px; }
+}
 
 /* ---------- Reveal ---------- */
 .hm-reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.6s ease, transform 0.6s ease; }
@@ -277,4 +372,7 @@ body.hm {
   .hm-bignum b { font-size: 2.4rem; }
   .hm-nav-cta .qm-btn-primary { padding: 8px 14px; }
   .hm-final-quote { padding-left: 14px; }
+  .hm-signin-wrap { margin: 18px auto 28px; }
+  .hm-actions-row { gap: 20px; }
+  .hm-carousel-card { min-width: 150px; }
 }

@@ -3,9 +3,13 @@ docstring for why this is a separate table from reports_core.py's reports, not a
 of it -- a karma complaint has no location and no council escalation ladder, which is the entire
 point of that module.
 
-create()'s route is deliberately not wired up in this pass (2026-10-18) -- this file builds the
-complete model (matching reports_core.py's/recovery_core.py's own create/list/act shape), but no
-citizen-facing "submit a query" entry point exists yet; that is a separate, later decision.
+create()'s route went unwired deliberately in the first pass (2026-10-18) -- this file built the
+complete model (matching reports_core.py's/recovery_core.py's own create/list/act shape) before
+any citizen-facing "submit a query" entry point existed. That entry point now exists, twice:
+POST /api/queries (logged-in, unchanged, user_id always set) and the new POST /api/support/ticket
+(2026-10-28, the public AI Support ticket route -- no login required, user_id is NULL,
+guest_name/guest_contact carry who to reply to). See migrations/031_admin_queries_guest.py for
+why user_id had to become nullable via a table rebuild rather than a plain ADD COLUMN.
 """
 from __future__ import annotations
 
@@ -14,7 +18,9 @@ import datetime as dt
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS admin_queries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
+    user_id INTEGER,
+    guest_name TEXT,
+    guest_contact TEXT,
     category TEXT NOT NULL,
     subject TEXT NOT NULL,
     body TEXT NOT NULL,
@@ -35,7 +41,13 @@ CREATE TABLE IF NOT EXISTS admin_query_replies (
 CREATE INDEX IF NOT EXISTS idx_admin_query_replies_query ON admin_query_replies(query_id, created_at);
 """
 
-CATEGORIES = ("account", "karma", "wallet", "other")
+# account/karma/wallet/other: a logged-in member's own query about their account (the original
+# 2026-10-18 scope). query/complaint/proposal (2026-10-28): the public AI Support widget's own
+# categories -- a different, broader classification for an anonymous visitor's ticket, not a
+# replacement for the first four. Both sets coexist in the same column; the Admin Panel's own
+# filter buttons key off `source` (report/id_recovery/query/council), never off `category`, so
+# adding these doesn't touch any existing filter.
+CATEGORIES = ("account", "karma", "wallet", "query", "complaint", "proposal", "other")
 STATUSES = ("open", "answered", "closed")
 
 
@@ -48,16 +60,28 @@ def _now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
 
-def create(conn, user_id: int, category: str, subject: str, body: str) -> int:
+def create(conn, user_id: int | None, category: str, subject: str, body: str,
+           guest_name: str | None = None, guest_contact: str | None = None) -> int:
+    """user_id is None for an anonymous AI Support ticket (POST /api/support/ticket) -- guest_name
+    is then required (something to show the Admin instead of a real account's name) and
+    guest_contact is optional (an email reply_core can send the Admin's reply to, or a Private ID
+    the visitor already has; either way it's never validated as a real account here, only stored
+    and shown as-is -- see api_support_ticket() in app.py for the one place that distinguishes an
+    email-shaped guest_contact from anything else)."""
     ensure_tables(conn)
     category = category if category in CATEGORIES else "other"
     subject = (subject or "").strip()
     body = (body or "").strip()
+    guest_name = (guest_name or "").strip() or None
+    guest_contact = (guest_contact or "").strip() or None
     if not subject or not body:
         raise ValueError("Subject and message are required")
+    if user_id is None and not guest_name:
+        raise ValueError("Your name is required")
     cur = conn.execute(
-        "INSERT INTO admin_queries (user_id, category, subject, body, status, created_at) VALUES (?, ?, ?, ?, 'open', ?)",
-        (user_id, category, subject, body, _now()),
+        """INSERT INTO admin_queries (user_id, guest_name, guest_contact, category, subject, body, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'open', ?)""",
+        (user_id, guest_name, guest_contact, category, subject, body, _now()),
     )
     conn.commit()
     return cur.lastrowid
@@ -98,13 +122,19 @@ def get_for_member(conn, user_id: int, query_id: int) -> dict | None:
 def list_open(conn) -> list[dict]:
     """Every query that isn't closed, newest first -- the Admin Panel feed's source for this
     ticket type. Includes the asking user's name and their latest reply timestamp (if any) so the
-    combined feed can render a preview without an N+1 query per ticket."""
+    combined feed can render a preview without an N+1 query per ticket.
+
+    2026-10-28: LEFT JOIN, not the original INNER JOIN -- an anonymous AI Support ticket has
+    user_id = NULL, and an INNER JOIN against users would silently drop that row from the feed
+    entirely (no matching users row, no result row), not just show it without a name. author_name
+    falls back to guest_name for those; author_has_picture/author_profile_picture_url are always
+    None/False for a guest (there's no users row to have a picture)."""
     ensure_tables(conn)
     rows = conn.execute(
-        """SELECT q.*, u.name AS author_name, u.gender AS author_gender,
-                  u.profile_picture IS NOT NULL AS author_has_picture,
+        """SELECT q.*, COALESCE(u.name, q.guest_name) AS author_name, u.gender AS author_gender,
+                  COALESCE(u.profile_picture IS NOT NULL, 0) AS author_has_picture,
                   (SELECT MAX(created_at) FROM admin_query_replies r WHERE r.query_id = q.id) AS last_reply_at
-           FROM admin_queries q JOIN users u ON u.id = q.user_id
+           FROM admin_queries q LEFT JOIN users u ON u.id = q.user_id
            WHERE q.status != 'closed' ORDER BY q.created_at DESC"""
     ).fetchall()
     return [_with_author_picture(dict(r), "user_id") for r in rows]

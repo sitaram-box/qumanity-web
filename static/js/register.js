@@ -261,6 +261,35 @@
   }
   restoreDraft();
   privateForm.addEventListener("input", saveDraft);
+
+  // ---- Referral-ID autocomplete (2026-10-28): native <datalist>, no custom dropdown component --
+  // GET /api/public-ids/suggest only ever matches 6+ digits (server-enforced; this debounce is
+  // just to avoid a request per keystroke, not the actual guard), and only ever returns bare
+  // 12-digit codes -- never a name, never a location. ----
+  (function () {
+    var input = document.getElementById("field-referred-by");
+    var list = document.getElementById("field-referred-by-suggestions");
+    if (!input || !list) return;
+    var debounceTimer = null;
+    input.addEventListener("input", function () {
+      clearTimeout(debounceTimer);
+      var q = input.value.trim();
+      if (!/^\d{6,}$/.test(q)) { list.innerHTML = ""; return; }
+      debounceTimer = setTimeout(function () {
+        fetch("/api/public-ids/suggest?q=" + encodeURIComponent(q))
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            list.innerHTML = "";
+            (d.suggestions || []).forEach(function (code) {
+              var opt = document.createElement("option");
+              opt.value = code;
+              list.appendChild(opt);
+            });
+          })
+          .catch(function () {});
+      }, 300);
+    });
+  })();
   privateForm.addEventListener("change", saveDraft);
   genderButtons.forEach(function (b) { b.addEventListener("click", saveDraft); });
 

@@ -7,13 +7,10 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}" />
-  {% if is_admin_panel_user %}
-  <!-- Multi-view's location picker only, same dependency set as /location-select and
-       templates/register.html -- loaded only for the one audience (Founder/council) that ever
-       sees the Multi-View tab, not every dashboard visitor. -->
+  <!-- Birth-location picker only (Update Birth Location, Settings tab): the same India/
+       Sub-continent wizard the registration page and the /location-select demo already use. -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/india_map.css') }}" />
-  {% endif %}
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
 </head>
 <body>
@@ -62,10 +59,6 @@
       <button class="qm-dash-tab" data-tab="public" type="button" data-i18n="tab_public" title="Where you live now: Zone down to Village">Public</button>
       <button class="qm-dash-tab" data-tab="personal" type="button" data-i18n="tab_personal" title="Your Family, Friends and Business groups">Personal</button>
       <button class="qm-dash-tab is-active" data-tab="private" type="button" data-i18n="tab_private" title="Your own profile, wallet and settings">Private</button>
-      {% if is_admin_panel_user %}
-      <button class="qm-dash-tab" data-tab="admin" type="button" title="Citizen Reports, ID recovery and member queries">🛡️ Admin</button>
-      <button class="qm-dash-tab" data-tab="multiview" type="button" title="Monitor other locations">🗺️ Multi-View</button>
-      {% endif %}
     </div>
 
     <section class="qm-dash-panel is-active" id="qm-dash-private">
@@ -306,6 +299,14 @@
               <p class="qm-timeline-note" id="pin-change-success" hidden>PIN updated.</p>
             </div>
 
+            {% if not profile.birth_time_known %}
+            <div class="pv-field" style="margin-top:14px;">
+              <label>Birth location</label>
+              <button type="button" class="qm-btn qm-btn-ghost" id="update-birth-location-btn">📍 Update Birth Location</button>
+              <small class="pv-hint pv-hintline">You registered without an exact birth time — once you have it, you can also confirm your exact birth location here.</small>
+            </div>
+            {% endif %}
+
             <div class="pv-field" style="margin-top:14px;">
               <button type="button" class="qm-btn qm-btn-ghost qm-logout-btn" data-i18n="logout">🚪 Sign out</button>
             </div>
@@ -314,55 +315,6 @@
       </div>
     </section>
 
-    {% if is_admin_panel_user %}
-    <section class="qm-dash-panel" id="qm-dash-admin" hidden>
-      <div class="ap-shell">
-        <div class="ap-filters">
-          <button type="button" class="ap-filter is-active" data-filter="all">All</button>
-          <button type="button" class="ap-filter" data-filter="report">Citizen Reports</button>
-          <button type="button" class="ap-filter" data-filter="id_recovery">ID Recovery</button>
-          <button type="button" class="ap-filter" data-filter="query">Queries</button>
-          <button type="button" class="ap-filter" data-filter="council">Council Queue</button>
-          <button type="button" class="qm-btn qm-btn-ghost ap-refresh-btn" title="Refresh">🔄</button>
-        </div>
-        <div class="ap-body">
-          <div class="ap-list" id="ap-list">
-            <p class="qm-dash-empty" id="ap-list-empty" hidden>Nothing open right now.</p>
-          </div>
-          <div class="ap-detail" id="ap-detail">
-            <p class="qm-dash-empty" id="ap-detail-empty">Select an item from the list.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-    {% endif %}
-
-    {% if is_admin_panel_user %}
-    <!-- 2026-10-28 (Founder/Council multi-view, docs/multiview research): gated on the SAME
-         is_admin_panel_user context var qm-dash-admin already uses above -- it returns a scope
-         for both the Founder ("global") and a currently-serving village council head
-         ("location"), the exact two audiences this tab is for. The zodiac-month narrowing for a
-         council head (only open during their own birth-sign month) is time-dependent and checked
-         fresh by GET /api/admin/viewable-locations at runtime (multiview.js), not here -- a head
-         outside their own window still sees this tab, just the "not open yet" state inside it. -->
-    <section class="qm-dash-panel" id="qm-dash-multiview" hidden>
-      <div class="qm-mv-shell">
-        <div class="qm-mv-main" id="qm-mv-main">
-          <p class="qm-dash-empty">Loading…</p>
-        </div>
-        <div class="qm-mv-tabbar" id="qm-mv-tabbar">
-          <button type="button" class="qm-mv-tab qm-mv-tab-add" id="qm-mv-add-tab">+ Open location</button>
-        </div>
-      </div>
-
-      <div class="dq-modal" id="qm-mv-picker-modal" hidden role="dialog" aria-modal="true">
-        <div class="dq-modal-box dq-modal-wide">
-          <button type="button" class="dq-modal-back" data-close aria-label="Close" title="Close">← Close</button>
-          <div id="qm-mv-picker-body"></div>
-        </div>
-      </div>
-    </section>
-    {% endif %}
 
     {% macro stat_block(prefix) %}
     <div id="{{ prefix }}-content" class="qm-stats-panel">
@@ -451,15 +403,16 @@
     {% endmacro %}
 
     {% if is_admin_panel_user %}
-    <!-- Cloned once per opened Multi-View tab (multiview.js) -- the exact same board macro
-         every real Global/Public board uses, so a monitored location's board looks and behaves
-         identically (read-only overrides come from app.py's /api/admin/board response itself, not
-         from any difference in this markup). Inert until cloned: a template's content is never
-         rendered or queried by id directly, so the macro's own "qm-mv-template-board" id never
-         collides with anything live -- multiview.js assigns each clone a fresh unique id before
-         mounting it. Placed deliberately below this macro's own definition above, since Jinja
-         needs a macro defined before it is called, even inside a plain HTML comment. -->
-    <template id="qm-mv-board-template">{{ board('qm-mv-template', 'village') }}</template>
+    <!-- Cloned once per opened dock tab (multiview.js, the persistent cross-tab dock) -- the exact
+         same board macro every real Global/Public board uses, so a monitored location's board
+         looks and behaves identically (read-only overrides come from app.py's /api/admin/board
+         response itself, not from any difference in this markup). Inert until cloned: a
+         template's content is never rendered or queried by id directly, so the macro's own
+         "qm-dock-template-board" id never collides with anything live -- multiview.js assigns
+         each clone a fresh unique id before mounting it. Placed deliberately below this macro's
+         own definition above, since Jinja needs a macro defined before it is called, even inside
+         a plain HTML comment. -->
+    <template id="qm-dock-board-template">{{ board('qm-dock-template', 'village') }}</template>
     {% endif %}
 
     <section class="qm-dash-panel qm-dash-3col" id="qm-dash-global" hidden>
@@ -932,6 +885,68 @@
     </section>
   </main>
 
+  {% if is_admin_panel_user %}
+  <!-- 2026-10-28 (Hierarchical Explorer redesign): replaces the old top-level Admin/Multi-View
+       tabs with one floating action button, gated by the SAME is_admin_panel_user context var
+       those tabs used -- Founder ("global" scope) or a currently-serving council head ("limited"
+       scope, zodiac-month-windowed, re-checked fresh by GET /api/admin/viewable-locations every
+       time this opens, never cached across the session). -->
+  <button type="button" class="qm-explorer-fab" id="qm-explorer-fab" title="Explore locations">🗺️</button>
+
+  <div class="dq-modal qm-explorer-modal" id="qm-explorer-modal" hidden role="dialog" aria-modal="true">
+    <div class="dq-modal-box dq-modal-wide">
+      <button type="button" class="dq-modal-back" data-close aria-label="Close" title="Close">← Close</button>
+      <div class="qm-explorer-subtabs">
+        <button type="button" class="qm-explorer-subtab is-active" data-sub="locations">📍 Locations</button>
+        <button type="button" class="qm-explorer-subtab" data-sub="queue">🛡️ Admin Queue</button>
+      </div>
+
+      <div class="qm-explorer-pane" id="qm-explorer-pane-locations">
+        <div class="qm-explorer-breadcrumb" id="qm-explorer-breadcrumb"></div>
+        <div class="qm-explorer-body" id="qm-explorer-body">
+          <p class="qm-dash-empty">Loading…</p>
+        </div>
+      </div>
+
+      <!-- The exact Admin Queue markup that used to be its own top-level tab (#qm-dash-admin) --
+           moved here verbatim; static/js/dashboard.js's own admin-panel code reads these same
+           ids (#ap-list/#ap-detail/.ap-filter/.ap-refresh-btn) unchanged, it's just triggered by
+           this sub-tab opening now instead of a top-tab click (window.QMLoadAdminPanel, called
+           from multiview.js). -->
+      <div class="qm-explorer-pane" id="qm-explorer-pane-queue" hidden>
+        <div class="ap-shell">
+          <div class="ap-filters">
+            <button type="button" class="ap-filter is-active" data-filter="all">All</button>
+            <button type="button" class="ap-filter" data-filter="report">Citizen Reports</button>
+            <button type="button" class="ap-filter" data-filter="id_recovery">ID Recovery</button>
+            <button type="button" class="ap-filter" data-filter="query">Queries</button>
+            <button type="button" class="ap-filter" data-filter="council">Council Queue</button>
+            <button type="button" class="qm-btn qm-btn-ghost ap-refresh-btn" title="Refresh">🔄</button>
+          </div>
+          <div class="ap-body">
+            <div class="ap-list" id="ap-list"></div>
+            <div class="ap-detail" id="ap-detail">
+              <p class="qm-dash-empty" id="ap-detail-empty">Select an item from the list.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Persistent cross-tab dock (2026-10-28): lives outside <main> entirely, so it is visible on
+       every dashboard tab (Global/Public/Personal/Private) -- a Founder monitoring several
+       villages can switch to Global to check the Earth board, then back to these open tabs
+       without losing them. Hidden by multiview.js until at least one location is open. -->
+  <div class="qm-dock" id="qm-dock" hidden>
+    <div class="qm-dock-bar" id="qm-dock-bar">
+      <button type="button" class="qm-dock-toggle" id="qm-dock-toggle" title="Expand or collapse">▴</button>
+      <div class="qm-dock-tabs" id="qm-dock-tabs"></div>
+    </div>
+    <div class="qm-dock-panel" id="qm-dock-panel" hidden></div>
+  </div>
+  {% endif %}
+
   <!-- Detailed Stats modal (2026-10-27): the "📊 Stats" button on a Global/Public board opens
        this instead of just scrolling to the cramped, always-on explorer sidebar -- same
        stat_block macro, a second time, with its own "qm-stats-modal" prefix (see dashboard.js's
@@ -959,6 +974,37 @@
       <p class="qm-summary-error" id="edit-profile-error" hidden></p>
       <p class="qm-timeline-note" id="edit-profile-success" hidden>Request queued for review.</p>
     </form>
+  </div>
+
+  <!-- Update Birth Location (2026-10-28, Part 1 of the homepage-redesign brief): only ever
+       shown to members with birth_time_known = 0. Routed through identity_core's id_change_a
+       ticket -- NOT self-service -- because it re-rolls the Private ID and cascades into
+       zodiac/Kundali/elemental recompute on approval, same as every other birth-identity change
+       in this codebase. Reuses the registration wizard's own continent/country dropdowns and,
+       for the 9 Sub-continent countries, the same QMLocationWizard (location_select.js) the
+       standalone /location-select demo already uses -- see dash_extras.js. -->
+  <div class="dq-modal" id="birth-location-modal" hidden role="dialog" aria-modal="true" aria-labelledby="birth-location-title">
+    <div class="dq-modal-box dq-modal-wide">
+      <button type="button" class="dq-modal-close" data-close aria-label="Close">×</button>
+      <h3 id="birth-location-title">📍 Update Birth Location</h3>
+      <p class="qm-timeline-note">Reviewed by your birth village's council before it applies. Approval also re-issues your 9-digit Private ID, since it was generated from your original birth location.</p>
+      <form id="birth-location-form" class="qm-form">
+        <label class="qm-field"><span>Continent</span>
+          <select id="bl-continent-select"><option value="">Select a continent…</option></select>
+        </label>
+        <label class="qm-field"><span>Country</span>
+          <select id="bl-country-select" disabled><option value="">Select a country…</option></select>
+        </label>
+        <div id="bl-wizard-container" hidden></div>
+        <label class="qm-field"><span>Reason for change</span><input type="text" id="bl-reason" required /></label>
+        <div class="qm-summary-actions">
+          <button type="button" class="qm-btn qm-btn-ghost" id="birth-location-cancel" data-close>Cancel</button>
+          <button type="submit" class="qm-btn qm-btn-primary">Submit for council review →</button>
+        </div>
+        <p class="qm-summary-error" id="bl-error" hidden></p>
+      </form>
+      <p class="qm-timeline-note" id="bl-success" hidden>✓ Queued for your birth village council's review.</p>
+    </div>
   </div>
 
   <div class="dq-modal" id="kundali-modal" hidden role="dialog" aria-modal="true" aria-labelledby="kundali-title">
@@ -1133,14 +1179,17 @@
   <script src="{{ url_for('static', filename='js/avatar.js') }}"></script>
   <script src="{{ url_for('static', filename='js/qmail_format.js') }}"></script>
   <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+  <!-- Birth-location picker only -- see the <link> note above. -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{{ url_for('static', filename='js/india_map.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/location_select.js') }}"></script>
   <script src="{{ url_for('static', filename='js/dash_extras.js') }}"></script>
   <script src="{{ url_for('static', filename='js/tutorial.js') }}"></script>
   <script src="{{ url_for('static', filename='js/board.js') }}"></script>
   {% if is_admin_panel_user %}
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="{{ url_for('static', filename='js/india_map.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/searchable_select.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/location_select.js') }}"></script>
+  <!-- 2026-10-28: the Hierarchical Explorer's generic level-by-level drill-down (multiview.js)
+       reuses the same location data endpoints the old map-based wizard did, just without the
+       map -- Leaflet/india_map.js/searchable_select.js/location_select.js are no longer needed. -->
   <script src="{{ url_for('static', filename='js/multiview.js') }}"></script>
   {% endif %}
   <script src="{{ url_for('static', filename='js/social.js') }}"></script>

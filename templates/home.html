@@ -19,6 +19,36 @@
 <body class="hm">
   <a class="hm-skip" href="#main">Skip to content</a>
 
+  <!-- Fixed spiritual anchor, bottom-left of every viewport on this page only (body.hm-scoped).
+       Decorative -- aria-hidden, no interactive content -- so it carries no role/label. -->
+  <div class="hm-shivalinga" aria-hidden="true">
+    <svg viewBox="0 0 70 108" width="54" height="83">
+      <!-- Pedestal (peetha/yoni base), two stacked rings -->
+      <ellipse cx="35" cy="100" rx="31" ry="8" fill="#17140f"/>
+      <ellipse cx="35" cy="92" rx="23" ry="6" fill="#201c15"/>
+      <!-- The linga itself: a tall half-ellipse dome sitting on the pedestal -->
+      <path d="M 14 92 A 21 62 0 0 1 56 92 Z" fill="#2b2620"/>
+      <path d="M 14 92 A 21 62 0 0 1 56 92 Z" fill="url(#hm-linga-sheen)" opacity="0.55"/>
+      <!-- Tripundra: three ash-white horizontal lines across the dome -->
+      <path d="M 19 58 Q 35 53 51 58" stroke="#e7e2d4" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+      <path d="M 18 67 Q 35 62 52 67" stroke="#e7e2d4" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+      <path d="M 17 76 Q 35 71 53 76" stroke="#e7e2d4" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+      <!-- Traditional Shiva eyes: two almond eyes + the third eye above -->
+      <path d="M 20 38 Q 27 32 34 38 Q 27 44 20 38 Z" fill="#ffd700"/>
+      <path d="M 36 38 Q 43 32 50 38 Q 43 44 36 38 Z" fill="#ffd700"/>
+      <circle cx="27" cy="38" r="2.1" fill="#17140f"/>
+      <circle cx="43" cy="38" r="2.1" fill="#17140f"/>
+      <ellipse cx="35" cy="26" rx="2.3" ry="5.6" fill="#ffd700"/>
+      <defs>
+        <linearGradient id="hm-linga-sheen" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#6b5a35"/>
+          <stop offset="1" stop-color="transparent"/>
+        </linearGradient>
+      </defs>
+    </svg>
+    <span class="hm-shivalinga-ram" lang="hi">राम</span>
+  </div>
+
   <!-- ============ Navigation ============ -->
   <header class="hm-nav" id="hm-nav">
     <div class="hm-nav-inner">
@@ -51,23 +81,33 @@
     <!-- ============ HERO ============ -->
     <section class="hm-hero">
       <div class="hm-hero-glow" aria-hidden="true"></div>
+
+      <!-- 2026-10-28 (homepage redesign): the "spiritual and emotional anchor" -- Qumanity's own
+           wordmark in English + Hindi, over a layered CSS/SVG scene (no binary image asset
+           needed: a starfield + slow-drifting orbit ring, same saffron/gold palette as the rest
+           of this page, GPU-cheap). Purely decorative -- aria-hidden, the real heading for
+           assistive tech is the h1 a few lines down, unchanged in meaning. -->
+      <div class="hm-hero-scene" aria-hidden="true">
+        <div class="hm-hero-stars"></div>
+        <div class="hm-hero-orbit"></div>
+      </div>
+      <div class="hm-wrap hm-hero-wordmark" aria-hidden="true">
+        <span class="hm-hero-wordmark-en">Qumanity</span>
+        <span class="hm-hero-wordmark-hi" lang="hi">क्वमानिटी लोक</span>
+      </div>
+
       <div class="hm-wrap hm-hero-inner">
         <p class="hm-chip"><span class="hm-chip-dot"></span> <span data-i18n="hero_chip">Quantum&nbsp;+&nbsp;Humanity</span></p>
-        <h1><span data-i18n="hero_title">A fair account of every place, and everyone who calls it home.</span></h1>
-        <p class="hm-lead" data-i18n="hero_lead">Every village and every member has a verified place on one open record — where you live now, not just where you were born. Build your family tree and connect with your lineage. Elections rotate by the zodiac calendar. Service is logged and, in time, rewarded. Nothing here needs to be re-verified, and nothing can quietly disappear.</p>
-        <div class="hm-cta-row hm-cta-center">
-          <a class="qm-btn qm-btn-primary qm-btn-lg" href="{{ url_for('register') }}"><span data-i18n="hero_cta">Create your account</span> <span aria-hidden="true">→</span></a>
-          <a class="qm-btn qm-btn-ghost qm-btn-lg" href="#live" data-i18n="hero_see_live">See who's here</a>
-        </div>
-        <ul class="hm-trust">
-          <li><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/></svg>Built and stewarded by one founder</li>
-          <li><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Open &amp; auditable</li>
-          <li><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>Voluntary by design</li>
-        </ul>
 
         <!-- The homepage's only sign-in entry point (the nav/footer "Login" links are gone).
              Reuses /login's own field markup, validation and POST /login call almost verbatim --
-             see home_signin.js. Element ids below are load-bearing; do not rename them. -->
+             see home_signin.js. Element ids below are load-bearing; do not rename them.
+             2026-10-28: moved directly under the wordmark/chip -- the center-focus primary action
+             for a returning member, ahead of the headline copy a first-time visitor needs instead
+             (both audiences are served, just in the order each one actually wants). This is the
+             SAME reordering the mobile breakpoint already did with a flexbox `order` override
+             ("a real UX failure on a phone" -- now true at every width, so it's just the DOM
+             order here instead of a breakpoint-only override; see home.css). -->
         <div class="hm-signin-wrap" id="hm-signin-slot">
           <div class="hm-panel hm-glass hm-signin-panel">
             <h3 class="hm-signin-title">Already a member? Sign in</h3>
@@ -93,6 +133,18 @@
             </div>
           </div>
         </div>
+
+        <h1><span data-i18n="hero_title">A fair account of every place, and everyone who calls it home.</span></h1>
+        <p class="hm-lead" data-i18n="hero_lead">Every village and every member has a verified place on one open record — where you live now, not just where you were born. Build your family tree and connect with your lineage. Elections rotate by the zodiac calendar. Service is logged and, in time, rewarded. Nothing here needs to be re-verified, and nothing can quietly disappear.</p>
+        <div class="hm-cta-row hm-cta-center">
+          <a class="qm-btn qm-btn-primary qm-btn-lg" href="{{ url_for('register') }}"><span data-i18n="hero_cta">Create your account</span> <span aria-hidden="true">→</span></a>
+          <a class="qm-btn qm-btn-ghost qm-btn-lg" href="#live" data-i18n="hero_see_live">See who's here</a>
+        </div>
+        <ul class="hm-trust">
+          <li><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/></svg>Built and stewarded by one founder</li>
+          <li><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Open &amp; auditable</li>
+          <li><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>Voluntary by design</li>
+        </ul>
       </div>
 
       <div class="hm-marquee" aria-label="Ways to contribute">
@@ -102,6 +154,41 @@
           <span aria-hidden="true">🌱 Plant a tree</span><span aria-hidden="true">📚 Teach an hour</span><span aria-hidden="true">👵 Care for an elder</span><span aria-hidden="true">💧 Restore water</span>
           <span aria-hidden="true">🌾 Farm regeneratively</span><span aria-hidden="true">🎭 Preserve a tradition</span><span aria-hidden="true">🤝 Mediate a dispute</span><span aria-hidden="true">🏛️ Serve on a council</span>
         </div>
+      </div>
+    </section>
+
+    <!-- ============ STATISTICS CAROUSEL (2026-10-28) ============
+         Live registered-human counts, Earth down to each Sub-continent country -- the SAME public
+         endpoints the #live section below already uses (/api/earth/stats, /api/subcontinent/stats,
+         /api/country/stats/<id>), just surfaced here first as a scannable row instead of requiring
+         a scroll + manual country pick. Clicking a card scrolls to #live and drives its EXISTING
+         tab/dropdown (earth.js's own showCountryStats()/switchTab()) rather than opening a second,
+         competing stats view -- see home_stats_carousel.js. -->
+    <section class="hm-section hm-carousel-section" id="hm-stats">
+      <div class="hm-wrap">
+        <p class="hm-kicker">Live from Qumanity</p>
+        <h2>The world, right now.</h2>
+      </div>
+      <div class="hm-carousel" id="hm-stats-carousel" aria-label="Registered humans by location — click a card for details">
+        <p class="hm-fine hm-carousel-loading">Loading…</p>
+      </div>
+    </section>
+
+    <!-- ============ ACTION ICONS (2026-10-28) ============ -->
+    <section class="hm-section hm-actions-section">
+      <div class="hm-wrap hm-actions-row">
+        <a class="hm-action-icon" href="{{ url_for('about') }}">
+          <span class="hm-action-glyph" aria-hidden="true">ℹ️</span>
+          <span class="hm-action-label">About</span>
+        </a>
+        <button type="button" class="hm-action-icon" id="hm-action-support">
+          <span class="hm-action-glyph" aria-hidden="true">💬</span>
+          <span class="hm-action-label">AI Support</span>
+        </button>
+        <a class="hm-action-icon" href="#hm-stats">
+          <span class="hm-action-glyph" aria-hidden="true">📊</span>
+          <span class="hm-action-label">Statistics</span>
+        </a>
       </div>
     </section>
 
@@ -270,6 +357,23 @@
     </div>
   </footer>
 
+  <!-- ============ AI SUPPORT ticket widget (2026-10-28) ============
+       A scripted 3-step flow (category -> who you are -> message), not a real LLM call -- see
+       the ticketing research/proposal for why. POSTs to the new, public
+       POST /api/support/ticket; a logged-in visitor's session auto-links the ticket (no name/
+       contact step shown at all -- see ai_support.js). -->
+  <div class="dq-modal hm-support-modal" id="hm-support-modal" hidden role="dialog" aria-modal="true" aria-labelledby="hm-support-title">
+    <div class="dq-modal-box">
+      <button type="button" class="dq-modal-close" data-close aria-label="Close">×</button>
+      <h3 id="hm-support-title">💬 Qumanity Support</h3>
+      <div class="hm-support-chat" id="hm-support-chat"></div>
+      <form class="hm-support-form" id="hm-support-form">
+        <input type="text" id="hm-support-input" placeholder="Type your message…" autocomplete="off" />
+        <button type="submit" class="qm-btn qm-btn-primary">Send</button>
+      </form>
+    </div>
+  </div>
+
   <!-- three.js / earcut are no longer loaded here -- earth.js lazy-loads them itself only when
        Live Stats scrolls into view, and only on screens 640px or wider; see earth.js. -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -282,6 +386,14 @@
   <script src="{{ url_for('static', filename='js/scoreboard.js') }}"></script>
   <script src="{{ url_for('static', filename='js/home_i18n.js') }}"></script>
   <script src="{{ url_for('static', filename='js/logo_nav.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/home_stats_carousel.js') }}"></script>
+  <script>
+    // Flask injects `session` into every template automatically -- no new route context needed.
+    // ai_support.js skips asking a logged-in visitor's name/contact (the ticket route auto-links
+    // via their session instead); this is the one bit of server state it needs to know that.
+    window.QM_LOGGED_IN = {{ 'true' if session.user_id else 'false' }};
+  </script>
+  <script src="{{ url_for('static', filename='js/ai_support.js') }}"></script>
   {% include '_poems_marquee.html' %}
 </body>
 </html>

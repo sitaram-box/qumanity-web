@@ -1050,24 +1050,45 @@
 @media (max-width: 520px) { .qp-elec-weeks { grid-template-columns: repeat(2, 1fr); } }
 .qp-elec-form { flex-direction: column; align-items: stretch; }
 
-/* ---- Founder/Council multi-view (2026-10-28) ---- */
-.qm-mv-shell { display: flex; flex-direction: column; height: calc(100vh - 220px); min-height: 420px; }
-.qm-mv-main { flex: 1; min-height: 0; overflow: hidden; border: 1px solid var(--qm-input-border); border-radius: 12px 12px 0 0; background: var(--qm-panel-bg); display: flex; }
-.qm-mv-main .bd { height: 100%; width: 100%; }
-/* .bd's own base rule (display: flex, above) beats the bare [hidden] UA style on specificity --
-   every other use of `hidden` in this codebase toggles a whole .qm-dash-panel (which DOES have
-   its own [hidden] override, far above), never an individual .bd directly; multiview.js is the
-   first caller to hide/show .bd elements one at a time within an already-visible panel, so this
-   override is new, not a duplicate of one that already existed. */
-.qm-mv-main .bd[hidden] { display: none; }
-.qm-mv-main > .qm-dash-empty { margin: auto; }
-.qm-mv-tabbar { display: flex; gap: 6px; padding: 8px; overflow-x: auto; border: 1px solid var(--qm-input-border); border-top: none; border-radius: 0 0 12px 12px; background: var(--qm-input-bg); }
-.qm-mv-tab { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--qm-input-border); background: var(--qm-panel-bg); color: var(--qm-text); font: 600 0.8rem "Inter", system-ui, sans-serif; cursor: pointer; white-space: nowrap; flex: 0 0 auto; }
-.qm-mv-tab[hidden] { display: none; }
-.qm-mv-tab.is-active { border-color: #B8860B; background: rgba(255, 210, 74, 0.18); color: var(--qm-gold-text); }
-.qm-mv-tab-close { opacity: 0.55; font-size: 0.75rem; } .qm-mv-tab-close:hover { opacity: 1; }
-.qm-mv-tab-add { border-style: dashed; }
-.qm-mv-quickrow { display: flex; align-items: center; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
-.qm-mv-picker-step select { width: 100%; margin-top: 4px; }
-.qm-mv-wizard-host { margin-top: 14px; border-top: 1px solid var(--qm-input-border); padding-top: 14px; }
-.qm-mv-wizard-host .qm-india-flow-header { margin-top: 0; }
+/* ---- Hierarchical Explorer: FAB + modal (2026-10-28 redesign, replaces the old top-level
+   Admin/Multi-View tabs and the panel-scoped .qm-mv-* rules) ---- */
+.qm-explorer-fab {
+  position: fixed; left: 20px; bottom: 20px; z-index: 150;
+  width: 56px; height: 56px; border-radius: 50%; border: none;
+  background: linear-gradient(135deg, #ff8a1f, #ffd24a); font-size: 1.4rem; line-height: 56px; text-align: center; padding: 0;
+  box-shadow: 0 6px 20px rgba(10, 25, 41, 0.35); cursor: pointer; transition: transform 0.15s ease;
+}
+.qm-explorer-fab:hover { transform: scale(1.06); }
+.qm-explorer-subtabs { display: flex; gap: 8px; margin: 4px 0 14px; border-bottom: 1px solid var(--qm-input-border); }
+.qm-explorer-subtab { padding: 8px 14px; border: none; border-bottom: 2px solid transparent; background: none; color: var(--qm-text-dim); font: 700 0.85rem "Inter", system-ui, sans-serif; cursor: pointer; }
+.qm-explorer-subtab.is-active { color: var(--qm-gold-text); border-bottom-color: #B8860B; }
+.qm-explorer-pane[hidden] { display: none; }
+.qm-explorer-breadcrumb { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 12px; font-size: 0.85rem; }
+.qm-explorer-crumb { background: none; border: none; color: var(--qm-gold-text); cursor: pointer; font-weight: 600; padding: 2px 4px; }
+.qm-explorer-crumb.is-current { color: var(--qm-text); cursor: default; }
+.qm-explorer-crumb-sep { color: var(--qm-text-dim); }
+.qm-explorer-openbtn { margin-bottom: 12px; }
+.qm-explorer-body { max-height: 50vh; overflow-y: auto; }
+.qm-explorer-list { display: flex; flex-direction: column; gap: 6px; }
+.qm-explorer-row { text-align: left; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--qm-input-border); background: var(--qm-input-bg); color: var(--qm-text); font: 600 0.88rem "Inter", system-ui, sans-serif; cursor: pointer; }
+.qm-explorer-row:hover { border-color: #B8860B; background: rgba(255, 210, 74, 0.1); }
+
+/* ---- Persistent cross-tab dock (2026-10-28): sits outside every dashboard tab panel, visible
+   on all of Global/Public/Personal/Private, independent of the Explorer modal's own open/closed
+   state. ---- */
+.qm-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 140; background: var(--qm-panel-bg); border-top: 1px solid var(--qm-input-border); box-shadow: 0 -4px 16px rgba(10, 25, 41, 0.12); }
+.qm-dock[hidden] { display: none; }
+.qm-dock-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; overflow-x: auto; }
+.qm-dock-toggle { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--qm-input-border); background: var(--qm-input-bg); color: var(--qm-text); cursor: pointer; }
+.qm-dock-tabs { display: flex; gap: 6px; overflow-x: auto; }
+.qm-dock-tab { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--qm-input-border); background: var(--qm-input-bg); color: var(--qm-text); font: 600 0.8rem "Inter", system-ui, sans-serif; cursor: pointer; white-space: nowrap; flex: 0 0 auto; }
+.qm-dock-tab.is-active { border-color: #B8860B; background: rgba(255, 210, 74, 0.18); color: var(--qm-gold-text); }
+.qm-dock-tab-close { opacity: 0.55; font-size: 0.75rem; } .qm-dock-tab-close:hover { opacity: 1; }
+.qm-dock-panel { height: 48vh; min-height: 320px; border-top: 1px solid var(--qm-input-border); display: flex; }
+.qm-dock-panel[hidden] { display: none; }
+.qm-dock-panel .bd { height: 100%; width: 100%; }
+/* .bd's own base rule (display: flex) beats the bare [hidden] UA style on specificity -- every
+   other use of `hidden` in this codebase toggles a whole .qm-dash-panel (which DOES have its own
+   [hidden] override, far above), never an individual .bd directly; this dock is the one place
+   that hides/shows .bd elements one at a time within an already-visible container. */
+.qm-dock-panel .bd[hidden] { display: none; }
