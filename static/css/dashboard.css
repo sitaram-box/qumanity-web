@@ -1049,3 +1049,25 @@
 .qp-elec-turnout { display: block; margin-top: 10px; }
 @media (max-width: 520px) { .qp-elec-weeks { grid-template-columns: repeat(2, 1fr); } }
 .qp-elec-form { flex-direction: column; align-items: stretch; }
+
+/* ---- Founder/Council multi-view (2026-10-28) ---- */
+.qm-mv-shell { display: flex; flex-direction: column; height: calc(100vh - 220px); min-height: 420px; }
+.qm-mv-main { flex: 1; min-height: 0; overflow: hidden; border: 1px solid var(--qm-input-border); border-radius: 12px 12px 0 0; background: var(--qm-panel-bg); display: flex; }
+.qm-mv-main .bd { height: 100%; width: 100%; }
+/* .bd's own base rule (display: flex, above) beats the bare [hidden] UA style on specificity --
+   every other use of `hidden` in this codebase toggles a whole .qm-dash-panel (which DOES have
+   its own [hidden] override, far above), never an individual .bd directly; multiview.js is the
+   first caller to hide/show .bd elements one at a time within an already-visible panel, so this
+   override is new, not a duplicate of one that already existed. */
+.qm-mv-main .bd[hidden] { display: none; }
+.qm-mv-main > .qm-dash-empty { margin: auto; }
+.qm-mv-tabbar { display: flex; gap: 6px; padding: 8px; overflow-x: auto; border: 1px solid var(--qm-input-border); border-top: none; border-radius: 0 0 12px 12px; background: var(--qm-input-bg); }
+.qm-mv-tab { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--qm-input-border); background: var(--qm-panel-bg); color: var(--qm-text); font: 600 0.8rem "Inter", system-ui, sans-serif; cursor: pointer; white-space: nowrap; flex: 0 0 auto; }
+.qm-mv-tab[hidden] { display: none; }
+.qm-mv-tab.is-active { border-color: #B8860B; background: rgba(255, 210, 74, 0.18); color: var(--qm-gold-text); }
+.qm-mv-tab-close { opacity: 0.55; font-size: 0.75rem; } .qm-mv-tab-close:hover { opacity: 1; }
+.qm-mv-tab-add { border-style: dashed; }
+.qm-mv-quickrow { display: flex; align-items: center; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+.qm-mv-picker-step select { width: 100%; margin-top: 4px; }
+.qm-mv-wizard-host { margin-top: 14px; border-top: 1px solid var(--qm-input-border); padding-top: 14px; }
+.qm-mv-wizard-host .qm-india-flow-header { margin-top: 0; }

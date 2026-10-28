@@ -7,6 +7,13 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}" />
+  {% if is_admin_panel_user %}
+  <!-- Multi-view's location picker only, same dependency set as /location-select and
+       templates/register.html -- loaded only for the one audience (Founder/council) that ever
+       sees the Multi-View tab, not every dashboard visitor. -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/india_map.css') }}" />
+  {% endif %}
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
 </head>
 <body>
@@ -57,6 +64,7 @@
       <button class="qm-dash-tab is-active" data-tab="private" type="button" data-i18n="tab_private" title="Your own profile, wallet and settings">Private</button>
       {% if is_admin_panel_user %}
       <button class="qm-dash-tab" data-tab="admin" type="button" title="Citizen Reports, ID recovery and member queries">🛡️ Admin</button>
+      <button class="qm-dash-tab" data-tab="multiview" type="button" title="Monitor other locations">🗺️ Multi-View</button>
       {% endif %}
     </div>
 
@@ -329,6 +337,33 @@
     </section>
     {% endif %}
 
+    {% if is_admin_panel_user %}
+    <!-- 2026-10-28 (Founder/Council multi-view, docs/multiview research): gated on the SAME
+         is_admin_panel_user context var qm-dash-admin already uses above -- it returns a scope
+         for both the Founder ("global") and a currently-serving village council head
+         ("location"), the exact two audiences this tab is for. The zodiac-month narrowing for a
+         council head (only open during their own birth-sign month) is time-dependent and checked
+         fresh by GET /api/admin/viewable-locations at runtime (multiview.js), not here -- a head
+         outside their own window still sees this tab, just the "not open yet" state inside it. -->
+    <section class="qm-dash-panel" id="qm-dash-multiview" hidden>
+      <div class="qm-mv-shell">
+        <div class="qm-mv-main" id="qm-mv-main">
+          <p class="qm-dash-empty">Loading…</p>
+        </div>
+        <div class="qm-mv-tabbar" id="qm-mv-tabbar">
+          <button type="button" class="qm-mv-tab qm-mv-tab-add" id="qm-mv-add-tab">+ Open location</button>
+        </div>
+      </div>
+
+      <div class="dq-modal" id="qm-mv-picker-modal" hidden role="dialog" aria-modal="true">
+        <div class="dq-modal-box dq-modal-wide">
+          <button type="button" class="dq-modal-back" data-close aria-label="Close" title="Close">← Close</button>
+          <div id="qm-mv-picker-body"></div>
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
     {% macro stat_block(prefix) %}
     <div id="{{ prefix }}-content" class="qm-stats-panel">
       <div class="qm-stats-location-header">
@@ -414,6 +449,18 @@
       <p class="bd-note" hidden></p>
     </section>
     {% endmacro %}
+
+    {% if is_admin_panel_user %}
+    <!-- Cloned once per opened Multi-View tab (multiview.js) -- the exact same board macro
+         every real Global/Public board uses, so a monitored location's board looks and behaves
+         identically (read-only overrides come from app.py's /api/admin/board response itself, not
+         from any difference in this markup). Inert until cloned: a template's content is never
+         rendered or queried by id directly, so the macro's own "qm-mv-template-board" id never
+         collides with anything live -- multiview.js assigns each clone a fresh unique id before
+         mounting it. Placed deliberately below this macro's own definition above, since Jinja
+         needs a macro defined before it is called, even inside a plain HTML comment. -->
+    <template id="qm-mv-board-template">{{ board('qm-mv-template', 'village') }}</template>
+    {% endif %}
 
     <section class="qm-dash-panel qm-dash-3col" id="qm-dash-global" hidden>
       <div class="qm-panel-tabs qm-location-tabs-row" id="global-root-tabs">
@@ -1089,6 +1136,13 @@
   <script src="{{ url_for('static', filename='js/dash_extras.js') }}"></script>
   <script src="{{ url_for('static', filename='js/tutorial.js') }}"></script>
   <script src="{{ url_for('static', filename='js/board.js') }}"></script>
+  {% if is_admin_panel_user %}
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{{ url_for('static', filename='js/india_map.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/searchable_select.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/location_select.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/multiview.js') }}"></script>
+  {% endif %}
   <script src="{{ url_for('static', filename='js/social.js') }}"></script>
   <script src="{{ url_for('static', filename='js/family.js') }}"></script>
   <script src="https://unpkg.com/d3@7.9.0/dist/d3.min.js"></script>

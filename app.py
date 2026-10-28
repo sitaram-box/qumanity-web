@@ -4293,6 +4293,113 @@ def _flatten_location_chain(location: dict) -> str:
     return ", ".join(parts)
 
 
+# ---- Founder/Council multi-view dashboard (2026-10-28) ----
+# "Build what the data supports, extension-point the rest" (the approved scope decision): the
+# Founder can monitor ANY location (village data is real for all 9 Sub-continent countries,
+# country-level only everywhere else); a currently-serving VILLAGE council head can monitor
+# sibling villages in their own Tehsil, but only during their OWN birth sign's month -- reviving
+# the spirit of the old training/leadership split (docs/zodiac_council_voting.md) without
+# reverting election_core._winner_term()'s own "leads immediately" decision: they're council all
+# year, multi-view access just doesn't open until their own zodiac month arrives within it.
+# Tehsil/District/State council members don't exist in any form yet (village_council has no
+# equivalent table at those levels) -- _viewable_locations_scope() returns scope "none" for them,
+# the same shape a real implementation would fill in later, not a different contract.
+
+
+def _viewable_locations_scope() -> dict:
+    """{"scope": "global"} (Founder/Admin, _is_admin()) | {"scope": "limited", level, parent,
+    locations, access_window} (a village council head, inside their own sign's month) |
+    {"scope": "none", "reason": "not_eligible" | "training", access_window?}. Re-derived fresh on
+    every call -- no caching -- so a head whose own zodiac month just ended loses multi-view
+    access on their very next request, same guarantee _is_admin_panel_user() already makes for
+    the admin panel's own location scope."""
+    if _is_admin():
+        return {"scope": "global"}
+    panel = _is_admin_panel_user()
+    if not panel or panel["scope"] != "location" or panel["level"] != "village":
+        return {"scope": "none", "reason": "not_eligible"}
+    conn = get_db()
+    try:
+        user = _current_user_row(conn)
+        zodiac = conn.execute("SELECT sun_sign FROM user_zodiac WHERE user_id = ?", (user["id"],)).fetchone()
+        if not zodiac:
+            return {"scope": "none", "reason": "not_eligible"}
+        today = dt.date.today()
+        start, end = election_core._sign_window(zodiac["sun_sign"], today)
+        window = {"sign": zodiac["sun_sign"], "opens": start.isoformat(), "closes": end.isoformat()}
+        if not (start <= today <= end):
+            return {"scope": "none", "reason": "training", "access_window": window}
+        present = json.loads(user["present_location_json"] or "{}")
+        tehsil = present.get("tehsil") or {}
+        if not tehsil.get("id"):
+            return {"scope": "none", "reason": "not_eligible"}
+        rows = conn.execute(
+            "SELECT id, name FROM india_villages WHERE tehsil_id = ? ORDER BY name", (tehsil["id"],)
+        ).fetchall()
+        locations = [{"id": r["id"], "name": r["name"], "is_own": r["id"] == panel["location_id"]} for r in rows]
+        return {
+            "scope": "limited", "level": "village",
+            "parent": {"level": "tehsil", "id": tehsil["id"], "name": tehsil.get("name")},
+            "locations": locations, "access_window": window,
+        }
+    finally:
+        conn.close()
+
+
+@app.route("/api/admin/viewable-locations")
+@login_required
+def api_admin_viewable_locations():
+    return jsonify(_viewable_locations_scope())
+
+
+@app.route("/api/admin/board/<level>", methods=["POST"])
+@login_required
+@_board_error
+def api_admin_board(level):
+    """Opens a board for a location OTHER than the viewer's own present_location -- the Founder's/
+    council member's multi-view tabs. The picker already walked the full hierarchy to make its
+    selection (section 3 of the research: no reverse id->chain lookup exists anywhere, so none is
+    built here either) -- the client sends that same chain back whole, this route only validates
+    it against _viewable_locations_scope(), never trusts it blind.
+
+    Always read-only, regardless of scope: can_post/can_pay_post/every post's can_vote are forced
+    False on the way out. This is a monitoring view -- a Founder "visiting" a village they don't
+    live in must never be able to vote there as though they were a resident just because the
+    submitted present_location says so; board_core's own residency check only ever sees whatever
+    chain this route is handed, so forcing these flags here (not trusting board_view's own
+    is_resident math for this one purpose) is the actual safety boundary, not a UI nicety."""
+    if level not in board_core.LEVELS:
+        return jsonify({"error": "Unknown level"}), 404
+    data = request.get_json(silent=True) or {}
+    present_location = data.get("present_location")
+    if not isinstance(present_location, dict):
+        return jsonify({"error": "present_location is required"}), 400
+    scope = _viewable_locations_scope()
+    if scope["scope"] == "global":
+        pass
+    elif scope["scope"] == "limited":
+        if level != scope["level"]:
+            return jsonify({"error": "Not permitted at this level"}), 403
+        requested_id = (present_location.get(level) or {}).get("id")
+        if not any(loc["id"] == requested_id for loc in scope["locations"]):
+            return jsonify({"error": "That location is outside your Tehsil"}), 403
+    else:
+        reason = scope.get("reason")
+        return jsonify({"error": "Multi-view access is not open for you right now"
+                         if reason == "training" else "Multi-view is for Admins and serving council heads"}), 403
+    conn, user, _loc = _board_user()
+    view = board_core.board_view(conn, user["id"], present_location, level, is_admin=(scope["scope"] == "global"))
+    conn.close()
+    if view is None:
+        return jsonify({"error": "No group at this level for that location"}), 404
+    view["can_post"] = False
+    view["can_pay_post"] = False
+    for p in view["posts"]:
+        p["can_vote"] = False
+    view["readonly"] = True
+    return jsonify(view)
+
+
 # ---- Admin member export (2026-10-18) ----
 # Every successful call -- JSON preview or CSV download -- is logged to admin_export_log (who,
 # when, filters, row count): a bulk export of every real member's Private ID is at least as

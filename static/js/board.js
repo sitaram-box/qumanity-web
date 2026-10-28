@@ -233,7 +233,16 @@
   }
 
   // ---- one board ----
-  function Board(root) {
+  function Board(root, opts) {
+    // 2026-10-28 (Founder/Council multi-view): opts.pinnedLocation, when set, is a full
+    // present_location-shaped chain for a location OTHER than the viewer's own -- load() then
+    // fetches POST /api/admin/board/<level> with that chain instead of GET /api/board/<level>.
+    // Always read-only (app.py's /api/admin/board forces can_post/can_pay_post/every post's
+    // can_vote false server-side; the compose form and vote buttons just stay hidden here as a
+    // normal consequence of that, no extra client-side gate needed). Groups/Q-Punch buttons are
+    // hidden outright -- both operate on the VIEWER's own location via separate fixed endpoints,
+    // never the pinned one, so left wired they'd show the wrong place's data.
+    var pinnedLocation = (opts && opts.pinnedLocation) || null;
     var level = root.getAttribute("data-level");
     var titleEl = root.querySelector(".bd-title"), subEl = root.querySelector(".bd-sub"), feed = root.querySelector(".bd-feed");
     var form = root.querySelector(".bd-compose"), ta = form.querySelector("textarea"), note = root.querySelector(".bd-note");
@@ -256,7 +265,10 @@
       announceBannerFull.hidden = expanded;
       if (!expanded) announceBannerFull.textContent = announceItems[announceIndex].body;
     });
-    root.querySelector(".bd-qp").addEventListener("click", function () { openQp(level); });
+    var qpBtn = root.querySelector(".bd-qp");
+    if (pinnedLocation) qpBtn.hidden = true; else qpBtn.addEventListener("click", function () { openQp(level); });
+    var groupsBtn = root.querySelector(".bd-groups");
+    if (pinnedLocation && groupsBtn) groupsBtn.hidden = true;
     var reportBtn = root.querySelector(".bd-report-btn");
     reportBtn.addEventListener("click", function (e) { e.preventDefault(); openPostOrReportChoice(); });
     // 2026-10-27: opens the detailed Stats modal (dashboard.js) for THIS board's current
@@ -321,8 +333,12 @@
         if (!done.length) feed.appendChild(el("p", "bd-empty", "No closed posts yet."));
         done.forEach(function (p, i) { feed.appendChild(bubble(p, v, i)); });
       }
-      renderAnnouncements(v);
-      renderReportInbox(v);
+      // Skipped for a pinned/remote board: both target the FIXED qm-dg-stats/qm-dp-stats sidebar
+      // ids by level (document.getElementById, not scoped to `root`) -- a multi-view tab shares
+      // the page with the real Global/Public boards, so calling these here would overwrite THEIR
+      // sidebar with this pinned location's (missing, since /api/admin/board never sets
+      // v.announcements/v.can_view_report_inbox) data instead of just doing nothing useful.
+      if (!pinnedLocation) { renderAnnouncements(v); renderReportInbox(v); }
     }
 
     // Recognition stars (2026-10-17 - removed from this board's own UI 2026-10-27, per the
@@ -559,7 +575,8 @@
 
     function load() {
       if (chat) return api("/api/chat/" + chat.id).then(renderChat).catch(function (e) { feed.innerHTML = ""; feed.appendChild(el("p", "bd-empty", e.message)); });
-      return api("/api/board/" + level).then(render).catch(function (e) {
+      var req = pinnedLocation ? api("/api/admin/board/" + level, { present_location: pinnedLocation }) : api("/api/board/" + level);
+      return req.then(render).catch(function (e) {
         titleEl.textContent = "Collective Board"; subEl.textContent = ""; feed.innerHTML = ""; feed.appendChild(el("p", "bd-empty", e.message)); form.hidden = true;
       });
     }
@@ -721,6 +738,9 @@
     });
   }
   window.qmOpenReportDetail = openReportDetail;
+  // 2026-10-28 (Founder/Council multi-view): lets multiview.js mount a Board on any .bd-shaped
+  // root it clones from #qm-mv-board-template, passing {pinnedLocation} for a remote location.
+  window.QMBoard = Board;
 
   var boardInstances = [];
   var boards = [["bd-global", "global-root-tabs", "qm-dash-global"], ["bd-public", "public-root-tabs", "qm-dash-public"]];
