@@ -18,18 +18,36 @@
   var markerEl = document.getElementById("pm-marker");
   var chipEl = document.getElementById("pm-chip");
   var chipNameEl = document.getElementById("pm-name");
-  // The chip's name/title/script are source-specific, not just its marker -- kept in sync with
-  // whichever religion's verses this session is actually seeing (see app.py's "religion" field
-  // on /api/poems/meta). "सीताराम" + lang="hi" is the historical Vinaya Patrika default.
+  // The gold chip is the ONLY religious identity element in the marquee (2026-11-XX -- the
+  // standalone homepage Shivalinga/राम badge was removed; see home.html/home.css). Its name/
+  // script are source-specific, kept in sync with whichever religion this session is actually
+  // seeing (app.py's "religion" field on /api/poems/meta). The TOOLTIP (chipEl.title) comes from
+  // the server's own "title" field (app.py's _poems_dir_for()) rather than a hardcoded
+  // per-religion guess here -- "hindu" alone can mean either the rights-cleared Vinaya Patrika
+  // edition (still unavailable) or the original fallback collection, and only the server knows
+  // which one is actually being served right now -- a hardcoded client-side title would risk
+  // calling the original, newly-written poems "Vinaya Patrika" the moment that fallback became
+  // real, which must never happen.
+  //
+  // Text-only, no SVG icons (2026-11-XX design decision). jain/other/prefer_not_to_say/any future
+  // unmapped value are DELIBERATELY absent from this table -- syncChip() below must never fall
+  // back to another religion's identity (the previous `|| CHIP_BY_RELIGION.hindu` fallback was a
+  // real bug: every unmapped religion silently got shown AS Hindu). Missing from this table means
+  // "no approved label exists yet" -- the chip is hidden entirely, never guessed.
   var CHIP_BY_RELIGION = {
-    hindu: { name: "सीताराम", lang: "hi", title: "Vinaya Patrika" },
-    christian: { name: "Psalms", lang: "en", title: "Psalms, King James Version" },
+    hindu: { name: "सीताराम", lang: "hi" },
+    christian: { name: "Jesus", lang: "en" },
+    muslim: { name: "الله", lang: "ar" },
+    sikh: { name: "ਵਾਹਿਗੁਰੂ", lang: "pa" },
+    buddhist: { name: "Buddha", lang: "en" },
   };
-  function syncChip(religion) {
-    var c = CHIP_BY_RELIGION[religion] || CHIP_BY_RELIGION.hindu;
+  function syncChip(religion, title) {
+    var c = CHIP_BY_RELIGION[religion];
+    if (!c) { chipEl.hidden = true; return; }   // no approved mapping -- show no identity box at all
+    chipEl.hidden = false;
     chipNameEl.textContent = c.name;
     chipNameEl.setAttribute("lang", c.lang);
-    chipEl.title = c.title;
+    chipEl.title = title || "";
   }
   var playBtn = document.getElementById("pm-play");
   // Play/Pause lives next to the chip; hovering (not clicking) it pops up Previous/Next above it.
@@ -291,13 +309,16 @@
   // A signed-in member whose spiritual path has no verses yet (meta.coming_soon, see
   // app.py's api_poems_meta) gets a static one-line notice in the same bar instead of the
   // scrolling strip -- play/pause, speed and language controls don't apply, so they're hidden.
-  function showComingSoon() {
+  // The gold chip still shows their REAL identity box (e.g. "ਵਾਹਿਗੁਰੂ"), via syncChip(), if an
+  // approved mapping exists for their religion -- it's hidden entirely if not (e.g. jain), never
+  // a generic placeholder standing in for an unverified identity (2026-11-XX).
+  function showComingSoon(religion, title) {
     view.innerHTML = "";
     var note = document.createElement("span");
     note.className = "pm-seg pm-coming-soon";
     note.textContent = "✨ Verses for your spiritual path are coming soon.";
     view.appendChild(note);
-    chipNameEl.textContent = "✨"; chipNameEl.setAttribute("lang", "en"); chipEl.title = "Coming soon";
+    syncChip(religion, title);
     markerEl.textContent = "";
     playWrap.hidden = true;
     menuWrap.hidden = true;
@@ -305,15 +326,28 @@
     document.body.classList.add("pm-on");
   }
 
-  // Hides the bar and home.html's own fixed religion symbol, #hm-symbol, if this page happens to
-  // be the homepage -- the symbol only ever appears alongside this same marquee's content.
+  // Anonymous visitor: no religion box, no poem text, no inferred identity at all -- just a
+  // neutral invitation to sign in (2026-11-XX privacy fix). See api_poems_meta()'s "anonymous"
+  // field (app.py) -- a logged-out visitor is never assigned a religion.
+  function showAnonymousNeutral() {
+    view.innerHTML = "";
+    var note = document.createElement("span");
+    note.className = "pm-seg pm-anonymous-note";
+    note.textContent = "Sign in to see your own marquee.";
+    view.appendChild(note);
+    chipEl.hidden = true;
+    markerEl.textContent = "";
+    playWrap.hidden = true;
+    menuWrap.hidden = true;
+    bar.hidden = false;
+    document.body.classList.add("pm-on");
+  }
+
   // Reversible for a signed-in member from Private Account settings (POST /api/marquee/show);
   // see the reconciliation in the meta handler below for how a stale local flag gets cleared.
   function hideEverything() {
     bar.hidden = true;
     document.body.classList.remove("pm-on");
-    var symbol = document.getElementById("hm-symbol");
-    if (symbol) symbol.hidden = true;
   }
   hideBtn.addEventListener("click", function () {
     store("local", HIDE_KEY, "1");
@@ -333,24 +367,20 @@
   fetch("/api/poems/meta")
     .then(function (r) { if (!r.ok) throw new Error("meta " + r.status); return r.json(); })
     .then(function (m) {
+      // A logged-out visitor is never assigned a religion (2026-11-XX) -- checked first, before
+      // any hidden-state reconciliation, since an anonymous visitor has no server-side hide
+      // preference to reconcile against at all.
+      if (m.anonymous) { showAnonymousNeutral(); return; }
       if (m.hidden) { store("local", HIDE_KEY, "1"); hideEverything(); return; }
-      if (m.hidden === false) {
-        // A positive, explicit "not hidden" from the server (only ever sent for a signed-in
-        // member -- see api_poems_meta) overrides any stale local flag from another device.
-        try { localStorage.removeItem(HIDE_KEY); } catch (e) {}
-        var symbol = document.getElementById("hm-symbol");
-        if (symbol) symbol.hidden = false;
-      } else if (locallyHidden) {
-        // Absent "hidden" field (a logged-out visitor, who has no server-side preference to
-        // check) with a local flag already set: that visitor's own hide, on this browser, stands.
-        return;
-      }
-      if (m.coming_soon) { showComingSoon(); return; }
+      // A positive, explicit "not hidden" from the server (every signed-in response includes
+      // this field) overrides any stale local flag from another device.
+      try { localStorage.removeItem(HIDE_KEY); } catch (e) {}
+      if (m.coming_soon) { showComingSoon(m.religion, m.title); return; }
       meta = m;
-      syncChip(m.religion);
+      syncChip(m.religion, m.title);
       var usable = m.languages.filter(function (l) { return l.available !== false; });
       var savedLang = load("local", LANG_KEY);
-      // Hindi is the default for visitors; a signed-in user starts on their own language (or English) and their choice is remembered.
+      // Hindi is the fallback default when nothing else matches; a signed-in member starts on their own language (or English) and their choice is remembered.
       lang = usable.some(function (l) { return l.code === savedLang; }) ? savedLang
            : (m.default || (usable.some(function (l) { return l.code === "hi"; }) ? "hi" : (usable[0] || {}).code));
       buildLangMenu();

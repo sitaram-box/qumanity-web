@@ -129,7 +129,6 @@ body.hm {
 @keyframes hm-orbit-spin { to { transform: rotate(360deg); } }
 .hm-hero-wordmark { position: relative; z-index: 1; text-align: center; padding-top: 12px; }
 .hm-hero-wordmark-en { display: block; font-family: var(--hm-display); font-weight: 700; font-size: clamp(2.6rem, 7vw, 5rem); line-height: 1; letter-spacing: -0.02em; background: linear-gradient(120deg, var(--qm-saffron), var(--qm-gold)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.hm-hero-wordmark-hi { display: block; margin-top: 6px; font-family: "Noto Sans Devanagari", "Kohinoor Devanagari", "Mangal", sans-serif; font-weight: 600; font-size: clamp(1.1rem, 2.6vw, 1.6rem); color: var(--qm-text-dim); letter-spacing: 0.04em; }
 .hm-hero-inner { position: relative; z-index: 1; }
 @media (prefers-reduced-motion: reduce) { .hm-hero-orbit { animation: none; } }
 
@@ -143,31 +142,6 @@ body.hm {
 .hm-signin-forgot-btn:hover { color: var(--qm-gold-text); }
 .hm-signin-forgot-links:not([hidden]) { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; }
 .hm-signin-forgot-links a { color: var(--qm-gold-text); }
-
-/* ---------- Shivalinga (fixed, bottom-left, this page only) ---------- */
-.hm-shivalinga {
-  position: fixed; left: 14px; bottom: 10px; z-index: 95;
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px; border-radius: 999px;
-  background: var(--qm-panel-bg); border: 1px solid var(--qm-border); box-shadow: var(--hm-shadow-sm);
-}
-.hm-shivalinga svg { display: block; flex: 0 0 auto; }
-.hm-symbol-label { font-family: "Noto Sans Devanagari", "Kohinoor Devanagari", "Devanagari Sangam MN", "Mangal", sans-serif; font-weight: 700; font-size: 1.15rem; color: var(--qm-gold-text); }
-/* "राम" reads at the same height as the Shivalinga svg beside it (56px desktop / 42px mobile),
-   not a small caption -- 2026-11-01. */
-.hm-symbol-label--ram { font-size: 3rem; line-height: 1; }
-/* Script-matched fallback stacks for the other four religion labels (2026-11-01) -- the base
-   rule's Devanagari stack above still applies to everything else it declares (weight/size/color),
-   only font-family is overridden per script. */
-.hm-symbol-label[lang="ar"] { font-family: "Geeza Pro", "Noto Sans Arabic", "Arabic Typesetting", sans-serif; }
-.hm-symbol-label[lang="pa"] { font-family: "Noto Sans Gurmukhi", "Gurmukhi Sangam MN", "Raavi", sans-serif; }
-.hm-symbol-label[lang="en"] { font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
-@media (max-width: 620px) {
-  .hm-shivalinga { left: 10px; bottom: 8px; padding: 6px 10px; gap: 6px; }
-  .hm-shivalinga svg { width: 42px; height: 42px; }
-  .hm-symbol-label { font-size: 0.95rem; }
-  .hm-symbol-label--ram { font-size: 2.3rem; }
-}
 
 /* Marquee */
 .hm-marquee { position: relative; overflow: hidden; padding: 16px 0; margin-top: 44px; border-top: 1px solid var(--qm-border); background: var(--qm-panel-bg); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }

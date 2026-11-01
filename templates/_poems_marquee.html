@@ -1,8 +1,8 @@
 {# Rendered only when QM_MARQUEE_ENABLED is on (app.py); see docs/marquee_poems_archive/README.md. #}
 {% if marquee_enabled %}<link rel="stylesheet" href="{{ url_for('static', filename='css/poems.css') }}" />
 <div class="pm-bar" id="pm-bar" role="region" aria-label="Poems marquee" hidden>
-  <div class="pm-chip" id="pm-chip" title="Vinay Patrika">
-    <span class="pm-name" id="pm-name" lang="hi">सीताराम</span>
+  <div class="pm-chip" id="pm-chip" hidden>
+    <span class="pm-name" id="pm-name"></span>
     <span class="pm-marker" id="pm-marker">पद</span>
   </div>
 

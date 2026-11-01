@@ -168,6 +168,14 @@ def ensure_tables(conn) -> None:
     node_cols = {r["name"] for r in conn.execute("PRAGMA table_info(family_nodes)")}
     if "is_deceased" not in node_cols:
         conn.execute("ALTER TABLE family_nodes ADD COLUMN is_deceased INTEGER NOT NULL DEFAULT 0")
+    # 2026-11-01 (Phase 2, the Unclaimed Profile Card editor's "Approximate Age" field): nullable,
+    # additive, same lazy ALTER pattern as every other column above -- NOT a reuse of dob_approx,
+    # which is a (never actually wired to any UI) approximate DATE OF BIRTH; this is a plain
+    # integer number of years, since fabricating a birth date from an age was explicitly ruled out.
+    # Only ever meaningful for an unclaimed node -- a claimed one's age always comes live from
+    # users.dob instead (see _person_summary()/_node_age()).
+    if "approximate_age" not in node_cols:
+        conn.execute("ALTER TABLE family_nodes ADD COLUMN approximate_age INTEGER")
 
     member_cols = {r["name"] for r in conn.execute("PRAGMA table_info(family_group_members)")}
     if "is_admin" not in member_cols:
@@ -243,17 +251,17 @@ def _claimed_user_for_node(conn, node_id):
 
 
 def create_node(conn, created_by_user_id: int, display_name: str, gender=None, dob_approx=None,
-                 claimed_user_id=None, is_deceased=False) -> int:
+                 claimed_user_id=None, is_deceased=False, approximate_age=None) -> int:
     display_name = (display_name or "").strip()
     if not display_name:
         raise ValueError("A name is required")
     now = _now()
     cur = conn.execute(
         """INSERT INTO family_nodes (claimed_user_id, created_by_user_id, display_name, gender, dob_approx,
-                                      status, is_deceased, created_at, claimed_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                      status, is_deceased, approximate_age, created_at, claimed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (claimed_user_id, created_by_user_id, display_name, gender, dob_approx,
-         "claimed" if claimed_user_id else "empty", 1 if is_deceased else 0,
+         "claimed" if claimed_user_id else "empty", 1 if is_deceased else 0, approximate_age,
          now, now if claimed_user_id else None),
     )
     return cur.lastrowid
@@ -364,6 +372,51 @@ def rename_node(conn, user_id: int, node_id: int, new_name) -> None:
     conn.commit()
 
 
+def update_node_details(conn, user_id: int, node_id: int, name=None, gender=None, approximate_age=None) -> None:
+    """The Unclaimed Profile Card editor's 'Save' action (Phase 2, 2026-11-01): updates an EMPTY
+    node's name, gender and/or approximate age together in one call -- never a claimed one, same
+    refusal and reasoning as rename_node() (whose name-only path this supersedes for the Profile
+    Card specifically; rename_node() itself is untouched and still used by the Add/Edit flows that
+    only ever touch a name). Each argument is applied ONLY when explicitly passed (not None) -- a
+    partial edit (e.g. just correcting the approximate age) never resets the others to blank,
+    satisfying the work order's "do not silently discard an existing [detail] when a user edits
+    one field." Updates the existing row in place: never creates a second node, never touches
+    family_parent_links/family_group_nodes -- this node's identity and every existing relationship
+    survive untouched."""
+    row = conn.execute("SELECT claimed_user_id FROM family_nodes WHERE id = ?", (node_id,)).fetchone()
+    if not row:
+        raise LookupError("Node not found")
+    if row["claimed_user_id"]:
+        raise ValueError("This person has a real Qumanity account -- their details can only be changed on their own profile")
+    if not _is_admin_of_node_group(conn, user_id, node_id):
+        raise PermissionError("Only an admin of a group this person belongs to can change this")
+    sets, vals = [], []
+    if name is not None:
+        name = name.strip()
+        if not name:
+            raise ValueError("A name is required")
+        if len(name) > MAX_NODE_NAME_CHARS:
+            raise ValueError(f"Name is too long (max {MAX_NODE_NAME_CHARS} characters)")
+        sets.append("display_name = ?"); vals.append(name)
+    if gender is not None:
+        if gender not in VALID_NODE_GENDERS:
+            raise ValueError("Unknown gender")
+        sets.append("gender = ?"); vals.append(gender)
+    if approximate_age is not None:
+        try:
+            approximate_age = int(approximate_age)
+        except (TypeError, ValueError):
+            raise ValueError("Approximate age must be a number")
+        if approximate_age < 0 or approximate_age > 130:
+            raise ValueError("Approximate age must be between 0 and 130")
+        sets.append("approximate_age = ?"); vals.append(approximate_age)
+    if not sets:
+        return
+    vals.append(node_id)
+    conn.execute(f"UPDATE family_nodes SET {', '.join(sets)} WHERE id = ?", vals)
+    conn.commit()
+
+
 def _resolve_target_user_id(conn, raw) -> int:
     """Accepts the 12-digit Public Search ID only -- spaces and dashes are stripped before
     matching, so '4060 2408 5969' and '4060-2408-5969' both normalize to the same 12 digits (a
@@ -464,7 +517,7 @@ def _claim_founder_slot(conn, target_node_id: int, user_id: int) -> None:
     _grant_founder_admin_if_applicable(conn, self_node["id"], user_id)
 
 
-def link_node_to_user(conn, user_id: int, node_id: int, target) -> None:
+def link_node_to_user(conn, user_id: int, node_id: int, target) -> dict:
     """Links an EMPTY node to a real user -- an admin unilaterally identifying who this person
     really is. If that node is a unit's founder slot, the newly-linked person becomes that unit's
     co-admin (see _grant_founder_admin_if_applicable); otherwise this deliberately does NOT touch
@@ -484,11 +537,16 @@ def link_node_to_user(conn, user_id: int, node_id: int, target) -> None:
     target_node_id path) already uses for the identical situation one role over. A founder-slot
     placeholder (husband_node_id/wife_node_id of some unit) also re-points that column and grants
     founder-admin, same as any fresh founder claim; a plain child-member placeholder only needs
-    _swap_node_references(). This does NOT attempt to unify the viewer's and the target's own
-    separate units into one tree beyond that -- a deliberately separate, harder decision. The
-    target is sent the same courtesy ping notify_to_activate() already sends for any other
-    identity match; this is never consent-gated, consistent with every other admin-initiated link
-    in this module."""
+    _swap_node_references(). The target is sent the same courtesy ping notify_to_activate()
+    already sends for any other identity match; this is never consent-gated, consistent with
+    every other admin-initiated link in this module.
+
+    2026-11-XX: the target's own PRE-EXISTING family (their founded unit's full roster, or their
+    birth unit's full roster) is now automatically cascaded into active membership too -- see
+    _cascade_relatives_after_link() -- instead of leaving them to be individually re-found. Return
+    value is now that cascade's own auditable dict (additive: the caller's previous `None` return
+    is now this dict instead; api_family_link_node's response grows a "cascade" field, nothing
+    existing changes)."""
     row = conn.execute("SELECT claimed_user_id FROM family_nodes WHERE id = ?", (node_id,)).fetchone()
     if not row:
         raise LookupError("Node not found")
@@ -512,17 +570,18 @@ def link_node_to_user(conn, user_id: int, node_id: int, target) -> None:
         if founder_groups:
             _grant_founder_admin_if_applicable(conn, real_node_id, target_user_id)
         notify_to_activate(conn, user_id, target_user_id)
-        _sync_family_membership(conn, target_user_id)
+        cascade_result = _cascade_relatives_after_link(conn, target_user_id)
         conn.commit()
-        return
+        return cascade_result
 
     conn.execute(
         "UPDATE family_nodes SET claimed_user_id = ?, status = 'claimed', claimed_at = ? WHERE id = ?",
         (target_user_id, _now(), node_id),
     )
     _grant_founder_admin_if_applicable(conn, node_id, target_user_id)
-    _sync_family_membership(conn, target_user_id)
+    cascade_result = _cascade_relatives_after_link(conn, target_user_id)
     conn.commit()
+    return cascade_result
 
 
 def link_parent(conn, parent_node_id: int, child_node_id: int, created_by_user_id: int) -> None:
@@ -753,7 +812,7 @@ def _find_parents_group_for_node(conn, node_id):
     return row["group_id"] if row else None
 
 
-def add_member(conn, group_id: int, user_id: int, invited_by=None, target_node_id=None) -> None:
+def add_member(conn, group_id: int, user_id: int, invited_by=None, target_node_id=None) -> dict | None:
     """Approves user_id into the group's chat membership as a PLAIN member (never admin -- only a
     unit's two named founders are ever admins, granted directly at creation or the moment an empty
     founder slot is claimed; see create_group()/link_node_to_user()).
@@ -767,15 +826,19 @@ def add_member(conn, group_id: int, user_id: int, invited_by=None, target_node_i
     this re-points the GROUP's founder slot at the joiner's own existing self-node (swapping out
     the placeholder, which stays in the DB, just no longer referenced by anything -- see
     _claim_founder_slot(), shared with link_node_to_user()'s identical 2026-10-25 case and
-    marry_timeline()'s automatic marriage-join) and grants founder-admin -- the approval itself IS the authorization a
-    third-party admin-initiated link_node_to_user() would otherwise need."""
+    marry_timeline()'s automatic marriage-join) and grants founder-admin -- the approval itself IS
+    the authorization a third-party admin-initiated link_node_to_user() would otherwise need.
+
+    2026-11-XX: this branch now also cascades the joiner's own pre-existing family (see
+    _cascade_relatives_after_link()), returning its auditable dict -- both current callers
+    (social_core.decide_request()) already discard add_member()'s return value, so this is a
+    purely additive change; None is still returned on the plain-member path below, unchanged."""
     if target_node_id:
         node = conn.execute("SELECT claimed_user_id FROM family_nodes WHERE id = ?", (target_node_id,)).fetchone()
         self_node = conn.execute("SELECT id FROM family_nodes WHERE claimed_user_id = ?", (user_id,)).fetchone()
         if node and not node["claimed_user_id"] and self_node:
             _claim_founder_slot(conn, target_node_id, user_id)
-            _sync_family_membership(conn, user_id)
-            return
+            return _cascade_relatives_after_link(conn, user_id)
 
     conn.execute(
         """INSERT INTO family_group_members (group_id, user_id, status, is_admin, invited_by, created_at) VALUES (?, ?, 'approved', 0, ?, ?)
@@ -788,16 +851,36 @@ def add_member(conn, group_id: int, user_id: int, invited_by=None, target_node_i
             "INSERT OR IGNORE INTO family_group_nodes (group_id, node_id, added_by_user_id, added_at) VALUES (?, ?, ?, ?)",
             (group_id, self_node["id"], user_id, _now()),
         )
+    return None
 
 
-def request_join_group(conn, user_id: int, group_id: int, target_node_id=None) -> int:
+def request_join_group(conn, user_id: int, group_id: int, target_node_id=None) -> dict:
     """Queues a join request for the group's FOUNDING creator to approve (not every current
     co-admin -- a known simplification) -- via the same people_requests table social_core.py
     already uses for group invites/rejoins (kind='family_group_join', group_id repurposed to hold
     family_groups.id, same overloading convention 'rejoin' already uses for private_chats.id).
     target_node_id (optional): this request is specifically "let me claim this empty founder
     slot," not just "let me join as a plain member" -- see add_member(). social_core.decide_request()
-    has the matching accept-side branch. Returns the new request's id.
+    has the matching accept-side branch.
+
+    Returns {"request_id": int | None, "status": "created" | "already_pending" | "already_member"}.
+
+    2026-11-01 (the activation-blocker fix -- see docs/family_tree/PHASE_1_BACKEND_REPAIR_REPORT.md):
+    this used to raise ValueError("A join request is already waiting") for an exact duplicate
+    pending request, and ValueError("You are already a member...") if already approved. Both were
+    reasonable as a direct, standalone call (and the caller below still gets a clear error for them
+    today, just via the returned status instead of an exception) -- but the SAME function is also
+    called from deep inside _resolve_slot()'s "join" action, itself called from
+    activate_timeline()/marry_timeline()/add_parents_to_group(), none of which commit anything
+    until their own single, final conn.commit(). Raising here aborted THAT ENTIRE call -- unrelated
+    self-node creation, parent linking, everything -- any time the matched unit already had a
+    pending (or fulfilled) request from this user, including one created moments earlier by the
+    exact same activation attempt being retried after an unrelated failure. Reusing/reporting the
+    existing state instead of raising makes every caller of this function naturally idempotent: a
+    retried activate_timeline()/marry_timeline() call now finds the same request/membership again
+    and proceeds, rather than failing identically forever. Genuine errors (not activated yet, no
+    such group, you own it, or you previously left and need an admin to invite you back) still
+    raise -- those aren't states a retry can recover from on its own.
 
     2026-10-26 (the rejoin rule): a user whose status here is 'left' CANNOT self-request back in
     -- rejoin after a leave or a removal is admin-initiated only (see invite_to_group()); this
@@ -814,19 +897,21 @@ def request_join_group(conn, user_id: int, group_id: int, target_node_id=None) -
         "SELECT status FROM family_group_members WHERE group_id = ? AND user_id = ?", (group_id, user_id)
     ).fetchone()
     if existing and existing["status"] == "approved":
-        raise ValueError("You are already a member of this group")
+        return {"request_id": None, "status": "already_member"}
     if existing and existing["status"] == "left":
         raise ValueError("You previously left this group — ask an admin to invite you back")
-    if conn.execute(
-        "SELECT 1 FROM people_requests WHERE from_user_id=? AND to_user_id=? AND kind='family_group_join' AND group_id=? AND status='pending'",
-        (user_id, group["created_by_user_id"], group_id),
-    ).fetchone():
-        raise ValueError("A join request is already waiting")
+    existing_request = conn.execute(
+        "SELECT id FROM people_requests WHERE from_user_id=? AND to_user_id=? AND kind='family_group_join' "
+        "AND group_id=? AND target_node_id IS ? AND status='pending'",
+        (user_id, group["created_by_user_id"], group_id, target_node_id),
+    ).fetchone()
+    if existing_request:
+        return {"request_id": existing_request["id"], "status": "already_pending"}
     cur = conn.execute(
         "INSERT INTO people_requests (from_user_id, to_user_id, kind, group_id, target_node_id, created_at, cycle_id) VALUES (?, ?, 'family_group_join', ?, ?, ?, ?)",
         (user_id, group["created_by_user_id"], group_id, target_node_id, _now(), cycle_middleware.get_active_cycle_id(conn)),
     )
-    return cur.lastrowid
+    return {"request_id": cur.lastrowid, "status": "created"}
 
 
 def invite_to_group(conn, admin_user_id: int, group_id: int, target_user_id: int) -> int:
@@ -1226,6 +1311,20 @@ def _location_display_brief(location: dict) -> str:
 VALID_NODE_GENDERS = ("male", "female", "both")  # same 3 values registration offers (templates/register.html) -- never a different vocabulary for the same concept
 
 
+def _finalize_results(results: dict) -> dict:
+    """Called right before every activate_timeline()/marry_timeline()/add_parents_to_group() return
+    (2026-11-01, Phase 2 preflight -- see docs/family_tree/PHASE_2_BACKEND_PREFLIGHT.md section 2.1).
+    _resolve_slot()'s 'join' branch records a genuine, non-recoverable request_join_group() error
+    (not activated, no such group, already own it, previously left) as a status='error' entry
+    inside results['joined_requests'] rather than aborting the whole call -- correct, since the rest
+    of the tree this call built is still valid and already committed. But a caller checking only the
+    HTTP status code (always 2xx here) would never see that one slot failed unless it inspects every
+    entry of that list itself. This adds one top-level, impossible-to-miss boolean so Phase 2's
+    frontend (and tests) can check it directly instead of scanning the array by hand."""
+    results["has_join_errors"] = any(e.get("status") == "error" for e in results["joined_requests"])
+    return results
+
+
 def _resolve_gender(entry: dict, default_gender):
     """entry.get("gender") wins when the caller supplied one (the wizard's own explicit Son/
     Daughter/Child selection for a child slot) -- default_gender is only a role-based fallback
@@ -1251,8 +1350,24 @@ def _resolve_slot(conn, user_id: int, entry: dict, fresh_node_ids: list, results
         group_id, matched_node_id = entry.get("group_id"), entry.get("matched_node_id")
         if not group_id or not matched_node_id:
             raise ValueError(f"Missing group/node to join for {label}")
-        request_join_group(conn, user_id, group_id)
-        results["joined_requests"].append({"label": label, "name": name, "group_id": group_id})
+        # 2026-11-01 (the activation-blocker fix): request_join_group() itself no longer raises for
+        # a duplicate/already-satisfied request (see its own docstring) -- but it can still raise
+        # for a genuine, unrecoverable-by-retry error (not activated, no such group, previously
+        # left). That must NOT abort the whole activate_timeline()/marry_timeline() call just
+        # because ONE slot's join couldn't be queued; the matched person's node id is still valid
+        # and the rest of the tree (this slot's own name/placeholder, every other slot, the
+        # self-node, relationship sync) should still be built and committed. Recorded as a
+        # status="error" entry instead, same results["joined_requests"] list Phase 2 already reads.
+        try:
+            join_result = request_join_group(conn, user_id, group_id)
+        except ValueError as e:
+            results["joined_requests"].append({"label": label, "name": name, "group_id": group_id,
+                                                 "status": "error", "error": str(e)})
+            return matched_node_id
+        results["joined_requests"].append({
+            "label": label, "name": name, "group_id": group_id,
+            "status": join_result["status"], "request_id": join_result["request_id"],
+        })
         return matched_node_id
 
     if action == "notify":
@@ -1352,17 +1467,22 @@ def add_parents_to_group(conn, user_id: int, group_id: int, side: str, father_en
     )
     conn.commit()
     results["parent_group_id"] = parent_group_id
-    return results
+    return _finalize_results(results)
 
 
-def add_child_to_group(conn, user_id: int, group_id: int, name: str, gender=None) -> dict:
+def add_child_to_group(conn, user_id: int, group_id: int, name: str, gender=None, is_deceased: bool = False) -> dict:
     """The '+ Add Child' AND '+ Add Sibling' buttons -- one primitive, not two: both create a plain,
     unclaimed family_nodes placeholder and link it as a child-member of group_id's two founders.
     'Add Child' passes the viewer's own unit as group_id; 'Add Sibling' (an in-law -- structurally a
     child of the SPOUSE'S parents' unit, not a peer of the viewer) passes THAT unit's group_id
     instead. Unclaimed, so this only grants family_group_nodes (tree visibility), never
     family_group_members (chat access) -- nobody has consented to anything, same as every other
-    freshly-created placeholder elsewhere in this module."""
+    freshly-created placeholder elsewhere in this module.
+
+    group_id is echoed back in the result (2026-11-01, Phase 2 preflight): the person-centric
+    wrappers below (add_sibling_to_node()/add_child_to_node()) resolve this internally from an
+    arbitrary node_id, so the caller doesn't otherwise learn which unit the placeholder actually
+    landed in -- needed to target the right neighborhood refresh."""
     if not _is_admin_of_group(conn, user_id, group_id):
         raise PermissionError("Only an admin of this group can grow the tree here")
     group = conn.execute("SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (group_id,)).fetchone()
@@ -1373,7 +1493,7 @@ def add_child_to_group(conn, user_id: int, group_id: int, name: str, gender=None
         raise ValueError("A name is required")
     if gender is not None and gender not in VALID_NODE_GENDERS:
         raise ValueError("Unknown gender")
-    node_id = create_node(conn, user_id, name, gender=gender)
+    node_id = create_node(conn, user_id, name, gender=gender, is_deceased=bool(is_deceased))
     for parent_node_id in (group["husband_node_id"], group["wife_node_id"]):
         if parent_node_id:
             link_parent(conn, parent_node_id, node_id, user_id)
@@ -1382,13 +1502,119 @@ def add_child_to_group(conn, user_id: int, group_id: int, name: str, gender=None
         (group_id, node_id, user_id, _now()),
     )
     conn.commit()
-    return {"node_id": node_id, "name": name}
+    return {"node_id": node_id, "name": name, "group_id": group_id}
 
 
 # ---- Real-world family membership (2026-10-26): which units a person should ACTIVELY belong to
 # (family_group_members) is now a live-computed function of the tree shape + marital status, same
 # "computed live, never stored" philosophy this module already uses for dormancy -- not a set of
 # one-off grants hand-threaded into each mutation. See _sync_family_membership(). ----
+
+def _direct_roster_of_group(conn, group_id):
+    """The user_ids of every CLAIMED person directly represented in family_groups row group_id:
+    its two founders (husband_node_id/wife_node_id, if claimed) and every family_group_nodes(
+    group_id, *) entry (if claimed) -- exactly the set create_group()/add_parents_to_group()/
+    add_child_to_group() put there. Nothing inferred, no further traversal into units founded BY
+    these people. Unclaimed placeholders are excluded by construction (claimed_user_id IS NOT
+    NULL) -- never converted, never counted (2026-11-XX, Family Tree full direct-roster cascade)."""
+    if not group_id:
+        return []
+    group = conn.execute(
+        "SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (group_id,)
+    ).fetchone()
+    if not group:
+        return []
+    node_ids = {group["husband_node_id"], group["wife_node_id"]} - {None}
+    for row in conn.execute(
+        "SELECT node_id FROM family_group_nodes WHERE group_id = ?", (group_id,)
+    ).fetchall():
+        node_ids.add(row["node_id"])
+    if not node_ids:
+        return []
+    placeholders = ",".join("?" * len(node_ids))
+    rows = conn.execute(
+        f"SELECT claimed_user_id FROM family_nodes WHERE id IN ({placeholders}) "
+        f"AND claimed_user_id IS NOT NULL",
+        tuple(node_ids),
+    ).fetchall()
+    return [r["claimed_user_id"] for r in rows]
+
+
+def _cascade_relatives_after_link(conn, user_id: int) -> dict:
+    """After user_id's real node is newly connected into a group (link_node_to_user()'s
+    existing_self_node branch, or _claim_founder_slot()'s callers -- add_member()'s
+    target_node_id branch, marry_timeline()'s two "join an existing unit" branches), re-syncs
+    EVERY directly represented member of user_id's own PRE-EXISTING source group(s) -- not just
+    user_id -- so they are not individually re-found/re-added one at a time (2026-11-XX, Family
+    Tree full direct-roster cascade -- approved as Option A: complete direct source-group roster,
+    non-recursive; supersedes an earlier one-hop, spouse-only version of this function).
+
+    Up to two independent source groups are handled, since _sync_family_membership()'s own Rule
+    1/Rule 2 already treat them independently per person:
+      (a) a unit user_id FOUNDS (is married) -- cascades that unit's full direct roster (the
+          other founder, plus every child represented via family_group_nodes).
+      (b) user_id's own BIRTH unit (a plain child-member there, found via
+          _find_parents_group_for_node()) -- cascades ITS full direct roster (both parents, plus
+          every sibling represented via family_group_nodes).
+
+    Deliberately bounded to each source group's OWN direct roster -- NEVER that group's own
+    further married-out children's OWN units (a grandchild-generation hop) and NEVER a group the
+    Admin merely also happens to administer unrelated to user_id's own tree position -- matching
+    every other traversal in this module's documented "bounded by construction" rule
+    (cascade_for_node(), _relationship_label(), _sync_family_membership() itself). No recursion
+    anywhere in this function, so a cycle in the relationship graph cannot cause an infinite loop
+    -- each source group is read with exactly one bounded pair of queries.
+
+    Ambiguity (ties directly to Section 3.2's "multiple active units" requirement): skips (never
+    guesses) the founder side entirely when user_id founds more than one ACTIVE marital unit at
+    once -- the same already-accepted multi-marriage ambiguity add_spouse_to_node() documents.
+    This does not affect the birth-unit side, which is unambiguous by construction (a node has at
+    most one recorded birth unit).
+
+    Idempotent: _sync_family_membership() already is, called only on claimed users already
+    resolvable via family_nodes.claimed_user_id. Transactional: performs no commit of its own --
+    runs inside the caller's existing single-commit transaction, so a failure anywhere in this
+    function propagates uncaught and the whole calling operation rolls back on conn.close(),
+    exactly as before this function existed. Auditable: returns {"source_groups": [...],
+    "synced_user_ids": [...], "skipped": [...]} for the caller to fold into its own result."""
+    self_node = conn.execute("SELECT id FROM family_nodes WHERE claimed_user_id = ?", (user_id,)).fetchone()
+    out = {"source_groups": [], "synced_user_ids": [], "skipped": []}
+    if not self_node:
+        return out
+    node_id = self_node["id"]
+
+    source_group_ids = []
+    founder_groups = conn.execute(
+        """SELECT id FROM family_groups
+           WHERE (husband_node_id = ? OR wife_node_id = ?) AND marriage_status = 'active'""",
+        (node_id, node_id),
+    ).fetchall()
+    if len(founder_groups) > 1:
+        out["skipped"].append({
+            "reason": "user_id founds more than one active marital unit -- ambiguous which is "
+                      "'the' source group to cascade (see add_spouse_to_node()'s own documented "
+                      "multi-marriage limitation); no automatic cascade on the founder side",
+        })
+    elif founder_groups:
+        source_group_ids.append(founder_groups[0]["id"])
+
+    birth_unit_id = _find_parents_group_for_node(conn, node_id)
+    if birth_unit_id:
+        source_group_ids.append(birth_unit_id)
+
+    _sync_family_membership(conn, user_id)
+    synced = {user_id}
+    for group_id in source_group_ids:
+        roster = _direct_roster_of_group(conn, group_id)
+        out["source_groups"].append({"group_id": group_id, "member_count": len(roster)})
+        for member_user_id in roster:
+            if member_user_id in synced:
+                continue
+            _sync_family_membership(conn, member_user_id)
+            synced.add(member_user_id)
+    out["synced_user_ids"] = sorted(synced)
+    return out
+
 
 def _sync_family_membership(conn, user_id: int) -> None:
     """Recomputes and applies this person's correct set of ACTIVE family unit memberships from the
@@ -1519,8 +1745,8 @@ def activate_timeline(conn, user_id: int, payload: dict) -> dict:
         conn.execute("UPDATE users SET timeline_activated_at = ? WHERE id = ?", (_now(), user_id))
         _sync_family_membership(conn, user_id)
         conn.commit()
-        return {"already_activated": True, "groups": my_family_groups(conn, user_id),
-                "joined_requests": [], "notified": [], "created_node_ids": []}
+        return _finalize_results({"already_activated": True, "groups": my_family_groups(conn, user_id),
+                                   "joined_requests": [], "notified": [], "created_node_ids": []})
 
     relationship = payload.get("relationship")
     if relationship is not None and relationship not in _RELATIONSHIP_TO_PROFILE_STATUS:
@@ -1579,7 +1805,7 @@ def activate_timeline(conn, user_id: int, payload: dict) -> dict:
     conn.execute("UPDATE users SET timeline_activated_at = ? WHERE id = ?", (_now(), user_id))
     _sync_family_membership(conn, user_id)
     conn.commit()
-    return results
+    return _finalize_results(results)
 
 
 # ---- Marriage: self + spouse -> find-or-create THEIR OWN couple-unit, with children added as its
@@ -1675,14 +1901,16 @@ def marry_timeline(conn, user_id: int, payload: dict) -> dict:
         other_founder_user_id = _claimed_user_for_node(conn, other_founder_node_id)
         _claim_founder_slot(conn, target_node_id, user_id)
         group = conn.execute("SELECT * FROM family_groups WHERE id = ?", (group_id,)).fetchone()  # re-read: the slot just moved
-        _sync_family_membership(conn, user_id)
+        # 2026-11-XX: cascades user_id's own pre-existing family (their own founded unit or birth
+        # unit's full direct roster), not just user_id themself -- see _cascade_relatives_after_link().
+        results["cascade"] = _cascade_relatives_after_link(conn, user_id)
         if other_founder_user_id:
             _notify_marriage(conn, user_id, other_founder_user_id)
         results["auto_joined"] = {"label": "spouse", "name": spouse["name"].strip(), "group_id": group_id}
         _attach_children_to_group(conn, user_id, group_id, group["husband_node_id"], group["wife_node_id"],
                                    payload.get("children"), results)
         conn.commit()
-        return results
+        return _finalize_results(results)
 
     spouse_node_id = _resolve_slot(conn, user_id, spouse, [], results, "spouse")
 
@@ -1705,14 +1933,16 @@ def marry_timeline(conn, user_id: int, payload: dict) -> dict:
         other_founder_user_id = _claimed_user_for_node(conn, spouse_node_id)
         _claim_founder_slot(conn, partner_node_id, user_id)
         group = conn.execute("SELECT * FROM family_groups WHERE id = ?", (their_marriage["id"],)).fetchone()
-        _sync_family_membership(conn, user_id)
+        # 2026-11-XX: cascades user_id's own pre-existing family's full direct roster -- see
+        # _cascade_relatives_after_link().
+        results["cascade"] = _cascade_relatives_after_link(conn, user_id)
         if other_founder_user_id:
             _notify_marriage(conn, user_id, other_founder_user_id)
         results["auto_joined"] = {"label": "spouse", "name": spouse["name"].strip(), "group_id": their_marriage["id"]}
         _attach_children_to_group(conn, user_id, their_marriage["id"], group["husband_node_id"], group["wife_node_id"],
                                    payload.get("children"), results)
         conn.commit()
-        return results
+        return _finalize_results(results)
 
     child_node_ids = []
     for i, child in enumerate(payload.get("children") or []):
@@ -1749,7 +1979,7 @@ def marry_timeline(conn, user_id: int, payload: dict) -> dict:
 
     _sync_family_membership(conn, user_id)
     conn.commit()
-    return results
+    return _finalize_results(results)
 
 
 # ---- Reading: listing a user's units, one unit's own immediate neighborhood (not a multi-
@@ -1789,30 +2019,176 @@ def my_family_groups(conn, user_id: int) -> list[dict]:
     return out
 
 
+# ---- Relationship-to-viewer labels (Phase 2, 2026-11-01): the Profile Card header's "Relationship
+# to viewer" field. Computed from the actual graph, relative to the SIGNED-IN viewer's own self-
+# node -- never inferred from wherever a person happens to be drawn in the currently centered
+# neighborhood (the work order's explicit instruction), since the same person can appear in more
+# than one place in the tree. Bounded by construction, same philosophy as cascade_for_node(): a
+# fixed set of named categories within 3 hops of the viewer's own node, each resolved with a
+# handful of direct queries -- never a general recursive graph walk. Anything outside this fixed
+# list (an in-law, a step-relation, a cousin twice removed) returns None, displayed as a neutral
+# label by the frontend rather than a guess. ----
+
+_RELATIONSHIP_GENDER_LABELS = {
+    "parent": {"male": "Father", "female": "Mother", None: "Parent"},
+    "sibling": {"male": "Brother", "female": "Sister", None: "Sibling"},
+    "child": {"male": "Son", "female": "Daughter", None: "Child"},
+    "grandparent": {"male": "Grandfather", "female": "Grandmother", None: "Grandparent"},
+    "grandchild": {"male": "Grandson", "female": "Granddaughter", None: "Grandchild"},
+    "aunt_uncle": {"male": "Uncle", "female": "Aunt", None: "Uncle/Aunt"},
+    "niece_nephew": {"male": "Nephew", "female": "Niece", None: "Nephew/Niece"},
+}
+
+
+def _gendered_relationship(bucket, gender):
+    labels = _RELATIONSHIP_GENDER_LABELS[bucket]
+    return labels.get(gender, labels[None])
+
+
+def _relationship_label(conn, viewer_user_id, node_id):
+    """See this section's own module-level note above. Returns None for the viewer's own node, a
+    viewer with no self-node yet, or any relationship outside the fixed list this covers: parent,
+    sibling, spouse, child, grandparent, grandchild, aunt/uncle, nephew/niece, cousin."""
+    if not node_id:
+        return None
+    self_row = conn.execute("SELECT id FROM family_nodes WHERE claimed_user_id = ?", (viewer_user_id,)).fetchone()
+    if not self_row or node_id == self_row["id"]:
+        return None
+    self_id = self_row["id"]
+
+    def gender_of(nid):
+        r = conn.execute(
+            "SELECT fn.gender AS node_gender, u.gender AS user_gender FROM family_nodes fn "
+            "LEFT JOIN users u ON u.id = fn.claimed_user_id WHERE fn.id = ?", (nid,),
+        ).fetchone()
+        return (r["user_gender"] or r["node_gender"]) if r else None
+
+    def founders_of(group_id):
+        g = conn.execute("SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (group_id,)).fetchone()
+        return (g["husband_node_id"], g["wife_node_id"]) if g else (None, None)
+
+    def active_unit_of(nid):
+        return conn.execute(
+            "SELECT * FROM family_groups WHERE (husband_node_id = ? OR wife_node_id = ?) AND marriage_status = 'active'",
+            (nid, nid),
+        ).fetchone()
+
+    def plain_members_of(group_id, founder_ids):
+        return [r["node_id"] for r in conn.execute("SELECT node_id FROM family_group_nodes WHERE group_id = ?", (group_id,))
+                if r["node_id"] not in founder_ids]
+
+    birth_group_id = _find_parents_group_for_node(conn, self_id)
+    birth_founders = founders_of(birth_group_id) if birth_group_id else (None, None)
+
+    if birth_group_id and node_id in birth_founders:
+        return _gendered_relationship("parent", gender_of(node_id))
+
+    sibling_ids = plain_members_of(birth_group_id, birth_founders) if birth_group_id else []
+    if node_id in sibling_ids:
+        return _gendered_relationship("sibling", gender_of(node_id))
+
+    own_group = active_unit_of(self_id)
+    own_founders = (own_group["husband_node_id"], own_group["wife_node_id"]) if own_group else (None, None)
+
+    if own_group and node_id in own_founders:
+        return "Spouse"
+
+    child_ids = plain_members_of(own_group["id"], own_founders) if own_group else []
+    if node_id in child_ids:
+        return _gendered_relationship("child", gender_of(node_id))
+
+    grandparent_group_ids = []
+    if birth_group_id:
+        bg = conn.execute("SELECT husband_parent_group_id, wife_parent_group_id FROM family_groups WHERE id = ?", (birth_group_id,)).fetchone()
+        grandparent_group_ids = [g for g in (bg["husband_parent_group_id"], bg["wife_parent_group_id"]) if g] if bg else []
+
+    for gpg_id in grandparent_group_ids:
+        gpg_founders = founders_of(gpg_id)
+        if node_id in gpg_founders:
+            return _gendered_relationship("grandparent", gender_of(node_id))
+
+    if own_group:
+        for r in conn.execute(
+            "SELECT id FROM family_groups WHERE husband_parent_group_id = ? OR wife_parent_group_id = ?",
+            (own_group["id"], own_group["id"]),
+        ):
+            if node_id in plain_members_of(r["id"], founders_of(r["id"])):
+                return _gendered_relationship("grandchild", gender_of(node_id))
+
+    for gpg_id in grandparent_group_ids:
+        if node_id in plain_members_of(gpg_id, founders_of(gpg_id)):
+            return _gendered_relationship("aunt_uncle", gender_of(node_id))
+
+    for sib_id in sibling_ids:
+        sib_group = active_unit_of(sib_id)
+        if sib_group and node_id in plain_members_of(sib_group["id"], (sib_group["husband_node_id"], sib_group["wife_node_id"])):
+            return _gendered_relationship("niece_nephew", gender_of(node_id))
+
+    for gpg_id in grandparent_group_ids:
+        for aunt_uncle_id in plain_members_of(gpg_id, founders_of(gpg_id)):
+            au_group = active_unit_of(aunt_uncle_id)
+            if au_group and node_id in plain_members_of(au_group["id"], (au_group["husband_node_id"], au_group["wife_node_id"])):
+                return "Cousin"
+
+    return None
+
+
+def _node_age(conn, node_id):
+    """(years, is_approx) for a Profile Card's Age field, or (None, False) if unknown. A claimed
+    node's age is computed live from users.dob (exact) -- the same arithmetic
+    social_core._age_group() already uses for its own age-RANGE label, just returning the number
+    itself here instead of a bucket. An unclaimed node's age is whatever approximate_age was
+    entered for it: already a plain integer, never a fabricated birth date (the work order's
+    explicit instruction not to invent a DOB from an age)."""
+    row = conn.execute("SELECT claimed_user_id, approximate_age FROM family_nodes WHERE id = ?", (node_id,)).fetchone()
+    if not row:
+        return None, False
+    if row["claimed_user_id"]:
+        u = conn.execute("SELECT dob FROM users WHERE id = ?", (row["claimed_user_id"],)).fetchone()
+        if not u or not u["dob"]:
+            return None, False
+        dob = dt.date.fromisoformat(u["dob"])
+        today = dt.date.today()
+        age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        return age, False
+    return row["approximate_age"], True
+
+
 def _person_summary(conn, node_id, viewer_user_id):
     """Gender, like name and DOB elsewhere in this module (_node_display_name()/_node_dob()),
     resolves live from `users.gender` once a node is claimed -- never trusting the stale snapshot
     typed in at placeholder-creation time. Matters in practice: a node created with a guessed or
     unknown gender (or none at all) must show the real person's own registered gender -- including
     'both' (third gender) -- the instant they're claimed, not whatever `family_nodes.gender` still
-    says."""
+    says.
+
+    2026-11-01 (Phase 2, the Profile Card): also returns account_id (claimed only -- the existing,
+    already-public account identifier `users.account_id`, NEVER `private_id_9digit`/the PIN -- see
+    display_identity()'s own identical choice of account_id as the one safe-to-show identifier for
+    a hidden member), age_years/age_is_approx (see _node_age()), the raw approximate_age (so the
+    Unclaimed Profile Card editor can pre-fill its own field without a second round trip), and
+    relationship_to_viewer (see _relationship_label() above)."""
     if not node_id:
         return None
     row = conn.execute(
         """SELECT fn.id, fn.claimed_user_id, fn.gender AS node_gender, fn.status, fn.is_deceased,
-                  COALESCE(u.name, fn.display_name) AS name, u.gender AS user_gender,
-                  u.profile_picture IS NOT NULL AS has_picture
+                  fn.approximate_age, COALESCE(u.name, fn.display_name) AS name, u.gender AS user_gender,
+                  u.account_id, u.profile_picture IS NOT NULL AS has_picture
            FROM family_nodes fn LEFT JOIN users u ON u.id = fn.claimed_user_id WHERE fn.id = ?""",
         (node_id,),
     ).fetchone()
     if not row:
         return None
+    age_years, age_is_approx = _node_age(conn, node_id)
     return {
         "id": row["id"], "name": row["name"],
         "gender": row["user_gender"] if row["claimed_user_id"] else row["node_gender"],
         "status": row["status"], "claimed": bool(row["claimed_user_id"]), "is_deceased": bool(row["is_deceased"]),
         "is_viewer": row["claimed_user_id"] == viewer_user_id,
         "profile_picture_url": _profile_picture_url(row["claimed_user_id"]) if row["claimed_user_id"] and row["has_picture"] else None,
+        "account_id": row["account_id"] if row["claimed_user_id"] else None,
+        "age_years": age_years, "age_is_approx": age_is_approx, "approximate_age": row["approximate_age"],
+        "relationship_to_viewer": _relationship_label(conn, viewer_user_id, node_id),
     }
 
 
@@ -1945,3 +2321,220 @@ def tree_for_group(conn, viewer_user_id: int, group_id: int):
         "created_by_user_id": group["created_by_user_id"], "is_admin": bool(member_row["is_admin"]),
         "nodes": nodes, "parent_links": parent_links, "spouse_links": spouse_links,
     }
+
+
+# ---- Cascading discovery (Phase 1, 2026-11-01): "the whole family rule" -- once an existing
+# member is linked into the viewer's tree (link_node_to_user() / _claim_founder_slot() /
+# add_member()'s founder-slot claim), surface whatever the tree ALREADY knows about that person's
+# own family, so the viewer never has to re-enter people Qumanity already has on record. ----
+
+def _is_member_of_node_group(conn, viewer_user_id: int, node_id: int) -> bool:
+    """True if the viewer is an APPROVED member of at least one unit node_id belongs to (as a
+    plain member OR a founder) -- the authorization bar cascade_for_node() sets. Deliberately
+    looser than _is_admin_of_node_group() (admin-only, used by every MUTATION in this module):
+    this is read-only discovery, and the viewer calling it has, by construction, just linked this
+    very node into one of their OWN units -- that shared unit alone is reason enough to also see
+    the rest of what the tree already knows about this person (their own parents, siblings,
+    spouse, children), the entire point of the feature."""
+    node_group_ids = {r["group_id"] for r in conn.execute("SELECT group_id FROM family_group_nodes WHERE node_id = ?", (node_id,))}
+    node_group_ids |= {r["id"] for r in conn.execute(
+        "SELECT id FROM family_groups WHERE husband_node_id = ? OR wife_node_id = ?", (node_id, node_id)
+    )}
+    if not node_group_ids:
+        return False
+    viewer_group_ids = {r["group_id"] for r in conn.execute(
+        "SELECT group_id FROM family_group_members WHERE user_id = ? AND status = 'approved'", (viewer_user_id,)
+    )}
+    return bool(node_group_ids & viewer_group_ids)
+
+
+def cascade_for_node(conn, viewer_user_id: int, node_id: int):
+    """Everything the tree already knows about node_id's OWN family: their parents (+ which unit
+    that is), siblings (other child-members of that same birth unit), their own two grandparent
+    units, their current spouse and unmarried children (if they've founded their own unit), and
+    that unit's own child units. Read-only -- never creates, links, claims, or overwrites anything;
+    purely a wider read than neighborhood_for_group() gives for a single unit, anchored on a PERSON
+    instead of a unit, for exactly the moment Phase 2's Profile Card needs it (right after a
+    successful Public-ID link).
+
+    Bounded by construction, not a visited-set: this is five fixed relationship categories read
+    directly off node_id's own rows (its birth unit, that unit's two parent units one generation up,
+    its own founder unit(s), and that unit's unmarried children/child units one generation down) --
+    there is no recursive walk here, so there's no cycle or unbounded-depth risk to guard against.
+    Both parental lineages stay distinguishable throughout (grandparent_groups is tagged
+    'paternal'/'maternal', never flattened into one list) -- see this module's docstring on why a
+    unit can have two separate, unrelated parent units.
+
+    Returns None (404-not-403, same convention as every other read in this module) if node_id
+    doesn't exist or the viewer isn't authorized -- see _is_member_of_node_group()."""
+    node = conn.execute("SELECT 1 FROM family_nodes WHERE id = ?", (node_id,)).fetchone()
+    if not node or not _is_member_of_node_group(conn, viewer_user_id, node_id):
+        return None
+
+    birth_group_id = _find_parents_group_for_node(conn, node_id)
+    parents, siblings, grandparent_groups = None, [], []
+    if birth_group_id:
+        birth_row = conn.execute(
+            "SELECT husband_node_id, wife_node_id, husband_parent_group_id, wife_parent_group_id "
+            "FROM family_groups WHERE id = ?", (birth_group_id,),
+        ).fetchone()
+        parents = {
+            "father": _person_summary(conn, birth_row["husband_node_id"], viewer_user_id),
+            "mother": _person_summary(conn, birth_row["wife_node_id"], viewer_user_id),
+        }
+        birth_founder_ids = {birth_row["husband_node_id"], birth_row["wife_node_id"]}
+        siblings = [
+            _person_summary(conn, r["node_id"], viewer_user_id)
+            for r in conn.execute("SELECT node_id FROM family_group_nodes WHERE group_id = ?", (birth_group_id,))
+            if r["node_id"] != node_id and r["node_id"] not in birth_founder_ids
+        ]
+        for side, parent_group_id in (("paternal", birth_row["husband_parent_group_id"]), ("maternal", birth_row["wife_parent_group_id"])):
+            pg = _group_brief(conn, parent_group_id, viewer_user_id)
+            if pg:
+                pg["side"] = side
+                grandparent_groups.append(pg)
+
+    own_group = conn.execute(
+        "SELECT * FROM family_groups WHERE (husband_node_id = ? OR wife_node_id = ?) AND marriage_status = 'active'",
+        (node_id, node_id),
+    ).fetchone()
+    marital_group_id, spouse, children, child_groups = None, None, [], []
+    if own_group:
+        marital_group_id = own_group["id"]
+        spouse_node_id = own_group["wife_node_id"] if own_group["husband_node_id"] == node_id else own_group["husband_node_id"]
+        spouse = _person_summary(conn, spouse_node_id, viewer_user_id)
+        own_founder_ids = {own_group["husband_node_id"], own_group["wife_node_id"]}
+        child_group_rows = conn.execute(
+            "SELECT id FROM family_groups WHERE husband_parent_group_id = ? OR wife_parent_group_id = ?",
+            (marital_group_id, marital_group_id),
+        ).fetchall()
+        married_child_ids = set()
+        for r in child_group_rows:
+            cg = conn.execute("SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (r["id"],)).fetchone()
+            married_child_ids |= {cg["husband_node_id"], cg["wife_node_id"]}
+        children = [
+            _person_summary(conn, r["node_id"], viewer_user_id)
+            for r in conn.execute("SELECT node_id FROM family_group_nodes WHERE group_id = ?", (marital_group_id,))
+            if r["node_id"] not in own_founder_ids and r["node_id"] not in married_child_ids
+        ]
+        child_groups = [_group_brief(conn, r["id"], viewer_user_id) for r in child_group_rows]
+
+    return {
+        "node": _person_summary(conn, node_id, viewer_user_id),
+        "birth_group_id": birth_group_id, "parents": parents, "siblings": siblings,
+        "grandparent_groups": grandparent_groups,
+        "marital_group_id": marital_group_id, "spouse": spouse,
+        "children": children, "child_groups": child_groups,
+    }
+
+
+# ---- Relationship-creation primitives, person-centric (Phase 1, 2026-11-01): the backend Phase 2's
+# Profile Card "+ Add Sibling"/"+ Add Child"/"+ Add Spouse" buttons call -- each resolves which
+# GROUP the action actually belongs to from an arbitrary person's node_id, then delegates to the
+# existing group-centric primitive (add_child_to_group(), already shared by both Add Sibling and
+# Add Child -- see its own docstring) or, for Add Spouse, the same founder-slot mechanics
+# marry_timeline()'s non-join branch already uses, generalized off session-user to an arbitrary
+# node. None of these bypass the admin check every other tree-growth mutation in this module
+# enforces. ----
+
+def add_sibling_to_node(conn, user_id: int, node_id: int, name: str, gender=None, is_deceased: bool = False) -> dict:
+    """'+ Add Sibling' on node_id's Profile Card: a new placeholder in node_id's OWN birth unit --
+    an uncle/aunt from the viewer's perspective if node_id is their parent, never a child of
+    node_id. Raises ValueError (not a fabricated parent pair) if node_id has no identifiable birth
+    unit yet -- e.g. a freshly-created placeholder nobody has linked any parents to."""
+    if not conn.execute("SELECT 1 FROM family_nodes WHERE id = ?", (node_id,)).fetchone():
+        raise LookupError("Person not found")
+    birth_group_id = _find_parents_group_for_node(conn, node_id)
+    if not birth_group_id:
+        raise ValueError("This person's own parents aren't known yet — add their parents first")
+    return add_child_to_group(conn, user_id, birth_group_id, name, gender=gender, is_deceased=is_deceased)
+
+
+def add_child_to_node(conn, user_id: int, node_id: int, name: str, gender=None, is_deceased: bool = False,
+                       group_id=None) -> dict:
+    """'+ Add Child' on node_id's Profile Card: a new placeholder in node_id's OWN active marital
+    unit -- a nephew/niece from the viewer's perspective if node_id is their sibling. Raises
+    ValueError if node_id hasn't founded any unit yet (unmarried, or no spouse recorded) -- add a
+    spouse first, same as marry_timeline() requires for the signed-in user themself.
+
+    group_id (optional): disambiguates which unit when node_id is a founder of MORE than one
+    active unit at once -- a real, architecturally-permitted state (2026-11-01, found while
+    testing this very function): link_node_to_user() can re-point an unrelated viewer's OWN
+    placeholder founder slot at this same real person without ever unifying it with their
+    pre-existing marital unit elsewhere (see that function's own docstring -- "a deliberately
+    separate, harder decision"), so the same node can legitimately be husband_node_id/wife_node_id
+    of two different family_groups rows that were never reconciled into one marriage. Silently
+    guessing which one the caller meant (e.g. "whichever was created most recently") risks adding
+    a child to the WRONG one -- Phase 2's Profile Card always has a definite unit already in view
+    (the neighborhood/group the card was opened from), so it passes that group_id explicitly
+    instead. Without it, this still succeeds unambiguously whenever there's exactly one match."""
+    if not conn.execute("SELECT 1 FROM family_nodes WHERE id = ?", (node_id,)).fetchone():
+        raise LookupError("Person not found")
+    own_groups = conn.execute(
+        "SELECT id FROM family_groups WHERE (husband_node_id = ? OR wife_node_id = ?) AND marriage_status = 'active'",
+        (node_id, node_id),
+    ).fetchall()
+    if not own_groups:
+        raise ValueError("This person doesn't have a spouse recorded yet — add a spouse first")
+    if group_id is not None:
+        if not any(g["id"] == group_id for g in own_groups):
+            raise ValueError("That isn't one of this person's own active marital units")
+        target_group_id = group_id
+    elif len(own_groups) == 1:
+        target_group_id = own_groups[0]["id"]
+    else:
+        raise ValueError(
+            "This person has more than one family unit on record — specify which one with group_id"
+        )
+    return add_child_to_group(conn, user_id, target_group_id, name, gender=gender, is_deceased=is_deceased)
+
+
+def add_spouse_to_node(conn, user_id: int, node_id: int, name: str, gender=None, is_deceased: bool = False) -> dict:
+    """'+ Add Spouse' on node_id's Profile Card: creates a new placeholder founder and finds-or-
+    creates the couple's own unit, generalizing marry_timeline()'s own non-join, non-session-user
+    branch to an arbitrary node_id. Preserves node_id's own birth-unit link on whichever side
+    column matches its gender. Raises ValueError if node_id already has an ACTIVE marriage
+    recorded -- never a second, conflicting unit (the same check marry_timeline() runs for the
+    session user).
+
+    Inherited limitation, not introduced here: _find_or_create_couple_group() treats "node_id is
+    already a founder of SOME unit" as reason to reuse that unit outright, without checking whether
+    its OTHER founder slot is even open -- correct for activate_timeline()'s one-birth-unit case,
+    but it means a node_id with a DORMANT/separated/dissolved (not active) marriage to someone else
+    entirely would silently reuse that old, already-fully-occupied unit instead of founding a new
+    one for this second marriage, leaving the freshly created placeholder here unattached.
+    marry_timeline() has this exact same gap for the session user today; fixing it (real multiple-
+    marriage support) is a separate, larger data-model decision outside this sprint's scope -- see
+    docs/family_tree/PHASE_1_BACKEND_REPAIR_REPORT.md."""
+    node = conn.execute("SELECT gender FROM family_nodes WHERE id = ?", (node_id,)).fetchone()
+    if not node:
+        raise LookupError("Person not found")
+    if not _is_admin_of_node_group(conn, user_id, node_id):
+        raise PermissionError("Only an admin of a group this person belongs to can change this")
+    if conn.execute(
+        "SELECT 1 FROM family_groups WHERE (husband_node_id = ? OR wife_node_id = ?) AND marriage_status = 'active'",
+        (node_id, node_id),
+    ).fetchone():
+        raise ValueError("This person already has an active marriage recorded")
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("A name is required")
+    if gender is not None and gender not in VALID_NODE_GENDERS:
+        raise ValueError("Unknown gender")
+
+    spouse_node_id = create_node(conn, user_id, name, gender=gender, is_deceased=bool(is_deceased))
+    node_gender = conn.execute("SELECT gender FROM family_nodes WHERE id = ?", (node_id,)).fetchone()["gender"]
+    if node_gender == "female":
+        husband_node_id, wife_node_id = spouse_node_id, node_id
+    else:
+        # Same named limitation as marry_timeline() -- see HANDOVER.md -- for 'male'/'both'/unknown.
+        husband_node_id, wife_node_id = node_id, spouse_node_id
+
+    husband_parent_group_id = _find_parents_group_for_node(conn, husband_node_id)
+    wife_parent_group_id = _find_parents_group_for_node(conn, wife_node_id)
+    group_id, created = _find_or_create_couple_group(
+        conn, user_id, husband_node_id, wife_node_id,
+        husband_parent_group_id=husband_parent_group_id, wife_parent_group_id=wife_parent_group_id,
+    )
+    conn.commit()
+    return {"node_id": spouse_node_id, "name": name, "group_id": group_id, "created_group": created}

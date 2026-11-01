@@ -1,0 +1,560 @@
+state_name,qumanity_record_id,qumanity_record_name,match_type,matched_constituency_name,matched_constituency_number,confidence
+Uttar Pradesh,NS.UP.1,Saharanpur,exact,Saharanpur,142,high
+Uttar Pradesh,NS.UP.2,Kairana,exact,Kairana,116,high
+Uttar Pradesh,NS.UP.3,Muzaffarnagar,exact,Muzaffarnagar,134,high
+Uttar Pradesh,NS.UP.4,Bijnor,exact,Bijnor,91,high
+Uttar Pradesh,NS.UP.5,Nagina,exact,Nagina,135,high
+Uttar Pradesh,NS.UP.6,Moradabad,exact,Moradabad,133,high
+Uttar Pradesh,NS.UP.7,Sambhal,exact,Sambhal,144,high
+Uttar Pradesh,NS.UP.8,Rampur,exact,Rampur,140,high
+Uttar Pradesh,NS.UP.9,Amroha,exact,Amroha,78,high
+Uttar Pradesh,NS.UP.A,Meerut,exact,Meerut,129,high
+Uttar Pradesh,NS.UP.B,Baghpat,exact,Baghpat,82,high
+Uttar Pradesh,NS.UP.C,Ghaziabad,exact,Ghaziabad,105,high
+Uttar Pradesh,NS.UP.D,Gautam Buddha Nagar,exact,Gautam Buddha Nagar,104,high
+Uttar Pradesh,NS.UP.E,Bulandshahr,exact,Bulandshahr,92,high
+Uttar Pradesh,NS.UP.F,Aligarh,exact,Aligarh,74,high
+Uttar Pradesh,NS.UP.10,Hathras,exact,Hathras,112,high
+Uttar Pradesh,NS.UP.11,Mathura,exact,Mathura,128,high
+Uttar Pradesh,NS.UP.12,Agra,exact,Agra,72,high
+Uttar Pradesh,NS.UP.13,Fatehpur Sikri,exact,Fatehpur Sikri,102,high
+Uttar Pradesh,NS.UP.14,Firozabad,exact,Firozabad,103,high
+Uttar Pradesh,NS.UP.15,Mainpuri,exact,Mainpuri,127,high
+Uttar Pradesh,NS.UP.16,Etah,exact,Etah,97,high
+Uttar Pradesh,NS.UP.17,Badaun,exact,Badaun,81,high
+Uttar Pradesh,NS.UP.18,Bareilly,exact,Bareilly,88,high
+Uttar Pradesh,NS.UP.19,Pilibhit,exact,Pilibhit,137,high
+Uttar Pradesh,NS.UP.1A,Shahjahanpur,exact,Shahjahanpur,146,high
+Uttar Pradesh,NS.UP.1B,Kheri,exact,Kheri,121,high
+Uttar Pradesh,NS.UP.1C,Dhaurahra,exact,Dhaurahra,95,high
+Uttar Pradesh,NS.UP.1D,Sitapur,exact,Sitapur,148,high
+Uttar Pradesh,NS.UP.1E,Hardoi,exact,Hardoi,111,high
+Uttar Pradesh,NS.UP.1F,Misrikh,exact,Misrikh,131,high
+Uttar Pradesh,NS.UP.20,Unnao,exact,Unnao,150,high
+Uttar Pradesh,NS.UP.21,Mohanlalganj,exact,Mohanlalganj,132,high
+Uttar Pradesh,NS.UP.22,Lucknow,exact,Lucknow,124,high
+Uttar Pradesh,NS.UP.23,Rae Bareli,exact,Rae Bareli,139,high
+Uttar Pradesh,NS.UP.24,Amethi,exact,Amethi,77,high
+Uttar Pradesh,NS.UP.25,Farrukhabad,exact,Farrukhabad,100,high
+Uttar Pradesh,NS.UP.26,Etawah,exact,Etawah,98,high
+Uttar Pradesh,NS.UP.27,Kannauj,exact,Kannauj,118,high
+Uttar Pradesh,NS.UP.28,Akbarpur,exact,Akbarpur,73,high
+Uttar Pradesh,NS.UP.29,Jalaun,exact,Jalaun,113,high
+Uttar Pradesh,NS.UP.2A,Jhansi,exact,Jhansi,115,high
+Uttar Pradesh,NS.UP.2B,Hamirpur,exact,Hamirpur,110,high
+Uttar Pradesh,NS.UP.2C,Banda,exact,Banda,85,high
+Uttar Pradesh,NS.UP.2D,Fatehpur,exact,Fatehpur,101,high
+Uttar Pradesh,NS.UP.2E,Kaushambi,exact,Kaushambi,120,high
+Uttar Pradesh,NS.UP.2F,Phulpur,exact,Phulpur,136,high
+Uttar Pradesh,NS.UP.30,Allahabad,exact,Allahabad,75,high
+Uttar Pradesh,NS.UP.31,Barabanki,exact,Barabanki,87,high
+Uttar Pradesh,NS.UP.32,Faizabad,exact,Faizabad,99,high
+Uttar Pradesh,NS.UP.33,Bahraich,exact,Bahraich,83,high
+Uttar Pradesh,NS.UP.34,Kaisarganj,unmatched,,,
+Uttar Pradesh,NS.UP.35,Shrawasti,exact,Shrawasti,147,high
+Uttar Pradesh,NS.UP.36,Gonda,exact,Gonda,108,high
+Uttar Pradesh,NS.UP.37,Domariyaganj,exact,Domariyaganj,96,high
+Uttar Pradesh,NS.UP.38,Basti,exact,Basti,89,high
+Uttar Pradesh,NS.UP.39,Sant Kabir Nagar,exact,Sant Kabir Nagar,145,high
+Uttar Pradesh,NS.UP.3A,Maharajganj,exact,Maharajganj,126,high
+Uttar Pradesh,NS.UP.3B,Gorakhpur,exact,Gorakhpur,109,high
+Uttar Pradesh,NS.UP.3C,Bansgaon,exact,Bansgaon,86,high
+Uttar Pradesh,NS.UP.3D,Kushinagar,unmatched,,,
+Uttar Pradesh,NS.UP.3E,Deoria,exact,Deoria,94,high
+Uttar Pradesh,NS.UP.3F,Lalganj,exact,Lalganj,123,high
+Uttar Pradesh,NS.UP.40,Azamgarh,exact,Azamgarh,80,high
+Uttar Pradesh,NS.UP.41,Ghosi,exact,Ghosi,107,high
+Uttar Pradesh,NS.UP.42,Salempur,exact,Salempur,143,high
+Uttar Pradesh,NS.UP.43,Ballia,exact,Ballia,84,high
+Uttar Pradesh,NS.UP.44,Jaunpur,exact,Jaunpur,114,high
+Uttar Pradesh,NS.UP.45,Machhlishahr,exact,Machhlishahr,125,high
+Uttar Pradesh,NS.UP.46,Ghazipur,exact,Ghazipur,106,high
+Uttar Pradesh,NS.UP.47,Chandauli,exact,Chandauli,93,high
+Uttar Pradesh,NS.UP.48,Varanasi,exact,Varanasi,151,high
+Uttar Pradesh,NS.UP.49,Bhadohi,exact,Bhadohi,90,high
+Uttar Pradesh,NS.UP.4A,Mirzapur,exact,Mirzapur,130,high
+Uttar Pradesh,NS.UP.4B,Robertsganj,exact,Robertsganj,141,high
+Uttar Pradesh,NS.UP.4C,Aonla,exact,Aonla,79,high
+Uttar Pradesh,NS.UP.4D,Sultanpur,exact,Sultanpur,149,high
+Uttar Pradesh,NS.UP.4E,Pratapgarh,exact,Pratapgarh,138,high
+Uttar Pradesh,NS.UP.4F,Kanpur,exact,Kanpur,119,high
+Uttar Pradesh,NS.UP.50,Ambedkar Nagar,exact,Ambedkar Nagar,76,high
+Maharashtra,WS.MH.1,Nandurbar,exact,Nandurbar,392,high
+Maharashtra,WS.MH.2,Dhule,exact,Dhule,372,high
+Maharashtra,WS.MH.3,Jalgaon,exact,Jalgaon,377,high
+Maharashtra,WS.MH.4,Raver,exact,Raver,401,high
+Maharashtra,WS.MH.5,Buldhana,exact,Buldhana,370,high
+Maharashtra,WS.MH.6,Akola,exact,Akola,363,high
+Maharashtra,WS.MH.7,Amravati,exact,Amravati,364,high
+Maharashtra,WS.MH.8,Wardha,exact,Wardha,408,high
+Maharashtra,WS.MH.9,Ramtek,exact,Ramtek,399,high
+Maharashtra,WS.MH.A,Nagpur,exact,Nagpur,390,high
+Maharashtra,WS.MH.B,Bhandara-Gondiya,unmatched,,,
+Maharashtra,WS.MH.C,Gadchiroli-Chimur,exact,Gadchiroli-Chimur,374,high
+Maharashtra,WS.MH.D,Chandrapur,exact,Chandrapur,371,high
+Maharashtra,WS.MH.E,Yavatmal-Washim,exact,Yavatmal-Washim,409,high
+Maharashtra,WS.MH.F,Hingoli,exact,Hingoli,376,high
+Maharashtra,WS.MH.10,Nanded,exact,Nanded,391,high
+Maharashtra,WS.MH.11,Parbhani,exact,Parbhani,396,high
+Maharashtra,WS.MH.12,Jalna,exact,Jalna,378,high
+Maharashtra,WS.MH.13,Aurangabad,exact,Aurangabad,365,high
+Maharashtra,WS.MH.14,Dindori,exact,Dindori,373,high
+Maharashtra,WS.MH.15,Nashik,exact,Nashik,393,high
+Maharashtra,WS.MH.16,Palghar,exact,Palghar,395,high
+Maharashtra,WS.MH.17,Bhiwandi,exact,Bhiwandi,369,high
+Maharashtra,WS.MH.18,Kalyan,exact,Kalyan,379,high
+Maharashtra,WS.MH.19,Thane,exact,Thane,407,high
+Maharashtra,WS.MH.1A,Mumbai North,exact,Mumbai North,384,high
+Maharashtra,WS.MH.1B,Mumbai North West,unmatched,,,
+Maharashtra,WS.MH.1C,Mumbai North East,unmatched,,,
+Maharashtra,WS.MH.1D,Mumbai North Central,unmatched,,,
+Maharashtra,WS.MH.1E,Mumbai South Central,unmatched,,,
+Maharashtra,WS.MH.1F,Mumbai South,unmatched,,,
+Maharashtra,WS.MH.20,Raigad,exact,Raigad,398,high
+Maharashtra,WS.MH.21,Maval,exact,Maval,383,high
+Maharashtra,WS.MH.22,Pune,exact,Pune,397,high
+Maharashtra,WS.MH.23,Baramati,exact,Baramati,366,high
+Maharashtra,WS.MH.24,Shirur,exact,Shirur,405,high
+Maharashtra,WS.MH.25,Ahmednagar,exact,Ahmednagar,362,high
+Maharashtra,WS.MH.26,Shirdi,exact,Shirdi,404,high
+Maharashtra,WS.MH.27,Beed,exact,Beed,367,high
+Maharashtra,WS.MH.28,Latur,exact,Latur,381,high
+Maharashtra,WS.MH.29,Osmanabad,exact,Osmanabad,394,high
+Maharashtra,WS.MH.2A,Solapur,exact,Solapur,406,high
+Maharashtra,WS.MH.2B,Madha,exact,Madha,382,high
+Maharashtra,WS.MH.2C,Satara,exact,Satara,403,high
+Maharashtra,WS.MH.2D,Ratnagiri-Sindhudurg,unmatched,,,
+Maharashtra,WS.MH.2E,Kolhapur,exact,Kolhapur,380,high
+Maharashtra,WS.MH.2F,Hatkanangle,exact,Hatkanangle,375,high
+Maharashtra,WS.MH.30,Sangli,exact,Sangli,402,high
+West Bengal,ES.WB.1,Jalpaiguri,exact,Jalpaiguri,240,high
+West Bengal,ES.WB.2,Cooch Behar,unmatched,,,
+West Bengal,ES.WB.3,Alipurduars,exact,Alipurduars,217,high
+West Bengal,ES.WB.4,Darjeeling,exact,Darjeeling,233,high
+West Bengal,ES.WB.5,Raiganj,exact,Raiganj,254,high
+West Bengal,ES.WB.6,Balurghat,exact,Balurghat,221,high
+West Bengal,ES.WB.7,Maldaha Uttar,exact,Maldaha Uttar,249,high
+West Bengal,ES.WB.8,Maldaha Dakshin,exact,Maldaha Dakshin,248,high
+West Bengal,ES.WB.9,Jangipur,exact,Jangipur,241,high
+West Bengal,ES.WB.A,Murshidabad,exact,Murshidabad,252,high
+West Bengal,ES.WB.B,Berhampore,unmatched,,,
+West Bengal,ES.WB.C,Krishnanagar,exact,Krishnanagar,247,high
+West Bengal,ES.WB.D,Ranaghat,exact,Ranaghat,255,high
+West Bengal,ES.WB.E,Bangaon,exact,Bangaon,222,high
+West Bengal,ES.WB.F,Basirhat,exact,Basirhat,228,high
+West Bengal,ES.WB.10,Barasat,exact,Barasat,224,high
+West Bengal,ES.WB.11,Barrackpore,unmatched,,,
+West Bengal,ES.WB.12,Dum Dum,exact,Dum Dum,235,high
+West Bengal,ES.WB.13,Jaynagar,exact,Jaynagar,242,high
+West Bengal,ES.WB.14,Mathurapur,exact,Mathurapur,250,high
+West Bengal,ES.WB.15,Jadavpur,exact,Jadavpur,239,high
+West Bengal,ES.WB.16,Diamond Harbour,exact,Diamond Harbour,234,high
+West Bengal,ES.WB.17,Kolkata Dakshin,exact,Kolkata Dakshin,245,high
+West Bengal,ES.WB.18,Kolkata Uttar,exact,Kolkata Uttar,246,high
+West Bengal,ES.WB.19,Howrah,exact,Howrah,238,high
+West Bengal,ES.WB.1A,Uluberia,exact,Uluberia,258,high
+West Bengal,ES.WB.1B,Srerampur,unmatched,,,
+West Bengal,ES.WB.1C,Hooghly,exact,Hooghly,237,high
+West Bengal,ES.WB.1D,Arambagh,unmatched,,,
+West Bengal,ES.WB.1E,Tamluk,exact,Tamluk,257,high
+West Bengal,ES.WB.1F,Ghatal,exact,Ghatal,236,high
+West Bengal,ES.WB.20,Kanthi,exact,Kanthi,244,high
+West Bengal,ES.WB.21,Medinipur,exact,Medinipur,251,high
+West Bengal,ES.WB.22,Jhargram,exact,Jhargram,243,high
+West Bengal,ES.WB.23,Purulia,exact,Purulia,253,high
+West Bengal,ES.WB.24,Bankura,exact,Bankura,223,high
+West Bengal,ES.WB.25,Bishnupur,exact,Bishnupur,230,high
+West Bengal,ES.WB.26,Bardhaman-Durgapur,unmatched,,,
+West Bengal,ES.WB.27,Bardhaman Purba,exact,Bardhaman Purba,226,high
+West Bengal,ES.WB.28,Bolpur,exact,Bolpur,231,high
+West Bengal,ES.WB.29,Asansol,exact,Asansol,219,high
+West Bengal,ES.WB.2A,Birbhum,exact,Birbhum,229,high
+Bihar,ES.BH.1,Valmiki Nagar,exact,Valmiki Nagar,191,high
+Bihar,ES.BH.2,Paschim Champaran,exact,Paschim Champaran,177,high
+Bihar,ES.BH.3,Purvi Champaran,exact,Purvi Champaran,181,high
+Bihar,ES.BH.4,Sheohar,exact,Sheohar,185,high
+Bihar,ES.BH.5,Sitamarhi,exact,Sitamarhi,186,high
+Bihar,ES.BH.6,Madhubani,exact,Madhubani,171,high
+Bihar,ES.BH.7,Jhanjharpur,exact,Jhanjharpur,165,high
+Bihar,ES.BH.8,Supaul,exact,Supaul,188,high
+Bihar,ES.BH.9,Araria,exact,Araria,152,high
+Bihar,ES.BH.A,Kishanganj,exact,Kishanganj,169,high
+Bihar,ES.BH.B,Purnia,exact,Purnia,180,high
+Bihar,ES.BH.C,Katihar,exact,Katihar,167,high
+Bihar,ES.BH.D,Madhepura,exact,Madhepura,170,high
+Bihar,ES.BH.E,Khagaria,exact,Khagaria,168,high
+Bihar,ES.BH.F,Samastipur,exact,Samastipur,182,high
+Bihar,ES.BH.10,Darbhanga,exact,Darbhanga,159,high
+Bihar,ES.BH.11,Muzaffarpur,exact,Muzaffarpur,174,high
+Bihar,ES.BH.12,Vaishali,exact,Vaishali,190,high
+Bihar,ES.BH.13,Gopalganj,exact,Gopalganj,161,high
+Bihar,ES.BH.14,Siwan,exact,Siwan,187,high
+Bihar,ES.BH.15,Maharajganj,exact,Maharajganj,172,high
+Bihar,ES.BH.16,Saran,exact,Saran,183,high
+Bihar,ES.BH.17,Hajipur,exact,Hajipur,162,high
+Bihar,ES.BH.18,Ujiarpur,exact,Ujiarpur,189,high
+Bihar,ES.BH.19,Begusarai,exact,Begusarai,156,high
+Bihar,ES.BH.1A,Bhagalpur,exact,Bhagalpur,157,high
+Bihar,ES.BH.1B,Banka,exact,Banka,155,high
+Bihar,ES.BH.1C,Jamui,exact,Jamui,164,high
+Bihar,ES.BH.1D,Munger,exact,Munger,173,high
+Bihar,ES.BH.1E,Nawada,exact,Nawada,176,high
+Bihar,ES.BH.1F,Nalanda,exact,Nalanda,175,high
+Bihar,ES.BH.20,Patna Sahib,exact,Patna Sahib,179,high
+Bihar,ES.BH.21,Pataliputra,exact,Pataliputra,178,high
+Bihar,ES.BH.22,Arrah,exact,Arrah,153,high
+Bihar,ES.BH.23,Buxar,exact,Buxar,158,high
+Bihar,ES.BH.24,Sasaram,exact,Sasaram,184,high
+Bihar,ES.BH.25,Karakat,exact,Karakat,166,high
+Bihar,ES.BH.26,Jahanabad,exact,Jahanabad,163,high
+Bihar,ES.BH.27,Aurangabad,exact,Aurangabad,154,high
+Bihar,ES.BH.28,Gaya,exact,Gaya,160,high
+Tamil Nadu,SS.TN.1,Tiruvallur,exact,Tiruvallur,537,high
+Tamil Nadu,SS.TN.2,Arakkonam,exact,Arakkonam,503,high
+Tamil Nadu,SS.TN.3,Sriperumbudur,exact,Sriperumbudur,529,high
+Tamil Nadu,SS.TN.4,Chennai North,exact,Chennai North,506,high
+Tamil Nadu,SS.TN.5,Chennai Central,exact,Chennai Central,505,high
+Tamil Nadu,SS.TN.6,Chennai South,exact,Chennai South,507,high
+Tamil Nadu,SS.TN.7,Kanchipuram,unmatched,,,
+Tamil Nadu,SS.TN.8,Vellore,exact,Vellore,539,high
+Tamil Nadu,SS.TN.9,Tiruvannamalai,exact,Tiruvannamalai,538,high
+Tamil Nadu,SS.TN.A,Krishnagiri,exact,Krishnagiri,518,high
+Tamil Nadu,SS.TN.B,Dharamapuri,unmatched,,,
+Tamil Nadu,SS.TN.C,Arani,exact,Arani,504,high
+Tamil Nadu,SS.TN.D,Viluppuram,exact,Viluppuram,540,high
+Tamil Nadu,SS.TN.E,Kallakurichi,exact,Kallakurichi,514,high
+Tamil Nadu,SS.TN.F,Salem,exact,Salem,527,high
+Tamil Nadu,SS.TN.10,Namakkal,exact,Namakkal,522,high
+Tamil Nadu,SS.TN.11,Erode,exact,Erode,513,high
+Tamil Nadu,SS.TN.12,Tiruppur,exact,Tiruppur,536,high
+Tamil Nadu,SS.TN.13,Nilgiris,exact,Nilgiris,523,high
+Tamil Nadu,SS.TN.14,Coimbatore,exact,Coimbatore,509,high
+Tamil Nadu,SS.TN.15,Pollachi,exact,Pollachi,525,high
+Tamil Nadu,SS.TN.16,Dindigul,exact,Dindigul,512,high
+Tamil Nadu,SS.TN.17,Karur,exact,Karur,517,high
+Tamil Nadu,SS.TN.18,Perambalur,exact,Perambalur,524,high
+Tamil Nadu,SS.TN.19,Tiruchirappalli,exact,Tiruchirappalli,534,high
+Tamil Nadu,SS.TN.1A,Chidambaram,exact,Chidambaram,508,high
+Tamil Nadu,SS.TN.1B,Cuddalore,exact,Cuddalore,510,high
+Tamil Nadu,SS.TN.1C,Mayiladuthurai,exact,Mayiladuthurai,520,high
+Tamil Nadu,SS.TN.1D,Nagapattinam,exact,Nagapattinam,521,high
+Tamil Nadu,SS.TN.1E,Thanjavur,exact,Thanjavur,531,high
+Tamil Nadu,SS.TN.1F,Sivaganga,exact,Sivaganga,528,high
+Tamil Nadu,SS.TN.20,Ramanathapuram,exact,Ramanathapuram,526,high
+Tamil Nadu,SS.TN.21,Madurai,exact,Madurai,519,high
+Tamil Nadu,SS.TN.22,Theni,exact,Theni,532,high
+Tamil Nadu,SS.TN.23,Virudhunagar,exact,Virudhunagar,541,high
+Tamil Nadu,SS.TN.24,Tenkasi,exact,Tenkasi,530,high
+Tamil Nadu,SS.TN.25,Thoothukkudi,exact,Thoothukkudi,533,high
+Tamil Nadu,SS.TN.26,Tirunelveli,exact,Tirunelveli,535,high
+Tamil Nadu,SS.TN.27,Kanniyakumari,exact,Kanniyakumari,516,high
+Madhya Pradesh,WS.MP.1,Morena,exact,Morena,323,high
+Madhya Pradesh,WS.MP.2,Bhind,exact,Bhind,307,high
+Madhya Pradesh,WS.MP.3,Gwalior,exact,Gwalior,314,high
+Madhya Pradesh,WS.MP.4,Guna,exact,Guna,313,high
+Madhya Pradesh,WS.MP.5,Rajgarh,exact,Rajgarh,324,high
+Madhya Pradesh,WS.MP.6,Sagar,exact,Sagar,327,high
+Madhya Pradesh,WS.MP.7,Damoh,exact,Damoh,310,high
+Madhya Pradesh,WS.MP.8,Khajuraho,exact,Khajuraho,318,high
+Madhya Pradesh,WS.MP.9,Satna,exact,Satna,328,high
+Madhya Pradesh,WS.MP.A,Rewa,exact,Rewa,326,high
+Madhya Pradesh,WS.MP.B,Sidhi,exact,Sidhi,330,high
+Madhya Pradesh,WS.MP.C,Shahdol,exact,Shahdol,329,high
+Madhya Pradesh,WS.MP.D,Jabalpur,exact,Jabalpur,317,high
+Madhya Pradesh,WS.MP.E,Mandla,exact,Mandla,321,high
+Madhya Pradesh,WS.MP.F,Balaghat,exact,Balaghat,305,high
+Madhya Pradesh,WS.MP.10,Chhindwara,exact,Chhindwara,309,high
+Madhya Pradesh,WS.MP.11,Betul,exact,Betul,306,high
+Madhya Pradesh,WS.MP.12,Hoshangabad,exact,Hoshangabad,315,high
+Madhya Pradesh,WS.MP.13,Vidisha,exact,Vidisha,333,high
+Madhya Pradesh,WS.MP.14,Bhopal,exact,Bhopal,308,high
+Madhya Pradesh,WS.MP.15,Dewas,exact,Dewas,311,high
+Madhya Pradesh,WS.MP.16,Khandwa,exact,Khandwa,319,high
+Madhya Pradesh,WS.MP.17,Khargone,exact,Khargone,320,high
+Madhya Pradesh,WS.MP.18,Ratlam,exact,Ratlam,325,high
+Madhya Pradesh,WS.MP.19,Dhar,exact,Dhar,312,high
+Madhya Pradesh,WS.MP.1A,Indore,exact,Indore,316,high
+Madhya Pradesh,WS.MP.1B,Ujjain,exact,Ujjain,332,high
+Madhya Pradesh,WS.MP.1C,Mandsaur,unmatched,,,
+Madhya Pradesh,WS.MP.1D,Tikamgarh,exact,Tikamgarh,331,high
+Karnataka,SS.KA.1,Chikkodi,exact,Chikkodi,463,high
+Karnataka,SS.KA.2,Belgaum,unmatched,,,
+Karnataka,SS.KA.3,Uttara Kannada,exact,Uttara Kannada,479,high
+Karnataka,SS.KA.4,Bagalkot,exact,Bagalkot,452,high
+Karnataka,SS.KA.5,Bijapur,unmatched,,,
+Karnataka,SS.KA.6,Gulbarga,unmatched,,,
+Karnataka,SS.KA.7,Raichur,exact,Raichur,475,high
+Karnataka,SS.KA.8,Bidar,exact,Bidar,459,high
+Karnataka,SS.KA.9,Koppal,exact,Koppal,472,high
+Karnataka,SS.KA.A,Haveri,exact,Haveri,470,high
+Karnataka,SS.KA.B,Dharwad,exact,Dharwad,467,high
+Karnataka,SS.KA.C,Bellary,unmatched,,,
+Karnataka,SS.KA.D,Chitradurga,exact,Chitradurga,464,high
+Karnataka,SS.KA.E,Davanagere,exact,Davanagere,466,high
+Karnataka,SS.KA.F,Shimoga,unmatched,,,
+Karnataka,SS.KA.10,Udupi Chikmagalur,unmatched,,,
+Karnataka,SS.KA.11,Hassan,exact,Hassan,469,high
+Karnataka,SS.KA.12,Tumkur,unmatched,,,
+Karnataka,SS.KA.13,Bangalore Rural,unmatched,,,
+Karnataka,SS.KA.14,Chikballapur,unmatched,,,
+Karnataka,SS.KA.15,Kolar,exact,Kolar,471,high
+Karnataka,SS.KA.16,Bangalore North,unmatched,,,
+Karnataka,SS.KA.17,Bangalore Central,unmatched,,,
+Karnataka,SS.KA.18,Bangalore South,unmatched,,,
+Karnataka,SS.KA.19,Mandya,exact,Mandya,473,high
+Karnataka,SS.KA.1A,Dakshina Kannada,exact,Dakshina Kannada,465,high
+Karnataka,SS.KA.1B,Mysore,unmatched,,,
+Karnataka,SS.KA.1C,Chamarajanagar,exact,Chamarajanagar,461,high
+Gujarat,WS.GJ.1,Kachchh,exact,Kachchh,347,high
+Gujarat,WS.GJ.2,Banaskantha,exact,Banaskantha,338,high
+Gujarat,WS.GJ.3,Patan,exact,Patan,352,high
+Gujarat,WS.GJ.4,Mahesana,exact,Mahesana,349,high
+Gujarat,WS.GJ.5,Sabarkantha,exact,Sabarkantha,355,high
+Gujarat,WS.GJ.6,Gandhinagar,exact,Gandhinagar,344,high
+Gujarat,WS.GJ.7,Ahmedabad East,exact,Ahmedabad East,334,high
+Gujarat,WS.GJ.8,Ahmedabad West,exact,Ahmedabad West,335,high
+Gujarat,WS.GJ.9,Kheda,exact,Kheda,348,high
+Gujarat,WS.GJ.A,Surendranagar,exact,Surendranagar,357,high
+Gujarat,WS.GJ.B,Rajkot,exact,Rajkot,354,high
+Gujarat,WS.GJ.C,Porbandar,exact,Porbandar,353,high
+Gujarat,WS.GJ.D,Jamnagar,exact,Jamnagar,345,high
+Gujarat,WS.GJ.E,Junagadh,exact,Junagadh,346,high
+Gujarat,WS.GJ.F,Amreli,exact,Amreli,336,high
+Gujarat,WS.GJ.10,Bhavnagar,exact,Bhavnagar,341,high
+Gujarat,WS.GJ.11,Anand,exact,Anand,337,high
+Gujarat,WS.GJ.12,Panchmahal,exact,Panchmahal,351,high
+Gujarat,WS.GJ.13,Dahod,exact,Dahod,343,high
+Gujarat,WS.GJ.14,Vadodara,exact,Vadodara,358,high
+Gujarat,WS.GJ.15,Chhota Udaipur,exact,Chhota Udaipur,342,high
+Gujarat,WS.GJ.16,Bharuch,exact,Bharuch,340,high
+Gujarat,WS.GJ.17,Surat,exact,Surat,356,high
+Gujarat,WS.GJ.18,Bardoli,exact,Bardoli,339,high
+Gujarat,WS.GJ.19,Navsari,exact,Navsari,350,high
+Gujarat,WS.GJ.1A,Valsad,exact,Valsad,359,high
+Andhra Pradesh,SS.AP.1,Srikakulam,exact,Srikakulam,445,high
+Andhra Pradesh,SS.AP.2,Vizianagaram,exact,Vizianagaram,449,high
+Andhra Pradesh,SS.AP.3,Araku,exact,Araku,414,high
+Andhra Pradesh,SS.AP.4,Visakhapatnam,exact,Visakhapatnam,448,high
+Andhra Pradesh,SS.AP.5,Anakapalli,unmatched,,,
+Andhra Pradesh,SS.AP.6,Kakinada,exact,Kakinada,424,high
+Andhra Pradesh,SS.AP.7,Rajahmundry,exact,Rajahmundry,442,high
+Andhra Pradesh,SS.AP.8,Amalapuram,exact,Amalapuram,411,high
+Andhra Pradesh,SS.AP.9,Narasapuram,unmatched,,,
+Andhra Pradesh,SS.AP.A,Eluru,exact,Eluru,419,high
+Andhra Pradesh,SS.AP.B,Vijayawada,exact,Vijayawada,447,high
+Andhra Pradesh,SS.AP.C,Machilipatnam,exact,Machilipatnam,428,high
+Andhra Pradesh,SS.AP.D,Narasaraopet,exact,Narasaraopet,436,high
+Andhra Pradesh,SS.AP.E,Guntur,exact,Guntur,420,high
+Andhra Pradesh,SS.AP.F,Bapatla,exact,Bapatla,415,high
+Andhra Pradesh,SS.AP.10,Ongole,exact,Ongole,440,high
+Andhra Pradesh,SS.AP.11,Nellore,exact,Nellore,438,high
+Andhra Pradesh,SS.AP.12,Tirupati,exact,Tirupati,446,high
+Andhra Pradesh,SS.AP.13,Kadapa,exact,Kadapa,423,high
+Andhra Pradesh,SS.AP.14,Rajampet,exact,Rajampet,443,high
+Andhra Pradesh,SS.AP.15,Nandyal,exact,Nandyal,435,high
+Andhra Pradesh,SS.AP.16,Kurnool,exact,Kurnool,427,high
+Andhra Pradesh,SS.AP.17,Anantapur,exact,Anantapur,413,high
+Andhra Pradesh,SS.AP.18,Hindupur,exact,Hindupur,421,high
+Andhra Pradesh,SS.AP.19,Chittoor,exact,Chittoor,418,high
+Rajasthan,NS.RJ.1,Ganganagar,exact,Ganganagar,57,high
+Rajasthan,NS.RJ.2,Bikaner,exact,Bikaner,53,high
+Rajasthan,NS.RJ.3,Churu,exact,Churu,55,high
+Rajasthan,NS.RJ.4,Jhunjhunu,exact,Jhunjhunu,62,high
+Rajasthan,NS.RJ.5,Sikar,exact,Sikar,69,high
+Rajasthan,NS.RJ.6,Jaipur Rural,exact,Jaipur Rural,59,high
+Rajasthan,NS.RJ.7,Ajmer,exact,Ajmer,47,high
+Rajasthan,NS.RJ.8,Jaipur,exact,Jaipur,58,high
+Rajasthan,NS.RJ.9,Dausa,exact,Dausa,56,high
+Rajasthan,NS.RJ.A,Alwar,exact,Alwar,48,high
+Rajasthan,NS.RJ.B,Bharatpur,exact,Bharatpur,51,high
+Rajasthan,NS.RJ.C,Karauli-Dholpur,exact,Karauli-Dholpur,64,high
+Rajasthan,NS.RJ.D,Tonk-Sawai Madhopur,exact,Tonk-Sawai Madhopur,70,high
+Rajasthan,NS.RJ.E,Nagaur,exact,Nagaur,66,high
+Rajasthan,NS.RJ.F,Rajsamand,exact,Rajsamand,68,high
+Rajasthan,NS.RJ.10,Pali,exact,Pali,67,high
+Rajasthan,NS.RJ.11,Jodhpur,exact,Jodhpur,63,high
+Rajasthan,NS.RJ.12,Barmer,exact,Barmer,50,high
+Rajasthan,NS.RJ.13,Jalore,exact,Jalore,60,high
+Rajasthan,NS.RJ.14,Udaipur,exact,Udaipur,71,high
+Rajasthan,NS.RJ.15,Banswara,exact,Banswara,49,high
+Rajasthan,NS.RJ.16,Chittorgarh,exact,Chittorgarh,54,high
+Rajasthan,NS.RJ.17,Bhilwara,exact,Bhilwara,52,high
+Rajasthan,NS.RJ.18,Kota,exact,Kota,65,high
+Rajasthan,NS.RJ.19,Jhalawar-Baran,exact,Jhalawar-Baran,61,high
+Haryana,NS.HR.1,Ambala,exact,Ambala,30,high
+Haryana,NS.HR.2,Kurukshetra,exact,Kurukshetra,36,high
+Haryana,NS.HR.3,Karnal,exact,Karnal,35,high
+Haryana,NS.HR.4,Sonipat,exact,Sonipat,39,high
+Haryana,NS.HR.5,Hisar,exact,Hisar,34,high
+Haryana,NS.HR.6,Sirsa,exact,Sirsa,38,high
+Haryana,NS.HR.8,Rohtak,exact,Rohtak,37,high
+Haryana,NS.HR.9,Gurgaon,exact,Gurgaon,33,high
+Haryana,NS.HR.A,Faridabad,exact,Faridabad,32,high
+Haryana,NS.HR.B,Fatehabad,unmatched,,,
+Haryana,NS.HR.C,Jhajjar,unmatched,,,
+Haryana,NS.HR.D,Jind,unmatched,,,
+Haryana,NS.HR.E,Kaithal,unmatched,,,
+Haryana,NS.HR.F,Nuh,unmatched,,,
+Haryana,NS.HR.G,Palwal,unmatched,,,
+Haryana,NS.HR.H,Panchkula,unmatched,,,
+Haryana,NS.HR.I,Panipat,unmatched,,,
+Haryana,NS.HR.J,Rewari,unmatched,,,
+Haryana,NS.HR.K,Yamunanagar,unmatched,,,
+Haryana,NS.HR.L,Bhiwani,unmatched,,,
+Haryana,NS.HR.M,Mahendragarh,unmatched,,,
+Haryana,NS.HR.N,Charkhi Dadri,unmatched,,,
+Odisha,ES.OR.1,Bargarh,exact,Bargarh,275,high
+Odisha,ES.OR.2,Sundargarh,exact,Sundargarh,293,high
+Odisha,ES.OR.3,Sambalpur,exact,Sambalpur,292,high
+Odisha,ES.OR.4,Keonjhar,exact,Keonjhar,287,high
+Odisha,ES.OR.5,Mayurbhanj,exact,Mayurbhanj,289,high
+Odisha,ES.OR.6,Balasore,exact,Balasore,274,high
+Odisha,ES.OR.7,Bhadrak,exact,Bhadrak,277,high
+Odisha,ES.OR.8,Jajpur,exact,Jajpur,283,high
+Odisha,ES.OR.9,Dhenkanal,exact,Dhenkanal,281,high
+Odisha,ES.OR.A,Cuttack,exact,Cuttack,280,high
+Odisha,ES.OR.B,Kendrapara,exact,Kendrapara,286,high
+Odisha,ES.OR.C,Jagatsinghpur,exact,Jagatsinghpur,282,high
+Odisha,ES.OR.D,Puri,exact,Puri,291,high
+Odisha,ES.OR.E,Bhubaneswar,exact,Bhubaneswar,278,high
+Odisha,ES.OR.F,Aska,exact,Aska,273,high
+Odisha,ES.OR.10,Berhampur,exact,Berhampur,276,high
+Odisha,ES.OR.11,Koraput,exact,Koraput,288,high
+Odisha,ES.OR.12,Nabarangpur,exact,Nabarangpur,290,high
+Odisha,ES.OR.13,Kalahandi,exact,Kalahandi,284,high
+Odisha,ES.OR.14,Bolangir,exact,Bolangir,279,high
+Odisha,ES.OR.15,Kandhamal,exact,Kandhamal,285,high
+Kerala,SS.KL.1,Kasaragod,exact,Kasaragod,490,high
+Kerala,SS.KL.2,Kannur,exact,Kannur,489,high
+Kerala,SS.KL.3,Vadakara,exact,Vadakara,501,high
+Kerala,SS.KL.4,Wayanad,exact,Wayanad,502,high
+Kerala,SS.KL.5,Kozhikode,exact,Kozhikode,493,high
+Kerala,SS.KL.6,Malappuram,exact,Malappuram,494,high
+Kerala,SS.KL.7,Ponnani,exact,Ponnani,498,high
+Kerala,SS.KL.8,Palakkad,exact,Palakkad,496,high
+Kerala,SS.KL.9,Alathur,exact,Alathur,484,high
+Kerala,SS.KL.A,Thrissur,exact,Thrissur,500,high
+Kerala,SS.KL.B,Chalakudy,exact,Chalakudy,486,high
+Kerala,SS.KL.C,Ernakulam,exact,Ernakulam,487,high
+Kerala,SS.KL.D,Kottayam,exact,Kottayam,492,high
+Kerala,SS.KL.E,Idukki,exact,Idukki,488,high
+Kerala,SS.KL.F,Mavelikara,unmatched,,,
+Kerala,SS.KL.10,Pathanamthitta,exact,Pathanamthitta,497,high
+Kerala,SS.KL.11,Alappuzha,exact,Alappuzha,483,high
+Kerala,SS.KL.12,Kollam,exact,Kollam,491,high
+Kerala,SS.KL.13,Attingal,exact,Attingal,485,high
+Kerala,SS.KL.14,Thiruvananthapuram,exact,Thiruvananthapuram,499,high
+Telangana,SS.TS.1,Adilabad,exact,Adilabad,410,high
+Telangana,SS.TS.2,Peddapalli,unmatched,,,
+Telangana,SS.TS.3,Nizamabad,exact,Nizamabad,439,high
+Telangana,SS.TS.4,Zahirabad,exact,Zahirabad,451,high
+Telangana,SS.TS.5,Karimnagar,exact,Karimnagar,425,high
+Telangana,SS.TS.6,Medak,exact,Medak,432,high
+Telangana,SS.TS.7,Malkajgiri,exact,Malkajgiri,431,high
+Telangana,SS.TS.8,Bhongir,exact,Bhongir,416,high
+Telangana,SS.TS.9,Chevella,exact,Chevella,417,high
+Telangana,SS.TS.A,Secunderabad,exact,Secunderabad,444,high
+Telangana,SS.TS.B,Hyderabad,exact,Hyderabad,422,high
+Telangana,SS.TS.C,Mahabubnagar,unmatched,,,
+Telangana,SS.TS.D,Nagarkurnool,exact,Nagarkurnool,433,high
+Telangana,SS.TS.E,Nalgonda,exact,Nalgonda,434,high
+Telangana,SS.TS.F,Warangal,exact,Warangal,450,high
+Telangana,SS.TS.10,Mahabubabad,exact,Mahabubabad,429,high
+Telangana,SS.TS.11,Khammam,exact,Khammam,426,high
+Assam,CS.AS.1,Sonitpur,unmatched,,,
+Assam,CS.AS.2,Diphu,unmatched,,,
+Assam,CS.AS.3,Kaziranga,unmatched,,,
+Assam,CS.AS.4,Darrang-Udalguri,unmatched,,,
+Assam,CS.AS.5,Lakhimpur,exact,Lakhimpur,212,high
+Assam,CS.AS.6,Kokrajhar,exact,Kokrajhar,211,high
+Assam,CS.AS.7,Dhubri,exact,Dhubri,205,high
+Assam,CS.AS.8,Dibrugarh,exact,Dibrugarh,206,high
+Assam,CS.AS.9,Jorhat,exact,Jorhat,208,high
+Assam,CS.AS.A,Nagaon,unmatched,,,
+Assam,CS.AS.B,Barpeta,exact,Barpeta,204,high
+Assam,CS.AS.C,Guwahati,unmatched,,,
+Assam,CS.AS.D,Karimganj,exact,Karimganj,210,high
+Assam,CS.AS.E,Silchar,exact,Silchar,215,high
+Jharkhand,ES.JH.1,Rajmahal,exact,Rajmahal,270,high
+Jharkhand,ES.JH.2,Dumka,exact,Dumka,261,high
+Jharkhand,ES.JH.3,Godda,exact,Godda,263,high
+Jharkhand,ES.JH.4,Kodarma,exact,Kodarma,267,high
+Jharkhand,ES.JH.5,Giridih,exact,Giridih,262,high
+Jharkhand,ES.JH.6,Dhanbad,exact,Dhanbad,260,high
+Jharkhand,ES.JH.7,Jamshedpur,exact,Jamshedpur,265,high
+Jharkhand,ES.JH.8,Singhbhum,exact,Singhbhum,272,high
+Jharkhand,ES.JH.9,Khunti,exact,Khunti,266,high
+Jharkhand,ES.JH.A,Ranchi,exact,Ranchi,271,high
+Jharkhand,ES.JH.B,Lohardaga,exact,Lohardaga,268,high
+Jharkhand,ES.JH.C,Hazaribagh,exact,Hazaribagh,264,high
+Jharkhand,ES.JH.D,Chatra,exact,Chatra,259,high
+Jharkhand,ES.JH.E,Palamu,unmatched,,,
+Punjab,NS.PB.1,Gurdaspur,exact,Gurdaspur,17,high
+Punjab,NS.PB.2,Amritsar,exact,Amritsar,11,high
+Punjab,NS.PB.3,Khadoor Sahib,exact,Khadoor Sahib,20,high
+Punjab,NS.PB.4,Jalandhar,exact,Jalandhar,19,high
+Punjab,NS.PB.5,Hoshiarpur,exact,Hoshiarpur,18,high
+Punjab,NS.PB.6,Anandpur Sahib,exact,Anandpur Sahib,12,high
+Punjab,NS.PB.7,Fatehgarh Sahib,exact,Fatehgarh Sahib,15,high
+Punjab,NS.PB.8,Ludhiana,exact,Ludhiana,21,high
+Punjab,NS.PB.9,Faridkot,exact,Faridkot,14,high
+Punjab,NS.PB.A,Firozpur,exact,Firozpur,16,high
+Punjab,NS.PB.B,Bathinda,exact,Bathinda,13,high
+Punjab,NS.PB.C,Sangrur,exact,Sangrur,23,high
+Punjab,NS.PB.D,Patiala,exact,Patiala,22,high
+Chhattisgarh,WS.CT.1,Bastar,exact,Bastar,294,high
+Chhattisgarh,WS.CT.2,Kanker,exact,Kanker,298,high
+Chhattisgarh,WS.CT.3,Raipur,exact,Raipur,302,high
+Chhattisgarh,WS.CT.4,Durg,exact,Durg,296,high
+Chhattisgarh,WS.CT.5,Rajnandgaon,exact,Rajnandgaon,303,high
+Chhattisgarh,WS.CT.6,Mahasamund,exact,Mahasamund,300,high
+Chhattisgarh,WS.CT.7,Bilaspur,exact,Bilaspur,295,high
+Chhattisgarh,WS.CT.8,Janjgir-Champa,unmatched,,,
+Chhattisgarh,WS.CT.9,Korba,exact,Korba,299,high
+Chhattisgarh,WS.CT.A,Sarguja,unmatched,,,
+Chhattisgarh,WS.CT.B,Raigarh,exact,Raigarh,301,high
+Delhi,CS.DL.1,New Delhi,exact,New Delhi,42,high
+Delhi,CS.DL.2,North East Delhi,exact,North East Delhi,43,high
+Delhi,CS.DL.3,North West Delhi,exact,North West Delhi,44,high
+Delhi,CS.DL.4,West Delhi,exact,West Delhi,46,high
+Delhi,CS.DL.5,East Delhi,exact,East Delhi,41,high
+Delhi,CS.DL.6,South Delhi,exact,South Delhi,45,high
+Delhi,CS.DL.7,Chandni Chowk,exact,Chandni Chowk,40,high
+Jammu and Kashmir,CS.JK.1,Baramulla,exact,Baramulla,2,high
+Jammu and Kashmir,CS.JK.2,Srinagar,exact,Srinagar,5,high
+Jammu and Kashmir,CS.JK.3,Anantnag-Rajouri,unmatched,,,
+Jammu and Kashmir,CS.JK.4,Udhampur,exact,Udhampur,6,high
+Jammu and Kashmir,CS.JK.5,Jammu,exact,Jammu,3,high
+Uttarakhand,NS.UT.1,Tehri Garhwal,exact,Tehri Garhwal,29,high
+Uttarakhand,NS.UT.2,Garhwal,exact,Garhwal,26,high
+Uttarakhand,NS.UT.3,Almora,exact,Almora,25,high
+Uttarakhand,NS.UT.4,Nainital-Udham Singh Nagar,unmatched,,,
+Uttarakhand,NS.UT.5,Haridwar,unmatched,,,
+Himachal Pradesh,NS.HP.1,Kangra,exact,Kangra,8,high
+Himachal Pradesh,NS.HP.2,Mandi,exact,Mandi,9,high
+Himachal Pradesh,NS.HP.3,Hamirpur,exact,Hamirpur,7,high
+Himachal Pradesh,NS.HP.4,Shimla,exact,Shimla,10,high
+Nagaland,CS.NL.1,Nagaland,exact,Nagaland,195,high
+Nagaland,CS.NL.2,Dimapur,unmatched,,,
+Nagaland,CS.NL.3,Kiphire,unmatched,,,
+Puducherry,CS.PY.1,Puducherry,normalized,PUDUCHERRY,542,high
+Puducherry,CS.PY.2,Mahe,unmatched,,,
+Puducherry,CS.PY.3,Yanam,unmatched,,,
+Arunachal Pradesh,CS.AR.1,Arunachal West,exact,Arunachal West,194,high
+Arunachal Pradesh,CS.AR.2,Arunachal East,exact,Arunachal East,193,high
+Goa,WS.GA.1,North Goa,exact,North Goa,480,high
+Goa,WS.GA.2,South Goa,exact,South Goa,481,high
+Manipur,CS.MN.1,Inner Manipur,exact,Inner Manipur,196,high
+Manipur,CS.MN.2,Outer Manipur,exact,Outer Manipur,197,high
+Meghalaya,CS.ME.1,Shillong,exact,Shillong,201,high
+Meghalaya,CS.ME.2,Tura,exact,Tura,202,high
+Tripura,CS.TR.1,Tripura West,exact,Tripura West,200,high
+Tripura,CS.TR.2,Tripura East,exact,Tripura East,199,high
+Andaman and Nicobar Islands,CS.AN.1,Andaman and Nicobar Islands,normalized,Andaman & Nicobar Islands,543,high
+Chandigarh,CS.CH.1,Chandigarh,exact,Chandigarh,24,high
+Dadra and Nagar Haveli,CS.DN.1,Dadra and Nagar Haveli,normalized,Dadra & Nagar Haveli,361,high
+Daman and Diu,CS.DD.1,Daman and Diu,normalized,Daman & Diu,360,high
+Ladakh,CS.LA.1,Ladakh,exact,Ladakh,4,high
+Lakshadweep,CS.LD.1,Lakshadweep,exact,Lakshadweep,482,high
+Mizoram,CS.MI.1,Mizoram,exact,Mizoram,198,high
+Sikkim,CS.SK.1,Sikkim,exact,Sikkim,192,high

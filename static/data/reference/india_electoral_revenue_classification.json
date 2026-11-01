@@ -1,0 +1,5361 @@
+{
+  "meta": {
+    "generated_at_utc": "2026-11-01T13:42:29.592521+00:00",
+    "master_json_path": "/Users/macmudgal/Desktop/0_Earth/Qumanity_Master.json",
+    "master_json_sha256": "4ebd0e39c7ee0ec7e045435d2570787e11525ac867f0aa4675be53fe6d474fa8",
+    "master_json_never_modified": true,
+    "constituency_reference": {
+      "csv_path": "/Users/macmudgal/Desktop/Qumanity_DPG/static/data/reference/lok_sabha_constituencies_543.csv",
+      "csv_sha256": "a18e22d97706a545671851a37093eefbf573a437e97467da58a0596d8797ae68",
+      "total_rows": 545,
+      "unique_constituency_numbers": 543,
+      "unique_states_in_reference": 37
+    },
+    "total_states_ut_records": 37,
+    "counts_by_classification": {
+      "LIKELY_ELECTORAL_GEOGRAPHY": 28,
+      "MIXED_GEOGRAPHY": 3,
+      "SPECIAL_ADMINISTRATIVE_CASE": 6
+    }
+  },
+  "states": [
+    {
+      "state_name": "Uttar Pradesh",
+      "qumanity_state_id": "NS.UP",
+      "zone_name": "North India State",
+      "master_district_record_count": 80,
+      "official_constituency_count": 80,
+      "exact_matches": 78,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 2,
+      "match_ratio": 0.975,
+      "revenue_district_reference": 75,
+      "revenue_district_reference_note": "medium -- consistent across most sources checked this session",
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "78/80 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (80 official constituencies on record for this state)",
+        "2/80 records did not match any known constituency name in this state -- this does NOT by itself prove they are genuine revenue districts (the reference list could be incomplete, or these could be real revenue districts, or something else entirely)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "NS.UP.1",
+          "qumanity_record_name": "Saharanpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Saharanpur",
+          "matched_constituency_number": "142",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.2",
+          "qumanity_record_name": "Kairana",
+          "match_type": "exact",
+          "matched_constituency_name": "Kairana",
+          "matched_constituency_number": "116",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.3",
+          "qumanity_record_name": "Muzaffarnagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Muzaffarnagar",
+          "matched_constituency_number": "134",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.4",
+          "qumanity_record_name": "Bijnor",
+          "match_type": "exact",
+          "matched_constituency_name": "Bijnor",
+          "matched_constituency_number": "91",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.5",
+          "qumanity_record_name": "Nagina",
+          "match_type": "exact",
+          "matched_constituency_name": "Nagina",
+          "matched_constituency_number": "135",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.6",
+          "qumanity_record_name": "Moradabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Moradabad",
+          "matched_constituency_number": "133",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.7",
+          "qumanity_record_name": "Sambhal",
+          "match_type": "exact",
+          "matched_constituency_name": "Sambhal",
+          "matched_constituency_number": "144",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.8",
+          "qumanity_record_name": "Rampur",
+          "match_type": "exact",
+          "matched_constituency_name": "Rampur",
+          "matched_constituency_number": "140",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.9",
+          "qumanity_record_name": "Amroha",
+          "match_type": "exact",
+          "matched_constituency_name": "Amroha",
+          "matched_constituency_number": "78",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.A",
+          "qumanity_record_name": "Meerut",
+          "match_type": "exact",
+          "matched_constituency_name": "Meerut",
+          "matched_constituency_number": "129",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.B",
+          "qumanity_record_name": "Baghpat",
+          "match_type": "exact",
+          "matched_constituency_name": "Baghpat",
+          "matched_constituency_number": "82",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.C",
+          "qumanity_record_name": "Ghaziabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Ghaziabad",
+          "matched_constituency_number": "105",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.D",
+          "qumanity_record_name": "Gautam Buddha Nagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Gautam Buddha Nagar",
+          "matched_constituency_number": "104",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.E",
+          "qumanity_record_name": "Bulandshahr",
+          "match_type": "exact",
+          "matched_constituency_name": "Bulandshahr",
+          "matched_constituency_number": "92",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.F",
+          "qumanity_record_name": "Aligarh",
+          "match_type": "exact",
+          "matched_constituency_name": "Aligarh",
+          "matched_constituency_number": "74",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.10",
+          "qumanity_record_name": "Hathras",
+          "match_type": "exact",
+          "matched_constituency_name": "Hathras",
+          "matched_constituency_number": "112",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.11",
+          "qumanity_record_name": "Mathura",
+          "match_type": "exact",
+          "matched_constituency_name": "Mathura",
+          "matched_constituency_number": "128",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.12",
+          "qumanity_record_name": "Agra",
+          "match_type": "exact",
+          "matched_constituency_name": "Agra",
+          "matched_constituency_number": "72",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.13",
+          "qumanity_record_name": "Fatehpur Sikri",
+          "match_type": "exact",
+          "matched_constituency_name": "Fatehpur Sikri",
+          "matched_constituency_number": "102",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.14",
+          "qumanity_record_name": "Firozabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Firozabad",
+          "matched_constituency_number": "103",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.15",
+          "qumanity_record_name": "Mainpuri",
+          "match_type": "exact",
+          "matched_constituency_name": "Mainpuri",
+          "matched_constituency_number": "127",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.16",
+          "qumanity_record_name": "Etah",
+          "match_type": "exact",
+          "matched_constituency_name": "Etah",
+          "matched_constituency_number": "97",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.17",
+          "qumanity_record_name": "Badaun",
+          "match_type": "exact",
+          "matched_constituency_name": "Badaun",
+          "matched_constituency_number": "81",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.18",
+          "qumanity_record_name": "Bareilly",
+          "match_type": "exact",
+          "matched_constituency_name": "Bareilly",
+          "matched_constituency_number": "88",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.19",
+          "qumanity_record_name": "Pilibhit",
+          "match_type": "exact",
+          "matched_constituency_name": "Pilibhit",
+          "matched_constituency_number": "137",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.1A",
+          "qumanity_record_name": "Shahjahanpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Shahjahanpur",
+          "matched_constituency_number": "146",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.1B",
+          "qumanity_record_name": "Kheri",
+          "match_type": "exact",
+          "matched_constituency_name": "Kheri",
+          "matched_constituency_number": "121",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.1C",
+          "qumanity_record_name": "Dhaurahra",
+          "match_type": "exact",
+          "matched_constituency_name": "Dhaurahra",
+          "matched_constituency_number": "95",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.1D",
+          "qumanity_record_name": "Sitapur",
+          "match_type": "exact",
+          "matched_constituency_name": "Sitapur",
+          "matched_constituency_number": "148",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.1E",
+          "qumanity_record_name": "Hardoi",
+          "match_type": "exact",
+          "matched_constituency_name": "Hardoi",
+          "matched_constituency_number": "111",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.1F",
+          "qumanity_record_name": "Misrikh",
+          "match_type": "exact",
+          "matched_constituency_name": "Misrikh",
+          "matched_constituency_number": "131",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.20",
+          "qumanity_record_name": "Unnao",
+          "match_type": "exact",
+          "matched_constituency_name": "Unnao",
+          "matched_constituency_number": "150",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.21",
+          "qumanity_record_name": "Mohanlalganj",
+          "match_type": "exact",
+          "matched_constituency_name": "Mohanlalganj",
+          "matched_constituency_number": "132",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.22",
+          "qumanity_record_name": "Lucknow",
+          "match_type": "exact",
+          "matched_constituency_name": "Lucknow",
+          "matched_constituency_number": "124",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.23",
+          "qumanity_record_name": "Rae Bareli",
+          "match_type": "exact",
+          "matched_constituency_name": "Rae Bareli",
+          "matched_constituency_number": "139",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.24",
+          "qumanity_record_name": "Amethi",
+          "match_type": "exact",
+          "matched_constituency_name": "Amethi",
+          "matched_constituency_number": "77",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.25",
+          "qumanity_record_name": "Farrukhabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Farrukhabad",
+          "matched_constituency_number": "100",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.26",
+          "qumanity_record_name": "Etawah",
+          "match_type": "exact",
+          "matched_constituency_name": "Etawah",
+          "matched_constituency_number": "98",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.27",
+          "qumanity_record_name": "Kannauj",
+          "match_type": "exact",
+          "matched_constituency_name": "Kannauj",
+          "matched_constituency_number": "118",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.28",
+          "qumanity_record_name": "Akbarpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Akbarpur",
+          "matched_constituency_number": "73",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.29",
+          "qumanity_record_name": "Jalaun",
+          "match_type": "exact",
+          "matched_constituency_name": "Jalaun",
+          "matched_constituency_number": "113",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.2A",
+          "qumanity_record_name": "Jhansi",
+          "match_type": "exact",
+          "matched_constituency_name": "Jhansi",
+          "matched_constituency_number": "115",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.2B",
+          "qumanity_record_name": "Hamirpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Hamirpur",
+          "matched_constituency_number": "110",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.2C",
+          "qumanity_record_name": "Banda",
+          "match_type": "exact",
+          "matched_constituency_name": "Banda",
+          "matched_constituency_number": "85",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.2D",
+          "qumanity_record_name": "Fatehpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Fatehpur",
+          "matched_constituency_number": "101",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.2E",
+          "qumanity_record_name": "Kaushambi",
+          "match_type": "exact",
+          "matched_constituency_name": "Kaushambi",
+          "matched_constituency_number": "120",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.2F",
+          "qumanity_record_name": "Phulpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Phulpur",
+          "matched_constituency_number": "136",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.30",
+          "qumanity_record_name": "Allahabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Allahabad",
+          "matched_constituency_number": "75",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.31",
+          "qumanity_record_name": "Barabanki",
+          "match_type": "exact",
+          "matched_constituency_name": "Barabanki",
+          "matched_constituency_number": "87",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.32",
+          "qumanity_record_name": "Faizabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Faizabad",
+          "matched_constituency_number": "99",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.33",
+          "qumanity_record_name": "Bahraich",
+          "match_type": "exact",
+          "matched_constituency_name": "Bahraich",
+          "matched_constituency_number": "83",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.34",
+          "qumanity_record_name": "Kaisarganj",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "NS.UP.35",
+          "qumanity_record_name": "Shrawasti",
+          "match_type": "exact",
+          "matched_constituency_name": "Shrawasti",
+          "matched_constituency_number": "147",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.36",
+          "qumanity_record_name": "Gonda",
+          "match_type": "exact",
+          "matched_constituency_name": "Gonda",
+          "matched_constituency_number": "108",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.37",
+          "qumanity_record_name": "Domariyaganj",
+          "match_type": "exact",
+          "matched_constituency_name": "Domariyaganj",
+          "matched_constituency_number": "96",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.38",
+          "qumanity_record_name": "Basti",
+          "match_type": "exact",
+          "matched_constituency_name": "Basti",
+          "matched_constituency_number": "89",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.39",
+          "qumanity_record_name": "Sant Kabir Nagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Sant Kabir Nagar",
+          "matched_constituency_number": "145",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.3A",
+          "qumanity_record_name": "Maharajganj",
+          "match_type": "exact",
+          "matched_constituency_name": "Maharajganj",
+          "matched_constituency_number": "126",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.3B",
+          "qumanity_record_name": "Gorakhpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Gorakhpur",
+          "matched_constituency_number": "109",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.3C",
+          "qumanity_record_name": "Bansgaon",
+          "match_type": "exact",
+          "matched_constituency_name": "Bansgaon",
+          "matched_constituency_number": "86",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.3D",
+          "qumanity_record_name": "Kushinagar",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "NS.UP.3E",
+          "qumanity_record_name": "Deoria",
+          "match_type": "exact",
+          "matched_constituency_name": "Deoria",
+          "matched_constituency_number": "94",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.3F",
+          "qumanity_record_name": "Lalganj",
+          "match_type": "exact",
+          "matched_constituency_name": "Lalganj",
+          "matched_constituency_number": "123",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.40",
+          "qumanity_record_name": "Azamgarh",
+          "match_type": "exact",
+          "matched_constituency_name": "Azamgarh",
+          "matched_constituency_number": "80",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.41",
+          "qumanity_record_name": "Ghosi",
+          "match_type": "exact",
+          "matched_constituency_name": "Ghosi",
+          "matched_constituency_number": "107",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.42",
+          "qumanity_record_name": "Salempur",
+          "match_type": "exact",
+          "matched_constituency_name": "Salempur",
+          "matched_constituency_number": "143",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.43",
+          "qumanity_record_name": "Ballia",
+          "match_type": "exact",
+          "matched_constituency_name": "Ballia",
+          "matched_constituency_number": "84",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.44",
+          "qumanity_record_name": "Jaunpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Jaunpur",
+          "matched_constituency_number": "114",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.45",
+          "qumanity_record_name": "Machhlishahr",
+          "match_type": "exact",
+          "matched_constituency_name": "Machhlishahr",
+          "matched_constituency_number": "125",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.46",
+          "qumanity_record_name": "Ghazipur",
+          "match_type": "exact",
+          "matched_constituency_name": "Ghazipur",
+          "matched_constituency_number": "106",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.47",
+          "qumanity_record_name": "Chandauli",
+          "match_type": "exact",
+          "matched_constituency_name": "Chandauli",
+          "matched_constituency_number": "93",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.48",
+          "qumanity_record_name": "Varanasi",
+          "match_type": "exact",
+          "matched_constituency_name": "Varanasi",
+          "matched_constituency_number": "151",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.49",
+          "qumanity_record_name": "Bhadohi",
+          "match_type": "exact",
+          "matched_constituency_name": "Bhadohi",
+          "matched_constituency_number": "90",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.4A",
+          "qumanity_record_name": "Mirzapur",
+          "match_type": "exact",
+          "matched_constituency_name": "Mirzapur",
+          "matched_constituency_number": "130",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.4B",
+          "qumanity_record_name": "Robertsganj",
+          "match_type": "exact",
+          "matched_constituency_name": "Robertsganj",
+          "matched_constituency_number": "141",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.4C",
+          "qumanity_record_name": "Aonla",
+          "match_type": "exact",
+          "matched_constituency_name": "Aonla",
+          "matched_constituency_number": "79",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.4D",
+          "qumanity_record_name": "Sultanpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Sultanpur",
+          "matched_constituency_number": "149",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.4E",
+          "qumanity_record_name": "Pratapgarh",
+          "match_type": "exact",
+          "matched_constituency_name": "Pratapgarh",
+          "matched_constituency_number": "138",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.4F",
+          "qumanity_record_name": "Kanpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Kanpur",
+          "matched_constituency_number": "119",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UP.50",
+          "qumanity_record_name": "Ambedkar Nagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Ambedkar Nagar",
+          "matched_constituency_number": "76",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Maharashtra",
+      "qumanity_state_id": "WS.MH",
+      "zone_name": "West India State",
+      "master_district_record_count": 48,
+      "official_constituency_count": 48,
+      "exact_matches": 41,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 7,
+      "match_ratio": 0.854,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 6,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "41/48 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (48 official constituencies on record for this state)",
+        "7/48 records did not match any known constituency name in this state -- this does NOT by itself prove they are genuine revenue districts (the reference list could be incomplete, or these could be real revenue districts, or something else entirely)",
+        "[secondary diagnostic only, not used for the classification decision] 6/48 district names use a directional/urban-split suffix (West/East/.../City/Rural): Mumbai North, Mumbai North West, Mumbai North East, Mumbai North Central, Mumbai South Central"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "WS.MH.1",
+          "qumanity_record_name": "Nandurbar",
+          "match_type": "exact",
+          "matched_constituency_name": "Nandurbar",
+          "matched_constituency_number": "392",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.2",
+          "qumanity_record_name": "Dhule",
+          "match_type": "exact",
+          "matched_constituency_name": "Dhule",
+          "matched_constituency_number": "372",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.3",
+          "qumanity_record_name": "Jalgaon",
+          "match_type": "exact",
+          "matched_constituency_name": "Jalgaon",
+          "matched_constituency_number": "377",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.4",
+          "qumanity_record_name": "Raver",
+          "match_type": "exact",
+          "matched_constituency_name": "Raver",
+          "matched_constituency_number": "401",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.5",
+          "qumanity_record_name": "Buldhana",
+          "match_type": "exact",
+          "matched_constituency_name": "Buldhana",
+          "matched_constituency_number": "370",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.6",
+          "qumanity_record_name": "Akola",
+          "match_type": "exact",
+          "matched_constituency_name": "Akola",
+          "matched_constituency_number": "363",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.7",
+          "qumanity_record_name": "Amravati",
+          "match_type": "exact",
+          "matched_constituency_name": "Amravati",
+          "matched_constituency_number": "364",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.8",
+          "qumanity_record_name": "Wardha",
+          "match_type": "exact",
+          "matched_constituency_name": "Wardha",
+          "matched_constituency_number": "408",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.9",
+          "qumanity_record_name": "Ramtek",
+          "match_type": "exact",
+          "matched_constituency_name": "Ramtek",
+          "matched_constituency_number": "399",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.A",
+          "qumanity_record_name": "Nagpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Nagpur",
+          "matched_constituency_number": "390",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.B",
+          "qumanity_record_name": "Bhandara-Gondiya",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "WS.MH.C",
+          "qumanity_record_name": "Gadchiroli-Chimur",
+          "match_type": "exact",
+          "matched_constituency_name": "Gadchiroli-Chimur",
+          "matched_constituency_number": "374",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.D",
+          "qumanity_record_name": "Chandrapur",
+          "match_type": "exact",
+          "matched_constituency_name": "Chandrapur",
+          "matched_constituency_number": "371",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.E",
+          "qumanity_record_name": "Yavatmal-Washim",
+          "match_type": "exact",
+          "matched_constituency_name": "Yavatmal-Washim",
+          "matched_constituency_number": "409",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.F",
+          "qumanity_record_name": "Hingoli",
+          "match_type": "exact",
+          "matched_constituency_name": "Hingoli",
+          "matched_constituency_number": "376",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.10",
+          "qumanity_record_name": "Nanded",
+          "match_type": "exact",
+          "matched_constituency_name": "Nanded",
+          "matched_constituency_number": "391",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.11",
+          "qumanity_record_name": "Parbhani",
+          "match_type": "exact",
+          "matched_constituency_name": "Parbhani",
+          "matched_constituency_number": "396",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.12",
+          "qumanity_record_name": "Jalna",
+          "match_type": "exact",
+          "matched_constituency_name": "Jalna",
+          "matched_constituency_number": "378",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.13",
+          "qumanity_record_name": "Aurangabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Aurangabad",
+          "matched_constituency_number": "365",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.14",
+          "qumanity_record_name": "Dindori",
+          "match_type": "exact",
+          "matched_constituency_name": "Dindori",
+          "matched_constituency_number": "373",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.15",
+          "qumanity_record_name": "Nashik",
+          "match_type": "exact",
+          "matched_constituency_name": "Nashik",
+          "matched_constituency_number": "393",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.16",
+          "qumanity_record_name": "Palghar",
+          "match_type": "exact",
+          "matched_constituency_name": "Palghar",
+          "matched_constituency_number": "395",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.17",
+          "qumanity_record_name": "Bhiwandi",
+          "match_type": "exact",
+          "matched_constituency_name": "Bhiwandi",
+          "matched_constituency_number": "369",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.18",
+          "qumanity_record_name": "Kalyan",
+          "match_type": "exact",
+          "matched_constituency_name": "Kalyan",
+          "matched_constituency_number": "379",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.19",
+          "qumanity_record_name": "Thane",
+          "match_type": "exact",
+          "matched_constituency_name": "Thane",
+          "matched_constituency_number": "407",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.1A",
+          "qumanity_record_name": "Mumbai North",
+          "match_type": "exact",
+          "matched_constituency_name": "Mumbai North",
+          "matched_constituency_number": "384",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.1B",
+          "qumanity_record_name": "Mumbai North West",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "WS.MH.1C",
+          "qumanity_record_name": "Mumbai North East",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "WS.MH.1D",
+          "qumanity_record_name": "Mumbai North Central",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "WS.MH.1E",
+          "qumanity_record_name": "Mumbai South Central",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "WS.MH.1F",
+          "qumanity_record_name": "Mumbai South",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "WS.MH.20",
+          "qumanity_record_name": "Raigad",
+          "match_type": "exact",
+          "matched_constituency_name": "Raigad",
+          "matched_constituency_number": "398",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.21",
+          "qumanity_record_name": "Maval",
+          "match_type": "exact",
+          "matched_constituency_name": "Maval",
+          "matched_constituency_number": "383",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.22",
+          "qumanity_record_name": "Pune",
+          "match_type": "exact",
+          "matched_constituency_name": "Pune",
+          "matched_constituency_number": "397",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.23",
+          "qumanity_record_name": "Baramati",
+          "match_type": "exact",
+          "matched_constituency_name": "Baramati",
+          "matched_constituency_number": "366",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.24",
+          "qumanity_record_name": "Shirur",
+          "match_type": "exact",
+          "matched_constituency_name": "Shirur",
+          "matched_constituency_number": "405",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.25",
+          "qumanity_record_name": "Ahmednagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Ahmednagar",
+          "matched_constituency_number": "362",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.26",
+          "qumanity_record_name": "Shirdi",
+          "match_type": "exact",
+          "matched_constituency_name": "Shirdi",
+          "matched_constituency_number": "404",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.27",
+          "qumanity_record_name": "Beed",
+          "match_type": "exact",
+          "matched_constituency_name": "Beed",
+          "matched_constituency_number": "367",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.28",
+          "qumanity_record_name": "Latur",
+          "match_type": "exact",
+          "matched_constituency_name": "Latur",
+          "matched_constituency_number": "381",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.29",
+          "qumanity_record_name": "Osmanabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Osmanabad",
+          "matched_constituency_number": "394",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.2A",
+          "qumanity_record_name": "Solapur",
+          "match_type": "exact",
+          "matched_constituency_name": "Solapur",
+          "matched_constituency_number": "406",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.2B",
+          "qumanity_record_name": "Madha",
+          "match_type": "exact",
+          "matched_constituency_name": "Madha",
+          "matched_constituency_number": "382",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.2C",
+          "qumanity_record_name": "Satara",
+          "match_type": "exact",
+          "matched_constituency_name": "Satara",
+          "matched_constituency_number": "403",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.2D",
+          "qumanity_record_name": "Ratnagiri-Sindhudurg",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "WS.MH.2E",
+          "qumanity_record_name": "Kolhapur",
+          "match_type": "exact",
+          "matched_constituency_name": "Kolhapur",
+          "matched_constituency_number": "380",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.2F",
+          "qumanity_record_name": "Hatkanangle",
+          "match_type": "exact",
+          "matched_constituency_name": "Hatkanangle",
+          "matched_constituency_number": "375",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MH.30",
+          "qumanity_record_name": "Sangli",
+          "match_type": "exact",
+          "matched_constituency_name": "Sangli",
+          "matched_constituency_number": "402",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "West Bengal",
+      "qumanity_state_id": "ES.WB",
+      "zone_name": "East India",
+      "master_district_record_count": 42,
+      "official_constituency_count": 42,
+      "exact_matches": 36,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 6,
+      "match_ratio": 0.857,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "36/42 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (42 official constituencies on record for this state)",
+        "6/42 records did not match any known constituency name in this state -- this does NOT by itself prove they are genuine revenue districts (the reference list could be incomplete, or these could be real revenue districts, or something else entirely)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "ES.WB.1",
+          "qumanity_record_name": "Jalpaiguri",
+          "match_type": "exact",
+          "matched_constituency_name": "Jalpaiguri",
+          "matched_constituency_number": "240",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.2",
+          "qumanity_record_name": "Cooch Behar",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "ES.WB.3",
+          "qumanity_record_name": "Alipurduars",
+          "match_type": "exact",
+          "matched_constituency_name": "Alipurduars",
+          "matched_constituency_number": "217",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.4",
+          "qumanity_record_name": "Darjeeling",
+          "match_type": "exact",
+          "matched_constituency_name": "Darjeeling",
+          "matched_constituency_number": "233",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.5",
+          "qumanity_record_name": "Raiganj",
+          "match_type": "exact",
+          "matched_constituency_name": "Raiganj",
+          "matched_constituency_number": "254",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.6",
+          "qumanity_record_name": "Balurghat",
+          "match_type": "exact",
+          "matched_constituency_name": "Balurghat",
+          "matched_constituency_number": "221",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.7",
+          "qumanity_record_name": "Maldaha Uttar",
+          "match_type": "exact",
+          "matched_constituency_name": "Maldaha Uttar",
+          "matched_constituency_number": "249",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.8",
+          "qumanity_record_name": "Maldaha Dakshin",
+          "match_type": "exact",
+          "matched_constituency_name": "Maldaha Dakshin",
+          "matched_constituency_number": "248",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.9",
+          "qumanity_record_name": "Jangipur",
+          "match_type": "exact",
+          "matched_constituency_name": "Jangipur",
+          "matched_constituency_number": "241",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.A",
+          "qumanity_record_name": "Murshidabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Murshidabad",
+          "matched_constituency_number": "252",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.B",
+          "qumanity_record_name": "Berhampore",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "ES.WB.C",
+          "qumanity_record_name": "Krishnanagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Krishnanagar",
+          "matched_constituency_number": "247",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.D",
+          "qumanity_record_name": "Ranaghat",
+          "match_type": "exact",
+          "matched_constituency_name": "Ranaghat",
+          "matched_constituency_number": "255",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.E",
+          "qumanity_record_name": "Bangaon",
+          "match_type": "exact",
+          "matched_constituency_name": "Bangaon",
+          "matched_constituency_number": "222",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.F",
+          "qumanity_record_name": "Basirhat",
+          "match_type": "exact",
+          "matched_constituency_name": "Basirhat",
+          "matched_constituency_number": "228",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.10",
+          "qumanity_record_name": "Barasat",
+          "match_type": "exact",
+          "matched_constituency_name": "Barasat",
+          "matched_constituency_number": "224",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.11",
+          "qumanity_record_name": "Barrackpore",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "ES.WB.12",
+          "qumanity_record_name": "Dum Dum",
+          "match_type": "exact",
+          "matched_constituency_name": "Dum Dum",
+          "matched_constituency_number": "235",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.13",
+          "qumanity_record_name": "Jaynagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Jaynagar",
+          "matched_constituency_number": "242",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.14",
+          "qumanity_record_name": "Mathurapur",
+          "match_type": "exact",
+          "matched_constituency_name": "Mathurapur",
+          "matched_constituency_number": "250",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.15",
+          "qumanity_record_name": "Jadavpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Jadavpur",
+          "matched_constituency_number": "239",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.16",
+          "qumanity_record_name": "Diamond Harbour",
+          "match_type": "exact",
+          "matched_constituency_name": "Diamond Harbour",
+          "matched_constituency_number": "234",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.17",
+          "qumanity_record_name": "Kolkata Dakshin",
+          "match_type": "exact",
+          "matched_constituency_name": "Kolkata Dakshin",
+          "matched_constituency_number": "245",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.18",
+          "qumanity_record_name": "Kolkata Uttar",
+          "match_type": "exact",
+          "matched_constituency_name": "Kolkata Uttar",
+          "matched_constituency_number": "246",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.19",
+          "qumanity_record_name": "Howrah",
+          "match_type": "exact",
+          "matched_constituency_name": "Howrah",
+          "matched_constituency_number": "238",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.1A",
+          "qumanity_record_name": "Uluberia",
+          "match_type": "exact",
+          "matched_constituency_name": "Uluberia",
+          "matched_constituency_number": "258",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.1B",
+          "qumanity_record_name": "Srerampur",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "ES.WB.1C",
+          "qumanity_record_name": "Hooghly",
+          "match_type": "exact",
+          "matched_constituency_name": "Hooghly",
+          "matched_constituency_number": "237",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.1D",
+          "qumanity_record_name": "Arambagh",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "ES.WB.1E",
+          "qumanity_record_name": "Tamluk",
+          "match_type": "exact",
+          "matched_constituency_name": "Tamluk",
+          "matched_constituency_number": "257",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.1F",
+          "qumanity_record_name": "Ghatal",
+          "match_type": "exact",
+          "matched_constituency_name": "Ghatal",
+          "matched_constituency_number": "236",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.20",
+          "qumanity_record_name": "Kanthi",
+          "match_type": "exact",
+          "matched_constituency_name": "Kanthi",
+          "matched_constituency_number": "244",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.21",
+          "qumanity_record_name": "Medinipur",
+          "match_type": "exact",
+          "matched_constituency_name": "Medinipur",
+          "matched_constituency_number": "251",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.22",
+          "qumanity_record_name": "Jhargram",
+          "match_type": "exact",
+          "matched_constituency_name": "Jhargram",
+          "matched_constituency_number": "243",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.23",
+          "qumanity_record_name": "Purulia",
+          "match_type": "exact",
+          "matched_constituency_name": "Purulia",
+          "matched_constituency_number": "253",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.24",
+          "qumanity_record_name": "Bankura",
+          "match_type": "exact",
+          "matched_constituency_name": "Bankura",
+          "matched_constituency_number": "223",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.25",
+          "qumanity_record_name": "Bishnupur",
+          "match_type": "exact",
+          "matched_constituency_name": "Bishnupur",
+          "matched_constituency_number": "230",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.26",
+          "qumanity_record_name": "Bardhaman-Durgapur",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "ES.WB.27",
+          "qumanity_record_name": "Bardhaman Purba",
+          "match_type": "exact",
+          "matched_constituency_name": "Bardhaman Purba",
+          "matched_constituency_number": "226",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.28",
+          "qumanity_record_name": "Bolpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Bolpur",
+          "matched_constituency_number": "231",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.29",
+          "qumanity_record_name": "Asansol",
+          "match_type": "exact",
+          "matched_constituency_name": "Asansol",
+          "matched_constituency_number": "219",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.WB.2A",
+          "qumanity_record_name": "Birbhum",
+          "match_type": "exact",
+          "matched_constituency_name": "Birbhum",
+          "matched_constituency_number": "229",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Bihar",
+      "qumanity_state_id": "ES.BH",
+      "zone_name": "East India",
+      "master_district_record_count": 40,
+      "official_constituency_count": 40,
+      "exact_matches": 40,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "40/40 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (40 official constituencies on record for this state)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "ES.BH.1",
+          "qumanity_record_name": "Valmiki Nagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Valmiki Nagar",
+          "matched_constituency_number": "191",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.2",
+          "qumanity_record_name": "Paschim Champaran",
+          "match_type": "exact",
+          "matched_constituency_name": "Paschim Champaran",
+          "matched_constituency_number": "177",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.3",
+          "qumanity_record_name": "Purvi Champaran",
+          "match_type": "exact",
+          "matched_constituency_name": "Purvi Champaran",
+          "matched_constituency_number": "181",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.4",
+          "qumanity_record_name": "Sheohar",
+          "match_type": "exact",
+          "matched_constituency_name": "Sheohar",
+          "matched_constituency_number": "185",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.5",
+          "qumanity_record_name": "Sitamarhi",
+          "match_type": "exact",
+          "matched_constituency_name": "Sitamarhi",
+          "matched_constituency_number": "186",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.6",
+          "qumanity_record_name": "Madhubani",
+          "match_type": "exact",
+          "matched_constituency_name": "Madhubani",
+          "matched_constituency_number": "171",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.7",
+          "qumanity_record_name": "Jhanjharpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Jhanjharpur",
+          "matched_constituency_number": "165",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.8",
+          "qumanity_record_name": "Supaul",
+          "match_type": "exact",
+          "matched_constituency_name": "Supaul",
+          "matched_constituency_number": "188",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.9",
+          "qumanity_record_name": "Araria",
+          "match_type": "exact",
+          "matched_constituency_name": "Araria",
+          "matched_constituency_number": "152",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.A",
+          "qumanity_record_name": "Kishanganj",
+          "match_type": "exact",
+          "matched_constituency_name": "Kishanganj",
+          "matched_constituency_number": "169",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.B",
+          "qumanity_record_name": "Purnia",
+          "match_type": "exact",
+          "matched_constituency_name": "Purnia",
+          "matched_constituency_number": "180",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.C",
+          "qumanity_record_name": "Katihar",
+          "match_type": "exact",
+          "matched_constituency_name": "Katihar",
+          "matched_constituency_number": "167",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.D",
+          "qumanity_record_name": "Madhepura",
+          "match_type": "exact",
+          "matched_constituency_name": "Madhepura",
+          "matched_constituency_number": "170",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.E",
+          "qumanity_record_name": "Khagaria",
+          "match_type": "exact",
+          "matched_constituency_name": "Khagaria",
+          "matched_constituency_number": "168",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.F",
+          "qumanity_record_name": "Samastipur",
+          "match_type": "exact",
+          "matched_constituency_name": "Samastipur",
+          "matched_constituency_number": "182",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.10",
+          "qumanity_record_name": "Darbhanga",
+          "match_type": "exact",
+          "matched_constituency_name": "Darbhanga",
+          "matched_constituency_number": "159",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.11",
+          "qumanity_record_name": "Muzaffarpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Muzaffarpur",
+          "matched_constituency_number": "174",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.12",
+          "qumanity_record_name": "Vaishali",
+          "match_type": "exact",
+          "matched_constituency_name": "Vaishali",
+          "matched_constituency_number": "190",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.13",
+          "qumanity_record_name": "Gopalganj",
+          "match_type": "exact",
+          "matched_constituency_name": "Gopalganj",
+          "matched_constituency_number": "161",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.14",
+          "qumanity_record_name": "Siwan",
+          "match_type": "exact",
+          "matched_constituency_name": "Siwan",
+          "matched_constituency_number": "187",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.15",
+          "qumanity_record_name": "Maharajganj",
+          "match_type": "exact",
+          "matched_constituency_name": "Maharajganj",
+          "matched_constituency_number": "172",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.16",
+          "qumanity_record_name": "Saran",
+          "match_type": "exact",
+          "matched_constituency_name": "Saran",
+          "matched_constituency_number": "183",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.17",
+          "qumanity_record_name": "Hajipur",
+          "match_type": "exact",
+          "matched_constituency_name": "Hajipur",
+          "matched_constituency_number": "162",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.18",
+          "qumanity_record_name": "Ujiarpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Ujiarpur",
+          "matched_constituency_number": "189",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.19",
+          "qumanity_record_name": "Begusarai",
+          "match_type": "exact",
+          "matched_constituency_name": "Begusarai",
+          "matched_constituency_number": "156",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.1A",
+          "qumanity_record_name": "Bhagalpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Bhagalpur",
+          "matched_constituency_number": "157",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.1B",
+          "qumanity_record_name": "Banka",
+          "match_type": "exact",
+          "matched_constituency_name": "Banka",
+          "matched_constituency_number": "155",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.1C",
+          "qumanity_record_name": "Jamui",
+          "match_type": "exact",
+          "matched_constituency_name": "Jamui",
+          "matched_constituency_number": "164",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.1D",
+          "qumanity_record_name": "Munger",
+          "match_type": "exact",
+          "matched_constituency_name": "Munger",
+          "matched_constituency_number": "173",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.1E",
+          "qumanity_record_name": "Nawada",
+          "match_type": "exact",
+          "matched_constituency_name": "Nawada",
+          "matched_constituency_number": "176",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.1F",
+          "qumanity_record_name": "Nalanda",
+          "match_type": "exact",
+          "matched_constituency_name": "Nalanda",
+          "matched_constituency_number": "175",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.20",
+          "qumanity_record_name": "Patna Sahib",
+          "match_type": "exact",
+          "matched_constituency_name": "Patna Sahib",
+          "matched_constituency_number": "179",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.21",
+          "qumanity_record_name": "Pataliputra",
+          "match_type": "exact",
+          "matched_constituency_name": "Pataliputra",
+          "matched_constituency_number": "178",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.22",
+          "qumanity_record_name": "Arrah",
+          "match_type": "exact",
+          "matched_constituency_name": "Arrah",
+          "matched_constituency_number": "153",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.23",
+          "qumanity_record_name": "Buxar",
+          "match_type": "exact",
+          "matched_constituency_name": "Buxar",
+          "matched_constituency_number": "158",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.24",
+          "qumanity_record_name": "Sasaram",
+          "match_type": "exact",
+          "matched_constituency_name": "Sasaram",
+          "matched_constituency_number": "184",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.25",
+          "qumanity_record_name": "Karakat",
+          "match_type": "exact",
+          "matched_constituency_name": "Karakat",
+          "matched_constituency_number": "166",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.26",
+          "qumanity_record_name": "Jahanabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Jahanabad",
+          "matched_constituency_number": "163",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.27",
+          "qumanity_record_name": "Aurangabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Aurangabad",
+          "matched_constituency_number": "154",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.BH.28",
+          "qumanity_record_name": "Gaya",
+          "match_type": "exact",
+          "matched_constituency_name": "Gaya",
+          "matched_constituency_number": "160",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Tamil Nadu",
+      "qumanity_state_id": "SS.TN",
+      "zone_name": "South India State",
+      "master_district_record_count": 39,
+      "official_constituency_count": 39,
+      "exact_matches": 37,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 2,
+      "match_ratio": 0.949,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 3,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "37/39 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (39 official constituencies on record for this state)",
+        "2/39 records did not match any known constituency name in this state -- this does NOT by itself prove they are genuine revenue districts (the reference list could be incomplete, or these could be real revenue districts, or something else entirely)",
+        "[secondary diagnostic only, not used for the classification decision] 3/39 district names use a directional/urban-split suffix (West/East/.../City/Rural): Chennai North, Chennai Central, Chennai South"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "SS.TN.1",
+          "qumanity_record_name": "Tiruvallur",
+          "match_type": "exact",
+          "matched_constituency_name": "Tiruvallur",
+          "matched_constituency_number": "537",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.2",
+          "qumanity_record_name": "Arakkonam",
+          "match_type": "exact",
+          "matched_constituency_name": "Arakkonam",
+          "matched_constituency_number": "503",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.3",
+          "qumanity_record_name": "Sriperumbudur",
+          "match_type": "exact",
+          "matched_constituency_name": "Sriperumbudur",
+          "matched_constituency_number": "529",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.4",
+          "qumanity_record_name": "Chennai North",
+          "match_type": "exact",
+          "matched_constituency_name": "Chennai North",
+          "matched_constituency_number": "506",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.5",
+          "qumanity_record_name": "Chennai Central",
+          "match_type": "exact",
+          "matched_constituency_name": "Chennai Central",
+          "matched_constituency_number": "505",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.6",
+          "qumanity_record_name": "Chennai South",
+          "match_type": "exact",
+          "matched_constituency_name": "Chennai South",
+          "matched_constituency_number": "507",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.7",
+          "qumanity_record_name": "Kanchipuram",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.TN.8",
+          "qumanity_record_name": "Vellore",
+          "match_type": "exact",
+          "matched_constituency_name": "Vellore",
+          "matched_constituency_number": "539",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.9",
+          "qumanity_record_name": "Tiruvannamalai",
+          "match_type": "exact",
+          "matched_constituency_name": "Tiruvannamalai",
+          "matched_constituency_number": "538",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.A",
+          "qumanity_record_name": "Krishnagiri",
+          "match_type": "exact",
+          "matched_constituency_name": "Krishnagiri",
+          "matched_constituency_number": "518",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.B",
+          "qumanity_record_name": "Dharamapuri",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.TN.C",
+          "qumanity_record_name": "Arani",
+          "match_type": "exact",
+          "matched_constituency_name": "Arani",
+          "matched_constituency_number": "504",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.D",
+          "qumanity_record_name": "Viluppuram",
+          "match_type": "exact",
+          "matched_constituency_name": "Viluppuram",
+          "matched_constituency_number": "540",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.E",
+          "qumanity_record_name": "Kallakurichi",
+          "match_type": "exact",
+          "matched_constituency_name": "Kallakurichi",
+          "matched_constituency_number": "514",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.F",
+          "qumanity_record_name": "Salem",
+          "match_type": "exact",
+          "matched_constituency_name": "Salem",
+          "matched_constituency_number": "527",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.10",
+          "qumanity_record_name": "Namakkal",
+          "match_type": "exact",
+          "matched_constituency_name": "Namakkal",
+          "matched_constituency_number": "522",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.11",
+          "qumanity_record_name": "Erode",
+          "match_type": "exact",
+          "matched_constituency_name": "Erode",
+          "matched_constituency_number": "513",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.12",
+          "qumanity_record_name": "Tiruppur",
+          "match_type": "exact",
+          "matched_constituency_name": "Tiruppur",
+          "matched_constituency_number": "536",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.13",
+          "qumanity_record_name": "Nilgiris",
+          "match_type": "exact",
+          "matched_constituency_name": "Nilgiris",
+          "matched_constituency_number": "523",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.14",
+          "qumanity_record_name": "Coimbatore",
+          "match_type": "exact",
+          "matched_constituency_name": "Coimbatore",
+          "matched_constituency_number": "509",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.15",
+          "qumanity_record_name": "Pollachi",
+          "match_type": "exact",
+          "matched_constituency_name": "Pollachi",
+          "matched_constituency_number": "525",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.16",
+          "qumanity_record_name": "Dindigul",
+          "match_type": "exact",
+          "matched_constituency_name": "Dindigul",
+          "matched_constituency_number": "512",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.17",
+          "qumanity_record_name": "Karur",
+          "match_type": "exact",
+          "matched_constituency_name": "Karur",
+          "matched_constituency_number": "517",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.18",
+          "qumanity_record_name": "Perambalur",
+          "match_type": "exact",
+          "matched_constituency_name": "Perambalur",
+          "matched_constituency_number": "524",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.19",
+          "qumanity_record_name": "Tiruchirappalli",
+          "match_type": "exact",
+          "matched_constituency_name": "Tiruchirappalli",
+          "matched_constituency_number": "534",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.1A",
+          "qumanity_record_name": "Chidambaram",
+          "match_type": "exact",
+          "matched_constituency_name": "Chidambaram",
+          "matched_constituency_number": "508",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.1B",
+          "qumanity_record_name": "Cuddalore",
+          "match_type": "exact",
+          "matched_constituency_name": "Cuddalore",
+          "matched_constituency_number": "510",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.1C",
+          "qumanity_record_name": "Mayiladuthurai",
+          "match_type": "exact",
+          "matched_constituency_name": "Mayiladuthurai",
+          "matched_constituency_number": "520",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.1D",
+          "qumanity_record_name": "Nagapattinam",
+          "match_type": "exact",
+          "matched_constituency_name": "Nagapattinam",
+          "matched_constituency_number": "521",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.1E",
+          "qumanity_record_name": "Thanjavur",
+          "match_type": "exact",
+          "matched_constituency_name": "Thanjavur",
+          "matched_constituency_number": "531",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.1F",
+          "qumanity_record_name": "Sivaganga",
+          "match_type": "exact",
+          "matched_constituency_name": "Sivaganga",
+          "matched_constituency_number": "528",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.20",
+          "qumanity_record_name": "Ramanathapuram",
+          "match_type": "exact",
+          "matched_constituency_name": "Ramanathapuram",
+          "matched_constituency_number": "526",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.21",
+          "qumanity_record_name": "Madurai",
+          "match_type": "exact",
+          "matched_constituency_name": "Madurai",
+          "matched_constituency_number": "519",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.22",
+          "qumanity_record_name": "Theni",
+          "match_type": "exact",
+          "matched_constituency_name": "Theni",
+          "matched_constituency_number": "532",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.23",
+          "qumanity_record_name": "Virudhunagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Virudhunagar",
+          "matched_constituency_number": "541",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.24",
+          "qumanity_record_name": "Tenkasi",
+          "match_type": "exact",
+          "matched_constituency_name": "Tenkasi",
+          "matched_constituency_number": "530",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.25",
+          "qumanity_record_name": "Thoothukkudi",
+          "match_type": "exact",
+          "matched_constituency_name": "Thoothukkudi",
+          "matched_constituency_number": "533",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.26",
+          "qumanity_record_name": "Tirunelveli",
+          "match_type": "exact",
+          "matched_constituency_name": "Tirunelveli",
+          "matched_constituency_number": "535",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TN.27",
+          "qumanity_record_name": "Kanniyakumari",
+          "match_type": "exact",
+          "matched_constituency_name": "Kanniyakumari",
+          "matched_constituency_number": "516",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Madhya Pradesh",
+      "qumanity_state_id": "WS.MP",
+      "zone_name": "West India State",
+      "master_district_record_count": 29,
+      "official_constituency_count": 29,
+      "exact_matches": 28,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 1,
+      "match_ratio": 0.966,
+      "revenue_district_reference": 55,
+      "revenue_district_reference_note": "low -- single-source figure, not cross-checked",
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "28/29 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (29 official constituencies on record for this state)",
+        "1/29 records did not match any known constituency name in this state -- this does NOT by itself prove they are genuine revenue districts (the reference list could be incomplete, or these could be real revenue districts, or something else entirely)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "WS.MP.1",
+          "qumanity_record_name": "Morena",
+          "match_type": "exact",
+          "matched_constituency_name": "Morena",
+          "matched_constituency_number": "323",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.2",
+          "qumanity_record_name": "Bhind",
+          "match_type": "exact",
+          "matched_constituency_name": "Bhind",
+          "matched_constituency_number": "307",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.3",
+          "qumanity_record_name": "Gwalior",
+          "match_type": "exact",
+          "matched_constituency_name": "Gwalior",
+          "matched_constituency_number": "314",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.4",
+          "qumanity_record_name": "Guna",
+          "match_type": "exact",
+          "matched_constituency_name": "Guna",
+          "matched_constituency_number": "313",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.5",
+          "qumanity_record_name": "Rajgarh",
+          "match_type": "exact",
+          "matched_constituency_name": "Rajgarh",
+          "matched_constituency_number": "324",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.6",
+          "qumanity_record_name": "Sagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Sagar",
+          "matched_constituency_number": "327",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.7",
+          "qumanity_record_name": "Damoh",
+          "match_type": "exact",
+          "matched_constituency_name": "Damoh",
+          "matched_constituency_number": "310",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.8",
+          "qumanity_record_name": "Khajuraho",
+          "match_type": "exact",
+          "matched_constituency_name": "Khajuraho",
+          "matched_constituency_number": "318",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.9",
+          "qumanity_record_name": "Satna",
+          "match_type": "exact",
+          "matched_constituency_name": "Satna",
+          "matched_constituency_number": "328",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.A",
+          "qumanity_record_name": "Rewa",
+          "match_type": "exact",
+          "matched_constituency_name": "Rewa",
+          "matched_constituency_number": "326",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.B",
+          "qumanity_record_name": "Sidhi",
+          "match_type": "exact",
+          "matched_constituency_name": "Sidhi",
+          "matched_constituency_number": "330",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.C",
+          "qumanity_record_name": "Shahdol",
+          "match_type": "exact",
+          "matched_constituency_name": "Shahdol",
+          "matched_constituency_number": "329",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.D",
+          "qumanity_record_name": "Jabalpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Jabalpur",
+          "matched_constituency_number": "317",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.E",
+          "qumanity_record_name": "Mandla",
+          "match_type": "exact",
+          "matched_constituency_name": "Mandla",
+          "matched_constituency_number": "321",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.F",
+          "qumanity_record_name": "Balaghat",
+          "match_type": "exact",
+          "matched_constituency_name": "Balaghat",
+          "matched_constituency_number": "305",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.10",
+          "qumanity_record_name": "Chhindwara",
+          "match_type": "exact",
+          "matched_constituency_name": "Chhindwara",
+          "matched_constituency_number": "309",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.11",
+          "qumanity_record_name": "Betul",
+          "match_type": "exact",
+          "matched_constituency_name": "Betul",
+          "matched_constituency_number": "306",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.12",
+          "qumanity_record_name": "Hoshangabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Hoshangabad",
+          "matched_constituency_number": "315",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.13",
+          "qumanity_record_name": "Vidisha",
+          "match_type": "exact",
+          "matched_constituency_name": "Vidisha",
+          "matched_constituency_number": "333",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.14",
+          "qumanity_record_name": "Bhopal",
+          "match_type": "exact",
+          "matched_constituency_name": "Bhopal",
+          "matched_constituency_number": "308",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.15",
+          "qumanity_record_name": "Dewas",
+          "match_type": "exact",
+          "matched_constituency_name": "Dewas",
+          "matched_constituency_number": "311",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.16",
+          "qumanity_record_name": "Khandwa",
+          "match_type": "exact",
+          "matched_constituency_name": "Khandwa",
+          "matched_constituency_number": "319",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.17",
+          "qumanity_record_name": "Khargone",
+          "match_type": "exact",
+          "matched_constituency_name": "Khargone",
+          "matched_constituency_number": "320",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.18",
+          "qumanity_record_name": "Ratlam",
+          "match_type": "exact",
+          "matched_constituency_name": "Ratlam",
+          "matched_constituency_number": "325",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.19",
+          "qumanity_record_name": "Dhar",
+          "match_type": "exact",
+          "matched_constituency_name": "Dhar",
+          "matched_constituency_number": "312",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.1A",
+          "qumanity_record_name": "Indore",
+          "match_type": "exact",
+          "matched_constituency_name": "Indore",
+          "matched_constituency_number": "316",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.1B",
+          "qumanity_record_name": "Ujjain",
+          "match_type": "exact",
+          "matched_constituency_name": "Ujjain",
+          "matched_constituency_number": "332",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.MP.1C",
+          "qumanity_record_name": "Mandsaur",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "WS.MP.1D",
+          "qumanity_record_name": "Tikamgarh",
+          "match_type": "exact",
+          "matched_constituency_name": "Tikamgarh",
+          "matched_constituency_number": "331",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Karnataka",
+      "qumanity_state_id": "SS.KA",
+      "zone_name": "South India State",
+      "master_district_record_count": 28,
+      "official_constituency_count": 28,
+      "exact_matches": 15,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 13,
+      "match_ratio": 0.536,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 4,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "medium-high",
+      "evidence": [
+        "15/28 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (28 official constituencies on record for this state)",
+        "13/28 records did not match any known constituency name in this state -- this does NOT by itself prove they are genuine revenue districts (the reference list could be incomplete, or these could be real revenue districts, or something else entirely)",
+        "[secondary diagnostic only, not used for the classification decision] 4/28 district names use a directional/urban-split suffix (West/East/.../City/Rural): Bangalore Rural, Bangalore North, Bangalore Central, Bangalore South"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "SS.KA.1",
+          "qumanity_record_name": "Chikkodi",
+          "match_type": "exact",
+          "matched_constituency_name": "Chikkodi",
+          "matched_constituency_number": "463",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KA.2",
+          "qumanity_record_name": "Belgaum",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.KA.3",
+          "qumanity_record_name": "Uttara Kannada",
+          "match_type": "exact",
+          "matched_constituency_name": "Uttara Kannada",
+          "matched_constituency_number": "479",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KA.4",
+          "qumanity_record_name": "Bagalkot",
+          "match_type": "exact",
+          "matched_constituency_name": "Bagalkot",
+          "matched_constituency_number": "452",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KA.5",
+          "qumanity_record_name": "Bijapur",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.KA.6",
+          "qumanity_record_name": "Gulbarga",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.KA.7",
+          "qumanity_record_name": "Raichur",
+          "match_type": "exact",
+          "matched_constituency_name": "Raichur",
+          "matched_constituency_number": "475",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KA.8",
+          "qumanity_record_name": "Bidar",
+          "match_type": "exact",
+          "matched_constituency_name": "Bidar",
+          "matched_constituency_number": "459",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KA.9",
+          "qumanity_record_name": "Koppal",
+          "match_type": "exact",
+          "matched_constituency_name": "Koppal",
+          "matched_constituency_number": "472",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KA.A",
+          "qumanity_record_name": "Haveri",
+          "match_type": "exact",
+          "matched_constituency_name": "Haveri",
+          "matched_constituency_number": "470",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KA.B",
+          "qumanity_record_name": "Dharwad",
+          "match_type": "exact",
+          "matched_constituency_name": "Dharwad",
+          "matched_constituency_number": "467",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KA.C",
+          "qumanity_record_name": "Bellary",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.KA.D",
+          "qumanity_record_name": "Chitradurga",
+          "match_type": "exact",
+          "matched_constituency_name": "Chitradurga",
+          "matched_constituency_number": "464",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KA.E",
+          "qumanity_record_name": "Davanagere",
+          "match_type": "exact",
+          "matched_constituency_name": "Davanagere",
+          "matched_constituency_number": "466",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KA.F",
+          "qumanity_record_name": "Shimoga",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.KA.10",
+          "qumanity_record_name": "Udupi Chikmagalur",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.KA.11",
+          "qumanity_record_name": "Hassan",
+          "match_type": "exact",
+          "matched_constituency_name": "Hassan",
+          "matched_constituency_number": "469",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KA.12",
+          "qumanity_record_name": "Tumkur",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.KA.13",
+          "qumanity_record_name": "Bangalore Rural",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.KA.14",
+          "qumanity_record_name": "Chikballapur",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.KA.15",
+          "qumanity_record_name": "Kolar",
+          "match_type": "exact",
+          "matched_constituency_name": "Kolar",
+          "matched_constituency_number": "471",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KA.16",
+          "qumanity_record_name": "Bangalore North",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.KA.17",
+          "qumanity_record_name": "Bangalore Central",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.KA.18",
+          "qumanity_record_name": "Bangalore South",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.KA.19",
+          "qumanity_record_name": "Mandya",
+          "match_type": "exact",
+          "matched_constituency_name": "Mandya",
+          "matched_constituency_number": "473",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KA.1A",
+          "qumanity_record_name": "Dakshina Kannada",
+          "match_type": "exact",
+          "matched_constituency_name": "Dakshina Kannada",
+          "matched_constituency_number": "465",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KA.1B",
+          "qumanity_record_name": "Mysore",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.KA.1C",
+          "qumanity_record_name": "Chamarajanagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Chamarajanagar",
+          "matched_constituency_number": "461",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Gujarat",
+      "qumanity_state_id": "WS.GJ",
+      "zone_name": "West India State",
+      "master_district_record_count": 26,
+      "official_constituency_count": 26,
+      "exact_matches": 26,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": [
+        33,
+        34
+      ],
+      "revenue_district_reference_note": "low -- secondary sources disagree by one; needs LGD",
+      "directional_suffix_hits_diagnostic_only": 2,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "26/26 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (26 official constituencies on record for this state)",
+        "[secondary diagnostic only, not used for the classification decision] 2/26 district names use a directional/urban-split suffix (West/East/.../City/Rural): Ahmedabad East, Ahmedabad West"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "WS.GJ.1",
+          "qumanity_record_name": "Kachchh",
+          "match_type": "exact",
+          "matched_constituency_name": "Kachchh",
+          "matched_constituency_number": "347",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.2",
+          "qumanity_record_name": "Banaskantha",
+          "match_type": "exact",
+          "matched_constituency_name": "Banaskantha",
+          "matched_constituency_number": "338",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.3",
+          "qumanity_record_name": "Patan",
+          "match_type": "exact",
+          "matched_constituency_name": "Patan",
+          "matched_constituency_number": "352",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.4",
+          "qumanity_record_name": "Mahesana",
+          "match_type": "exact",
+          "matched_constituency_name": "Mahesana",
+          "matched_constituency_number": "349",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.5",
+          "qumanity_record_name": "Sabarkantha",
+          "match_type": "exact",
+          "matched_constituency_name": "Sabarkantha",
+          "matched_constituency_number": "355",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.6",
+          "qumanity_record_name": "Gandhinagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Gandhinagar",
+          "matched_constituency_number": "344",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.7",
+          "qumanity_record_name": "Ahmedabad East",
+          "match_type": "exact",
+          "matched_constituency_name": "Ahmedabad East",
+          "matched_constituency_number": "334",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.8",
+          "qumanity_record_name": "Ahmedabad West",
+          "match_type": "exact",
+          "matched_constituency_name": "Ahmedabad West",
+          "matched_constituency_number": "335",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.9",
+          "qumanity_record_name": "Kheda",
+          "match_type": "exact",
+          "matched_constituency_name": "Kheda",
+          "matched_constituency_number": "348",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.A",
+          "qumanity_record_name": "Surendranagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Surendranagar",
+          "matched_constituency_number": "357",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.B",
+          "qumanity_record_name": "Rajkot",
+          "match_type": "exact",
+          "matched_constituency_name": "Rajkot",
+          "matched_constituency_number": "354",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.C",
+          "qumanity_record_name": "Porbandar",
+          "match_type": "exact",
+          "matched_constituency_name": "Porbandar",
+          "matched_constituency_number": "353",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.D",
+          "qumanity_record_name": "Jamnagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Jamnagar",
+          "matched_constituency_number": "345",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.E",
+          "qumanity_record_name": "Junagadh",
+          "match_type": "exact",
+          "matched_constituency_name": "Junagadh",
+          "matched_constituency_number": "346",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.F",
+          "qumanity_record_name": "Amreli",
+          "match_type": "exact",
+          "matched_constituency_name": "Amreli",
+          "matched_constituency_number": "336",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.10",
+          "qumanity_record_name": "Bhavnagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Bhavnagar",
+          "matched_constituency_number": "341",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.11",
+          "qumanity_record_name": "Anand",
+          "match_type": "exact",
+          "matched_constituency_name": "Anand",
+          "matched_constituency_number": "337",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.12",
+          "qumanity_record_name": "Panchmahal",
+          "match_type": "exact",
+          "matched_constituency_name": "Panchmahal",
+          "matched_constituency_number": "351",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.13",
+          "qumanity_record_name": "Dahod",
+          "match_type": "exact",
+          "matched_constituency_name": "Dahod",
+          "matched_constituency_number": "343",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.14",
+          "qumanity_record_name": "Vadodara",
+          "match_type": "exact",
+          "matched_constituency_name": "Vadodara",
+          "matched_constituency_number": "358",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.15",
+          "qumanity_record_name": "Chhota Udaipur",
+          "match_type": "exact",
+          "matched_constituency_name": "Chhota Udaipur",
+          "matched_constituency_number": "342",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.16",
+          "qumanity_record_name": "Bharuch",
+          "match_type": "exact",
+          "matched_constituency_name": "Bharuch",
+          "matched_constituency_number": "340",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.17",
+          "qumanity_record_name": "Surat",
+          "match_type": "exact",
+          "matched_constituency_name": "Surat",
+          "matched_constituency_number": "356",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.18",
+          "qumanity_record_name": "Bardoli",
+          "match_type": "exact",
+          "matched_constituency_name": "Bardoli",
+          "matched_constituency_number": "339",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.19",
+          "qumanity_record_name": "Navsari",
+          "match_type": "exact",
+          "matched_constituency_name": "Navsari",
+          "matched_constituency_number": "350",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GJ.1A",
+          "qumanity_record_name": "Valsad",
+          "match_type": "exact",
+          "matched_constituency_name": "Valsad",
+          "matched_constituency_number": "359",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Andhra Pradesh",
+      "qumanity_state_id": "SS.AP",
+      "zone_name": "South India State",
+      "master_district_record_count": 25,
+      "official_constituency_count": 25,
+      "exact_matches": 23,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 2,
+      "match_ratio": 0.92,
+      "revenue_district_reference": [
+        13,
+        26
+      ],
+      "revenue_district_reference_note": "low -- secondary sources actively disagree; needs LGD",
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "23/25 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (25 official constituencies on record for this state)",
+        "2/25 records did not match any known constituency name in this state -- this does NOT by itself prove they are genuine revenue districts (the reference list could be incomplete, or these could be real revenue districts, or something else entirely)",
+        "district-record count (25) is also consistent with the approximate revenue-district reference (low -- secondary sources actively disagree; needs LGD)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "SS.AP.1",
+          "qumanity_record_name": "Srikakulam",
+          "match_type": "exact",
+          "matched_constituency_name": "Srikakulam",
+          "matched_constituency_number": "445",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.2",
+          "qumanity_record_name": "Vizianagaram",
+          "match_type": "exact",
+          "matched_constituency_name": "Vizianagaram",
+          "matched_constituency_number": "449",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.3",
+          "qumanity_record_name": "Araku",
+          "match_type": "exact",
+          "matched_constituency_name": "Araku",
+          "matched_constituency_number": "414",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.4",
+          "qumanity_record_name": "Visakhapatnam",
+          "match_type": "exact",
+          "matched_constituency_name": "Visakhapatnam",
+          "matched_constituency_number": "448",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.5",
+          "qumanity_record_name": "Anakapalli",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.AP.6",
+          "qumanity_record_name": "Kakinada",
+          "match_type": "exact",
+          "matched_constituency_name": "Kakinada",
+          "matched_constituency_number": "424",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.7",
+          "qumanity_record_name": "Rajahmundry",
+          "match_type": "exact",
+          "matched_constituency_name": "Rajahmundry",
+          "matched_constituency_number": "442",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.8",
+          "qumanity_record_name": "Amalapuram",
+          "match_type": "exact",
+          "matched_constituency_name": "Amalapuram",
+          "matched_constituency_number": "411",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.9",
+          "qumanity_record_name": "Narasapuram",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.AP.A",
+          "qumanity_record_name": "Eluru",
+          "match_type": "exact",
+          "matched_constituency_name": "Eluru",
+          "matched_constituency_number": "419",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.B",
+          "qumanity_record_name": "Vijayawada",
+          "match_type": "exact",
+          "matched_constituency_name": "Vijayawada",
+          "matched_constituency_number": "447",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.C",
+          "qumanity_record_name": "Machilipatnam",
+          "match_type": "exact",
+          "matched_constituency_name": "Machilipatnam",
+          "matched_constituency_number": "428",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.D",
+          "qumanity_record_name": "Narasaraopet",
+          "match_type": "exact",
+          "matched_constituency_name": "Narasaraopet",
+          "matched_constituency_number": "436",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.E",
+          "qumanity_record_name": "Guntur",
+          "match_type": "exact",
+          "matched_constituency_name": "Guntur",
+          "matched_constituency_number": "420",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.F",
+          "qumanity_record_name": "Bapatla",
+          "match_type": "exact",
+          "matched_constituency_name": "Bapatla",
+          "matched_constituency_number": "415",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.10",
+          "qumanity_record_name": "Ongole",
+          "match_type": "exact",
+          "matched_constituency_name": "Ongole",
+          "matched_constituency_number": "440",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.11",
+          "qumanity_record_name": "Nellore",
+          "match_type": "exact",
+          "matched_constituency_name": "Nellore",
+          "matched_constituency_number": "438",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.12",
+          "qumanity_record_name": "Tirupati",
+          "match_type": "exact",
+          "matched_constituency_name": "Tirupati",
+          "matched_constituency_number": "446",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.13",
+          "qumanity_record_name": "Kadapa",
+          "match_type": "exact",
+          "matched_constituency_name": "Kadapa",
+          "matched_constituency_number": "423",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.14",
+          "qumanity_record_name": "Rajampet",
+          "match_type": "exact",
+          "matched_constituency_name": "Rajampet",
+          "matched_constituency_number": "443",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.15",
+          "qumanity_record_name": "Nandyal",
+          "match_type": "exact",
+          "matched_constituency_name": "Nandyal",
+          "matched_constituency_number": "435",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.16",
+          "qumanity_record_name": "Kurnool",
+          "match_type": "exact",
+          "matched_constituency_name": "Kurnool",
+          "matched_constituency_number": "427",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.17",
+          "qumanity_record_name": "Anantapur",
+          "match_type": "exact",
+          "matched_constituency_name": "Anantapur",
+          "matched_constituency_number": "413",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.18",
+          "qumanity_record_name": "Hindupur",
+          "match_type": "exact",
+          "matched_constituency_name": "Hindupur",
+          "matched_constituency_number": "421",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.AP.19",
+          "qumanity_record_name": "Chittoor",
+          "match_type": "exact",
+          "matched_constituency_name": "Chittoor",
+          "matched_constituency_number": "418",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Rajasthan",
+      "qumanity_state_id": "NS.RJ",
+      "zone_name": "North India State",
+      "master_district_record_count": 25,
+      "official_constituency_count": 25,
+      "exact_matches": 25,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": [
+        41,
+        50
+      ],
+      "revenue_district_reference_note": "low -- secondary sources actively disagree; needs LGD",
+      "directional_suffix_hits_diagnostic_only": 1,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "25/25 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (25 official constituencies on record for this state)",
+        "[secondary diagnostic only, not used for the classification decision] 1/25 district names use a directional/urban-split suffix (West/East/.../City/Rural): Jaipur Rural"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "NS.RJ.1",
+          "qumanity_record_name": "Ganganagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Ganganagar",
+          "matched_constituency_number": "57",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.2",
+          "qumanity_record_name": "Bikaner",
+          "match_type": "exact",
+          "matched_constituency_name": "Bikaner",
+          "matched_constituency_number": "53",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.3",
+          "qumanity_record_name": "Churu",
+          "match_type": "exact",
+          "matched_constituency_name": "Churu",
+          "matched_constituency_number": "55",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.4",
+          "qumanity_record_name": "Jhunjhunu",
+          "match_type": "exact",
+          "matched_constituency_name": "Jhunjhunu",
+          "matched_constituency_number": "62",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.5",
+          "qumanity_record_name": "Sikar",
+          "match_type": "exact",
+          "matched_constituency_name": "Sikar",
+          "matched_constituency_number": "69",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.6",
+          "qumanity_record_name": "Jaipur Rural",
+          "match_type": "exact",
+          "matched_constituency_name": "Jaipur Rural",
+          "matched_constituency_number": "59",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.7",
+          "qumanity_record_name": "Ajmer",
+          "match_type": "exact",
+          "matched_constituency_name": "Ajmer",
+          "matched_constituency_number": "47",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.8",
+          "qumanity_record_name": "Jaipur",
+          "match_type": "exact",
+          "matched_constituency_name": "Jaipur",
+          "matched_constituency_number": "58",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.9",
+          "qumanity_record_name": "Dausa",
+          "match_type": "exact",
+          "matched_constituency_name": "Dausa",
+          "matched_constituency_number": "56",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.A",
+          "qumanity_record_name": "Alwar",
+          "match_type": "exact",
+          "matched_constituency_name": "Alwar",
+          "matched_constituency_number": "48",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.B",
+          "qumanity_record_name": "Bharatpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Bharatpur",
+          "matched_constituency_number": "51",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.C",
+          "qumanity_record_name": "Karauli-Dholpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Karauli-Dholpur",
+          "matched_constituency_number": "64",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.D",
+          "qumanity_record_name": "Tonk-Sawai Madhopur",
+          "match_type": "exact",
+          "matched_constituency_name": "Tonk-Sawai Madhopur",
+          "matched_constituency_number": "70",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.E",
+          "qumanity_record_name": "Nagaur",
+          "match_type": "exact",
+          "matched_constituency_name": "Nagaur",
+          "matched_constituency_number": "66",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.F",
+          "qumanity_record_name": "Rajsamand",
+          "match_type": "exact",
+          "matched_constituency_name": "Rajsamand",
+          "matched_constituency_number": "68",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.10",
+          "qumanity_record_name": "Pali",
+          "match_type": "exact",
+          "matched_constituency_name": "Pali",
+          "matched_constituency_number": "67",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.11",
+          "qumanity_record_name": "Jodhpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Jodhpur",
+          "matched_constituency_number": "63",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.12",
+          "qumanity_record_name": "Barmer",
+          "match_type": "exact",
+          "matched_constituency_name": "Barmer",
+          "matched_constituency_number": "50",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.13",
+          "qumanity_record_name": "Jalore",
+          "match_type": "exact",
+          "matched_constituency_name": "Jalore",
+          "matched_constituency_number": "60",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.14",
+          "qumanity_record_name": "Udaipur",
+          "match_type": "exact",
+          "matched_constituency_name": "Udaipur",
+          "matched_constituency_number": "71",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.15",
+          "qumanity_record_name": "Banswara",
+          "match_type": "exact",
+          "matched_constituency_name": "Banswara",
+          "matched_constituency_number": "49",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.16",
+          "qumanity_record_name": "Chittorgarh",
+          "match_type": "exact",
+          "matched_constituency_name": "Chittorgarh",
+          "matched_constituency_number": "54",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.17",
+          "qumanity_record_name": "Bhilwara",
+          "match_type": "exact",
+          "matched_constituency_name": "Bhilwara",
+          "matched_constituency_number": "52",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.18",
+          "qumanity_record_name": "Kota",
+          "match_type": "exact",
+          "matched_constituency_name": "Kota",
+          "matched_constituency_number": "65",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.RJ.19",
+          "qumanity_record_name": "Jhalawar-Baran",
+          "match_type": "exact",
+          "matched_constituency_name": "Jhalawar-Baran",
+          "matched_constituency_number": "61",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Haryana",
+      "qumanity_state_id": "NS.HR",
+      "zone_name": "North India State",
+      "master_district_record_count": 22,
+      "official_constituency_count": 10,
+      "exact_matches": 9,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 13,
+      "match_ratio": 0.409,
+      "revenue_district_reference": 22,
+      "revenue_district_reference_note": "high -- matches this project's own already-verified, already-corrected Master JSON list",
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "MIXED_GEOGRAPHY",
+      "confidence": "low",
+      "evidence": [
+        "9/22 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (10 official constituencies on record for this state)",
+        "13/22 records did not match any known constituency name in this state -- this does NOT by itself prove they are genuine revenue districts (the reference list could be incomplete, or these could be real revenue districts, or something else entirely)",
+        "district-record count (22) is also consistent with the approximate revenue-district reference (high -- matches this project's own already-verified, already-corrected Master JSON list)",
+        "match ratio (41%) is neither clearly electoral (>=50%) nor clearly zero -- a partial match can mean a genuine name collision for a handful of districts, not full electoral-geography adoption; needs record-by-record review (see the per-record report)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "NS.HR.1",
+          "qumanity_record_name": "Ambala",
+          "match_type": "exact",
+          "matched_constituency_name": "Ambala",
+          "matched_constituency_number": "30",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.HR.2",
+          "qumanity_record_name": "Kurukshetra",
+          "match_type": "exact",
+          "matched_constituency_name": "Kurukshetra",
+          "matched_constituency_number": "36",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.HR.3",
+          "qumanity_record_name": "Karnal",
+          "match_type": "exact",
+          "matched_constituency_name": "Karnal",
+          "matched_constituency_number": "35",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.HR.4",
+          "qumanity_record_name": "Sonipat",
+          "match_type": "exact",
+          "matched_constituency_name": "Sonipat",
+          "matched_constituency_number": "39",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.HR.5",
+          "qumanity_record_name": "Hisar",
+          "match_type": "exact",
+          "matched_constituency_name": "Hisar",
+          "matched_constituency_number": "34",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.HR.6",
+          "qumanity_record_name": "Sirsa",
+          "match_type": "exact",
+          "matched_constituency_name": "Sirsa",
+          "matched_constituency_number": "38",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.HR.8",
+          "qumanity_record_name": "Rohtak",
+          "match_type": "exact",
+          "matched_constituency_name": "Rohtak",
+          "matched_constituency_number": "37",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.HR.9",
+          "qumanity_record_name": "Gurgaon",
+          "match_type": "exact",
+          "matched_constituency_name": "Gurgaon",
+          "matched_constituency_number": "33",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.HR.A",
+          "qumanity_record_name": "Faridabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Faridabad",
+          "matched_constituency_number": "32",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.HR.B",
+          "qumanity_record_name": "Fatehabad",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "NS.HR.C",
+          "qumanity_record_name": "Jhajjar",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "NS.HR.D",
+          "qumanity_record_name": "Jind",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "NS.HR.E",
+          "qumanity_record_name": "Kaithal",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "NS.HR.F",
+          "qumanity_record_name": "Nuh",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "NS.HR.G",
+          "qumanity_record_name": "Palwal",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "NS.HR.H",
+          "qumanity_record_name": "Panchkula",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "NS.HR.I",
+          "qumanity_record_name": "Panipat",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "NS.HR.J",
+          "qumanity_record_name": "Rewari",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "NS.HR.K",
+          "qumanity_record_name": "Yamunanagar",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "NS.HR.L",
+          "qumanity_record_name": "Bhiwani",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "NS.HR.M",
+          "qumanity_record_name": "Mahendragarh",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "NS.HR.N",
+          "qumanity_record_name": "Charkhi Dadri",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "state_name": "Odisha",
+      "qumanity_state_id": "ES.OR",
+      "zone_name": "East India",
+      "master_district_record_count": 21,
+      "official_constituency_count": 21,
+      "exact_matches": 21,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "21/21 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (21 official constituencies on record for this state)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "ES.OR.1",
+          "qumanity_record_name": "Bargarh",
+          "match_type": "exact",
+          "matched_constituency_name": "Bargarh",
+          "matched_constituency_number": "275",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.2",
+          "qumanity_record_name": "Sundargarh",
+          "match_type": "exact",
+          "matched_constituency_name": "Sundargarh",
+          "matched_constituency_number": "293",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.3",
+          "qumanity_record_name": "Sambalpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Sambalpur",
+          "matched_constituency_number": "292",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.4",
+          "qumanity_record_name": "Keonjhar",
+          "match_type": "exact",
+          "matched_constituency_name": "Keonjhar",
+          "matched_constituency_number": "287",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.5",
+          "qumanity_record_name": "Mayurbhanj",
+          "match_type": "exact",
+          "matched_constituency_name": "Mayurbhanj",
+          "matched_constituency_number": "289",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.6",
+          "qumanity_record_name": "Balasore",
+          "match_type": "exact",
+          "matched_constituency_name": "Balasore",
+          "matched_constituency_number": "274",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.7",
+          "qumanity_record_name": "Bhadrak",
+          "match_type": "exact",
+          "matched_constituency_name": "Bhadrak",
+          "matched_constituency_number": "277",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.8",
+          "qumanity_record_name": "Jajpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Jajpur",
+          "matched_constituency_number": "283",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.9",
+          "qumanity_record_name": "Dhenkanal",
+          "match_type": "exact",
+          "matched_constituency_name": "Dhenkanal",
+          "matched_constituency_number": "281",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.A",
+          "qumanity_record_name": "Cuttack",
+          "match_type": "exact",
+          "matched_constituency_name": "Cuttack",
+          "matched_constituency_number": "280",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.B",
+          "qumanity_record_name": "Kendrapara",
+          "match_type": "exact",
+          "matched_constituency_name": "Kendrapara",
+          "matched_constituency_number": "286",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.C",
+          "qumanity_record_name": "Jagatsinghpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Jagatsinghpur",
+          "matched_constituency_number": "282",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.D",
+          "qumanity_record_name": "Puri",
+          "match_type": "exact",
+          "matched_constituency_name": "Puri",
+          "matched_constituency_number": "291",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.E",
+          "qumanity_record_name": "Bhubaneswar",
+          "match_type": "exact",
+          "matched_constituency_name": "Bhubaneswar",
+          "matched_constituency_number": "278",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.F",
+          "qumanity_record_name": "Aska",
+          "match_type": "exact",
+          "matched_constituency_name": "Aska",
+          "matched_constituency_number": "273",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.10",
+          "qumanity_record_name": "Berhampur",
+          "match_type": "exact",
+          "matched_constituency_name": "Berhampur",
+          "matched_constituency_number": "276",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.11",
+          "qumanity_record_name": "Koraput",
+          "match_type": "exact",
+          "matched_constituency_name": "Koraput",
+          "matched_constituency_number": "288",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.12",
+          "qumanity_record_name": "Nabarangpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Nabarangpur",
+          "matched_constituency_number": "290",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.13",
+          "qumanity_record_name": "Kalahandi",
+          "match_type": "exact",
+          "matched_constituency_name": "Kalahandi",
+          "matched_constituency_number": "284",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.14",
+          "qumanity_record_name": "Bolangir",
+          "match_type": "exact",
+          "matched_constituency_name": "Bolangir",
+          "matched_constituency_number": "279",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.OR.15",
+          "qumanity_record_name": "Kandhamal",
+          "match_type": "exact",
+          "matched_constituency_name": "Kandhamal",
+          "matched_constituency_number": "285",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Kerala",
+      "qumanity_state_id": "SS.KL",
+      "zone_name": "South India State",
+      "master_district_record_count": 20,
+      "official_constituency_count": 20,
+      "exact_matches": 19,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 1,
+      "match_ratio": 0.95,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "19/20 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (20 official constituencies on record for this state)",
+        "1/20 records did not match any known constituency name in this state -- this does NOT by itself prove they are genuine revenue districts (the reference list could be incomplete, or these could be real revenue districts, or something else entirely)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "SS.KL.1",
+          "qumanity_record_name": "Kasaragod",
+          "match_type": "exact",
+          "matched_constituency_name": "Kasaragod",
+          "matched_constituency_number": "490",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.2",
+          "qumanity_record_name": "Kannur",
+          "match_type": "exact",
+          "matched_constituency_name": "Kannur",
+          "matched_constituency_number": "489",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.3",
+          "qumanity_record_name": "Vadakara",
+          "match_type": "exact",
+          "matched_constituency_name": "Vadakara",
+          "matched_constituency_number": "501",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.4",
+          "qumanity_record_name": "Wayanad",
+          "match_type": "exact",
+          "matched_constituency_name": "Wayanad",
+          "matched_constituency_number": "502",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.5",
+          "qumanity_record_name": "Kozhikode",
+          "match_type": "exact",
+          "matched_constituency_name": "Kozhikode",
+          "matched_constituency_number": "493",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.6",
+          "qumanity_record_name": "Malappuram",
+          "match_type": "exact",
+          "matched_constituency_name": "Malappuram",
+          "matched_constituency_number": "494",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.7",
+          "qumanity_record_name": "Ponnani",
+          "match_type": "exact",
+          "matched_constituency_name": "Ponnani",
+          "matched_constituency_number": "498",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.8",
+          "qumanity_record_name": "Palakkad",
+          "match_type": "exact",
+          "matched_constituency_name": "Palakkad",
+          "matched_constituency_number": "496",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.9",
+          "qumanity_record_name": "Alathur",
+          "match_type": "exact",
+          "matched_constituency_name": "Alathur",
+          "matched_constituency_number": "484",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.A",
+          "qumanity_record_name": "Thrissur",
+          "match_type": "exact",
+          "matched_constituency_name": "Thrissur",
+          "matched_constituency_number": "500",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.B",
+          "qumanity_record_name": "Chalakudy",
+          "match_type": "exact",
+          "matched_constituency_name": "Chalakudy",
+          "matched_constituency_number": "486",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.C",
+          "qumanity_record_name": "Ernakulam",
+          "match_type": "exact",
+          "matched_constituency_name": "Ernakulam",
+          "matched_constituency_number": "487",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.D",
+          "qumanity_record_name": "Kottayam",
+          "match_type": "exact",
+          "matched_constituency_name": "Kottayam",
+          "matched_constituency_number": "492",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.E",
+          "qumanity_record_name": "Idukki",
+          "match_type": "exact",
+          "matched_constituency_name": "Idukki",
+          "matched_constituency_number": "488",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.F",
+          "qumanity_record_name": "Mavelikara",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.KL.10",
+          "qumanity_record_name": "Pathanamthitta",
+          "match_type": "exact",
+          "matched_constituency_name": "Pathanamthitta",
+          "matched_constituency_number": "497",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.11",
+          "qumanity_record_name": "Alappuzha",
+          "match_type": "exact",
+          "matched_constituency_name": "Alappuzha",
+          "matched_constituency_number": "483",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.12",
+          "qumanity_record_name": "Kollam",
+          "match_type": "exact",
+          "matched_constituency_name": "Kollam",
+          "matched_constituency_number": "491",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.13",
+          "qumanity_record_name": "Attingal",
+          "match_type": "exact",
+          "matched_constituency_name": "Attingal",
+          "matched_constituency_number": "485",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.KL.14",
+          "qumanity_record_name": "Thiruvananthapuram",
+          "match_type": "exact",
+          "matched_constituency_name": "Thiruvananthapuram",
+          "matched_constituency_number": "499",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Telangana",
+      "qumanity_state_id": "SS.TS",
+      "zone_name": "South India State",
+      "master_district_record_count": 17,
+      "official_constituency_count": 17,
+      "exact_matches": 15,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 2,
+      "match_ratio": 0.882,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "15/17 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (17 official constituencies on record for this state)",
+        "2/17 records did not match any known constituency name in this state -- this does NOT by itself prove they are genuine revenue districts (the reference list could be incomplete, or these could be real revenue districts, or something else entirely)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "SS.TS.1",
+          "qumanity_record_name": "Adilabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Adilabad",
+          "matched_constituency_number": "410",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TS.2",
+          "qumanity_record_name": "Peddapalli",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.TS.3",
+          "qumanity_record_name": "Nizamabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Nizamabad",
+          "matched_constituency_number": "439",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TS.4",
+          "qumanity_record_name": "Zahirabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Zahirabad",
+          "matched_constituency_number": "451",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TS.5",
+          "qumanity_record_name": "Karimnagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Karimnagar",
+          "matched_constituency_number": "425",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TS.6",
+          "qumanity_record_name": "Medak",
+          "match_type": "exact",
+          "matched_constituency_name": "Medak",
+          "matched_constituency_number": "432",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TS.7",
+          "qumanity_record_name": "Malkajgiri",
+          "match_type": "exact",
+          "matched_constituency_name": "Malkajgiri",
+          "matched_constituency_number": "431",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TS.8",
+          "qumanity_record_name": "Bhongir",
+          "match_type": "exact",
+          "matched_constituency_name": "Bhongir",
+          "matched_constituency_number": "416",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TS.9",
+          "qumanity_record_name": "Chevella",
+          "match_type": "exact",
+          "matched_constituency_name": "Chevella",
+          "matched_constituency_number": "417",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TS.A",
+          "qumanity_record_name": "Secunderabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Secunderabad",
+          "matched_constituency_number": "444",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TS.B",
+          "qumanity_record_name": "Hyderabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Hyderabad",
+          "matched_constituency_number": "422",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TS.C",
+          "qumanity_record_name": "Mahabubnagar",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "SS.TS.D",
+          "qumanity_record_name": "Nagarkurnool",
+          "match_type": "exact",
+          "matched_constituency_name": "Nagarkurnool",
+          "matched_constituency_number": "433",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TS.E",
+          "qumanity_record_name": "Nalgonda",
+          "match_type": "exact",
+          "matched_constituency_name": "Nalgonda",
+          "matched_constituency_number": "434",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TS.F",
+          "qumanity_record_name": "Warangal",
+          "match_type": "exact",
+          "matched_constituency_name": "Warangal",
+          "matched_constituency_number": "450",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TS.10",
+          "qumanity_record_name": "Mahabubabad",
+          "match_type": "exact",
+          "matched_constituency_name": "Mahabubabad",
+          "matched_constituency_number": "429",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "SS.TS.11",
+          "qumanity_record_name": "Khammam",
+          "match_type": "exact",
+          "matched_constituency_name": "Khammam",
+          "matched_constituency_number": "426",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Assam",
+      "qumanity_state_id": "CS.AS",
+      "zone_name": "Central State",
+      "master_district_record_count": 14,
+      "official_constituency_count": 14,
+      "exact_matches": 8,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 6,
+      "match_ratio": 0.571,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "medium-high",
+      "evidence": [
+        "8/14 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (14 official constituencies on record for this state)",
+        "6/14 records did not match any known constituency name in this state -- this does NOT by itself prove they are genuine revenue districts (the reference list could be incomplete, or these could be real revenue districts, or something else entirely)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "CS.AS.1",
+          "qumanity_record_name": "Sonitpur",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "CS.AS.2",
+          "qumanity_record_name": "Diphu",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "CS.AS.3",
+          "qumanity_record_name": "Kaziranga",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "CS.AS.4",
+          "qumanity_record_name": "Darrang-Udalguri",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "CS.AS.5",
+          "qumanity_record_name": "Lakhimpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Lakhimpur",
+          "matched_constituency_number": "212",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.AS.6",
+          "qumanity_record_name": "Kokrajhar",
+          "match_type": "exact",
+          "matched_constituency_name": "Kokrajhar",
+          "matched_constituency_number": "211",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.AS.7",
+          "qumanity_record_name": "Dhubri",
+          "match_type": "exact",
+          "matched_constituency_name": "Dhubri",
+          "matched_constituency_number": "205",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.AS.8",
+          "qumanity_record_name": "Dibrugarh",
+          "match_type": "exact",
+          "matched_constituency_name": "Dibrugarh",
+          "matched_constituency_number": "206",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.AS.9",
+          "qumanity_record_name": "Jorhat",
+          "match_type": "exact",
+          "matched_constituency_name": "Jorhat",
+          "matched_constituency_number": "208",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.AS.A",
+          "qumanity_record_name": "Nagaon",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "CS.AS.B",
+          "qumanity_record_name": "Barpeta",
+          "match_type": "exact",
+          "matched_constituency_name": "Barpeta",
+          "matched_constituency_number": "204",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.AS.C",
+          "qumanity_record_name": "Guwahati",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "CS.AS.D",
+          "qumanity_record_name": "Karimganj",
+          "match_type": "exact",
+          "matched_constituency_name": "Karimganj",
+          "matched_constituency_number": "210",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.AS.E",
+          "qumanity_record_name": "Silchar",
+          "match_type": "exact",
+          "matched_constituency_name": "Silchar",
+          "matched_constituency_number": "215",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Jharkhand",
+      "qumanity_state_id": "ES.JH",
+      "zone_name": "East India",
+      "master_district_record_count": 14,
+      "official_constituency_count": 14,
+      "exact_matches": 13,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 1,
+      "match_ratio": 0.929,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "13/14 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (14 official constituencies on record for this state)",
+        "1/14 records did not match any known constituency name in this state -- this does NOT by itself prove they are genuine revenue districts (the reference list could be incomplete, or these could be real revenue districts, or something else entirely)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "ES.JH.1",
+          "qumanity_record_name": "Rajmahal",
+          "match_type": "exact",
+          "matched_constituency_name": "Rajmahal",
+          "matched_constituency_number": "270",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.JH.2",
+          "qumanity_record_name": "Dumka",
+          "match_type": "exact",
+          "matched_constituency_name": "Dumka",
+          "matched_constituency_number": "261",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.JH.3",
+          "qumanity_record_name": "Godda",
+          "match_type": "exact",
+          "matched_constituency_name": "Godda",
+          "matched_constituency_number": "263",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.JH.4",
+          "qumanity_record_name": "Kodarma",
+          "match_type": "exact",
+          "matched_constituency_name": "Kodarma",
+          "matched_constituency_number": "267",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.JH.5",
+          "qumanity_record_name": "Giridih",
+          "match_type": "exact",
+          "matched_constituency_name": "Giridih",
+          "matched_constituency_number": "262",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.JH.6",
+          "qumanity_record_name": "Dhanbad",
+          "match_type": "exact",
+          "matched_constituency_name": "Dhanbad",
+          "matched_constituency_number": "260",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.JH.7",
+          "qumanity_record_name": "Jamshedpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Jamshedpur",
+          "matched_constituency_number": "265",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.JH.8",
+          "qumanity_record_name": "Singhbhum",
+          "match_type": "exact",
+          "matched_constituency_name": "Singhbhum",
+          "matched_constituency_number": "272",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.JH.9",
+          "qumanity_record_name": "Khunti",
+          "match_type": "exact",
+          "matched_constituency_name": "Khunti",
+          "matched_constituency_number": "266",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.JH.A",
+          "qumanity_record_name": "Ranchi",
+          "match_type": "exact",
+          "matched_constituency_name": "Ranchi",
+          "matched_constituency_number": "271",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.JH.B",
+          "qumanity_record_name": "Lohardaga",
+          "match_type": "exact",
+          "matched_constituency_name": "Lohardaga",
+          "matched_constituency_number": "268",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.JH.C",
+          "qumanity_record_name": "Hazaribagh",
+          "match_type": "exact",
+          "matched_constituency_name": "Hazaribagh",
+          "matched_constituency_number": "264",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.JH.D",
+          "qumanity_record_name": "Chatra",
+          "match_type": "exact",
+          "matched_constituency_name": "Chatra",
+          "matched_constituency_number": "259",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "ES.JH.E",
+          "qumanity_record_name": "Palamu",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "state_name": "Punjab",
+      "qumanity_state_id": "NS.PB",
+      "zone_name": "North India State",
+      "master_district_record_count": 13,
+      "official_constituency_count": 13,
+      "exact_matches": 13,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "13/13 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (13 official constituencies on record for this state)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "NS.PB.1",
+          "qumanity_record_name": "Gurdaspur",
+          "match_type": "exact",
+          "matched_constituency_name": "Gurdaspur",
+          "matched_constituency_number": "17",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.PB.2",
+          "qumanity_record_name": "Amritsar",
+          "match_type": "exact",
+          "matched_constituency_name": "Amritsar",
+          "matched_constituency_number": "11",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.PB.3",
+          "qumanity_record_name": "Khadoor Sahib",
+          "match_type": "exact",
+          "matched_constituency_name": "Khadoor Sahib",
+          "matched_constituency_number": "20",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.PB.4",
+          "qumanity_record_name": "Jalandhar",
+          "match_type": "exact",
+          "matched_constituency_name": "Jalandhar",
+          "matched_constituency_number": "19",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.PB.5",
+          "qumanity_record_name": "Hoshiarpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Hoshiarpur",
+          "matched_constituency_number": "18",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.PB.6",
+          "qumanity_record_name": "Anandpur Sahib",
+          "match_type": "exact",
+          "matched_constituency_name": "Anandpur Sahib",
+          "matched_constituency_number": "12",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.PB.7",
+          "qumanity_record_name": "Fatehgarh Sahib",
+          "match_type": "exact",
+          "matched_constituency_name": "Fatehgarh Sahib",
+          "matched_constituency_number": "15",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.PB.8",
+          "qumanity_record_name": "Ludhiana",
+          "match_type": "exact",
+          "matched_constituency_name": "Ludhiana",
+          "matched_constituency_number": "21",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.PB.9",
+          "qumanity_record_name": "Faridkot",
+          "match_type": "exact",
+          "matched_constituency_name": "Faridkot",
+          "matched_constituency_number": "14",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.PB.A",
+          "qumanity_record_name": "Firozpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Firozpur",
+          "matched_constituency_number": "16",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.PB.B",
+          "qumanity_record_name": "Bathinda",
+          "match_type": "exact",
+          "matched_constituency_name": "Bathinda",
+          "matched_constituency_number": "13",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.PB.C",
+          "qumanity_record_name": "Sangrur",
+          "match_type": "exact",
+          "matched_constituency_name": "Sangrur",
+          "matched_constituency_number": "23",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.PB.D",
+          "qumanity_record_name": "Patiala",
+          "match_type": "exact",
+          "matched_constituency_name": "Patiala",
+          "matched_constituency_number": "22",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Chhattisgarh",
+      "qumanity_state_id": "WS.CT",
+      "zone_name": "West India State",
+      "master_district_record_count": 11,
+      "official_constituency_count": 11,
+      "exact_matches": 9,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 2,
+      "match_ratio": 0.818,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "9/11 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (11 official constituencies on record for this state)",
+        "2/11 records did not match any known constituency name in this state -- this does NOT by itself prove they are genuine revenue districts (the reference list could be incomplete, or these could be real revenue districts, or something else entirely)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "WS.CT.1",
+          "qumanity_record_name": "Bastar",
+          "match_type": "exact",
+          "matched_constituency_name": "Bastar",
+          "matched_constituency_number": "294",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.CT.2",
+          "qumanity_record_name": "Kanker",
+          "match_type": "exact",
+          "matched_constituency_name": "Kanker",
+          "matched_constituency_number": "298",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.CT.3",
+          "qumanity_record_name": "Raipur",
+          "match_type": "exact",
+          "matched_constituency_name": "Raipur",
+          "matched_constituency_number": "302",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.CT.4",
+          "qumanity_record_name": "Durg",
+          "match_type": "exact",
+          "matched_constituency_name": "Durg",
+          "matched_constituency_number": "296",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.CT.5",
+          "qumanity_record_name": "Rajnandgaon",
+          "match_type": "exact",
+          "matched_constituency_name": "Rajnandgaon",
+          "matched_constituency_number": "303",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.CT.6",
+          "qumanity_record_name": "Mahasamund",
+          "match_type": "exact",
+          "matched_constituency_name": "Mahasamund",
+          "matched_constituency_number": "300",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.CT.7",
+          "qumanity_record_name": "Bilaspur",
+          "match_type": "exact",
+          "matched_constituency_name": "Bilaspur",
+          "matched_constituency_number": "295",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.CT.8",
+          "qumanity_record_name": "Janjgir-Champa",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "WS.CT.9",
+          "qumanity_record_name": "Korba",
+          "match_type": "exact",
+          "matched_constituency_name": "Korba",
+          "matched_constituency_number": "299",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.CT.A",
+          "qumanity_record_name": "Sarguja",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "WS.CT.B",
+          "qumanity_record_name": "Raigarh",
+          "match_type": "exact",
+          "matched_constituency_name": "Raigarh",
+          "matched_constituency_number": "301",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Delhi",
+      "qumanity_state_id": "CS.DL",
+      "zone_name": "Central State",
+      "master_district_record_count": 7,
+      "official_constituency_count": 7,
+      "exact_matches": 7,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 5,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "7/7 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (7 official constituencies on record for this state)",
+        "[secondary diagnostic only, not used for the classification decision] 5/7 district names use a directional/urban-split suffix (West/East/.../City/Rural): North East Delhi, North West Delhi, West Delhi, East Delhi, South Delhi"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "CS.DL.1",
+          "qumanity_record_name": "New Delhi",
+          "match_type": "exact",
+          "matched_constituency_name": "New Delhi",
+          "matched_constituency_number": "42",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.DL.2",
+          "qumanity_record_name": "North East Delhi",
+          "match_type": "exact",
+          "matched_constituency_name": "North East Delhi",
+          "matched_constituency_number": "43",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.DL.3",
+          "qumanity_record_name": "North West Delhi",
+          "match_type": "exact",
+          "matched_constituency_name": "North West Delhi",
+          "matched_constituency_number": "44",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.DL.4",
+          "qumanity_record_name": "West Delhi",
+          "match_type": "exact",
+          "matched_constituency_name": "West Delhi",
+          "matched_constituency_number": "46",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.DL.5",
+          "qumanity_record_name": "East Delhi",
+          "match_type": "exact",
+          "matched_constituency_name": "East Delhi",
+          "matched_constituency_number": "41",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.DL.6",
+          "qumanity_record_name": "South Delhi",
+          "match_type": "exact",
+          "matched_constituency_name": "South Delhi",
+          "matched_constituency_number": "45",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.DL.7",
+          "qumanity_record_name": "Chandni Chowk",
+          "match_type": "exact",
+          "matched_constituency_name": "Chandni Chowk",
+          "matched_constituency_number": "40",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Jammu and Kashmir",
+      "qumanity_state_id": "CS.JK",
+      "zone_name": "Central State",
+      "master_district_record_count": 5,
+      "official_constituency_count": 5,
+      "exact_matches": 4,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 1,
+      "match_ratio": 0.8,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "4/5 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (5 official constituencies on record for this state)",
+        "1/5 records did not match any known constituency name in this state -- this does NOT by itself prove they are genuine revenue districts (the reference list could be incomplete, or these could be real revenue districts, or something else entirely)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "CS.JK.1",
+          "qumanity_record_name": "Baramulla",
+          "match_type": "exact",
+          "matched_constituency_name": "Baramulla",
+          "matched_constituency_number": "2",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.JK.2",
+          "qumanity_record_name": "Srinagar",
+          "match_type": "exact",
+          "matched_constituency_name": "Srinagar",
+          "matched_constituency_number": "5",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.JK.3",
+          "qumanity_record_name": "Anantnag-Rajouri",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "CS.JK.4",
+          "qumanity_record_name": "Udhampur",
+          "match_type": "exact",
+          "matched_constituency_name": "Udhampur",
+          "matched_constituency_number": "6",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.JK.5",
+          "qumanity_record_name": "Jammu",
+          "match_type": "exact",
+          "matched_constituency_name": "Jammu",
+          "matched_constituency_number": "3",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Uttarakhand",
+      "qumanity_state_id": "NS.UT",
+      "zone_name": "North India State",
+      "master_district_record_count": 5,
+      "official_constituency_count": 5,
+      "exact_matches": 3,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 2,
+      "match_ratio": 0.6,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "medium-high",
+      "evidence": [
+        "3/5 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (5 official constituencies on record for this state)",
+        "2/5 records did not match any known constituency name in this state -- this does NOT by itself prove they are genuine revenue districts (the reference list could be incomplete, or these could be real revenue districts, or something else entirely)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "NS.UT.1",
+          "qumanity_record_name": "Tehri Garhwal",
+          "match_type": "exact",
+          "matched_constituency_name": "Tehri Garhwal",
+          "matched_constituency_number": "29",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UT.2",
+          "qumanity_record_name": "Garhwal",
+          "match_type": "exact",
+          "matched_constituency_name": "Garhwal",
+          "matched_constituency_number": "26",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UT.3",
+          "qumanity_record_name": "Almora",
+          "match_type": "exact",
+          "matched_constituency_name": "Almora",
+          "matched_constituency_number": "25",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.UT.4",
+          "qumanity_record_name": "Nainital-Udham Singh Nagar",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "NS.UT.5",
+          "qumanity_record_name": "Haridwar",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "state_name": "Himachal Pradesh",
+      "qumanity_state_id": "NS.HP",
+      "zone_name": "North India State",
+      "master_district_record_count": 4,
+      "official_constituency_count": 4,
+      "exact_matches": 4,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "4/4 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (4 official constituencies on record for this state)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "NS.HP.1",
+          "qumanity_record_name": "Kangra",
+          "match_type": "exact",
+          "matched_constituency_name": "Kangra",
+          "matched_constituency_number": "8",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.HP.2",
+          "qumanity_record_name": "Mandi",
+          "match_type": "exact",
+          "matched_constituency_name": "Mandi",
+          "matched_constituency_number": "9",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.HP.3",
+          "qumanity_record_name": "Hamirpur",
+          "match_type": "exact",
+          "matched_constituency_name": "Hamirpur",
+          "matched_constituency_number": "7",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "NS.HP.4",
+          "qumanity_record_name": "Shimla",
+          "match_type": "exact",
+          "matched_constituency_name": "Shimla",
+          "matched_constituency_number": "10",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Nagaland",
+      "qumanity_state_id": "CS.NL",
+      "zone_name": "Central State",
+      "master_district_record_count": 3,
+      "official_constituency_count": 1,
+      "exact_matches": 1,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 2,
+      "match_ratio": 0.333,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "MIXED_GEOGRAPHY",
+      "confidence": "low",
+      "evidence": [
+        "1/3 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (1 official constituencies on record for this state)",
+        "2/3 records did not match any known constituency name in this state -- this does NOT by itself prove they are genuine revenue districts (the reference list could be incomplete, or these could be real revenue districts, or something else entirely)",
+        "match ratio (33%) is neither clearly electoral (>=50%) nor clearly zero -- a partial match can mean a genuine name collision for a handful of districts, not full electoral-geography adoption; needs record-by-record review (see the per-record report)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "CS.NL.1",
+          "qumanity_record_name": "Nagaland",
+          "match_type": "exact",
+          "matched_constituency_name": "Nagaland",
+          "matched_constituency_number": "195",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.NL.2",
+          "qumanity_record_name": "Dimapur",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "CS.NL.3",
+          "qumanity_record_name": "Kiphire",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "state_name": "Puducherry",
+      "qumanity_state_id": "CS.PY",
+      "zone_name": "Central State",
+      "master_district_record_count": 3,
+      "official_constituency_count": 1,
+      "exact_matches": 0,
+      "normalized_matches": 1,
+      "alias_matches": 0,
+      "unmatched": 2,
+      "match_ratio": 0.333,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "MIXED_GEOGRAPHY",
+      "confidence": "low",
+      "evidence": [
+        "0/3 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (1 official constituencies on record for this state)",
+        "1/3 more matched only after case/whitespace/Unicode normalization (still a real match, not a spelling guess)",
+        "2/3 records did not match any known constituency name in this state -- this does NOT by itself prove they are genuine revenue districts (the reference list could be incomplete, or these could be real revenue districts, or something else entirely)",
+        "match ratio (33%) is neither clearly electoral (>=50%) nor clearly zero -- a partial match can mean a genuine name collision for a handful of districts, not full electoral-geography adoption; needs record-by-record review (see the per-record report)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "CS.PY.1",
+          "qumanity_record_name": "Puducherry",
+          "match_type": "normalized",
+          "matched_constituency_name": "PUDUCHERRY",
+          "matched_constituency_number": "542",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.PY.2",
+          "qumanity_record_name": "Mahe",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        },
+        {
+          "qumanity_record_id": "CS.PY.3",
+          "qumanity_record_name": "Yanam",
+          "match_type": "unmatched",
+          "matched_constituency_name": null,
+          "matched_constituency_number": null,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "state_name": "Arunachal Pradesh",
+      "qumanity_state_id": "CS.AR",
+      "zone_name": "Central State",
+      "master_district_record_count": 2,
+      "official_constituency_count": 2,
+      "exact_matches": 2,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 2,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "2/2 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (2 official constituencies on record for this state)",
+        "[secondary diagnostic only, not used for the classification decision] 2/2 district names use a directional/urban-split suffix (West/East/.../City/Rural): Arunachal West, Arunachal East"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "CS.AR.1",
+          "qumanity_record_name": "Arunachal West",
+          "match_type": "exact",
+          "matched_constituency_name": "Arunachal West",
+          "matched_constituency_number": "194",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.AR.2",
+          "qumanity_record_name": "Arunachal East",
+          "match_type": "exact",
+          "matched_constituency_name": "Arunachal East",
+          "matched_constituency_number": "193",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Goa",
+      "qumanity_state_id": "WS.GA",
+      "zone_name": "West India State",
+      "master_district_record_count": 2,
+      "official_constituency_count": 2,
+      "exact_matches": 2,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": 2,
+      "revenue_district_reference_note": "medium",
+      "directional_suffix_hits_diagnostic_only": 2,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "2/2 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (2 official constituencies on record for this state)",
+        "[secondary diagnostic only, not used for the classification decision] 2/2 district names use a directional/urban-split suffix (West/East/.../City/Rural): North Goa, South Goa",
+        "district-record count (2) is also consistent with the approximate revenue-district reference (medium)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "WS.GA.1",
+          "qumanity_record_name": "North Goa",
+          "match_type": "exact",
+          "matched_constituency_name": "North Goa",
+          "matched_constituency_number": "480",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "WS.GA.2",
+          "qumanity_record_name": "South Goa",
+          "match_type": "exact",
+          "matched_constituency_name": "South Goa",
+          "matched_constituency_number": "481",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Manipur",
+      "qumanity_state_id": "CS.MN",
+      "zone_name": "Central State",
+      "master_district_record_count": 2,
+      "official_constituency_count": 2,
+      "exact_matches": 2,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 1,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "2/2 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (2 official constituencies on record for this state)",
+        "[secondary diagnostic only, not used for the classification decision] 1/2 district names use a directional/urban-split suffix (West/East/.../City/Rural): Outer Manipur"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "CS.MN.1",
+          "qumanity_record_name": "Inner Manipur",
+          "match_type": "exact",
+          "matched_constituency_name": "Inner Manipur",
+          "matched_constituency_number": "196",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.MN.2",
+          "qumanity_record_name": "Outer Manipur",
+          "match_type": "exact",
+          "matched_constituency_name": "Outer Manipur",
+          "matched_constituency_number": "197",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Meghalaya",
+      "qumanity_state_id": "CS.ME",
+      "zone_name": "Central State",
+      "master_district_record_count": 2,
+      "official_constituency_count": 2,
+      "exact_matches": 2,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "2/2 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (2 official constituencies on record for this state)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "CS.ME.1",
+          "qumanity_record_name": "Shillong",
+          "match_type": "exact",
+          "matched_constituency_name": "Shillong",
+          "matched_constituency_number": "201",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.ME.2",
+          "qumanity_record_name": "Tura",
+          "match_type": "exact",
+          "matched_constituency_name": "Tura",
+          "matched_constituency_number": "202",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Tripura",
+      "qumanity_state_id": "CS.TR",
+      "zone_name": "Central State",
+      "master_district_record_count": 2,
+      "official_constituency_count": 2,
+      "exact_matches": 2,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 2,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "2/2 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (2 official constituencies on record for this state)",
+        "[secondary diagnostic only, not used for the classification decision] 2/2 district names use a directional/urban-split suffix (West/East/.../City/Rural): Tripura West, Tripura East"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "CS.TR.1",
+          "qumanity_record_name": "Tripura West",
+          "match_type": "exact",
+          "matched_constituency_name": "Tripura West",
+          "matched_constituency_number": "200",
+          "confidence": "high"
+        },
+        {
+          "qumanity_record_id": "CS.TR.2",
+          "qumanity_record_name": "Tripura East",
+          "match_type": "exact",
+          "matched_constituency_name": "Tripura East",
+          "matched_constituency_number": "199",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Andaman and Nicobar Islands",
+      "qumanity_state_id": "CS.AN",
+      "zone_name": "Central State",
+      "master_district_record_count": 1,
+      "official_constituency_count": 1,
+      "exact_matches": 0,
+      "normalized_matches": 1,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "SPECIAL_ADMINISTRATIVE_CASE",
+      "confidence": "high",
+      "evidence": [
+        "0/1 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (1 official constituencies on record for this state)",
+        "1/1 more matched only after case/whitespace/Unicode normalization (still a real match, not a spelling guess)",
+        "single-district UT -- electoral-vs-revenue classification is not a meaningful question at n=1"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "CS.AN.1",
+          "qumanity_record_name": "Andaman and Nicobar Islands",
+          "match_type": "normalized",
+          "matched_constituency_name": "Andaman & Nicobar Islands",
+          "matched_constituency_number": "543",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Chandigarh",
+      "qumanity_state_id": "CS.CH",
+      "zone_name": "Central State",
+      "master_district_record_count": 1,
+      "official_constituency_count": 1,
+      "exact_matches": 1,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "SPECIAL_ADMINISTRATIVE_CASE",
+      "confidence": "high",
+      "evidence": [
+        "1/1 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (1 official constituencies on record for this state)",
+        "single-district UT -- electoral-vs-revenue classification is not a meaningful question at n=1"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "CS.CH.1",
+          "qumanity_record_name": "Chandigarh",
+          "match_type": "exact",
+          "matched_constituency_name": "Chandigarh",
+          "matched_constituency_number": "24",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Dadra and Nagar Haveli",
+      "qumanity_state_id": "CS.DN",
+      "zone_name": "Central State",
+      "master_district_record_count": 1,
+      "official_constituency_count": 2,
+      "exact_matches": 0,
+      "normalized_matches": 1,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "SPECIAL_ADMINISTRATIVE_CASE",
+      "confidence": "high",
+      "evidence": [
+        "0/1 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (2 official constituencies on record for this state)",
+        "1/1 more matched only after case/whitespace/Unicode normalization (still a real match, not a spelling guess)",
+        "single-district UT -- electoral-vs-revenue classification is not a meaningful question at n=1"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "CS.DN.1",
+          "qumanity_record_name": "Dadra and Nagar Haveli",
+          "match_type": "normalized",
+          "matched_constituency_name": "Dadra & Nagar Haveli",
+          "matched_constituency_number": "361",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Daman and Diu",
+      "qumanity_state_id": "CS.DD",
+      "zone_name": "Central State",
+      "master_district_record_count": 1,
+      "official_constituency_count": 2,
+      "exact_matches": 0,
+      "normalized_matches": 1,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "SPECIAL_ADMINISTRATIVE_CASE",
+      "confidence": "high",
+      "evidence": [
+        "0/1 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (2 official constituencies on record for this state)",
+        "1/1 more matched only after case/whitespace/Unicode normalization (still a real match, not a spelling guess)",
+        "single-district UT -- electoral-vs-revenue classification is not a meaningful question at n=1"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "CS.DD.1",
+          "qumanity_record_name": "Daman and Diu",
+          "match_type": "normalized",
+          "matched_constituency_name": "Daman & Diu",
+          "matched_constituency_number": "360",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Ladakh",
+      "qumanity_state_id": "CS.LA",
+      "zone_name": "Central State",
+      "master_district_record_count": 1,
+      "official_constituency_count": 1,
+      "exact_matches": 1,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "SPECIAL_ADMINISTRATIVE_CASE",
+      "confidence": "high",
+      "evidence": [
+        "1/1 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (1 official constituencies on record for this state)",
+        "single-district UT -- electoral-vs-revenue classification is not a meaningful question at n=1"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "CS.LA.1",
+          "qumanity_record_name": "Ladakh",
+          "match_type": "exact",
+          "matched_constituency_name": "Ladakh",
+          "matched_constituency_number": "4",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Lakshadweep",
+      "qumanity_state_id": "CS.LD",
+      "zone_name": "Central State",
+      "master_district_record_count": 1,
+      "official_constituency_count": 1,
+      "exact_matches": 1,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "SPECIAL_ADMINISTRATIVE_CASE",
+      "confidence": "high",
+      "evidence": [
+        "1/1 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (1 official constituencies on record for this state)",
+        "single-district UT -- electoral-vs-revenue classification is not a meaningful question at n=1"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "CS.LD.1",
+          "qumanity_record_name": "Lakshadweep",
+          "match_type": "exact",
+          "matched_constituency_name": "Lakshadweep",
+          "matched_constituency_number": "482",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Mizoram",
+      "qumanity_state_id": "CS.MI",
+      "zone_name": "Central State",
+      "master_district_record_count": 1,
+      "official_constituency_count": 1,
+      "exact_matches": 1,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "1/1 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (1 official constituencies on record for this state)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "CS.MI.1",
+          "qumanity_record_name": "Mizoram",
+          "match_type": "exact",
+          "matched_constituency_name": "Mizoram",
+          "matched_constituency_number": "198",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "state_name": "Sikkim",
+      "qumanity_state_id": "CS.SK",
+      "zone_name": "Central State",
+      "master_district_record_count": 1,
+      "official_constituency_count": 1,
+      "exact_matches": 1,
+      "normalized_matches": 0,
+      "alias_matches": 0,
+      "unmatched": 0,
+      "match_ratio": 1.0,
+      "revenue_district_reference": null,
+      "revenue_district_reference_note": null,
+      "directional_suffix_hits_diagnostic_only": 0,
+      "classification": "LIKELY_ELECTORAL_GEOGRAPHY",
+      "confidence": "high",
+      "evidence": [
+        "1/1 district records are EXACT name matches to a real Lok Sabha constituency in this state's own reference list (1 official constituencies on record for this state)"
+      ],
+      "record_matches": [
+        {
+          "qumanity_record_id": "CS.SK.1",
+          "qumanity_record_name": "Sikkim",
+          "match_type": "exact",
+          "matched_constituency_name": "Sikkim",
+          "matched_constituency_number": "192",
+          "confidence": "high"
+        }
+      ]
+    }
+  ]
+}

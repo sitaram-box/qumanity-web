@@ -1,5 +1,7 @@
-/* Poems marquee — a fixed bar along the bottom of every page (see poems.js). */
-:root { --pm-h: 72px; }
+/* Poems marquee — a fixed bar along the bottom of every page (see poems.js).
+   --pm-hi-poem-size is the single source of truth for Devanagari poem text size, at every
+   breakpoint. */
+:root { --pm-h: 72px; --pm-hi-poem-size: 1.55rem; }
 
 .pm-bar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
@@ -15,13 +17,8 @@
 .pm-bar[hidden] { display: none; }
 body.pm-on { padding-bottom: var(--pm-h); }
 
-/* Homepage only: the fixed Shivalinga (home.css) sits bottom-left, so the poems bar starts to
-   its right instead of spanning the full width. Inert everywhere else, and inert here too while
-   QM_MARQUEE_ENABLED stays off (app.py) -- ready for whenever it's re-enabled. */
-body.hm .pm-bar { left: 140px; }
-@media (max-width: 620px) {
-  body.hm .pm-bar { left: 108px; }
-}
+/* The standalone bottom-left religious symbol was removed 2026-11-XX -- the bar spans full width
+   on every page now, homepage included; religious identity lives only in .pm-chip below. */
 
 .pm-chip {
   flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;
@@ -29,27 +26,34 @@ body.hm .pm-bar { left: 140px; }
   background: linear-gradient(135deg, rgba(255, 138, 31, 0.28), rgba(255, 210, 74, 0.16));
   border: 1px solid rgba(255, 210, 74, 0.55);
 }
+.pm-chip[hidden] { display: none; }
 .pm-name {
   font: 700 1.4rem/1.1 "Noto Sans Devanagari", "Kohinoor Devanagari", "Devanagari Sangam MN", "Mangal", sans-serif;
   color: #ffd24a; letter-spacing: 0.01em; text-shadow: 0 0 18px rgba(255, 153, 51, 0.5);
 }
 .pm-marker { margin-top: 2px; font: 600 0.74rem "Inter", system-ui, sans-serif; color: #f4d9a4; white-space: nowrap; }
 
+/* The poem surface itself: pure white background, pure black text, always -- a fixed,
+   non-negotiable requirement (2026-11-01), independent of the dark .pm-bar chrome around it and
+   of the site's own theme. A hard edge (overflow: hidden, no alpha mask) rather than the previous
+   fade-to-transparent, since fading to transparent at the edges would itself be a "transparent
+   poem background" at exactly the two spots most visible to a reader. Applies identically during
+   play, pause, a prev/next jump, a speed change, and a language change -- none of those paths
+   touch .pm-view's own background/color, only .pm-track's transform or .pm-seg's own text. */
 .pm-view {
-  position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; height: 100%;
+  position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; height: calc(100% - 16px);
   display: flex; align-items: center;
-  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  background: #FFFFFF; border-radius: 10px; padding: 0 1.1rem;
 }
 .pm-track { position: relative; display: inline-flex; align-items: center; white-space: nowrap; will-change: transform; }
 .pm-seg {
   flex: 0 0 auto; display: inline-flex; align-items: center; padding-right: 3.5rem;
-  color: #fff1d0; font-size: 1.4rem; letter-spacing: 0.01em; line-height: 1.5;
+  color: #000000; font-size: 1.4rem; letter-spacing: 0.01em; line-height: 1.5;
   font-family: "Inter", system-ui, sans-serif;
 }
 .pm-seg[lang="hi"] {
   font-family: "Noto Sans Devanagari", "Kohinoor Devanagari", "Devanagari Sangam MN", "Mangal", sans-serif;
-  font-size: 1.55rem; line-height: 1.6;
+  font-size: var(--pm-hi-poem-size); line-height: 1.6;
 }
 .pm-seg .pm-sep { color: #ff9933; padding: 0 0.9em; }
 /* poem number shown where each poem begins, so the join between two poems is obvious */
@@ -140,13 +144,15 @@ body.hm .pm-bar { left: 140px; }
 .pm-combo-list { margin: 0 0 2px; padding: 0 0 4px; list-style: none; }
 
 @media (max-width: 700px) {
-  :root { --pm-h: 66px; }
+  /* Redefining --pm-hi-poem-size here (not overriding .pm-seg[lang="hi"]'s font-size directly)
+     is what lets home.css's "राम" badge track this same breakpoint automatically -- it has no
+     media query of its own for this property any more, see home.css. */
+  :root { --pm-h: 66px; --pm-hi-poem-size: 1.3rem; }
   .pm-bar { gap: 8px; padding: 0 8px; }
   .pm-chip { min-width: 0; padding: 4px 10px; border-radius: 12px; }
   .pm-name { font-size: 1.15rem; }
   .pm-marker { font-size: 0.66rem; }
   .pm-seg { font-size: 1.2rem; }
-  .pm-seg[lang="hi"] { font-size: 1.3rem; }
 }
 @media (max-width: 520px) {
   .pm-bar { gap: 6px; }

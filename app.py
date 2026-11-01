@@ -222,12 +222,10 @@ def _app_token_auth():
 
 @app.route("/")
 def index():
-    # The fixed bottom-left symbol: same religion the poems marquee would show this visitor (or
-    # None for "show nothing" -- see _marquee_religion_for_session's docstring), restricted to the
-    # subset RELIGION_HOME_SYMBOLS actually has artwork for.
-    religion, _user = _marquee_religion_for_session()
-    home_symbol = religion if religion in RELIGION_HOME_SYMBOLS else None
-    return render_template("home.html", home_symbol=home_symbol)
+    # The standalone bottom-left religious symbol was removed 2026-11-XX -- religious identity now
+    # lives only inside the marquee's own gold chip (templates/_poems_marquee.html), which is
+    # itself gated on QM_MARQUEE_ENABLED via its own {% if marquee_enabled %} guard.
+    return render_template("home.html")
 
 
 @app.route("/register")
@@ -282,6 +280,17 @@ def founders_message():
     message = founder_core.get_message(conn, request.args.get("lang", "en"))
     conn.close()
     return render_template("founders_message.html", message=message)
+
+
+@app.route("/copyright/gita-press")
+def copyright_gita_press():
+    """Public transparency notice: the status of the Gita Press Hindi Vinaya Patrika translation
+    (Hanuman Prasad Poddar's, in copyright in India until 1 Jan 2032 -- see
+    docs/marquee_poems_archive/README.md). No permission has been granted, nothing from it is
+    reproduced anywhere on the site, and the marquee's current Hindu content is the separate,
+    newly-written Poems/hindu_original/ collection instead -- never relabelled as Vinaya Patrika.
+    Public, no login needed, same pattern as /founders-message."""
+    return render_template("copyright_gita_press.html")
 
 
 @app.route("/api/founder-message")
@@ -1959,6 +1968,24 @@ def api_family_node_rename(node_id):
     return jsonify({"status": "ok"})
 
 
+# Phase 2 (2026-11-01): the Unclaimed Profile Card editor's combined Save -- name, gender and
+# approximate age together, distinct from the name-only route above (still used elsewhere).
+@app.route("/api/family/node/<int:node_id>/details", methods=["POST"])
+@login_required
+@_board_error
+def api_family_node_update_details(node_id):
+    data = request.get_json(silent=True) or {}
+    conn = _family(get_db())
+    try:
+        family_core.update_node_details(
+            conn, session["user_id"], node_id,
+            name=data.get("name"), gender=data.get("gender"), approximate_age=data.get("approximate_age"),
+        )
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
 @app.route("/api/family/node/<int:node_id>/link", methods=["POST"])
 @login_required
 @_board_error
@@ -1966,10 +1993,13 @@ def api_family_node_link(node_id):
     data = request.get_json(silent=True) or {}
     conn = _family(get_db())
     try:
-        family_core.link_node_to_user(conn, session["user_id"], node_id, data.get("user_id"))
+        cascade = family_core.link_node_to_user(conn, session["user_id"], node_id, data.get("user_id"))
     finally:
         conn.close()
-    return jsonify({"status": "ok"})
+    # Additive only (2026-11-XX): the previous response shape ({"status": "ok"}) is unchanged;
+    # "cascade" is new and reports which pre-existing family members were auto-synced into active
+    # membership alongside the linked person -- see family_core._cascade_relatives_after_link().
+    return jsonify({"status": "ok", "cascade": cascade})
 
 
 @app.route("/api/family/node/<int:group_id>/add-parents", methods=["POST"])
@@ -2034,11 +2064,79 @@ def api_family_node_neighborhood(group_id):
 def api_family_group_join_request(group_id):
     conn = _family(get_db())
     try:
-        family_core.request_join_group(conn, session["user_id"], group_id)
+        result = family_core.request_join_group(conn, session["user_id"], group_id)
         conn.commit()
     finally:
         conn.close()
-    return jsonify({"status": "requested"}), 201
+    # 2026-11-01: request_join_group() is now idempotent -- a repeat call returns the existing
+    # pending request or membership instead of raising, so this is no longer always a fresh 201.
+    status_code = 201 if result["status"] == "created" else 200
+    return jsonify({"status": result["status"], "request_id": result["request_id"]}), status_code
+
+
+# ---- Person-centric routes (Phase 1, 2026-11-01): built for Phase 2's Profile Card, which acts on
+# whichever person's node is currently open -- not necessarily the signed-in user's own node or
+# unit, which every /api/family/node/<group_id>/... route above operates on instead. ----
+
+@app.route("/api/family/person/<int:node_id>/cascade")
+@login_required
+def api_family_person_cascade(node_id):
+    conn = _family(get_db())
+    try:
+        result = family_core.cascade_for_node(conn, session["user_id"], node_id)
+    finally:
+        conn.close()
+    if result is None:
+        return jsonify({"error": "Person not found"}), 404
+    return jsonify(result)
+
+
+@app.route("/api/family/person/<int:node_id>/sibling", methods=["POST"])
+@login_required
+@_board_error
+def api_family_person_add_sibling(node_id):
+    data = request.get_json(silent=True) or {}
+    conn = _family(get_db())
+    try:
+        result = family_core.add_sibling_to_node(
+            conn, session["user_id"], node_id, data.get("name"), data.get("gender"),
+            is_deceased=bool(data.get("is_deceased", False)),
+        )
+    finally:
+        conn.close()
+    return jsonify(result), 201
+
+
+@app.route("/api/family/person/<int:node_id>/child", methods=["POST"])
+@login_required
+@_board_error
+def api_family_person_add_child(node_id):
+    data = request.get_json(silent=True) or {}
+    conn = _family(get_db())
+    try:
+        result = family_core.add_child_to_node(
+            conn, session["user_id"], node_id, data.get("name"), data.get("gender"),
+            is_deceased=bool(data.get("is_deceased", False)), group_id=data.get("group_id"),
+        )
+    finally:
+        conn.close()
+    return jsonify(result), 201
+
+
+@app.route("/api/family/person/<int:node_id>/spouse", methods=["POST"])
+@login_required
+@_board_error
+def api_family_person_add_spouse(node_id):
+    data = request.get_json(silent=True) or {}
+    conn = _family(get_db())
+    try:
+        result = family_core.add_spouse_to_node(
+            conn, session["user_id"], node_id, data.get("name"), data.get("gender"),
+            is_deceased=bool(data.get("is_deceased", False)),
+        )
+    finally:
+        conn.close()
+    return jsonify(result), 201
 
 
 @app.route("/api/family-groups/<int:group_id>/leave", methods=["POST"])
@@ -3456,9 +3554,15 @@ def _move_born_here_folder(conn, user_id, old_location, new_location, element):
 # Marquee shows verses from Tulsidas's Vinay Patrika. Original
 # text is public domain, but the Hindi translation by Hanuman
 # Prasad Poddar (d. 1971) remains under copyright until the end of 2031 (expires 1 January 2032).
-# Disabled pending a cleanly-licensed or work-for-hire replacement.
-# See docs/marquee_poems_archive/README.md for re-enablement steps.
-QM_MARQUEE_ENABLED = os.environ.get("QM_MARQUEE_ENABLED", "false").strip().lower() in ("1", "true", "yes")  # default False; flip to True when poems are cleanly licensed
+# 2026-11-01: re-enabled. The Vinaya Patrika copyright blocker (see docs/marquee_poems_archive/
+# README.md) is a content-specific gap, not a reason to keep the whole marquee feature dark -- it
+# is now handled per-religion, inside RELIGION_MARQUEE_SOURCES/_poems_dir_for() below (the "hindu"
+# entry automatically falls back to a newly-written, uncopied original collection whenever the
+# rights-cleared Poems/hindu/ directory is empty, which it still is). This flag now only gates the
+# feature as a whole (a manual ops kill-switch, e.g. QM_MARQUEE_ENABLED=false on Railway), never a
+# stand-in for "is Vinaya Patrika itself available" -- that question is answered independently, per
+# religion, by _poems_dir_for().
+QM_MARQUEE_ENABLED = os.environ.get("QM_MARQUEE_ENABLED", "true").strip().lower() in ("1", "true", "yes")  # default True; set to "false" to force the feature off
 
 
 @app.context_processor
@@ -3466,22 +3570,35 @@ def _marquee_flag():
     return {"marquee_enabled": QM_MARQUEE_ENABLED}
 
 
-# One JSON file per language per religion in Poems/<religion>/, each a list of {id, marker,
-# text} with the same ids in the same order within that religion. Personalized by the signed-in
-# member's users.religion_belief (2026-10-28, Part 4 of the homepage-redesign brief) --
-# logged-out visitors and members who haven't set one yet see DEFAULT_MARQUEE_RELIGION.
+# One JSON file per language per religion-content-source in Poems/<dir>/, each a list of {id,
+# marker, text} with the same ids in the same order within that source. Personalized by the
+# signed-in member's users.religion_belief (2026-10-28, Part 4 of the homepage-redesign brief).
+# A LOGGED-OUT visitor is never assigned a religion (2026-11-XX correction -- see
+# api_poems_meta()'s "anonymous" branch): no default, no inferred symbol, no inferred content.
 #
-# Only religions with a confirmed public-domain or cleanly-licensed text are listed here; every
-# other religion_belief value (muslim/sikh/buddhist/jain/other/prefer_not_to_say) shows
-# "coming soon" (api_poems_meta's coming_soon branch) rather than nothing. In particular "hindu"
-# is NOT backed by real files right now -- the Hindi Vinaya Patrika translation was pulled from
-# this repository for an active copyright reason, see docs/marquee_poems_archive/README.md --
-# it stays wired up under the same file names so it needs no code change to re-enable once a
-# cleanly-licensed translation is dropped into Poems/hindu/.
+# Only religions with a confirmed public-domain, cleanly-licensed, or newly-written-and-uncopied
+# text are listed here; every other religion_belief value (muslim/sikh/buddhist/jain/other/
+# prefer_not_to_say) shows "coming soon" (api_poems_meta's coming_soon branch) rather than nothing.
+#
+# "hindu" has TWO possible content sources, resolved by _poems_dir_for() below, never both at
+# once: `dir` (Poems/hindu/) is reserved for a future rights-cleared Vinaya Patrika edition --
+# still empty today, the Hindi translation previously used was pulled from this repository for an
+# active copyright reason, see docs/marquee_poems_archive/README.md -- it stays wired up under the
+# same file names so it needs no code change to re-enable once a cleanly-licensed translation is
+# dropped in. `fallback_dir` (Poems/hindu_original/) holds a small collection of newly-written
+# Hindi Ram-bhakti poems (2026-11-01) -- original composition, not copied, translated, adapted, or
+# closely paraphrased from the removed Poddar translation or any other copyrighted source; labeled
+# distinctly in the UI ("मौलिक राम-भक्ति कविताएँ," never "Vinaya Patrika") so the two are never
+# confused. The fallback is used automatically whenever the primary `dir` has no files yet, and
+# stops being used automatically the moment a real rights-cleared edition is dropped into `dir` --
+# no code change needed either way.
 POEMS_DIR = BASE_DIR / "Poems"
 RELIGION_MARQUEE_SOURCES = {
     "hindu": {
-        "dir": "hindu",
+        "dir": "hindu",                              # reserved for a future rights-cleared Vinaya Patrika edition -- still empty
+        "fallback_dir": "hindu_original",             # newly-written, uncopied Ram-bhakti poems -- see Poems/hindu_original/README.md
+        "title": "विनय पत्रिका — गोस्वामी तुलसीदास",
+        "fallback_title": "मौलिक राम-भक्ति कविताएँ",
         "languages": {
             "hi": ("poems_hindi.json", "हिन्दी"),
             "en": ("poems_english.json", "English"),
@@ -3492,22 +3609,44 @@ RELIGION_MARQUEE_SOURCES = {
         # patent is a UK-only restriction on commercial printing, not a copyright, and doesn't
         # reach this non-commercial, non-UK-printed use). See Poems/christian/README.md.
         "dir": "christian",
+        "title": "Psalms, King James Version",
         "languages": {
             "en": ("psalms_kjv_en.json", "English"),
         },
     },
 }
-DEFAULT_MARQUEE_RELIGION = "hindu"
 _poem_cache = {}
+
+
+def _poems_dir_for(religion):
+    """(actual_dir, title) -- whichever of this religion's content sources genuinely has files on
+    disk right now: the primary (rights-cleared) one if it does, else `fallback_dir` if that one
+    does, else (None, None). Checked fresh against the filesystem on every call (cheap -- at most
+    one directory listing), never cached, so dropping a real rights-cleared edition into `dir`
+    later takes effect immediately with no code change and no restart-dependent cache to clear --
+    exactly the re-enablement story docs/marquee_poems_archive/README.md already promises."""
+    source = RELIGION_MARQUEE_SOURCES.get(religion)
+    if not source:
+        return None, None
+    primary = POEMS_DIR / source["dir"]
+    if primary.is_dir() and any(primary.glob("*.json")):
+        return source["dir"], source.get("title", "")
+    fallback_dir = source.get("fallback_dir")
+    if fallback_dir and (POEMS_DIR / fallback_dir).is_dir() and any((POEMS_DIR / fallback_dir).glob("*.json")):
+        return fallback_dir, source.get("fallback_title", "")
+    return None, None
 
 
 def _poems(religion, lang):
     source = RELIGION_MARQUEE_SOURCES.get(religion)
     if not source or lang not in source["languages"]:
         return None
-    cache_key = (religion, lang)
+    actual_dir, _title = _poems_dir_for(religion)
+    if not actual_dir:
+        return None
+    cache_key = (religion, actual_dir, lang)
     if cache_key not in _poem_cache:
-        path = POEMS_DIR / source["dir"] / source["languages"][lang][0]
+        path = POEMS_DIR / actual_dir / source["languages"][lang][0]
         _poem_cache[cache_key] = sorted(_load_json(path), key=lambda p: p["id"]) if path.exists() else None
     return _poem_cache[cache_key]
 
@@ -3519,24 +3658,27 @@ def _poem_languages(religion):
     return [{"code": c, "label": label, "available": True} for c, (_, label) in source["languages"].items() if _poems(religion, c)]
 
 
-# Which religion_belief values the homepage's fixed bottom-left symbol (home.html) has its own
-# icon for -- see index()'s home_symbol. jain/other/prefer_not_to_say have no icon defined (yet),
-# same as they have no marquee verses source in RELIGION_MARQUEE_SOURCES above.
-RELIGION_HOME_SYMBOLS = {"hindu", "muslim", "christian", "sikh", "buddhist"}
+# RELIGION_HOME_SYMBOLS removed 2026-11-XX -- the standalone homepage symbol no longer exists.
+# The gold marquee chip's own per-religion mapping now lives client-side in poems.js's
+# CHIP_BY_RELIGION, driven entirely by api_poems_meta()'s "religion"/"coming_soon" fields below,
+# which already distinguish every religion case server-side; no second, parallel symbol-
+# eligibility set is needed.
 
 
 def _marquee_religion_for_session():
-    """(religion, user_row) for this request. religion is None when nothing should be shown at
-    all -- a signed-in member who hid the marquee (users.hide_marquee, migrations/
-    033_marquee_hide_pref.py) or who hasn't chosen a spiritual path yet (religion_belief is
-    NULL): both cases mean "no marquee, no homepage symbol", not "fall back to the default".
-    A logged-out visitor always gets DEFAULT_MARQUEE_RELIGION -- that's the historical,
-    pre-religion-field behavior and nothing about it changed. A signed-in member whose
+    """(religion, user_row) for a SIGNED-IN member only. Returns (None, None) for a logged-out
+    visitor -- callers must check session.get("user_id") separately (see api_poems_meta) to tell
+    "anonymous" apart from "signed-in but hidden/no religion chosen" below; both resolve religion
+    =None here on purpose, since neither should ever see another member's, or a default, religion's
+    content (2026-11-XX: removed the previous DEFAULT_MARQUEE_RELIGION="hindu" anonymous default --
+    a logged-out visitor has not declared a religion and must never be assigned one). A signed-in
+    member's religion_belief is None when they hid the marquee (users.hide_marquee, migrations/
+    033_marquee_hide_pref.py) or haven't chosen a spiritual path yet. A signed-in member whose
     religion_belief names a religion we have no verses source for yet gets THAT religion back
-    (not silently swapped to the default), so the caller can tell them their own path
+    (not silently swapped to another religion's), so the caller can tell them their own path
     specifically is coming soon."""
     if not session.get("user_id"):
-        return DEFAULT_MARQUEE_RELIGION, None
+        return None, None
     conn = get_db()
     user = _current_user_row(conn)
     conn.close()
@@ -3549,19 +3691,20 @@ def _marquee_religion_for_session():
 def api_poems_meta():
     if not QM_MARQUEE_ENABLED:
         return jsonify({"error": "Poems marquee is disabled"}), 404
+    if not session.get("user_id"):
+        # A logged-out visitor is never assigned a religion -- no default, no inferred identity,
+        # no inferred content (2026-11-XX privacy fix). poems.js's showAnonymousNeutral() renders
+        # the neutral "Sign in to see your own marquee" state from this field alone.
+        return jsonify({"anonymous": True})
     religion, user = _marquee_religion_for_session()
     if religion is None:
         return jsonify({"hidden": True})
     langs = _poem_languages(religion)
     if not langs:
-        if religion != DEFAULT_MARQUEE_RELIGION:
-            # Reaching this branch at all means _marquee_religion_for_session already ruled out
-            # hide_marquee (it returns religion=None otherwise) -- so this is as positive a
-            # "not hidden" signal as the main success path's, same reconciliation reasoning.
-            return jsonify({"coming_soon": True, "religion": religion, "hidden": False})
-        return jsonify({"error": "No poems available"}), 404
+        return jsonify({"coming_soon": True, "religion": religion, "hidden": False})
     count = min(len(_poems(religion, l["code"])) for l in langs)
-    result = {"count": count, "languages": langs, "personal": False, "religion": religion}
+    _actual_dir, title = _poems_dir_for(religion)
+    result = {"count": count, "languages": langs, "personal": False, "religion": religion, "title": title}
     if user:
         have = {l["code"] for l in langs}
         # the user's own languages; ones without a poem translation yet are listed as "coming soon"

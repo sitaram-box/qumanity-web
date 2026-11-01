@@ -19,70 +19,6 @@
 <body class="hm">
   <a class="hm-skip" href="#main">Skip to content</a>
 
-  <!-- Fixed spiritual anchor, bottom-left of every viewport on this page only (body.hm-scoped).
-       Decorative -- aria-hidden, no interactive content -- so it carries no role/label. Which
-       symbol (if any) is drawn comes from home_symbol (app.py's index(), RELIGION_HOME_SYMBOLS) --
-       None (not logged in with a religion we have art for, or the member hid the marquee/hasn't
-       chosen a path) means nothing is rendered at all, see static/js/poems.js's hideSymbol(). -->
-  {% if home_symbol %}
-  <div class="hm-shivalinga" id="hm-symbol" aria-hidden="true">
-    {% if home_symbol == 'hindu' %}
-    <svg viewBox="0 0 70 70" width="56" height="56">
-      <!-- Pedestal (peetha/yoni base), two stacked rings -->
-      <ellipse cx="35" cy="62" rx="27" ry="6" fill="#17140f"/>
-      <ellipse cx="35" cy="57" rx="20" ry="5" fill="#201c15"/>
-      <!-- The linga's own top: a half-elliptical dome, wide and rounded -- not a tall spike. -->
-      <path d="M 9 56 A 26 34 0 0 1 61 56 Z" fill="#2b2620"/>
-      <path d="M 9 56 A 26 34 0 0 1 61 56 Z" fill="url(#hm-linga-sheen)" opacity="0.45"/>
-      <!-- Tripundra: three ash-white horizontal lines across the dome -->
-      <path d="M 14 50 Q 35 46 56 50" stroke="#e7e2d4" stroke-width="3.4" fill="none" stroke-linecap="round"/>
-      <path d="M 17 40 Q 35 36 53 40" stroke="#e7e2d4" stroke-width="3.4" fill="none" stroke-linecap="round"/>
-      <path d="M 21 30 Q 35 26 49 30" stroke="#e7e2d4" stroke-width="3.4" fill="none" stroke-linecap="round"/>
-      <defs>
-        <linearGradient id="hm-linga-sheen" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#6b5a35"/>
-          <stop offset="1" stop-color="transparent"/>
-        </linearGradient>
-      </defs>
-    </svg>
-    <span class="hm-symbol-label hm-symbol-label--ram" lang="hi">राम</span>
-    {% elif home_symbol == 'muslim' %}
-    <svg viewBox="0 0 70 70" width="54" height="54">
-      <!-- Crescent: a large circle with a smaller offset circle cut out, i.e. two paths -->
-      <path d="M38 8a27 27 0 1 0 0 54 22 22 0 1 1 0-54z" fill="#ffd700"/>
-      <polygon points="54,16 56.3,22.1 63,22.4 57.8,26.6 59.5,33 54,29.3 48.5,33 50.2,26.6 45,22.4 51.7,22.1" fill="#ffd700"/>
-    </svg>
-    <span class="hm-symbol-label" lang="ar">الله</span>
-    {% elif home_symbol == 'christian' %}
-    <svg viewBox="0 0 70 90" width="46" height="60">
-      <rect x="29" y="6" width="12" height="76" rx="2.5" fill="#ffd700"/>
-      <rect x="9" y="26" width="52" height="12" rx="2.5" fill="#ffd700"/>
-    </svg>
-    <span class="hm-symbol-label" lang="en">Jesus</span>
-    {% elif home_symbol == 'sikh' %}
-    <svg viewBox="0 0 70 90" width="48" height="62">
-      <circle cx="35" cy="48" r="25" fill="none" stroke="#ffd700" stroke-width="3"/>
-      <path d="M35 8 L41 40 L35 82 L29 40 Z" fill="#ffd700"/>
-      <path d="M13 28 Q35 48 15 68" fill="none" stroke="#ffd700" stroke-width="3.5" stroke-linecap="round"/>
-      <path d="M57 28 Q35 48 55 68" fill="none" stroke="#ffd700" stroke-width="3.5" stroke-linecap="round"/>
-    </svg>
-    <span class="hm-symbol-label" lang="pa">ਵਾਹਿਗੁਰੂ</span>
-    {% elif home_symbol == 'buddhist' %}
-    <svg viewBox="0 0 70 70" width="54" height="54">
-      <circle cx="35" cy="35" r="25" fill="none" stroke="#ffd700" stroke-width="4"/>
-      <circle cx="35" cy="35" r="5" fill="#ffd700"/>
-      <g stroke="#ffd700" stroke-width="3" stroke-linecap="round">
-        <line x1="35" y1="10" x2="35" y2="60"/>
-        <line x1="10" y1="35" x2="60" y2="35"/>
-        <line x1="17" y1="17" x2="53" y2="53"/>
-        <line x1="53" y1="17" x2="17" y2="53"/>
-      </g>
-    </svg>
-    <span class="hm-symbol-label" lang="en">Buddha</span>
-    {% endif %}
-  </div>
-  {% endif %}
-
   <!-- ============ Navigation ============ -->
   <header class="hm-nav" id="hm-nav">
     <div class="hm-nav-inner">
@@ -387,6 +323,7 @@
       <span>© 2026 Rohit Mudgal</span>
       <span>A working prototype — the full design is described in the About section.</span>
       <span><a href="https://github.com/sitaram-box/qumanity-web" style="color:inherit">Licensed under AGPL-3.0</a></span>
+      <span><a href="{{ url_for('copyright_gita_press') }}" style="color:inherit">Copyright &amp; licensing notices</a></span>
     </div>
   </footer>
 
