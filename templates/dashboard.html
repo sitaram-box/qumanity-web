@@ -307,6 +307,26 @@
             </div>
             {% endif %}
 
+            {% if profile.religion_belief %}
+            <div class="pv-field" style="margin-top:14px;">
+              <label>Spiritual path</label>
+              <p class="qm-timeline-note" style="margin:0 0 8px;">{{ profile.religion_belief.replace('_', ' ')|capitalize }} <small>(locked)</small></p>
+              <button type="button" class="qm-btn qm-btn-ghost" id="request-religion-change-btn">🕉️ Request a Change</button>
+              <small class="pv-hint pv-hintline">Locked after registration. A change needs your birth village council's approval.</small>
+            </div>
+            {% endif %}
+
+            <div class="pv-field" style="margin-top:14px;">
+              <label>Poems marquee</label>
+              {% if profile.hide_marquee %}
+              <button type="button" class="qm-btn qm-btn-ghost" id="marquee-visibility-btn" data-hidden="1">👁️ Show Marquee Again</button>
+              <small class="pv-hint pv-hintline" id="marquee-visibility-hint">You hid the marquee. This brings it back on every device you're signed in on.</small>
+              {% else %}
+              <button type="button" class="qm-btn qm-btn-ghost" id="marquee-visibility-btn" data-hidden="0">🙈 Hide Marquee</button>
+              <small class="pv-hint pv-hintline" id="marquee-visibility-hint">Also hides the bottom-left spiritual symbol on the homepage.</small>
+              {% endif %}
+            </div>
+
             <div class="pv-field" style="margin-top:14px;">
               <button type="button" class="qm-btn qm-btn-ghost qm-logout-btn" data-i18n="logout">🚪 Sign out</button>
             </div>
@@ -955,6 +975,16 @@
     <div class="dq-modal-box dq-modal-wide">
       <button type="button" class="dq-modal-back" data-close aria-label="Close" title="Close">← Close</button>
       {{ stat_block("qm-stats-modal") }}
+      <!-- Transactions (2026-11-01): modal-only, not part of stat_block -- the always-on sidebar
+           stays a quick Qoins-count glance; this full list is what clicking it is for. Reuses
+           GET /api/wallet/history/<level>/<id>, the same endpoint board.js's Q-Punch panel's own
+           "Group wallet — weekly history" button already calls. -->
+      <div class="qm-stats-section">
+        <div class="qm-stats-section-title">📜 Transactions</div>
+        <p class="qm-dash-empty" id="qm-stats-modal-tx-note" hidden></p>
+        <div class="qp-history" id="qm-stats-modal-tx-list"></div>
+        <p class="qm-dash-empty" id="qm-stats-modal-tx-empty" hidden>No transactions yet.</p>
+      </div>
     </div>
   </div>
 
@@ -1004,6 +1034,40 @@
         <p class="qm-summary-error" id="bl-error" hidden></p>
       </form>
       <p class="qm-timeline-note" id="bl-success" hidden>✓ Queued for your birth village council's review.</p>
+    </div>
+  </div>
+
+  <!-- Request Spiritual Path Change (2026-10-28): shown only once religion_belief is already
+       set (profile.religion_belief, Jinja-gated above) -- routed through identity_core's
+       religion_change ticket, same council as every other identity-adjacent change, even though
+       it touches no zodiac/Kundali/location data; see identity_core.py's docstring. -->
+  <div class="dq-modal" id="religion-change-modal" hidden role="dialog" aria-modal="true" aria-labelledby="religion-change-title">
+    <div class="dq-modal-box">
+      <button type="button" class="dq-modal-close" data-close aria-label="Close">×</button>
+      <h3 id="religion-change-title">🕉️ Request a Spiritual Path Change</h3>
+      <p class="qm-timeline-note">Reviewed by your birth village's council before it applies.</p>
+      <form id="religion-change-form" class="qm-form">
+        <label class="qm-field"><span>New spiritual path</span>
+          <select id="rc-religion-select" required>
+            <option value="">Select…</option>
+            <option value="hindu">Hindu</option>
+            <option value="christian">Christian</option>
+            <option value="muslim">Muslim</option>
+            <option value="sikh">Sikh</option>
+            <option value="buddhist">Buddhist</option>
+            <option value="jain">Jain</option>
+            <option value="other">Other</option>
+            <option value="prefer_not_to_say">Prefer not to say</option>
+          </select>
+        </label>
+        <label class="qm-field"><span>Reason for change</span><input type="text" id="rc-reason" required /></label>
+        <div class="qm-summary-actions">
+          <button type="button" class="qm-btn qm-btn-ghost" id="religion-change-cancel" data-close>Cancel</button>
+          <button type="submit" class="qm-btn qm-btn-primary">Submit for council review →</button>
+        </div>
+        <p class="qm-summary-error" id="rc-error" hidden></p>
+      </form>
+      <p class="qm-timeline-note" id="rc-success" hidden>✓ Queued for your birth village council's review.</p>
     </div>
   </div>
 

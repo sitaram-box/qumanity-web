@@ -1,8 +1,8 @@
 {# Rendered only when QM_MARQUEE_ENABLED is on (app.py); see docs/marquee_poems_archive/README.md. #}
 {% if marquee_enabled %}<link rel="stylesheet" href="{{ url_for('static', filename='css/poems.css') }}" />
 <div class="pm-bar" id="pm-bar" role="region" aria-label="Poems marquee" hidden>
-  <div class="pm-chip" title="Vinay Patrika">
-    <span class="pm-name" lang="hi">सीताराम</span>
+  <div class="pm-chip" id="pm-chip" title="Vinay Patrika">
+    <span class="pm-name" id="pm-name" lang="hi">सीताराम</span>
     <span class="pm-marker" id="pm-marker">पद</span>
   </div>
 
@@ -52,6 +52,12 @@
         <ul class="pm-combo-list pm-accordion-body" id="pm-langmenu" role="listbox" aria-label="Poem language" hidden></ul>
       </div>
     </div>
+
+    <!-- Permanent dismiss (2026-10-28): see app.py's POST /api/marquee/hide and poems.js's
+         HIDE_KEY -- hides the bar (and the homepage symbol, if present) for good. -->
+    <button type="button" class="pm-dot pm-dot-hide" id="pm-hide" aria-label="Hide this marquee" title="Hide">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg>
+    </button>
   </div>
 </div>
 <script src="{{ url_for('static', filename='js/poems.js') }}" defer></script>

@@ -235,7 +235,7 @@
 
   // ---- Keep what was typed: a draft of Step 1 survives a page refresh (passwords are never stored) ----
   var DRAFT_KEY = "qm_reg_draft";
-  var draftFields = ["field-first-name", "field-middle-name", "field-last-name", "field-language", "field-email", "field-phone", "field-referred-by"];
+  var draftFields = ["field-first-name", "field-middle-name", "field-last-name", "field-language", "field-religion", "field-email", "field-phone", "field-referred-by"];
   function saveDraft() {
     try {
       var d = { gender: genderInput.value, dob: [dobDaySelect.value, dobMonthSelect.value, dobYearSelect.value], tob: document.getElementById("field-tob").value };
@@ -384,6 +384,7 @@
       tob: document.getElementById("field-tob").value,
       tobUnknown: tobUnknown,
       language: document.getElementById("field-language").value.trim(),
+      religion: document.getElementById("field-religion").value,
       email: email,
       phone: document.getElementById("field-phone").value.trim(),
       pin: password,
@@ -1157,7 +1158,7 @@
     var payload = {
       name: state.form.name, middle_name: state.form.middle_name, gender: state.form.gender, dob: state.form.dob, tob: state.form.tob,
       tob_unknown: state.form.tobUnknown,
-      language: state.form.language, email: state.form.email, phone: state.form.phone, pin: state.form.pin,
+      language: state.form.language, religion_belief: state.form.religion, email: state.form.email, phone: state.form.phone, pin: state.form.pin,
       birth_location: buildLocationPayload(state.birthLocation, state.birthPublic),
       present_location: buildLocationPayload(state.presentLocation, state.presentPublic),
       assisted: hasHelper,

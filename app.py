@@ -222,7 +222,12 @@ def _app_token_auth():
 
 @app.route("/")
 def index():
-    return render_template("home.html")
+    # The fixed bottom-left symbol: same religion the poems marquee would show this visitor (or
+    # None for "show nothing" -- see _marquee_religion_for_session's docstring), restricted to the
+    # subset RELIGION_HOME_SYMBOLS actually has artwork for.
+    religion, _user = _marquee_religion_for_session()
+    home_symbol = religion if religion in RELIGION_HOME_SYMBOLS else None
+    return render_template("home.html", home_symbol=home_symbol)
 
 
 @app.route("/register")
@@ -353,7 +358,14 @@ def login():
     if not re.fullmatch(r"\d{9}", code) or not PIN_RE.fullmatch(pin):
         return generic
     conn = get_db()
-    user = conn.execute("SELECT id, pin_hash, pin_fails, pin_locked_until FROM users WHERE private_id_9digit = ?", (code,)).fetchone()
+    # is_removed=0 is filtered right here, not checked after the fact -- a retired account
+    # (scripts/retire_stray_demo_accounts.py and the generic "RETIRE THE TEST ACCOUNTS" flow use
+    # this flag everywhere else already) must fail exactly like a wrong Private ID: same generic
+    # error below, never a hint that the account exists but was retired (2026-10-28 security fix).
+    user = conn.execute(
+        "SELECT id, pin_hash, pin_fails, pin_locked_until FROM users WHERE private_id_9digit = ? AND is_removed = 0",
+        (code,),
+    ).fetchone()
     now = dt.datetime.now(dt.timezone.utc)
     if user and user["pin_locked_until"] and dt.datetime.fromisoformat(user["pin_locked_until"]) > now:
         conn.close()
@@ -3012,6 +3024,8 @@ def _profile_for(user_id):
         "birth_location_struct": json.loads(user["birth_location_json"]),
         "present_location_struct": json.loads(user["present_location_json"]),
         "birth_time_known": bool(user["birth_time_known"]),
+        "religion_belief": user["religion_belief"],
+        "hide_marquee": bool(user["hide_marquee"]),
         "has_profile_picture": bool(user["profile_picture"]),
         "profile_picture_updated_at": user["profile_picture_updated_at"] or "",
     }
@@ -3023,6 +3037,11 @@ def _profile_for(user_id):
 # kundali/zodiac/location, so there's nothing for a council to verify.
 RELATIONSHIP_STATUSES = ("single", "married", "divorced_widowed")
 WORK_PROFILES = ("unemployed_student", "employed", "govt", "security", "medical", "other")
+
+# Spiritual path (2026-10-28): set once at registration, then locked -- see api_auth_register
+# and migrations/031_religion_belief.py. Not every value has marquee verses yet; RELIGION_
+# MARQUEE_SOURCES further down names which ones do.
+RELIGION_BELIEF_VALUES = ("hindu", "christian", "muslim", "sikh", "buddhist", "jain", "other", "prefer_not_to_say")
 
 
 @app.route("/api/profile/personal-details", methods=["GET", "POST"])
@@ -3149,6 +3168,11 @@ def api_dashboard_identity_request():
         fields = {"birth_location": birth_location, "private_id_9digit": PRIVATE_CODE_REGENERATE_SENTINEL}
     elif request_type == "id_change_b":
         fields = {"private_id_9digit": PRIVATE_CODE_REGENERATE_SENTINEL}
+    elif request_type == "religion_change":
+        new_religion = (data.get("religion_belief") or "").strip()
+        if new_religion not in RELIGION_BELIEF_VALUES:
+            return jsonify({"error": "Choose a spiritual path from the list"}), 400
+        fields = {"religion_belief": new_religion}
     else:  # birth_time_correction
         try:
             dt.time.fromisoformat(data.get("tob") or "")
@@ -3339,6 +3363,11 @@ def api_admin_profile_decide(request_id):
             # clears the flag set at registration (see api_auth_register's birth_time_known handling).
             sets.append("birth_time_known = ?")
             args.append(1)
+        if "religion_belief" in fields:
+            # Re-stamps the lock timestamp to when the council actually approved it, not when the
+            # member originally registered -- see migrations/031_religion_belief.py.
+            sets.append("religion_locked_at = ?")
+            args.append(dt.datetime.utcnow().isoformat() + "Z")
         if sets:
             args.append(row["user_id"])
             conn.execute(f"UPDATE users SET {', '.join(sets)} WHERE id = ?", args)
@@ -3477,17 +3506,29 @@ def _poem_languages(religion):
     return [{"code": c, "label": label, "available": True} for c, (_, label) in source["languages"].items() if _poems(religion, c)]
 
 
+# Which religion_belief values the homepage's fixed bottom-left symbol (home.html) has its own
+# icon for -- see index()'s home_symbol. jain/other/prefer_not_to_say have no icon defined (yet),
+# same as they have no marquee verses source in RELIGION_MARQUEE_SOURCES above.
+RELIGION_HOME_SYMBOLS = {"hindu", "muslim", "christian", "sikh", "buddhist"}
+
+
 def _marquee_religion_for_session():
-    """(religion, user_row) for this request. A signed-in member whose religion_belief names a
-    religion we have no source for yet gets THAT religion back (not silently swapped to the
-    default), so the caller can tell them their own path specifically is coming soon."""
+    """(religion, user_row) for this request. religion is None when nothing should be shown at
+    all -- a signed-in member who hid the marquee (users.hide_marquee, migrations/
+    033_marquee_hide_pref.py) or who hasn't chosen a spiritual path yet (religion_belief is
+    NULL): both cases mean "no marquee, no homepage symbol", not "fall back to the default".
+    A logged-out visitor always gets DEFAULT_MARQUEE_RELIGION -- that's the historical,
+    pre-religion-field behavior and nothing about it changed. A signed-in member whose
+    religion_belief names a religion we have no verses source for yet gets THAT religion back
+    (not silently swapped to the default), so the caller can tell them their own path
+    specifically is coming soon."""
     if not session.get("user_id"):
         return DEFAULT_MARQUEE_RELIGION, None
     conn = get_db()
     user = _current_user_row(conn)
     conn.close()
-    if not user or not user["religion_belief"]:
-        return DEFAULT_MARQUEE_RELIGION, user
+    if not user or user["hide_marquee"] or not user["religion_belief"]:
+        return None, user
     return user["religion_belief"], user
 
 
@@ -3496,10 +3537,15 @@ def api_poems_meta():
     if not QM_MARQUEE_ENABLED:
         return jsonify({"error": "Poems marquee is disabled"}), 404
     religion, user = _marquee_religion_for_session()
+    if religion is None:
+        return jsonify({"hidden": True})
     langs = _poem_languages(religion)
     if not langs:
         if religion != DEFAULT_MARQUEE_RELIGION:
-            return jsonify({"coming_soon": True, "religion": religion})
+            # Reaching this branch at all means _marquee_religion_for_session already ruled out
+            # hide_marquee (it returns religion=None otherwise) -- so this is as positive a
+            # "not hidden" signal as the main success path's, same reconciliation reasoning.
+            return jsonify({"coming_soon": True, "religion": religion, "hidden": False})
         return jsonify({"error": "No poems available"}), 404
     count = min(len(_poems(religion, l["code"])) for l in langs)
     result = {"count": count, "languages": langs, "personal": False, "religion": religion}
@@ -3511,7 +3557,42 @@ def api_poems_meta():
         ]
         result["personal"] = True
         result["default"] = next((u["code"] for u in _user_languages(user) if u["code"] in have), langs[0]["code"])
+        # Explicit, not just "absent": poems.js's browser-local hide flag (qm_poem_hidden, set
+        # whenever a signed-in or logged-out visitor sees the marquee hidden) can only be safely
+        # cleared on a response that POSITIVELY confirms this signed-in member is not hidden --
+        # the field being merely absent (as it is for a logged-out visitor, who has no
+        # hide_marquee row to check) must never be read as "not hidden" (2026-11-01).
+        result["hidden"] = False
     return jsonify(result)
+
+
+@app.route("/api/marquee/hide", methods=["POST"])
+@login_required
+def api_marquee_hide():
+    """A signed-in member clicking the marquee's own Hide button. Persists across devices/
+    browsers for them (api_poems_meta/_marquee_religion_for_session read hide_marquee on every
+    request); see api_marquee_show for the reverse, offered from Private Account settings."""
+    conn = get_db()
+    conn.execute("UPDATE users SET hide_marquee = 1 WHERE id = ?", (session["user_id"],))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/marquee/show", methods=["POST"])
+@login_required
+def api_marquee_show():
+    """Reverses api_marquee_hide -- the "Show marquee again" control in Private Account settings
+    (2026-10-28 brief: "Add this to the Private Account settings so users can turn it back on").
+    The browser-local qm_poem_hidden flag (poems.js) that mirrors hide_marquee on whichever
+    device the member clicked Hide from is cleared lazily, the next time THIS device's poems.js
+    sees {"hidden": false} from /api/poems/meta -- not here, since this request may come from a
+    different device than the one that's actually showing the stale hidden marquee."""
+    conn = get_db()
+    conn.execute("UPDATE users SET hide_marquee = 0 WHERE id = ?", (session["user_id"],))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
 
 
 @app.route("/api/poems/<lang>/<int:index>")
@@ -3933,7 +4014,12 @@ def _verify_helper(private_id, pin):
         return None, generic
     conn = get_db()
     try:
-        user = conn.execute("SELECT id, pin_hash, pin_fails, pin_locked_until FROM users WHERE private_id_9digit = ?", (code,)).fetchone()
+        # Same is_removed filter as login() (2026-10-28) -- a retired member can't become a new
+        # registrant's referrer by typing their old credentials here either.
+        user = conn.execute(
+            "SELECT id, pin_hash, pin_fails, pin_locked_until FROM users WHERE private_id_9digit = ? AND is_removed = 0",
+            (code,),
+        ).fetchone()
         now = dt.datetime.now(dt.timezone.utc)
         if user and user["pin_locked_until"] and dt.datetime.fromisoformat(user["pin_locked_until"]) > now:
             return None, "Too many wrong PINs. Try again in a few minutes."
@@ -3989,6 +4075,15 @@ def api_auth_register():
     if language and language not in _language_names():
         return jsonify({"error": "Choose your mother tongue from the list"}), 400
 
+    # Spiritual path (2026-10-28, Part 4 of the homepage-redesign brief): optional, one-time at
+    # registration. Blank/absent means "never answered" (NULL, religion_locked_at stays NULL too)
+    # -- distinct from the explicit answer "prefer_not_to_say" -- and leaves it open to set later.
+    # Once a real value IS saved, it's locked (religion_locked_at); changing it after that needs
+    # an Admin Panel request -- no self-service edit route exists for this field by design.
+    religion_belief = (data.get("religion_belief") or "").strip() or None
+    if religion_belief and religion_belief not in RELIGION_BELIEF_VALUES:
+        return jsonify({"error": "Choose a spiritual path from the list"}), 400
+
     # "Register a new member": an existing member fills this in for someone else (e.g. a person
     # without a smartphone). The helper becomes the referrer and stays who they are. On the website
     # the helper is the signed-in session; on the phone app the helper has signed out, so they
@@ -4038,12 +4133,14 @@ def api_auth_register():
     cur = conn.execute(
         """INSERT INTO users (name, middle_name, gender, dob, tob, language, birth_location_json,
                                present_location_json, private_id, account_id,
-                               email, phone, pin_hash, private_id_9digit, birth_time_known)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                               email, phone, pin_hash, private_id_9digit, birth_time_known,
+                               religion_belief, religion_locked_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (data["name"], (data.get("middle_name") or "").strip() or None, data["gender"], data["dob"], data["tob"], data.get("language"),
          json.dumps(birth_location), json.dumps(present_location), private_id, account_id,
          email or None, phone or None, generate_password_hash(str(data["pin"])), private_code,
-         int(birth_time_known)),
+         int(birth_time_known), religion_belief,
+         (dt.datetime.utcnow().isoformat() + "Z") if religion_belief else None),
     )
     user_id = cur.lastrowid
     if helper_user_id:

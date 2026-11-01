@@ -2,7 +2,7 @@
 
 Extends profile_change_requests (app.py) rather than building a parallel table -- reusing
 FOUNDATIONAL_FIELDS / _recompute_profile() / api_admin_profile_decide() instead of duplicating
-them. Adds three ticket types a user cannot resolve themselves, each routed to their BIRTH
+them. Adds four ticket types a user cannot resolve themselves, each routed to their BIRTH
 village's council instead of straight to a Qmail reply:
 
   - id_change_a: birth location was wrong at registration. Corrects birth_location (which already
@@ -13,6 +13,14 @@ village's council instead of straight to a Qmail reply:
     private_id_9digit is re-rolled.
   - birth_time_correction: the user registered with "I don't remember my exact birth time"
     (users.birth_time_known = 0, tob defaulted to noon) and now has a real time to provide.
+  - religion_change (2026-10-28): users.religion_belief (migrations/031_religion_belief.py) is
+    locked once set at registration -- this is the only way to change it afterward. Touches no
+    location/zodiac/Private-ID field, so api_admin_profile_decide()'s FOUNDATIONAL_FIELDS
+    recompute branch correctly never fires for it; it still goes to the birth village council
+    (not straight to global Admin, and not an unmoderated self-service edit) because that's the
+    same review body every other identity ticket in this module already uses, and the founder's
+    rule treats a spiritual-path change as locked, identity-adjacent data deserving the same
+    human review as birth location/time.
 
 Two facts, confirmed by reading the code rather than assumed, govern how this module touches
 (or doesn't touch) everything else:
@@ -40,7 +48,7 @@ import json
 import id_generator
 import qmail_core
 
-REQUEST_TYPES = ("id_change_a", "id_change_b", "birth_time_correction")
+REQUEST_TYPES = ("id_change_a", "id_change_b", "birth_time_correction", "religion_change")
 MAX_ATTACHMENT_BYTES = qmail_core.MAX_ATTACHMENT_BYTES
 
 

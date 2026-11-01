@@ -16,10 +16,26 @@
   var view = document.getElementById("pm-view");
   var track = document.getElementById("pm-track");
   var markerEl = document.getElementById("pm-marker");
+  var chipEl = document.getElementById("pm-chip");
+  var chipNameEl = document.getElementById("pm-name");
+  // The chip's name/title/script are source-specific, not just its marker -- kept in sync with
+  // whichever religion's verses this session is actually seeing (see app.py's "religion" field
+  // on /api/poems/meta). "सीताराम" + lang="hi" is the historical Vinaya Patrika default.
+  var CHIP_BY_RELIGION = {
+    hindu: { name: "सीताराम", lang: "hi", title: "Vinaya Patrika" },
+    christian: { name: "Psalms", lang: "en", title: "Psalms, King James Version" },
+  };
+  function syncChip(religion) {
+    var c = CHIP_BY_RELIGION[religion] || CHIP_BY_RELIGION.hindu;
+    chipNameEl.textContent = c.name;
+    chipNameEl.setAttribute("lang", c.lang);
+    chipEl.title = c.title;
+  }
   var playBtn = document.getElementById("pm-play");
   // Play/Pause lives next to the chip; hovering (not clicking) it pops up Previous/Next above it.
   var playWrap = document.getElementById("pm-playwrap");
   var hoverPop = document.getElementById("pm-hoverpop");
+  var hideBtn = document.getElementById("pm-hide");
   var langMenu = document.getElementById("pm-langmenu");
   var speedMenu = document.getElementById("pm-speedmenu");
   // The menu icon now holds only Speed and Language, as two accordion sections (one open at a
@@ -36,6 +52,7 @@
   var SPEEDS = [1, 1.25, 1.5, 2];
   var SPEED_KEY = "qm_poem_speed2";
   var LANG_KEY = "qm_poem_lang";  // remembered across visits
+  var HIDE_KEY = "qm_poem_hidden"; // this browser's own dismiss, independent of users.hide_marquee
   var IDX_KEY = "qm_poem_idx", T_KEY = "qm_poem_off", PLAY_KEY = "qm_poem_playing", STAMP_KEY = "qm_poem_stamp"; // per tab session
 
   // Poems autoplay from the very first load (2026-10-05) -- if the user pauses, that choice
@@ -271,10 +288,66 @@
     }, 200);
   });
 
+  // A signed-in member whose spiritual path has no verses yet (meta.coming_soon, see
+  // app.py's api_poems_meta) gets a static one-line notice in the same bar instead of the
+  // scrolling strip -- play/pause, speed and language controls don't apply, so they're hidden.
+  function showComingSoon() {
+    view.innerHTML = "";
+    var note = document.createElement("span");
+    note.className = "pm-seg pm-coming-soon";
+    note.textContent = "✨ Verses for your spiritual path are coming soon.";
+    view.appendChild(note);
+    chipNameEl.textContent = "✨"; chipNameEl.setAttribute("lang", "en"); chipEl.title = "Coming soon";
+    markerEl.textContent = "";
+    playWrap.hidden = true;
+    menuWrap.hidden = true;
+    bar.hidden = false;
+    document.body.classList.add("pm-on");
+  }
+
+  // Hides the bar and home.html's own fixed religion symbol, #hm-symbol, if this page happens to
+  // be the homepage -- the symbol only ever appears alongside this same marquee's content.
+  // Reversible for a signed-in member from Private Account settings (POST /api/marquee/show);
+  // see the reconciliation in the meta handler below for how a stale local flag gets cleared.
+  function hideEverything() {
+    bar.hidden = true;
+    document.body.classList.remove("pm-on");
+    var symbol = document.getElementById("hm-symbol");
+    if (symbol) symbol.hidden = true;
+  }
+  hideBtn.addEventListener("click", function () {
+    store("local", HIDE_KEY, "1");
+    hideEverything();
+    // Best-effort: persists across browsers/devices for a signed-in member (POST /api/marquee/
+    // hide, @login_required); for a logged-out visitor it 302s to /login and this just no-ops --
+    // the local flag above is what actually hides it for them, on this browser, from now on.
+    fetch("/api/marquee/hide", { method: "POST" }).catch(function () {});
+  });
+
+  // The local flag paints the hidden state immediately (no flicker while the fetch is in
+  // flight), but it is NEVER the last word -- the fetch below always runs and reconciles against
+  // the server, so a signed-in member who clicked "Show marquee again" in Private Account
+  // settings on a DIFFERENT device sees it reappear here too, the next time this page loads.
+  var locallyHidden = load("local", HIDE_KEY) === "1";
+  if (locallyHidden) { hideEverything(); }
   fetch("/api/poems/meta")
     .then(function (r) { if (!r.ok) throw new Error("meta " + r.status); return r.json(); })
     .then(function (m) {
+      if (m.hidden) { store("local", HIDE_KEY, "1"); hideEverything(); return; }
+      if (m.hidden === false) {
+        // A positive, explicit "not hidden" from the server (only ever sent for a signed-in
+        // member -- see api_poems_meta) overrides any stale local flag from another device.
+        try { localStorage.removeItem(HIDE_KEY); } catch (e) {}
+        var symbol = document.getElementById("hm-symbol");
+        if (symbol) symbol.hidden = false;
+      } else if (locallyHidden) {
+        // Absent "hidden" field (a logged-out visitor, who has no server-side preference to
+        // check) with a local flag already set: that visitor's own hide, on this browser, stands.
+        return;
+      }
+      if (m.coming_soon) { showComingSoon(); return; }
       meta = m;
+      syncChip(m.religion);
       var usable = m.languages.filter(function (l) { return l.available !== false; });
       var savedLang = load("local", LANG_KEY);
       // Hindi is the default for visitors; a signed-in user starts on their own language (or English) and their choice is remembered.

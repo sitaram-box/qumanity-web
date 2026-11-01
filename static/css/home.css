@@ -152,11 +152,21 @@ body.hm {
   background: var(--qm-panel-bg); border: 1px solid var(--qm-border); box-shadow: var(--hm-shadow-sm);
 }
 .hm-shivalinga svg { display: block; flex: 0 0 auto; }
-.hm-shivalinga-ram { font-family: "Noto Sans Devanagari", "Kohinoor Devanagari", "Devanagari Sangam MN", "Mangal", sans-serif; font-weight: 700; font-size: 1.15rem; color: var(--qm-gold-text); }
+.hm-symbol-label { font-family: "Noto Sans Devanagari", "Kohinoor Devanagari", "Devanagari Sangam MN", "Mangal", sans-serif; font-weight: 700; font-size: 1.15rem; color: var(--qm-gold-text); }
+/* "राम" reads at the same height as the Shivalinga svg beside it (56px desktop / 42px mobile),
+   not a small caption -- 2026-11-01. */
+.hm-symbol-label--ram { font-size: 3rem; line-height: 1; }
+/* Script-matched fallback stacks for the other four religion labels (2026-11-01) -- the base
+   rule's Devanagari stack above still applies to everything else it declares (weight/size/color),
+   only font-family is overridden per script. */
+.hm-symbol-label[lang="ar"] { font-family: "Geeza Pro", "Noto Sans Arabic", "Arabic Typesetting", sans-serif; }
+.hm-symbol-label[lang="pa"] { font-family: "Noto Sans Gurmukhi", "Gurmukhi Sangam MN", "Raavi", sans-serif; }
+.hm-symbol-label[lang="en"] { font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
 @media (max-width: 620px) {
   .hm-shivalinga { left: 10px; bottom: 8px; padding: 6px 10px; gap: 6px; }
-  .hm-shivalinga svg { width: 40px; height: 62px; }
-  .hm-shivalinga-ram { font-size: 0.95rem; }
+  .hm-shivalinga svg { width: 42px; height: 42px; }
+  .hm-symbol-label { font-size: 0.95rem; }
+  .hm-symbol-label--ram { font-size: 2.3rem; }
 }
 
 /* Marquee */

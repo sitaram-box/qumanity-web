@@ -510,6 +510,56 @@
     });
   }
 
+  // ---- Request Spiritual Path Change (2026-10-28) ----
+  // Simple select + reason, unlike the birth-location wizard above -- no location picker needed,
+  // see dashboard.html's religion-change-modal. Routed through the same /api/dashboard/identity-
+  // request endpoint as every other council ticket, request_type "religion_change".
+  var rcBtn = $("request-religion-change-btn"), rcModal = $("religion-change-modal");
+  if (rcBtn && rcModal) {
+    var rcForm = $("religion-change-form"), rcError = $("rc-error"), rcSuccess = $("rc-success");
+    rcBtn.addEventListener("click", function () {
+      rcForm.reset(); rcForm.hidden = false; rcForm.style.display = ""; rcError.hidden = true; rcSuccess.hidden = true;
+      openModal(rcModal);
+    });
+    rcForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      rcError.hidden = true;
+      var submitBtn = rcForm.querySelector("button[type=submit]");
+      submitBtn.disabled = true;
+      api("/api/dashboard/identity-request", {
+        request_type: "religion_change",
+        religion_belief: $("rc-religion-select").value,
+        reason: $("rc-reason").value,
+      })
+        .then(function () { rcForm.hidden = true; rcForm.style.display = "none"; rcSuccess.hidden = false; })
+        .catch(function (err) { rcError.textContent = err.message; rcError.hidden = false; })
+        .finally(function () { submitBtn.disabled = false; });
+    });
+  }
+
+  // ---- Show/Hide Marquee (2026-10-28) ----
+  // One button, label and target endpoint swap with the member's current users.hide_marquee
+  // (data-hidden, set server-side from profile.hide_marquee -- see dashboard.html). Hiding here
+  // takes the same path as the marquee bar's own Hide button (POST /api/marquee/hide); showing
+  // again calls the new POST /api/marquee/show. Reloads afterward rather than patching the DOM --
+  // simplest way to pick up the server-rendered label swap and re-evaluate the homepage symbol
+  // next time they visit it.
+  var marqueeBtn = $("marquee-visibility-btn");
+  if (marqueeBtn) {
+    marqueeBtn.addEventListener("click", function () {
+      var currentlyHidden = marqueeBtn.getAttribute("data-hidden") === "1";
+      var url = currentlyHidden ? "/api/marquee/show" : "/api/marquee/hide";
+      marqueeBtn.disabled = true;
+      api(url, {}).then(function () {
+        try { localStorage.removeItem("qm_poem_hidden"); } catch (e) {}
+        location.reload();
+      }).catch(function (err) {
+        marqueeBtn.disabled = false;
+        alert(err.message);
+      });
+    });
+  }
+
   // ---- Daily-use (third) language ----
   var saveBtn = $("daily-lang-save");
   if (saveBtn) saveBtn.addEventListener("click", function () {
