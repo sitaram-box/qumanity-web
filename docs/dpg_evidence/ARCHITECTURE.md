@@ -1,6 +1,16 @@
 # Qumanity architecture
 
-This describes the qumanity-web repository as of 11 October 2026, updated 14 October 2026, 17 October 2026 and 18 October 2026 (commit c09b91f). It is written for a developer who has not seen the code before. For setup see `docs/INSTALL.md`, for the routes see `docs/API.md`, and for the tables see `docs/DATA_MODEL.md`.
+This describes the qumanity-web repository as of 11 October 2026, updated 14 October 2026, 17 October 2026, 18 October 2026 (commit c09b91f) and 25 October 2026 (profile pictures, the Avatar Sweep, explicit Family Tree growth, the Family Group naming code, and the Middle Name field — migrations 028/029, neither of which added a table, so the table counts below are unchanged). It is written for a developer who has not seen the code before. For setup see `docs/INSTALL.md`, for the routes see `docs/API.md`, and for the tables see `docs/DATA_MODEL.md`.
+
+> **DPG Evidence Refresh — 2026-11-01.** Internal correction pass, not a DPGA resubmission. This
+> file is reconciled against the current `docs/ARCHITECTURE.md` (the repository's own up-to-date
+> reference), which this pack's copy had fallen behind. The Family Tree and Referral Engine have
+> their own, more detailed evidence sections — see `12_family_tree_evidence.md` and
+> `13_referral_engine_evidence.md`. The Data model summary table below keeps the main document's
+> own figures unchanged (one row gained a cross-reference annotation only); those figures do not
+> yet appear to count `family_core.py`'s 7 tables, `provisional_location_core.py`'s tables, or
+> `referral_bonus_awards` — a main-document staleness this pass does not fix (out of scope; see
+> this refresh's final report for the owner note).
 
 ## Components
 
@@ -79,8 +89,10 @@ Every Python module at the repository root.
 | `archive_writer.py` | Writes a finished cycle's Earth-level data to the `0_Earth` folder tree, with checksums |
 | `folder_connector.py` | Creates a member's folder in the `0_Earth` location tree on registration |
 | `folder_sync.py` | Daily mirror of location statistics from the database to the folder tree |
+| `family_core.py` | The Family Tree: Nuclear Family Node units (a unit is a married couple, not a generic container), explicit tree-growth routes (add a unit's missing parents, add a child or sibling-in-law placeholder), and the Family Group naming code (`_name_code`/`_group_name_from_couple`). See `12_family_tree_evidence.md` |
+| `profile_picture_core.py` | Profile pictures: Pillow processing (EXIF strip, center-crop, 256×256 JPEG), upload validation, and `hide_identity`-aware serving |
 
-Supporting folders: `db/` (base schema and first-run seed), `migrations/` (001–003 and 007–024; 004–006 are unused), `tools/` (migration runner and verification scripts), `scripts/` (one-off data import and build scripts), `templates/`, `static/` (CSS, JS, map data, locales, images), `translations/`.
+Supporting folders: `db/` (base schema and first-run seed), `migrations/` (001–003 and 007–029; 004–006 are unused), `tools/` (migration runner and verification scripts), `scripts/` (one-off data import and build scripts), `templates/`, `static/` (CSS, JS, map data, locales, images), `translations/`.
 
 ## The `/qmail` page
 
@@ -94,6 +106,10 @@ Added 18 October 2026. `/qmail` is a page route, not an `/api` route, so it does
 | `static/css/qmail.css` | The page's own stylesheet. The page does not load `dashboard.css`; two small utility classes are copied into this file instead |
 
 The renderer was extracted from `static/js/dashboard.js` into `qmail_format.js` at commit e99eced and rewritten, not moved: the old version built its elements through a helper local to `dashboard.js`, and the new one calls `document.createElement` directly. Its output is the same, but its code is new. It has no automated regression test (Document 09, 9.6 row 9).
+
+## Avatars (`static/js/avatar.js`)
+
+Added 25 October 2026. `window.QMAvatar.render(user, size)` is the one avatar renderer every surface calls — Group Chat, Qmail, the Collective Board, the Admin Panel's query replies, and the Family Tree. It takes `{name, gender, profile_picture_url, hide_identity?, account_id?}` and returns a real `HTMLElement` (an `<img>`, or a colored-initials `<div>` fallback), so it works in plain DOM and, via a `<foreignObject>`, inside the Family Tree's SVG canvas. Loaded on `dashboard.html` and `qmail.html`, before the page's own script. Pictures themselves are served from `GET /api/users/<id>/profile-picture` (`profile_picture_core.py`) — see `docs/HANDOVER.md` §4.14 for the full backend/frontend wiring and its one known gap (the Admin Panel's combined ticket feed isn't wired up yet).
 
 ## Data model summary
 
@@ -111,7 +127,7 @@ The renderer was extracted from `static/js/dashboard.js` into `qmail_format.js` 
 | Reactions and ratings | 4 | Message reactions, business ratings, app reviews, logout reviews |
 | Karma | 3 | Karma entries, collective karma and its log |
 | Qoins | 4 | Wallets, wallet transactions, physical denominated Qoins, recognition stars |
-| Referrals | 2 | Referrers and referrer applications |
+| Referrals | 2 | Referrers and referrer applications. Does not count `referral_bonus_awards` (migration 030) — see `13_referral_engine_evidence.md`, which also establishes that the "Referrers" code here has no redemption path anywhere in the application |
 | Elections and councils | 6 | Election cycles, candidates, votes, village councils, cycle configuration, election history (`election_history_entries`; the legacy `election_history` table is no longer created) |
 | Perception | 4 | Country and zone sentiment votes and frozen yearly totals |
 | Citizen Reports | 2 | Reports and their updates |

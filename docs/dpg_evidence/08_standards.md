@@ -3,6 +3,12 @@
 **DPG Standard Indicator 8: Adherence to Standards and Best Practices**
 Current owner: Rohit Mudgal (individual). Legal entity Qumanity Lok LLP is in registration. The IP will be assigned to Qumanity Lok LLP once it is registered.
 
+> **DPG Evidence Refresh — 2026-11-01.** This is an internal correction pass against the current
+> repository, not a resubmission to the Digital Public Goods Alliance. The pack's own prior
+> code-check was dated 18 October 2026 (commit `7fda4cb`, recoverable via git history); this pass
+> brings §8.2's SMTP/Resend line back in line with the current implementation. No external DPG
+> submission or re-review has occurred.
+
 ## Contents
 
 - [8.1 What the DPG Standard requires](#81-what-the-dpg-standard-requires)
@@ -45,7 +51,7 @@ HMAC-SHA256 was used only for Razorpay payment-signature checks and was removed 
 | OWASP ASVS | Not yet assessed. Planned. |
 | JSON Schema | Not used. API responses are not schema-validated today. Planned. |
 | iCalendar, RSS/Atom | Not used. Nothing in the code produces calendar or feed output. |
-| Internet mail (SMTP, RFC 5321) | Not used for Qmail. Qmail addresses (`<username>-<account_id>@qumanity.in` and `<level>-<location_id>@qumanity.in`) look like email addresses but are an internal addressing convention only: Qmail messages stay inside Qumanity, and no route sends or receives internet mail for them (added 18 October 2026). The only SMTP use is the optional registration notice to the Admin (`email_core.py`), which is off unless `SMTP_HOST` and `QM_ADMIN_EMAIL` are set. |
+| Internet mail (SMTP, RFC 5321) | Not used anywhere in the codebase (re-verified 2026-11-01: no `SMTP_HOST` variable, no `smtplib` import, anywhere in the repository). Qmail addresses (`<username>-<account_id>@qumanity.in` and `<level>-<location_id>@qumanity.in`) look like email addresses but are an internal addressing convention only: Qmail messages stay inside Qumanity, and no route sends or receives internet mail for them (added 18 October 2026). The optional registration notice to the Admin (`email_core.py`) is sent over HTTPS through Resend's transactional-email API (`RESEND_URL = "https://api.resend.com/emails"`), gated on `RESEND_API_KEY` and `RESEND_FROM_EMAIL`, not SMTP — source evidence: `email_core.py`, read-only this pass. Test evidence: `tests/test_email_core.py`. Operational evidence: none independently verified this pass — confirming the Resend path actually fires in the deployed Railway environment (as opposed to being correctly implemented and locally testable) was not checked here. |
 
 ## 8.4 Evidence for the application form
 
