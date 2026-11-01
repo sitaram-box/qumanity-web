@@ -970,6 +970,9 @@
       recordPublicSelection(target, { district: district, tehsil: null, village: null });
       if (district && indiaMapActiveFor(target)) indiaMap.highlightDistrictByName(district.name);
       if (target === "birth") updateConfirmBirthButtonState();
+      // Crowdsourced Location System MVP: the Tehsil fallback only ever appears once a verified
+      // District is selected (never before -- there would be nothing to scope the search to).
+      if (target === "present" && window.QMProvisionalLocations) window.QMProvisionalLocations.onDistrictChanged(st, district);
     });
     tehsilSelect.addEventListener("change", function () {
       var st = findStateById(stateSelect.value);
@@ -979,6 +982,7 @@
       populateVillageDropdown(villageSelect, villageParent);
       recordPublicSelection(target, { tehsil: tehsil || null, village: null });
       if (target === "birth") updateConfirmBirthButtonState();
+      if (target === "present" && window.QMProvisionalLocations) window.QMProvisionalLocations.onTehsilChanged(st, district, tehsil);
     });
     villageSelect.addEventListener("change", function () {
       var village = villageSelect.value ? { id: villageSelect.value, name: villageSelect.options[villageSelect.selectedIndex].textContent } : null;
@@ -988,6 +992,226 @@
   }
   wirePublicDropdowns("birth");
   wirePublicDropdowns("present");
+
+  // ---- Crowdsourced Location System MVP (2026-11): "Can't find my Tehsil?"/"Can't find my
+  // Village?" fallback, present-location only, per Section 3.2's explicit restriction. Backend
+  // independently enforces QM_ALLOW_PROVISIONAL_LOCATIONS and the Village/Tehsil-only rule either
+  // way -- this flag only controls whether the BUTTON is shown, never the actual authorization. ----
+  window.QMProvisionalLocations = (function () {
+    var allowed = document.body.dataset.allowProvisionalLocations === "true";
+    var tehsilBtn = document.getElementById("present-tehsil-fallback-btn");
+    var tehsilPanel = document.getElementById("present-tehsil-fallback-panel");
+    var villageBtn = document.getElementById("present-village-fallback-btn");
+    var villagePanel = document.getElementById("present-village-fallback-panel");
+    if (!tehsilBtn || !villageBtn) return null;
+    var currentState = null, currentDistrict = null, currentTehsil = null;
+
+    function onDistrictChanged(st, district) {
+      currentState = st; currentDistrict = district; currentTehsil = null;
+      tehsilBtn.hidden = !(allowed && st && district);
+      tehsilPanel.hidden = true; tehsilPanel.innerHTML = "";
+      villageBtn.hidden = true; villagePanel.hidden = true; villagePanel.innerHTML = "";
+    }
+    function onTehsilChanged(st, district, tehsil) {
+      currentTehsil = tehsil ? { id: tehsil.id, name: tehsil.name } : null;
+      villageBtn.hidden = !(allowed && st && district && tehsil);
+      villagePanel.hidden = true; villagePanel.innerHTML = "";
+    }
+
+    function confirmAndClose(panel, level, name, isNew) {
+      panel.innerHTML = "";
+      panel.hidden = false;
+      var msg = document.createElement("p");
+      msg.className = "qm-provisional-confirm-msg";
+      msg.textContent = isNew
+        ? "Your " + level + " “" + name + "” has been submitted as a provisional Qumanity location. It is not yet an active geographical location."
+        : "Selected: " + name;
+      panel.appendChild(msg);
+    }
+
+    function renderSearchPanel(panel, level, onPick, onCreate) {
+      panel.innerHTML = ""; panel.hidden = false;
+      var input = document.createElement("input");
+      input.type = "text"; input.placeholder = "Type the " + level + " name…";
+      panel.appendChild(input);
+      var resultsEl = document.createElement("ul");
+      resultsEl.className = "qm-provisional-match-list";
+      panel.appendChild(resultsEl);
+      var note = document.createElement("p");
+      note.className = "qm-provisional-note";
+      note.textContent = "Type a name to search within " + (currentState ? currentState.name : "this State") + ". If nothing matches, submit it as new below.";
+      panel.appendChild(note);
+      var createBtn = document.createElement("button");
+      createBtn.type = "button"; createBtn.className = "qm-btn qm-btn-primary";
+      createBtn.textContent = "None of these match — submit as a new provisional " + level;
+      createBtn.disabled = true;
+      panel.appendChild(createBtn);
+
+      var searchTimer = null;
+      input.addEventListener("input", function () {
+        clearTimeout(searchTimer);
+        createBtn.disabled = !input.value.trim();
+        searchTimer = setTimeout(function () {
+          resultsEl.innerHTML = "";
+          if (!input.value.trim()) return;
+          fetch("/api/locations/search?level=" + level + "&state_id=" + encodeURIComponent(currentState.id) + "&q=" + encodeURIComponent(input.value.trim()))
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              resultsEl.innerHTML = "";
+              (data.results || []).forEach(function (res) {
+                var li = document.createElement("li");
+                var strong = document.createElement("strong");
+                strong.textContent = res.name + (res.kind === "provisional" ? " (provisional)" : "");
+                var span = document.createElement("span");
+                span.className = "qm-match-hierarchy";
+                var hierarchy = [res.district_name];
+                if (res.tehsil_name) hierarchy.push(res.tehsil_name);
+                span.textContent = hierarchy.join(" → ");
+                li.appendChild(strong); li.appendChild(span);
+                li.addEventListener("click", function () { onPick(res); });
+                resultsEl.appendChild(li);
+              });
+            })
+            .catch(function () {});
+        }, 300);
+      });
+      createBtn.addEventListener("click", function () { onCreate(input.value.trim()); });
+    }
+
+    tehsilBtn.addEventListener("click", function () {
+      tehsilBtn.hidden = true;
+      renderSearchPanel(tehsilPanel, "tehsil", function (match) {
+        recordPublicSelection("present", { tehsil: { id: match.id, name: match.name }, village: null });
+        currentTehsil = { id: match.id, name: match.name };
+        confirmAndClose(tehsilPanel, "tehsil", match.name, false);
+        villageBtn.hidden = !allowed;
+      }, function (name) {
+        if (!name) return;
+        fetch("/api/locations/provisional", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ location_type: "tehsil", name: name, state_id: currentState.id, district_id: currentDistrict.id }),
+        })
+          .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+          .then(function (result) {
+            if (!result.ok) { alert(result.body.error || "Could not submit that Tehsil"); return; }
+            recordPublicSelection("present", { tehsil: { id: result.body.id, name: result.body.name }, village: null });
+            currentTehsil = { id: result.body.id, name: result.body.name };
+            confirmAndClose(tehsilPanel, "tehsil", result.body.name, true);
+            villageBtn.hidden = !allowed;
+          });
+      });
+    });
+
+    villageBtn.addEventListener("click", function () {
+      villageBtn.hidden = true;
+      renderSearchPanel(villagePanel, "village", function (match) {
+        recordPublicSelection("present", { village: { id: match.id, name: match.name } });
+        confirmAndClose(villagePanel, "village", match.name, false);
+      }, function (name) {
+        if (!name) return;
+        var body = { location_type: "village", name: name, state_id: currentState.id, district_id: currentDistrict.id };
+        if (currentTehsil && String(currentTehsil.id).indexOf("PROV-") === 0) body.provisional_tehsil_id = currentTehsil.id;
+        else if (currentTehsil) body.verified_tehsil_id = currentTehsil.id;
+        fetch("/api/locations/provisional", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+          .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+          .then(function (result) {
+            if (!result.ok) { alert(result.body.error || "Could not submit that Village"); return; }
+            recordPublicSelection("present", { village: { id: result.body.id, name: result.body.name } });
+            confirmAndClose(villagePanel, "village", result.body.name, true);
+          });
+      });
+    });
+
+    return { onDistrictChanged: onDistrictChanged, onTehsilChanged: onTehsilChanged };
+  })();
+
+  // ---- Phase C: optional, asynchronous, non-blocking GPS consent (three independent
+  // checkboxes, ALL default unchecked). Never disables Submit, never waits before registration
+  // proceeds -- captureIfConsented() fires in the background the moment "storage" is checked, and
+  // submitAfterRegistration() (called only once registration has already succeeded, from the
+  // authenticated session) sends whatever was captured by then, or an honest "unavailable" status
+  // if nothing was. No Overpass/OSM call is ever made here, even if the external-lookup box is
+  // checked -- that phase is explicitly deferred (Part 9). ----
+  window.QMGpsConsent = (function () {
+    var storageBox = document.getElementById("gps-consent-storage");
+    var centroidBox = document.getElementById("gps-consent-centroid");
+    var overpassBox = document.getElementById("gps-consent-overpass");
+    var statusText = document.getElementById("gps-status-text");
+    if (!storageBox) return { submitAfterRegistration: function () {} };
+    var capturedPosition = null;
+    var captureAttempted = false;
+    var deniedReason = null;
+
+    function setStatus(text) { statusText.textContent = text; }
+
+    centroidBox.addEventListener("change", function () {
+      if (centroidBox.checked && !storageBox.checked) {
+        storageBox.checked = true;
+        setStatus("Centroid aggregation needs storage permission too -- both boxes are now checked.");
+        maybeCapture();
+      }
+    });
+    storageBox.addEventListener("change", maybeCapture);
+
+    function maybeCapture() {
+      if (!storageBox.checked || captureAttempted) return;
+      captureAttempted = true;
+      if (!navigator.geolocation) {
+        deniedReason = "unavailable";
+        setStatus("GPS is not supported by this browser — you can continue registration normally.");
+        return;
+      }
+      setStatus("Requesting location permission…");
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (settled) return;
+        settled = true; deniedReason = "timeout";
+        setStatus("GPS timed out — you can continue registration normally.");
+      }, 8000);
+      navigator.geolocation.getCurrentPosition(
+        function (pos) {
+          if (settled) return;
+          settled = true; clearTimeout(timer);
+          capturedPosition = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy };
+          setStatus("Location captured — thank you for helping build Q-Map.");
+        },
+        function (err) {
+          if (settled) return;
+          settled = true; clearTimeout(timer);
+          deniedReason = (err.code === err.PERMISSION_DENIED) ? "permission_denied" : "unavailable";
+          setStatus(deniedReason === "permission_denied"
+            ? "Location permission denied — you can continue registration normally."
+            : "Could not get your location — you can continue registration normally.");
+        },
+        { timeout: 8000, maximumAge: 60000 }
+      );
+    }
+
+    // Called AFTER registration has already succeeded and the session is authenticated -- never
+    // sends a client-supplied user id; the server derives it from the session alone.
+    function submitAfterRegistration(presentLocationIds) {
+      if (!storageBox.checked) return;
+      var body = {
+        consent_internal_storage: storageBox.checked,
+        consent_centroid_aggregation: centroidBox.checked,
+        consent_external_overpass_lookup: overpassBox.checked,
+      };
+      var villageId = presentLocationIds && presentLocationIds.village;
+      if (villageId && String(villageId).indexOf("PROV-") === 0) body.provisional_location_id = villageId;
+      else if (villageId) body.qumanity_verified_location_id = villageId;
+      if (capturedPosition) {
+        body.latitude = capturedPosition.lat; body.longitude = capturedPosition.lon; body.accuracy_meters = capturedPosition.accuracy;
+      } else {
+        body.status = deniedReason || "unavailable";
+      }
+      fetch("/api/location/observation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(function () {});
+    }
+
+    return { submitAfterRegistration: submitAfterRegistration };
+  })();
   ["birth", "present"].forEach(function (prefix) {
     QMSearchableSelect.enhance(document.getElementById(prefix + "-zone-select"), { placeholder: "Select a zone…" });
     QMSearchableSelect.enhance(document.getElementById(prefix + "-state-select"), { placeholder: "Select a state…" });
@@ -1188,6 +1412,15 @@
         if (!result.ok) throw new Error(result.body.error || "Registration failed");
         state.registeredResult = result.body;
         try { sessionStorage.removeItem("qm_reg_draft"); } catch (e) {}
+        // GPS submission happens AFTER registration has already succeeded and the session is
+        // authenticated -- never blocks the result screen below, never awaited. Skipped entirely
+        // for an ASSISTED registration: api_auth_register() never sets session["user_id"] to the
+        // NEW member in that path (the helper stays signed in as themself, see app.py's own
+        // helper_user_id branch) -- submitting here would silently attribute the new member's
+        // GPS observation to the HELPER's session instead, which must never happen.
+        if (window.QMGpsConsent && !result.body.assisted) {
+          window.QMGpsConsent.submitAfterRegistration({ village: state.presentPublic.village && state.presentPublic.village.id });
+        }
         document.getElementById("review-private-id").textContent = result.body.private_code.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3");
         document.getElementById("review-account-id").textContent = result.body.account_id;
         document.getElementById("review-submit-actions").hidden = true;

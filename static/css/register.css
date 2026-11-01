@@ -654,3 +654,29 @@
 .qm-idbox { margin: 4px 0 8px; padding: 14px 18px; border-radius: 12px; text-align: center; background: rgba(255, 210, 74, 0.12); border: 1px dashed rgba(201, 150, 12, 0.5); }
 .qm-idbox code { font: 700 1.7rem "Fraunces", Georgia, serif; letter-spacing: 0.18em; color: var(--qm-gold-text); }
 
+/* Crowdsourced Location System MVP (2026-11) -- fallback buttons/panels and the GPS consent
+   card. Deliberately plain/compact: this is a fallback path, not the primary registration flow,
+   and must never visually compete with the normal verified dropdowns above it. */
+.qm-provisional-fallback-btn { margin: 2px 0 10px; font-size: 0.82rem; padding: 6px 12px; }
+.qm-provisional-panel {
+  margin: 0 0 14px; padding: 12px 14px; border-radius: 10px;
+  background: rgba(255, 210, 74, 0.08); border: 1px solid rgba(201, 150, 12, 0.35);
+}
+.qm-provisional-panel input[type="text"] {
+  width: 100%; box-sizing: border-box; padding: 8px 10px; margin-bottom: 8px;
+  border-radius: 8px; border: 1px solid var(--qm-border, #D8D2C4); font-size: 0.9rem;
+}
+.qm-provisional-match-list { list-style: none; margin: 0 0 8px; padding: 0; }
+.qm-provisional-match-list li { padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+.qm-provisional-match-list li:hover { background: rgba(201, 150, 12, 0.15); }
+.qm-provisional-match-list li .qm-match-hierarchy { display: block; font-size: 0.75rem; opacity: 0.7; }
+.qm-provisional-note { font-size: 0.8rem; opacity: 0.85; margin: 6px 0; }
+.qm-provisional-confirm-msg { font-size: 0.82rem; color: #6a5200; margin-top: 6px; }
+
+.qm-gps-consent-card {
+  margin-top: 18px; padding: 14px 16px; border-radius: 12px;
+  background: var(--qm-panel-bg); border: 1px solid var(--qm-border, #D8D2C4);
+}
+.qm-gps-hint { font-size: 0.8rem; opacity: 0.8; margin: 4px 0 10px; }
+#gps-status-text:empty { display: none; }
+

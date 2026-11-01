@@ -53,6 +53,7 @@ import board_core
 import karma_core
 import notify_core
 import perception_core
+import provisional_location_core
 import qmail_core
 import qoin_core
 import reactions_core
@@ -261,7 +262,8 @@ def register():
         if code_row:
             own_public_id = code_row["search_code"]
     return render_template("register.html", languages=_load_json(LANGUAGES_FILE),
-                           test_pin=os.environ.get("QM_TEST_PIN", ""), helper=helper, own_public_id=own_public_id)
+                           test_pin=os.environ.get("QM_TEST_PIN", ""), helper=helper, own_public_id=own_public_id,
+                           allow_provisional_locations=provisional_location_core.allow_provisional_locations())
 
 
 @app.route("/about")
@@ -3909,6 +3911,124 @@ def api_india_villages(tehsil_id):
     return jsonify({"tehsil_id": tehsil_id, "villages": [dict(r) for r in rows]})
 
 
+# ---- Crowdsourced Location System MVP (2026-11): registration fallback for a missing Tehsil or
+# Village -- see provisional_location_core.py's own module docstring for the full architecture.
+# OSM/Overpass/Leaflet Q-Map rendering is explicitly deferred and not implemented anywhere here. --
+
+@app.route("/api/locations/search")
+def api_locations_search():
+    """Same-State search for an existing Tehsil/Village (verified AND provisional), used by the
+    registration fallback before a new provisional location is created. Public -- no account
+    needed to search, matching every other location-browsing endpoint in this file."""
+    level = request.args.get("level", "")
+    state_id = request.args.get("state_id", "")
+    q = request.args.get("q", "")
+    if level not in provisional_location_core.VALID_LOCATION_TYPES:
+        return jsonify({"error": "level must be 'village' or 'tehsil'"}), 400
+    if not state_id:
+        return jsonify({"error": "state_id is required"}), 400
+    conn = get_db()
+    provisional_location_core.ensure_tables(conn)
+    try:
+        results = provisional_location_core.search_locations(conn, level, state_id, q=q)
+    except ValueError as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 400
+    conn.close()
+    return jsonify({"results": results})
+
+
+@app.route("/api/locations/provisional", methods=["POST"])
+@login_required
+def api_locations_provisional_create():
+    """Creates a provisional Tehsil or Village. location_type is validated against exactly
+    {'village','tehsil'} inside provisional_location_core -- a District/State/Zone/Country/
+    Continent/Earth attempt is rejected here AND at the SQL CHECK-constraint level, never relying
+    on the frontend alone to hide the button (Section 2.3/1.2's explicit requirement)."""
+    data = request.get_json(silent=True) or {}
+    if not provisional_location_core.allow_provisional_locations():
+        return jsonify({"error": "Provisional location creation is currently disabled"}), 403
+    location_type = data.get("location_type")
+    name = data.get("name")
+    state_id = data.get("state_id")
+    district_id = data.get("district_id")
+    if location_type not in provisional_location_core.VALID_LOCATION_TYPES:
+        return jsonify({"error": "location_type must be 'village' or 'tehsil'"}), 400
+    if not state_id or not district_id:
+        return jsonify({"error": "state_id and district_id are required"}), 400
+
+    conn = get_db()
+    provisional_location_core.ensure_tables(conn)
+    try:
+        if location_type == "tehsil":
+            prov = provisional_location_core.create_provisional_tehsil(conn, session["user_id"], name, state_id, district_id)
+        else:
+            verified_tehsil_id = data.get("verified_tehsil_id")
+            provisional_tehsil_id = data.get("provisional_tehsil_id")
+            prov_tehsil_int = None
+            if provisional_tehsil_id:
+                prov_tehsil_int = provisional_location_core.from_present_location_id(provisional_tehsil_id)
+                if prov_tehsil_int is None:
+                    conn.close()
+                    return jsonify({"error": "provisional_tehsil_id must be a 'PROV-<n>' id"}), 400
+            prov = provisional_location_core.create_provisional_village(
+                conn, session["user_id"], name, state_id, district_id,
+                verified_tehsil_id=verified_tehsil_id, provisional_tehsil_id=prov_tehsil_int,
+            )
+    except (ValueError, PermissionError) as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 400
+    conn.close()
+    return jsonify({
+        "id": provisional_location_core.to_present_location_id(prov["id"]),
+        "name": prov["name"],
+        "location_type": prov["location_type"],
+        "status": prov["status"],
+        "provisional": True,  # explicit, honest confirmation per Section 2.3 -- never implies a verified location was created
+    }), 201
+
+
+@app.route("/api/location/observation", methods=["POST"])
+@login_required
+def api_location_observation():
+    """Accepts one GPS observation, fully optional, three independent consent flags, never
+    blocking anything -- this is a standalone POST called asynchronously by the client, never part
+    of the registration request/response cycle itself (Section 4.3's explicit requirement)."""
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    provisional_location_core.ensure_tables(conn)
+    provisional_location_id = None
+    if data.get("provisional_location_id"):
+        provisional_location_id = provisional_location_core.from_present_location_id(data["provisional_location_id"])
+        if provisional_location_id is None:
+            conn.close()
+            return jsonify({"error": "provisional_location_id must be a 'PROV-<n>' id"}), 400
+    try:
+        if data.get("status") in ("permission_denied", "unavailable", "timeout"):
+            result = provisional_location_core.record_observation_unavailable(
+                conn, session["user_id"], data.get("status"),
+                qumanity_verified_location_id=data.get("qumanity_verified_location_id"),
+                provisional_location_id=provisional_location_id,
+            )
+        else:
+            result = provisional_location_core.submit_observation(
+                conn, session["user_id"],
+                data.get("latitude"), data.get("longitude"), data.get("accuracy_meters"),
+                consent_internal_storage=bool(data.get("consent_internal_storage")),
+                consent_centroid_aggregation=bool(data.get("consent_centroid_aggregation")),
+                consent_external_overpass_lookup=bool(data.get("consent_external_overpass_lookup")),
+                qumanity_verified_location_id=data.get("qumanity_verified_location_id"),
+                provisional_location_id=provisional_location_id,
+            )
+    except ValueError as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 400
+    conn.close()
+    # Never echoes the coordinates back -- Section 4.5's explicit "do not expose submitted
+    # coordinates in the API response" requirement.
+    return jsonify({"status": result["status"], "stored_coordinates": result["stored_coordinates"]}), 201
+
+
 @app.route("/api/country/stats/<path:country_id>")
 def api_country_stats(country_id):
     """Registered-user demographics for one country (Total Humans, gender,
@@ -4266,6 +4386,31 @@ def api_auth_register():
     if present_state_id not in _public_state_ids(present_country_id):
         return jsonify({"error": "Present location needs a valid state/province for its country"}), 400
 
+    # Crowdsourced Location System MVP (2026-11): present_location.tehsil.id / .village.id may be
+    # a "PROV-<n>" string (created earlier, before this final submit, via POST
+    # /api/locations/provisional -- never a raw name string accepted here, see that route's own
+    # "do not treat arbitrary name strings as verified IDs" rule). Validated the same way for
+    # every one of the registration contract's five supported cases (existing/new provisional
+    # Village, with an existing/new provisional Tehsil, or a verified Tehsil) -- a PROV- id is
+    # recognized uniformly here rather than special-cased per scenario, since by the time
+    # registration sees it, /api/locations/provisional has already done all the real validation.
+    present_tehsil_id = (present_location.get("tehsil") or {}).get("id")
+    present_village_id = (present_location.get("village") or {}).get("id")
+    provisional_conn = get_db()
+    provisional_location_core.ensure_tables(provisional_conn)
+    for label, loc_id in (("tehsil", present_tehsil_id), ("village", present_village_id)):
+        prov_id = provisional_location_core.from_present_location_id(loc_id) if loc_id else None
+        if prov_id is None:
+            continue
+        prov = provisional_location_core.get_provisional(provisional_conn, prov_id)
+        if not prov or prov["status"] in ("rejected", "merged"):
+            provisional_conn.close()
+            return jsonify({"error": f"That provisional {label} is no longer available -- please search again"}), 400
+        if prov["parent_verified_state_id"] != present_state_id:
+            provisional_conn.close()
+            return jsonify({"error": f"That provisional {label} does not belong to the selected State"}), 400
+    provisional_conn.close()
+
     tropical = zodiac_core.get_zodiac_sign(dob)
     if tropical is None:
         return jsonify({"error": "Could not determine zodiac sign from dob"}), 400
@@ -4375,6 +4520,22 @@ def api_auth_register():
                 conn.execute("UPDATE users SET referred_by_user_id = ? WHERE id = ?", (referrer_user_id, user_id))
                 conn.commit()
     board_core.ensure_sub_tables(conn)
+
+    # Crowdsourced Location System MVP: associate this new member with every provisional
+    # location in their declared present-residence path (Section 2.6 -- a provisional Tehsil AND
+    # a provisional Village both get their own membership row; one user is never double-counted
+    # toward the SAME provisional location, since add_membership() is itself idempotent). Wrapped
+    # the same way wallet_core's own non-critical registration side effect below is -- a failure
+    # here must never fail the registration that already succeeded.
+    try:
+        provisional_location_core.ensure_tables(conn)
+        for loc_id in (present_tehsil_id, present_village_id):
+            prov_id = provisional_location_core.from_present_location_id(loc_id) if loc_id else None
+            if prov_id is not None:
+                provisional_location_core.add_membership(conn, prov_id, user_id)
+    except Exception as e:
+        print(f"[provisional_location] membership association failed for user_id={user_id}: {e}")
+
     try:
         wallet_core.apply_free_registration(conn, user_id, present_location, referrer_user_id)
         wallet_core.check_and_award_bonus(conn, referrer_user_id)
@@ -5934,6 +6095,12 @@ test_cycle_scheduler.init_scheduler(app)
 # BackgroundScheduler instance -- see election_test_scheduler.py's own docstring for why this is
 # a daily tick, not a calendar cron like test_cycle_scheduler's above.
 election_test_scheduler.init_scheduler(app)
+
+# Crowdsourced Location System MVP (2026-11): a FOURTH, independent BackgroundScheduler instance
+# -- the periodic half of Phase E's hybrid activation engine (see
+# provisional_location_core.reconcile_all()'s own docstring for why the immediate per-registration
+# check alone isn't sufficient).
+provisional_location_core.init_scheduler(app)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))

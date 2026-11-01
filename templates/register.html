@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/india_map.css') }}" />
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
 </head>
-<body data-logo-nav="confirm-exit">
+<body data-logo-nav="confirm-exit" data-allow-provisional-locations="{{ 'true' if allow_provisional_locations else 'false' }}">
   <header class="qm-header">
     <a href="{{ url_for('index') }}" style="display:contents">
       <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
@@ -316,10 +316,45 @@
               <label class="qm-dropdown-field"><span>Tehsil</span>
                 <select id="present-tehsil-select" disabled><option value="">Select a tehsil…</option></select>
               </label>
+              <!-- Crowdsourced Location System MVP (2026-11): "Can't find my Tehsil?" -- ONLY
+                   ever shown here, next to Tehsil, never at District/State/Zone/Country/
+                   Continent/Earth. Hidden entirely when data-allow-provisional-locations="false"
+                   (register.js), and the backend independently rejects a direct API bypass either
+                   way -- this button is a convenience, never the actual enforcement. -->
+              <button type="button" class="qm-btn qm-btn-ghost qm-provisional-fallback-btn" id="present-tehsil-fallback-btn" hidden>Can't find my Tehsil?</button>
+              <div class="qm-provisional-panel" id="present-tehsil-fallback-panel" hidden></div>
+
               <label class="qm-dropdown-field"><span>Village</span>
                 <select id="present-village-select" disabled><option value="">Select a village…</option></select>
               </label>
+              <!-- "Can't find my Village?" -- ONLY ever shown here, next to Village. -->
+              <button type="button" class="qm-btn qm-btn-ghost qm-provisional-fallback-btn" id="present-village-fallback-btn" hidden>Can't find my Village?</button>
+              <div class="qm-provisional-panel" id="present-village-fallback-panel" hidden></div>
             </div>
+          </div>
+
+          <!-- Optional GPS / Q-Map consent -- three independent checkboxes, ALL default
+               unchecked. GPS capture is asynchronous and never blocks the Submit button below;
+               see register.js's captureGpsIfConsented(). No map, no OSM/Overpass call, no
+               GeoJSON anywhere in this card -- that phase is explicitly deferred. -->
+          <div class="qm-gps-consent-card" id="gps-consent-card">
+            <h3 class="qm-panel-subhead">Help build Q-Map (optional)</h3>
+            <p class="qm-gps-hint">Qumanity is preparing Q-Map, a future map of villages and
+              tehsils. You can help by sharing your approximate location -- entirely optional,
+              and registration works exactly the same either way.</p>
+            <label class="qm-tob-unknown-check">
+              <input type="checkbox" id="gps-consent-storage" />
+              <span>Allow Qumanity to securely store my GPS coordinates for improving geographical accuracy.</span>
+            </label>
+            <label class="qm-tob-unknown-check">
+              <input type="checkbox" id="gps-consent-centroid" />
+              <span>Allow my GPS coordinates to contribute to an aggregated Village/Tehsil location estimate for future Q-Map development.</span>
+            </label>
+            <label class="qm-tob-unknown-check">
+              <input type="checkbox" id="gps-consent-overpass" />
+              <span>Allow Qumanity to use my GPS coordinates for nearby OpenStreetMap feature lookup when this service becomes available.</span>
+            </label>
+            <p class="qm-gps-hint" id="gps-status-text"></p>
           </div>
         </div>
       </div>
