@@ -42,12 +42,18 @@ def _resend_config() -> dict | None:
     """None if Resend isn't configured (no RESEND_API_KEY or no QM_ADMIN_EMAIL) -- the caller
     should treat that as "notifications are off", not an error. QM_ADMIN_EMAIL is the existing env
     var (already in .env.example) for the destination address; reused here rather than inventing
-    a new one."""
+    a new one.
+
+    2026-11-01 (diagnostic hardening): logs WHICH variable is missing (name only, never a value)
+    whenever this returns None, so a silent no-op is distinguishable in Railway logs from "Resend
+    was actually attempted and failed" -- see email_qmail_diagnostic_audit.md."""
     api_key = os.environ.get("RESEND_API_KEY", "").strip()
     if not api_key:
+        print("[email_core] EMAIL_CONFIG_MISSING var=RESEND_API_KEY")
         return None
     to_addr = os.environ.get("QM_ADMIN_EMAIL", "").strip()
     if not to_addr:
+        print("[email_core] EMAIL_CONFIG_MISSING var=QM_ADMIN_EMAIL")
         return None
     return {
         "api_key": api_key,
@@ -56,12 +62,58 @@ def _resend_config() -> dict | None:
     }
 
 
-def _send(to_addr: str, subject: str, html_body: str) -> None:
+def _mask_addr(addr: str) -> str:
+    """'someone@example.com' -> 's***@example.com' -- enough to spot an obviously wrong recipient
+    in a log line without printing a real address."""
+    addr = addr or ""
+    at = addr.find("@")
+    if at <= 0:
+        return "***"
+    return addr[0] + "***" + addr[at:]
+
+
+def _log_resend_response(operation: str, resp) -> None:
+    """2026-11-01: success path. Resend returns {"id": "..."} on success -- logged so a caller can
+    confirm the request was actually ACCEPTED (not proof of inbox delivery; see the module
+    docstring's distinction)."""
+    try:
+        body = json.loads(resp.read().decode("utf-8", "replace") or "{}")
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        body = {}
+    print(f"[email_core] EMAIL_SEND_SUCCESS operation={operation} status={resp.status} resend_id={body.get('id')}")
+
+
+def _log_resend_http_error(operation: str, e: "urllib.error.HTTPError") -> None:
+    """2026-11-01: the one change this whole diagnostic pass is really for -- makes Resend's own
+    JSON error body (e.g. {"statusCode":401,"message":"API key is invalid","name":"validation_error"})
+    visible in Railway logs. Before this, the caller's `except Exception as e: print(... {e} ...)`
+    only ever saw HTTPError's generic str(), e.g. "HTTP Error 401: Unauthorized" -- the single most
+    useful diagnostic fact (WHY Resend rejected the request) was being discarded. Body is capped
+    and never includes the Authorization header or API key."""
+    try:
+        raw = e.read().decode("utf-8", "replace")
+    except Exception:
+        raw = ""
+    raw = raw[:2000]
+    try:
+        body = json.loads(raw)
+        print(f"[email_core] EMAIL_SEND_HTTP_ERROR operation={operation} status={e.code} response={json.dumps(body)}")
+    except json.JSONDecodeError:
+        print(f"[email_core] EMAIL_SEND_HTTP_ERROR operation={operation} status={e.code} response_text={raw!r}")
+
+
+def _send(to_addr: str, subject: str, html_body: str, operation: str = "unspecified") -> None:
     """The actual Resend HTTP call, shared by send_registration_notification() (to_addr always
     QM_ADMIN_EMAIL) and send_ticket_reply() (to_addr is whatever a visitor typed as their
     guest_contact). Raises on a genuine send failure -- every caller is responsible for deciding
     whether that should break its own request or just get logged, same as
-    send_registration_notification() already documents for itself."""
+    send_registration_notification() already documents for itself.
+
+    2026-11-01 (diagnostic hardening): `operation` is a short tag (e.g. "registration",
+    "ticket_reply") threaded through every log line so Railway logs can tell which call site
+    failed. This function's return contract and exception behavior are UNCHANGED -- it still
+    raises exactly when it used to; the HTTPError/URLError are re-raised after logging, not
+    swallowed, so every existing caller's try/except keeps working as before."""
     api_key = os.environ.get("RESEND_API_KEY", "").strip()
     from_addr = os.environ.get("RESEND_FROM_EMAIL", "Qumanity <founder@qumanity.in>").strip()
     payload = json.dumps({"from": from_addr, "to": [to_addr], "subject": subject, "html": html_body}).encode("utf-8")
@@ -69,8 +121,19 @@ def _send(to_addr: str, subject: str, html_body: str) -> None:
         RESEND_URL, data=payload, method="POST",
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT_SECONDS) as resp:
-        resp.read()
+    print(f"[email_core] EMAIL_SEND_ATTEMPT operation={operation} to={_mask_addr(to_addr)}")
+    try:
+        with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT_SECONDS) as resp:
+            _log_resend_response(operation, resp)
+    except urllib.error.HTTPError as e:
+        _log_resend_http_error(operation, e)
+        raise
+    except urllib.error.URLError as e:
+        print(f"[email_core] EMAIL_SEND_NETWORK_ERROR operation={operation} error={e.reason!r}")
+        raise
+    except Exception as e:
+        print(f"[email_core] EMAIL_SEND_UNEXPECTED_ERROR operation={operation} error_class={type(e).__name__} error={e}")
+        raise
 
 
 def is_email_like(value: str) -> bool:
@@ -89,7 +152,11 @@ def send_ticket_reply(to_addr: str, ticket_id: int, subject: str, reply_message:
     or blank guest_contact has nowhere to send to -- the visitor only ever sees that reply if they
     come back to the ticket lookup, which is the real "channel" for those, not email). Raises on a
     genuine send failure, same contract as send_registration_notification()."""
-    if not os.environ.get("RESEND_API_KEY", "").strip() or not is_email_like(to_addr):
+    if not os.environ.get("RESEND_API_KEY", "").strip():
+        print("[email_core] EMAIL_SEND_SKIPPED operation=ticket_reply reason=RESEND_API_KEY_missing")
+        return False
+    if not is_email_like(to_addr):
+        print(f"[email_core] EMAIL_SEND_SKIPPED operation=ticket_reply reason=guest_contact_not_email_shaped ticket_id={ticket_id}")
         return False
     safe_subject = html.escape(subject or "Your Qumanity Support ticket")
     safe_message = html.escape(reply_message or "")
@@ -98,7 +165,7 @@ def send_ticket_reply(to_addr: str, ticket_id: int, subject: str, reply_message:
         f"<blockquote>{safe_message}</blockquote>"
         "<p>This is a one-way notification — replying to this email won't reach us.</p>"
     )
-    _send(to_addr, f"Qumanity Support — reply to ticket #{ticket_id}", html_body)
+    _send(to_addr, f"Qumanity Support — reply to ticket #{ticket_id}", html_body, operation="ticket_reply")
     return True
 
 
@@ -131,22 +198,9 @@ def send_registration_notification(name: str, location_chain: str, private_id_9d
         "<p>To look up their full details, sign in as Administrator and use the member export tool:<br>"
         f'<a href="{LOGIN_URL}">{LOGIN_URL}</a></p>'
     )
-    payload = json.dumps({
-        "from": config["from_addr"],
-        "to": [config["to_addr"]],
-        "subject": f"Qumanity: new member registered — {name}",
-        "html": html_body,
-    }).encode("utf-8")
-
-    req = urllib.request.Request(
-        RESEND_URL,
-        data=payload,
-        method="POST",
-        headers={
-            "Authorization": f"Bearer {config['api_key']}",
-            "Content-Type": "application/json",
-        },
-    )
-    with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT_SECONDS) as resp:
-        resp.read()
+    # 2026-11-01: routed through the shared _send() (same Resend call this function always made --
+    # from_addr/api_key/endpoint/headers unchanged) instead of its own duplicate urlopen block, so
+    # this call site gets the same HTTP-error/network-error/success diagnostic logging as
+    # send_ticket_reply() rather than a second, undiagnosed copy of the same request.
+    _send(config["to_addr"], f"Qumanity: new member registered — {name}", html_body, operation="registration")
     return True

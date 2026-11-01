@@ -75,23 +75,40 @@ def activate(conn, user_id: int, raw_username: str) -> str:
     different account_id -- the uniqueness check is on the username string alone, which is the
     whole point: two users can never share one, regardless of what their account_id happens to
     be), or this user has already activated (one-time; usernames don't change). Returns the new
-    full address."""
+    full address.
+
+    2026-11-01 (diagnostic hardening): one print() per stage (see email_qmail_diagnostic_audit.md)
+    so Railway logs can show exactly how far a failed activation got -- before validation, past
+    the uniqueness checks, through the INSERT, or stuck at commit -- rather than only "it didn't
+    work." No business logic changed: every raise/return below is unchanged from before this pass."""
+    print(f"[qmail] QMAIL_ACTIVATION_FUNCTION_ENTERED user_id={user_id}")
     existing = conn.execute("SELECT qmail_username FROM users WHERE id = ?", (user_id,)).fetchone()
     if existing and existing["qmail_username"]:
+        print(f"[qmail] QMAIL_ACTIVATION_FAILED user_id={user_id} reason=already_activated")
         raise ValueError("Qmail is already activated for this account.")
     username = validate_username(raw_username)
     if conn.execute("SELECT 1 FROM users WHERE qmail_username = ?", (username,)).fetchone():
+        print(f"[qmail] QMAIL_ACTIVATION_FAILED user_id={user_id} reason=username_taken")
         raise ValueError("That username is already taken.")
 
+    print(f"[qmail] QMAIL_ADDRESS_GENERATION_STARTED user_id={user_id}")
     user = conn.execute("SELECT account_id FROM users WHERE id = ?", (user_id,)).fetchone()
     full_address = build_full_address(username, user["account_id"])
-    conn.execute("UPDATE users SET qmail_username = ? WHERE id = ?", (username, user_id))
-    conn.execute(
-        "INSERT INTO qmail_addresses (user_id, account_id, full_address, is_current, created_at) "
-        "VALUES (?, ?, ?, 1, ?)",
-        (user_id, user["account_id"], full_address, _now()),
-    )
-    conn.commit()
+    print(f"[qmail] QMAIL_ADDRESS_GENERATION_COMPLETED user_id={user_id} account_id={user['account_id']}")
+    try:
+        conn.execute("UPDATE users SET qmail_username = ? WHERE id = ?", (username, user_id))
+        print(f"[qmail] QMAIL_ADDRESS_INSERT_ATTEMPT user_id={user_id}")
+        conn.execute(
+            "INSERT INTO qmail_addresses (user_id, account_id, full_address, is_current, created_at) "
+            "VALUES (?, ?, ?, 1, ?)",
+            (user_id, user["account_id"], full_address, _now()),
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"[qmail] QMAIL_DATABASE_INSERT_FAILED user_id={user_id} error_class={type(e).__name__} error={e}")
+        raise
+    print(f"[qmail] QMAIL_DATABASE_COMMIT_SUCCESS user_id={user_id}")
+    print(f"[qmail] QMAIL_ACTIVATION_COMPLETED user_id={user_id}")
     return full_address
 
 

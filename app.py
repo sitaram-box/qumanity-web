@@ -1155,6 +1155,14 @@ def api_admin_account_decide(request_id):
 @login_required
 @_board_error
 def api_qmail_activate():
+    # 2026-11-01 (diagnostic hardening): @_board_error only turns ValueError/PermissionError/
+    # LookupError into a clean 4xx JSON response -- anything else (e.g. a database error not
+    # already caught and re-raised with logging inside qmail_core.activate()) falls through to
+    # Flask's default handler, which returns an HTML error page. dash_extras.js's api() helper
+    # always calls r.json() even on a non-ok response, so that HTML page then shows up to the
+    # member as a cryptic "Unexpected token '<'..." instead of a real message -- this log line at
+    # least makes that failure mode visible in Railway logs, tied to the request that caused it.
+    print(f"[qmail] QMAIL_ACTIVATION_REQUEST_RECEIVED user_id={session['user_id']}")
     data = request.get_json(silent=True) or {}
     conn = get_db()
     try:
@@ -2781,10 +2789,15 @@ def qmail_page():
     conn = get_db()
     user = conn.execute("SELECT name, qmail_username FROM users WHERE id = ?", (session["user_id"],)).fetchone()
     conn.close()
+    # 2026-11-01 (diagnostic hardening): a member who believes they activated but whose write
+    # silently failed lands right back here with no explanation -- this log line distinguishes
+    # that case (not user, or user with no qmail_username) from a normal, successful page load.
     if not user:
+        print(f"[qmail] QMAIL_PAGE_REDIRECT user_id={session.get('user_id')} reason=no_such_user target=login")
         session.pop("user_id", None)
         return redirect(url_for("login"))
     if not user["qmail_username"]:
+        print(f"[qmail] QMAIL_PAGE_REDIRECT user_id={session['user_id']} reason=not_activated target=dashboard")
         return redirect(url_for("dashboard"))
     return render_template("qmail.html", member_name=user["name"])
 
