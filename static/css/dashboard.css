@@ -324,6 +324,12 @@
   margin-bottom: 10px;
 }
 
+/* Clicking the sidebar (2026-11-01) opens the same Statistics modal the board header's own
+   "📊 Stats" button does -- see dashboard.js. A hover cue only on the big always-visible numbers
+   (Total Humans / Wallet / Karma), not every row of the gender/age/element lists below them. */
+.qm-stats-panel--clickable { cursor: pointer; }
+.qm-stats-panel--clickable .qm-stats-section--big:hover { border-left-color: var(--qm-gold-text); background: var(--qm-input-bg-hover, rgba(255, 210, 74, 0.08)); }
+
 .qm-stats-section--big { text-align: center; }
 .qm-stat-big-number {
   font-size: 1.9rem;

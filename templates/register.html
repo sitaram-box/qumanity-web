@@ -51,10 +51,16 @@
             <h3 class="qm-form-section-title">✏️ Personal Details</h3>
             <div class="qm-row2">
               <label class="qm-field"><span>👤 First Name<span class="req-star">*</span></span><input type="text" id="field-first-name" required minlength="2" autocomplete="given-name" placeholder="e.g. Asha" /></label>
+              <!-- Sits between First and Last in the DOM so revealing it (the checkbox below)
+                   needs no reordering -- just an unhide, same grid row as both (2026-11-01). -->
+              <label class="qm-field" id="field-middle-name-wrap" hidden><span>👤 Middle Name</span><input type="text" id="field-middle-name" autocomplete="additional-name" placeholder="e.g. Kumar" /></label>
               <label class="qm-field"><span>👤 Last Name<span class="req-star">*</span></span><input type="text" id="field-last-name" required minlength="2" autocomplete="family-name" placeholder="e.g. Kumar" /></label>
             </div>
 
-            <label class="qm-field"><span>👤 Middle Name</span><input type="text" id="field-middle-name" autocomplete="additional-name" placeholder="e.g. Kumar (Optional)" /></label>
+            <label class="qm-tob-unknown-check">
+              <input type="checkbox" id="field-has-middle-name" />
+              <span>I have a middle name</span>
+            </label>
 
             <div class="qm-field">
               <span>⚧️ Gender<span class="req-star">*</span></span>

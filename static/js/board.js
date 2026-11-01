@@ -291,7 +291,7 @@
     }
 
     function render(v) {
-      titleEl.textContent = v.group + " Lok";
+      titleEl.textContent = v.group;
       subEl.innerHTML = "";
       subEl.appendChild(el("span", "bd-count", "\uD83D\uDC65 " + v.members.toLocaleString() + " member" + (v.members === 1 ? "" : "s")));
       subEl.appendChild(el("span", "bd-count", "\uD83D\uDD37 " + v.qoins.toLocaleString() + " Qoins"));

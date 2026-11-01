@@ -89,7 +89,7 @@
       .catch(function (err) { console.error("Failed to load dashboard stats from " + url, err); });
   }
 
-  function loadWalletBalanceFor(prefix, locationType, locationId) {
+  function loadWalletBalanceFor(prefix, locationType, locationId, showCurrency) {
     var el = document.getElementById(prefix + "-wallet");
     if (!el) return;
     fetch("/api/wallet/balance/" + locationType + "/" + encodeURIComponent(locationId))
@@ -97,13 +97,48 @@
       .then(function (data) {
         // 2026-10-27: qoin_count is the PUBLIC figure every viewer gets back (board_core.py's own
         // board header already keys off it, never the private balance_qoins -- council/admin
-        // only, and simply absent from this response for anyone else, which is why this used to
-        // render the literal string "undefined Qoins"). 1 Qoin = ₹1 flat (wallet_core.py), so
-        // the currency value is the identical number, just relabeled.
+        // only, and simply absent from this response for anyone else).
+        // 2026-11-01: the always-on sidebar (qm-dg-stats/qm-dp-stats) now shows Qoins only, never
+        // a currency figure -- that's what clicking it (openStatsModal) is for. showCurrency is
+        // true only there, and even then the ₹ value only appears when the server actually sent
+        // balance_qoins (council/admin) -- never derived client-side from qoin_count, which would
+        // just be re-inventing the same leak this gate exists to prevent.
         var n = data.qoin_count || 0;
-        el.textContent = n.toLocaleString() + " Qoins ≈ ₹" + n.toLocaleString() + ".00";
+        el.textContent = n.toLocaleString() + " Qoins";
+        if (showCurrency && data.balance_qoins !== undefined) {
+          el.textContent += " ≈ ₹" + data.balance_qoins.toLocaleString() + ".00";
+        }
       })
       .catch(function (err) { console.error("Failed to load wallet balance for " + prefix, err); });
+  }
+
+  // 2026-11-01: modal-only transaction list -- same GET /api/wallet/history/<level>/<id> and the
+  // same week-grouped rendering board.js's Q-Punch panel's "Group wallet — weekly history" button
+  // already uses, just always-open instead of toggled, and targeting the stats modal's own list.
+  function loadWalletHistoryFor(prefix, locationType, locationId) {
+    var list = document.getElementById(prefix + "-tx-list");
+    var empty = document.getElementById(prefix + "-tx-empty");
+    var note = document.getElementById(prefix + "-tx-note");
+    if (!list) return;
+    list.innerHTML = ""; empty.hidden = true; note.hidden = true;
+    fetch("/api/wallet/history/" + locationType + "/" + encodeURIComponent(locationId))
+      .then(function (r) { return r.json(); })
+      .then(function (h) {
+        if (!h.is_council) { note.textContent = "Showing the last 3 months; full history is for council members."; note.hidden = false; }
+        else if (h.older_weeks_hidden) { note.textContent = h.older_weeks_hidden + " older week(s) available to council members."; note.hidden = false; }
+        empty.hidden = (h.weeks || []).length !== 0;
+        (h.weeks || []).forEach(function (wk) {
+          var box = el("div", "wh-week");
+          box.appendChild(el("b", "", wk.start + " – " + wk.end + " · " + (wk.change >= 0 ? "+" : "") + wk.change + " Qoins"));
+          wk.rows.forEach(function (r) {
+            var when = new Date((r.at || "").replace(" ", "T"));
+            var whenText = isNaN(when.getTime()) ? r.at : when.toLocaleString();
+            box.appendChild(el("small", "", (r.amount >= 0 ? "+" : "") + r.amount + " · " + r.reason + " · " + whenText));
+          });
+          list.appendChild(box);
+        });
+      })
+      .catch(function (err) { console.error("Failed to load wallet history for " + prefix, err); });
   }
 
   function loadCollectiveKarmaFor(prefix, locationType, locationId) {
@@ -148,10 +183,27 @@
     // carves out for the sidebar version of this exact data).
     var statsUrl = level === "earth" ? "/api/earth/stats" : "/api/location/stats/" + level + "/" + encodeURIComponent(locationId) + "?basis=present";
     loadStatsFor("qm-stats-modal", statsUrl);
-    loadWalletBalanceFor("qm-stats-modal", level, locationId);
+    loadWalletBalanceFor("qm-stats-modal", level, locationId, true);
     loadCollectiveKarmaFor("qm-stats-modal", level, locationId);
+    loadWalletHistoryFor("qm-stats-modal", level, locationId);
   }
   window.QMOpenStatsModal = openStatsModal;
+
+  // 2026-11-01: the always-on sidebar itself (not just its "📊 Stats" board-header button) now
+  // opens the same modal -- one delegated listener per sidebar rather than re-binding on every
+  // selectLocation() call; the level/id/name it needs are read from data-* attributes that
+  // selectLocation() (and the "earth" root case in renderGlobalExplorer()) keep current. Clicks on
+  // an actual control inside the panel (View all / + New Announcement) are left alone.
+  ["qm-dg-stats", "qm-dp-stats"].forEach(function (prefix) {
+    var panel = document.getElementById(prefix + "-content");
+    if (!panel) return;
+    panel.classList.add("qm-stats-panel--clickable");
+    panel.addEventListener("click", function (e) {
+      if (e.target.closest("button, a")) return;
+      if (!panel.dataset.level || !panel.dataset.locationId) return;
+      openStatsModal(panel.dataset.level, panel.dataset.locationId, panel.dataset.name || null);
+    });
+  });
 
   // ==================== Location explorer (Global / Public tabs) ====================
   // A left-sidebar tree scoped to the user's own present-location lineage
@@ -330,6 +382,8 @@
       loadWalletBalanceFor("qm-dg-stats", "earth", "EARTH");
       loadCollectiveKarmaFor("qm-dg-stats", "earth", "EARTH");
       document.getElementById("qm-dg-stats-heading").textContent = "🌍 Earth statistics";
+      var earthPanel = document.getElementById("qm-dg-stats-content");
+      if (earthPanel) { earthPanel.dataset.level = "earth"; earthPanel.dataset.locationId = "EARTH"; earthPanel.dataset.name = "Earth"; }
     } else if (root === "continent") {
       var continent = presentLocation.continent && findContinentById(presentLocation.continent.id);
       renderTreeRoot("global-explorer-tree", continent ? continent.countries.map(function (c) { return countryLeafNode("global", c, 0); }) : [], "Continent not set.");
@@ -400,6 +454,8 @@
   function selectLocation(tab, level, id, name) {
     var prefix = tab === "global" ? "qm-dg-stats" : "qm-dp-stats";
     document.getElementById(prefix + "-heading").textContent = name ? "📊 " + name : "Statistics";
+    var panel = document.getElementById(prefix + "-content");
+    if (panel) { panel.dataset.level = level; panel.dataset.locationId = id; panel.dataset.name = name || ""; }
     loadStatsFor(prefix, "/api/location/stats/" + level + "/" + encodeURIComponent(id) + "?basis=present");
     loadWalletBalanceFor(prefix, level, id);
     loadCollectiveKarmaFor(prefix, level, id);

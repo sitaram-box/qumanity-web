@@ -224,6 +224,18 @@
     }
   });
 
+  // "I have a middle name" (2026-11-01): hidden by default so the form reads as just First/Last
+  // -- revealing Middle Name between them needs no DOM reordering since it already sits there in
+  // the markup (templates/register.html), just [hidden]. Unchecking clears it, same reasoning as
+  // the tob-unknown checkbox just above: a value left behind in a hidden field would still get
+  // submitted.
+  var hasMiddleCheckbox = document.getElementById("field-has-middle-name");
+  var middleNameWrap = document.getElementById("field-middle-name-wrap");
+  hasMiddleCheckbox.addEventListener("change", function () {
+    middleNameWrap.hidden = !hasMiddleCheckbox.checked;
+    if (!hasMiddleCheckbox.checked) document.getElementById("field-middle-name").value = "";
+  });
+
   var genderInput = document.getElementById("field-gender");
   var genderButtons = Array.prototype.slice.call(document.querySelectorAll(".qm-gender-btn"));
   genderButtons.forEach(function (btn) {
@@ -248,6 +260,7 @@
     try { d = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || "null"); } catch (e) {}
     if (!d) return;
     draftFields.forEach(function (id) { if (d[id]) document.getElementById(id).value = d[id]; });
+    if (d["field-middle-name"]) { hasMiddleCheckbox.checked = true; middleNameWrap.hidden = false; }
     if (d.gender) genderButtons.forEach(function (b) { if (b.getAttribute("data-gender") === d.gender) b.click(); });
     if (d.dob && d.dob[1] && d.dob[2]) {
       dobYearSelect.value = d.dob[2]; dobMonthSelect.value = d.dob[1]; populateDobDays(); dobDaySelect.value = d.dob[0]; syncDobHidden();
