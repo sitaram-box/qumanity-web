@@ -962,6 +962,43 @@
 .ft-empty-label { fill: var(--qm-text-dim); font-style: italic; }
 .ft-avatar { overflow: visible; }
 
+/* ---- Profile Card (Phase 2, 2026-11-01): replaces the old small Public-ID-only popup. Reuses
+   the app's existing .dq-modal/.dq-modal-box shell (desktop: a centered modal, same as every
+   other modal here -- "a comfortable modal... the family tree remains recognizable in the
+   background" per the work order); .ft-profile-box only widens it slightly and, on narrow
+   viewports, grows near-full-screen (section 10's mobile spec) via the existing .dq-modal-box's
+   own max-height/overflow, already in place. ---- */
+.ft-profile-box { width: min(560px, 100%); }
+.ft-profile-header { display: flex; align-items: center; gap: 14px; margin: 4px 0 16px; }
+.ft-profile-avatar { flex: 0 0 auto; width: 64px; height: 64px; border-radius: 50%; overflow: hidden; }
+.ft-profile-avatar .qm-avatar, .ft-profile-avatar img { width: 64px; height: 64px; }
+.ft-profile-headtext { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ft-profile-headtext h3 { margin: 0; font-size: 1.1rem; color: var(--qm-gold-text); overflow-wrap: anywhere; }
+.ft-profile-relationship { font-size: 0.82rem; color: var(--qm-text-dim); font-weight: 600; }
+.ft-profile-badge { align-self: flex-start; font-size: 0.72rem; padding: 2px 9px; border-radius: 999px; background: var(--qm-border); color: var(--qm-text-dim); }
+.ft-profile-badge.is-claimed { background: rgba(26, 138, 103, 0.15); color: #1a8a67; font-weight: 600; }
+.ft-profile-badge.is-unclaimed { background: rgba(255, 153, 51, 0.15); color: var(--qm-saffron); font-weight: 600; }
+
+.ft-profile-or { display: flex; align-items: center; gap: 10px; margin: 16px 0; color: var(--qm-text-dim); font-size: 0.78rem; font-weight: 700; }
+.ft-profile-or::before, .ft-profile-or::after { content: ""; flex: 1; height: 1px; background: var(--qm-input-border); }
+
+.ft-profile-cascade { margin: 16px 0; padding: 12px 14px; border-radius: 12px; background: rgba(26, 138, 103, 0.06); border: 1px solid rgba(26, 138, 103, 0.25); }
+.ft-profile-cascade .qm-form-section-title { margin: 0 0 8px; }
+.ft-cascade-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; }
+.ft-cascade-label { font-size: 0.82rem; color: var(--qm-text-dim); }
+.ft-cascade-link { font-size: 0.82rem; padding: 4px 10px; }
+
+.ft-profile-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--qm-input-border); }
+.ft-profile-inline-form[hidden] { display: none; }
+.ft-profile-inline-form { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--qm-input-bg); border: 1px solid var(--qm-input-border); }
+
+@media (max-width: 640px) {
+  /* Near-full-screen on mobile (section 10) -- the shared .dq-modal already pads/centers; this
+     just lets the card itself use nearly the whole viewport instead of a narrow fixed width. */
+  .ft-profile-box { width: 100%; max-height: calc(100vh - 24px); }
+  .ft-profile-actions { position: sticky; bottom: -20px; background: var(--qm-panel-bg); margin-left: -22px; margin-right: -22px; padding: 14px 22px; }
+}
+
 /* ---- Election sentiment (Country = Lok Sabha, State = Vidhan Sabha only) ---- */
 .bd-sentiment { margin: 0 14px 10px; padding: 10px 14px; border-radius: 12px; background: rgba(139, 123, 255, 0.08); border: 1px solid rgba(139, 123, 255, 0.3); }
 .bd-sentiment b { display: block; margin-bottom: 8px; font-size: 0.82rem; color: #5b4fc4; }

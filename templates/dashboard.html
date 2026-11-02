@@ -603,14 +603,6 @@
             <div id="family-activated-summary" hidden>
               <p class="qm-dash-empty">Your Family Timeline is active. Pick a group below to view its tree:</p>
               <ul class="pt-grouplist" id="family-groups-list"></ul>
-
-              <h3 class="qm-form-section-title">🔎 Find a relative</h3>
-              <p class="qm-dash-empty">Search by name — we'll check people near you and in your mutual groups.</p>
-              <div class="pt-search-row">
-                <input type="text" class="qm-explorer-search" id="family-search-input" placeholder="Name" />
-                <button type="button" class="qm-btn qm-btn-ghost" id="family-search-btn">Search</button>
-              </div>
-              <div id="family-search-result"></div>
             </div>
 
             <div id="family-tree-container" hidden>
@@ -846,21 +838,62 @@
           <p class="qm-summary-error" id="pt-members-error" hidden></p>
         </div>
       </div>
-      <div class="dq-modal" id="ft-edit-modal" hidden role="dialog" aria-modal="true">
-        <div class="dq-modal-box">
-          <button type="button" class="dq-modal-back" data-close aria-label="Close" title="Close">← Close</button>
-          <h3 id="ft-edit-modal-title">Add Family Member</h3>
+      <!-- Profile Card (Phase 2, 2026-11-01): replaces the old ft-edit-modal's small "Public ID +
+           Edit Name" popup entirely -- every individual person node now opens this instead. Two
+           modes sharing one card: ft-profile-claimed-body (a registered member's own authorized
+           profile, read-only) and ft-profile-unclaimed-body (the placeholder editor: Public ID
+           link, or manual First/Middle/Last/Gender/Approximate Age), toggled by family_tree.js
+           based on the clicked person's claimed status. See static/js/family_tree.js. -->
+      <div class="dq-modal ft-profile-modal" id="ft-profile-modal" hidden role="dialog" aria-modal="true" aria-labelledby="ft-profile-name">
+        <div class="dq-modal-box ft-profile-box">
+          <button type="button" class="dq-modal-back" data-close aria-label="Close profile" title="Close">← Close</button>
 
-          <label class="qm-field"><span>Enter 12-digit Public ID</span><input type="text" id="ft-edit-link-input" placeholder="e.g. 4060 2408 5969" inputmode="numeric" /></label>
-          <div id="ft-edit-link-result"></div>
-
-          <button type="button" class="qm-btn qm-btn-ghost" id="ft-edit-toggle-name-btn">✏️ Edit Name</button>
-          <div id="ft-edit-name-section" hidden>
-            <label class="qm-field"><span>Name</span><input type="text" id="ft-edit-name-input" maxlength="80" /></label>
-            <button type="button" class="qm-btn qm-btn-ghost" id="ft-edit-save-name-btn">Save Name</button>
+          <div class="ft-profile-header">
+            <div class="ft-profile-avatar" id="ft-profile-avatar"></div>
+            <div class="ft-profile-headtext">
+              <h3 id="ft-profile-name"></h3>
+              <span class="ft-profile-relationship" id="ft-profile-relationship"></span>
+              <span class="ft-profile-badge" id="ft-profile-badge"></span>
+            </div>
           </div>
 
-          <p class="qm-summary-error" id="ft-edit-error" hidden></p>
+          <dl class="qm-summary-list ft-profile-claimed-body" id="ft-profile-claimed-body" hidden></dl>
+
+          <div class="ft-profile-unclaimed-body" id="ft-profile-unclaimed-body" hidden>
+            <h4 class="qm-form-section-title">🔗 Connect Existing Qumanity Member</h4>
+            <label class="qm-field"><span>Enter 12-digit Public ID</span>
+              <input type="text" id="ft-profile-link-input" inputmode="numeric" placeholder="e.g. 4060 2408 5969" />
+            </label>
+            <div id="ft-profile-link-result"></div>
+
+            <div class="ft-profile-or" role="separator" aria-label="or"><span>OR</span></div>
+
+            <h4 class="qm-form-section-title">✏️ Add Family Member Details</h4>
+            <div class="qm-private-columns">
+              <label class="qm-field"><span>First Name</span><input type="text" id="ft-profile-first-name" maxlength="60" /></label>
+              <label class="qm-field"><span>Middle Name</span><input type="text" id="ft-profile-middle-name" maxlength="60" /></label>
+            </div>
+            <label class="qm-field"><span>Last Name</span><input type="text" id="ft-profile-last-name" maxlength="60" /></label>
+            <div class="qm-gender-group" id="ft-profile-gender-group">
+              <button type="button" class="qm-gender-btn" data-gender="male">👦<span>Male</span></button>
+              <button type="button" class="qm-gender-btn" data-gender="female">👧<span>Female</span></button>
+              <button type="button" class="qm-gender-btn" data-gender="both">⚧️<span>Third Gender</span></button>
+            </div>
+            <label class="qm-field"><span>Approximate Age</span><input type="number" id="ft-profile-approx-age" min="0" max="130" inputmode="numeric" /></label>
+            <button type="button" class="qm-btn qm-btn-primary" id="ft-profile-save-btn">Save</button>
+            <p class="qm-summary-error" id="ft-profile-save-error" hidden></p>
+            <p class="qm-dash-empty" id="ft-profile-save-success" hidden>✓ Saved</p>
+          </div>
+
+          <div class="ft-profile-cascade" id="ft-profile-cascade" hidden></div>
+
+          <div class="ft-profile-actions" id="ft-profile-actions">
+            <button type="button" class="qm-btn qm-btn-ghost" id="ft-profile-add-sibling-btn">+ Add Sibling</button>
+            <button type="button" class="qm-btn qm-btn-ghost" id="ft-profile-add-child-btn">+ Add Child</button>
+            <button type="button" class="qm-btn qm-btn-ghost" id="ft-profile-add-spouse-btn">+ Add Spouse</button>
+          </div>
+          <div class="ft-profile-inline-form" id="ft-profile-inline-form" hidden></div>
+          <p class="qm-summary-error" id="ft-profile-action-error" hidden></p>
         </div>
       </div>
 
@@ -872,15 +905,6 @@
           <div id="ft-add-parents-fields">
             <label class="qm-field"><span>Father's Name</span><input type="text" id="ft-add-father-name" maxlength="80" /></label>
             <label class="qm-field"><span>Mother's Name</span><input type="text" id="ft-add-mother-name" maxlength="80" /></label>
-          </div>
-
-          <div id="ft-add-child-fields" hidden>
-            <label class="qm-field"><span>Name</span><input type="text" id="ft-add-child-name" maxlength="80" /></label>
-            <div class="qm-gender-group" id="ft-add-child-gender-group">
-              <button type="button" class="qm-gender-btn" data-gender="male">👦<span>Son</span></button>
-              <button type="button" class="qm-gender-btn" data-gender="female">👧<span>Daughter</span></button>
-              <button type="button" class="qm-gender-btn" data-gender="both">⚧️<span>Third Gender</span></button>
-            </div>
           </div>
 
           <button type="button" class="qm-btn qm-btn-primary" id="ft-add-save-btn">Add</button>

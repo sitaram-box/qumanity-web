@@ -133,31 +133,11 @@
     });
   }
 
-  // ---- Find a relative: name + location search for already-activated members, distinct from the
-  // Activation wizard's own father/mother/spouse/child slot-matching (same /api/family/suggest
-  // route, a third result "type": "real_user" family_core.search_suggestions() now also returns). ----
-  var familySearchInput = document.getElementById("family-search-input");
-  var familySearchBtn = document.getElementById("family-search-btn");
-  var familySearchResult = document.getElementById("family-search-result");
-  if (familySearchBtn) {
-    familySearchBtn.addEventListener("click", function () {
-      var q = familySearchInput.value.trim();
-      if (q.length < 2) return;
-      familySearchResult.innerHTML = "";
-      familySearchResult.appendChild(el("p", "qm-dash-empty", "Searching…"));
-      api("/api/family/suggest?name=" + encodeURIComponent(q)).then(function (d) {
-        renderFamilySearchResults((d.results || []).filter(function (r) { return r.type === "real_user"; }));
-      }).catch(function () {
-        familySearchResult.innerHTML = "";
-        familySearchResult.appendChild(el("p", "qm-dash-empty", "Couldn't search right now."));
-      });
-    });
-    familySearchInput.addEventListener("keydown", function (e) { if (e.key === "Enter") familySearchBtn.click(); });
-  }
-
   // A 40px avatar for a suggestion row -- the uploaded profile picture if there is one, else a
   // colored circle with the name's first letter (same fallback idiom as the Private account's
-  // own .pv-avatar).
+  // own .pv-avatar). Still used by the Discover step below (renderSlotSuggestions()) -- the old
+  // standalone "Find a relative" search that used to share this is gone (Phase 2, 2026-11-01):
+  // the Profile Card's own Public ID lookup replaces it, see family_tree.js.
   function suggestionAvatar(name, pictureUrl) {
     var div = el("div", "fw-suggestion-avatar");
     if (pictureUrl) { div.style.backgroundImage = "url('" + pictureUrl + "')"; }
@@ -166,35 +146,6 @@
   }
   function genderLabel(gender) {
     return gender === "male" ? "Male" : gender === "female" ? "Female" : gender === "both" ? "Third Gender" : "";
-  }
-
-  function renderFamilySearchResults(rows) {
-    familySearchResult.innerHTML = "";
-    if (!rows.length) { familySearchResult.appendChild(el("p", "qm-dash-empty", "No matches nearby.")); return; }
-    rows.forEach(function (r) {
-      var row = el("div", "fw-suggestion-row");
-      var top = el("div", "fw-suggestion-top");
-      top.appendChild(suggestionAvatar(r.name, r.profile_picture_url));
-      var textWrap = el("div", "fw-suggestion-text");
-      var detail = r.name + (r.gender ? " · " + genderLabel(r.gender) : "") +
-        (r.location ? " — " + r.location : "") + (r.mutual_group_name ? " · shares " + r.mutual_group_name : "");
-      textWrap.appendChild(el("p", "", detail));
-      top.appendChild(textWrap);
-      row.appendChild(top);
-      var joinBtn = el("button", "qm-btn qm-btn-primary", "Request to Join " + r.group_name);
-      joinBtn.type = "button";
-      joinBtn.addEventListener("click", function () {
-        joinBtn.disabled = true; joinBtn.textContent = "Requesting…";
-        api("/api/family-groups/" + r.group_id + "/join-request", {}).then(function () {
-          joinBtn.textContent = "✓ Requested";
-        }).catch(function (e) {
-          joinBtn.disabled = false; joinBtn.textContent = "Request to Join " + r.group_name;
-          alert(e.message);
-        });
-      });
-      row.appendChild(joinBtn);
-      familySearchResult.appendChild(row);
-    });
   }
 
   // Piggyback on the Personal tab's existing top-tab switcher (social.js owns show/hide) --
@@ -701,8 +652,26 @@
       mother_father: slotPayload("mother_father"), mother_mother: slotPayload("mother_mother"),
     };
 
-    api("/api/family/activate", activatePayload).then(function () {
-      if (state.relationship === "single" || !state.spouse) { finishWizard(); return; }
+    // Phase 2 preflight (2026-11-01): activate_timeline()/marry_timeline() can return 201 (success)
+    // while still recording a non-fatal per-slot join failure in has_join_errors/joined_requests
+    // (family_core.py's _finalize_results()) -- a real, genuine error (not activated, already own
+    // it, previously left), just one that doesn't abort the rest of the tree. Checking only the
+    // HTTP status here would silently hide that from the user.
+    function joinErrorsNote(result) {
+      if (!result || !result.has_join_errors) return null;
+      var failed = (result.joined_requests || []).filter(function (e) { return e.status === "error"; });
+      if (!failed.length) return null;
+      var names = failed.map(function (e) { return e.label + " (" + e.name + ")"; }).join(", ");
+      return "We couldn't queue a join request for: " + names + " — " + failed[0].error + ".";
+    }
+
+    api("/api/family/activate", activatePayload).then(function (activateResult) {
+      var activateNote = joinErrorsNote(activateResult);
+      if (state.relationship === "single" || !state.spouse) {
+        if (activateNote) { noteEl.textContent = activateNote; noteEl.hidden = false; }
+        finishWizard();
+        return;
+      }
       var childPayloads = state.slots
         .filter(function (s) { return s.key.indexOf("child_") === 0; })
         .map(function (s) { return slotPayload(s.key); });
@@ -713,7 +682,13 @@
         spouse: spousePayload, children: childPayloads,
         marriage_status: MARRIAGE_STATUS_MAP[state.relationship],
         spouse_father: slotPayload("spouse_father"), spouse_mother: slotPayload("spouse_mother"),
-      }).then(function () {
+      }).then(function (marryResult) {
+        var marryNote = joinErrorsNote(marryResult);
+        var combined = [activateNote, marryNote].filter(Boolean).join(" ");
+        if (combined) {
+          noteEl.textContent = "Your Family Timeline is active. " + combined + " You can retry this from your Personal tab.";
+          noteEl.hidden = false;
+        }
         finishWizard();
       }).catch(function (e) {
         noteEl.textContent = "Your Family Timeline is active. Adding your spouse ran into a problem: " +
