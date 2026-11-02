@@ -509,10 +509,16 @@ a Forward Plan + application-form-answers compilation + copies of `API.md`/`ARCH
 `DATA_MODEL.md`). Its master working copy is a non-git directory on the owner's own machine;
 `docs/dpg_evidence/` inside this repository is a copy, changed only when the owner asks for it.
 
-**What "frozen" means here**: every document in the pack explicitly marks itself, in its own
-banner, as *"DPG Evidence Refresh — internal correction pass, not a DPGA resubmission."* **No
-document in this repository claims formal Digital Public Goods certification, DPG Registry
-acceptance, or external endorsement** — the pack is internal evidence-preparation and
+**What "frozen" means here**: 5 of the pack's 17 documents (the ones touched by the 2026-11-01
+correction pass — `01_sdg_relevance.md`, `08_standards.md`, `12_family_tree_evidence.md`,
+`13_referral_engine_evidence.md`, `ARCHITECTURE.md`) carry an explicit banner reading
+*"DPG Evidence Refresh — internal correction pass, not a DPGA resubmission."* (verified by grep
+across the full pack this session — not every one of the 17 files carries this exact banner, so
+describing it as universal would itself be an overstatement). **No document in this repository, in
+or out of that banner, claims formal Digital Public Goods certification, DPG Registry acceptance,
+or external endorsement anywhere** (independently re-confirmed by a second grep for
+certification/registry-acceptance language, this session, with zero hits) — the pack is internal
+evidence-preparation and
 self-assessment work, written so a reviewer *could* use it to assess the project against the DPG
 Standard's 9 indicators, not a record of a completed registry submission or an award received.
 

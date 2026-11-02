@@ -79,8 +79,10 @@ marked content-complete merely because the database infrastructure can support i
 ## DPG evidence
 
 The evidence pack (`docs/dpg_evidence/`) is internal evidence-preparation/self-assessment work —
-every document in it marks itself "not a DPGA resubmission." **No document claims formal DPG
-certification or registry acceptance.** Application-form-answers: 40 of 45 fields "Ready"
+5 of its 17 documents (the ones touched by the 2026-11-01 correction pass) mark themselves "not a
+DPGA resubmission"; the other 12 carry no such banner but likewise make no certification claim.
+**No document in the pack claims formal DPG certification or registry acceptance** (re-confirmed
+by grep this session). Application-form-answers: 40 of 45 fields "Ready"
 (verified fresh this session).
 
 **Known, uncorrected drift** (found in an untracked research document,
