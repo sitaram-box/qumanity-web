@@ -356,8 +356,11 @@ Next step:
 
 ### Christian Hindi (Biblica) — moved from pending to Live, 2026-11-02
 
-**Status:** `approved_with_conditions — imported and live` (commit `<set at commit time, see
-entry 1 above>`). The owner reviewed and explicitly authorized importing the Biblica Open Hindi
+**Status:** `approved_with_conditions — imported and live` (commit `fbc0a5e`, full hash
+`fbc0a5ed2ab0c55c183786be6e464f7f14eaec1f`, "feat: add Biblica Hindi Bible to Christian marquee
+collection" — verified present on `origin/main` and containing the Hindi Bible collection files
+before this reference was written). The owner reviewed and explicitly authorized importing the
+Biblica Open Hindi
 Contemporary Version candidate identified in the deeper research pass above. Eight Psalm verses
 (the same references already used by the existing English KJV collection) were fetched live,
 verse-by-verse, directly from `ebible.org/hincv/` and added as a second language (`hi`) on the
