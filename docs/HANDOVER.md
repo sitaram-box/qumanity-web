@@ -1,842 +1,759 @@
 # Qumanity — Project Handover
 
-Written 17 October 2026, refreshed 18 October 2026 to cover Qmail, Q-Punch council addresses, the
-Admin Panel's scope evolution, attachments, drafts, and the standalone `/qmail` mailbox page, and
-refreshed again later on 18 October 2026 after the DPG evidence pack pass (§5), which led to two
-code fixes and a README correction. Refreshed again 25 October 2026 to cover explicit tree growth,
-the Family Group naming code, the Middle Name field, profile pictures, and the Avatar Sweep
-(§4.13, §4.14) — §5 (DPG Evidence Pack) was deliberately left untouched in that pass; the pack is
-submitted and frozen. This is a snapshot for whoever picks up the project next — it is not a replacement for the detailed
-design docs already in this folder (linked throughout), and it will go stale as the code moves;
-treat it as a map, not a source of truth for exact current state.
+**Refreshed 2 November 2026**, as the final documentation consolidation at the end of the current
+website feature-development phase, before the project moves on to the phone application
+(`qumanity-app`). This is a full rewrite, not an appended note — the prior version (last touched
+25 October 2026) was reorganised and most of it rewritten so a new developer can understand the
+*current* system without needing old chat transcripts. Historical architectural decisions and
+"gotchas" that remain true were kept; stale claims were corrected or removed and are called out
+explicitly where correcting them matters.
 
-## 1. What Qumanity is
+This is a snapshot, not a replacement for the detailed design docs already in this folder (linked
+throughout). It will go stale as the code moves — treat it as a map, not a permanent source of
+truth for exact current state. Where a figure in this document was taken from a fresh, live check
+in this session, that is stated; where it is carried over from an earlier pass, that is stated too.
 
-Qumanity (Quantum + Humanity) is a civic participation platform organised around eight nested
-location levels — Village, Tehsil, District, State, Zone, Country, Continent, Earth. Each level
-has a Collective Board where residents post and vote, and a council (one man, one woman — Nayak
-and Nayika) elected through zodiac-sign cycles. Members get a verified identity (a 9-digit Private
-ID + 5-character PIN, no email required), a Qoin wallet earned through civic service, and a Karma
-score. The name is literal: a nested, transparent ledger of Space, Time and Consciousness, not a
-quantum-computing claim — see the About page's "quantum qualities" section (§4.5) for how that
-framing is actually justified in the UI.
+---
 
-One backend serves both the website (`qumanity-web`, this repo) and a React Native / Expo phone
-app (`qumanity-app`) through the same `/api` routes — the app authenticates with a signed bearer
-token, the website with a signed session cookie, and a valid token is treated exactly like a
-session.
+## 1. Project overview and current phase
 
-## 2. Architecture
+Qumanity (**Quantum + Humanity**) is a civic participation platform organised around **eight
+nested geography levels** — Village, Tehsil, District, State, Zone, Country, Continent, Earth (see
+§4). Each level has a Collective Board where residents post and vote, and (where elections have
+actually reached that level — currently village only, piloted in one location) a council elected
+through zodiac-sign cycles. Members get a verified identity (a 9-digit Private ID + 5-character
+PIN, no email required), a Qoin wallet earned through civic service, and a Karma score that is
+never convertible to Qoins.
 
-- **Flask + SQLite**, modular business logic in `*_core.py` files at the repo root, each with its
-  own `SCHEMA` / `ensure_tables(conn)`. `app.py` holds every page route, every `/api` route,
-  startup wiring, and session/auth.
+**Current phase**: this document marks the end of the current **website feature-development
+phase** (`qumanity-web`, this repository). The next phase is the **phone application**
+(`qumanity-app`), which must integrate with the backend documented here rather than redefining
+identity, geography, consent, or location IDs on its own — see §15.
+
+**Repository state at this handover** (verified fresh, not carried over):
+- Branch `main`. Local `HEAD` and `origin/main` both at **`6b8e5b5`** — `feat: add Q-Map Leaflet
+  rendering with OSM pilot data` — confirmed identical by `git fetch` + `git rev-parse` in this
+  session, i.e. this is genuinely the tip of `main`, not an assumption carried over from an older
+  note.
+- **Fresh regression run, this session: 1,380 checks across 30 test files, 0 failures.** This
+  supersedes the previously reported "1,378 across 30 files" figure — `tests/test_qmap.py` alone
+  has 33 checks, not 31, and the other 29 files' counts were re-confirmed unchanged. See §11 for
+  the full per-file table and how to reproduce it.
+- The working tree also carries **pre-existing, unrelated uncommitted changes** from other,
+  independently-scoped work (`db.py`, several `folder_export/Earth/*.json` mirror files,
+  `tests/test_post_kinds.py`, and a number of untracked location-data scripts, `Poems/` content
+  staging, and research docs). None of these were touched, staged, or committed by this
+  documentation pass — see §14.
+
+---
+
+## 2. Technology stack and repository structure
+
+- **Backend**: Python 3, **Flask**, **SQLite**. Business logic lives in modular `*_core.py` files
+  at the repo root (e.g. `wallet_core.py`, `family_core.py`, `osm_proximity_core.py`), each with
+  its own `SCHEMA` string and `ensure_tables(conn)`. `app.py` holds every page route, every
+  `/api` route, startup wiring, and session/auth — it is large and central by design, not an
+  oversight.
+- **Frontend**: server-rendered **Jinja templates** (`templates/`), plain JavaScript
+  (`static/js/`), plain CSS (`static/css/`). No front-end framework, no build step. The only
+  third-party JS libraries in the project are **Leaflet** (maps) and **three.js** (the homepage
+  globe), both loaded via pinned-version CDN `<script>` tags — the precedent for how any future
+  library would be added, should one genuinely be needed.
+- **Astronomy** (zodiac cycles, Kundali) is computed locally via `pyswisseph`'s built-in Moshier
+  ephemeris — no external service, no data files to maintain.
+- **Email**: Resend's HTTPS API (`email_core.py`) — not SMTP. (An earlier DPG evidence document
+  still described SMTP; this is one of the stale claims corrected in §10.)
+- **One backend serves both this website and the phone app** through the same `/api` routes — the
+  app authenticates with a signed bearer token, the website with a signed session cookie, and a
+  valid token is treated exactly like a session.
+- Full architecture detail: `docs/ARCHITECTURE.md`. Every route: `docs/API.md`. Every table:
+  `docs/DATA_MODEL.md`. **These three files are known to have drifted behind the actual code** as
+  of this handover (confirmed in `docs/audit_dpg_unfinished_features_2026_11.md`, an untracked,
+  not-yet-authorized research document from 2026-11-01) — do not treat their route/table counts as
+  current without re-checking. Updating them is listed as unresolved work in §13.
+
+### Repository structure (top level, relevant to this phase)
+
+```
+app.py                     All routes, session/auth, startup wiring
+db.py                      SQLite connection handling (DB_PATH binds at import time)
+*_core.py                  One module per subsystem's business logic + schema
+migrations/                NNN_description.{sql,py}, applied by tools/run_migrations.py
+templates/                 Jinja templates, one per page (no shared layout)
+static/css/, static/js/    Plain CSS/JS, one file per page/feature, no bundler
+static/data/               Geography master data and derived datasets (see §4)
+tests/                     Standalone PASS/FAIL scripts, one per subsystem (see §11)
+docs/                      This handover, status tracker, whitepaper, and ~70 other design docs
+docs/dpg_evidence/         The DPG Standard evidence pack (see §10)
+scripts/                   One-off data-maintenance and research scripts
+Poems/                     Marquee religious-text content files (see §9)
+```
+
+---
+
+## 3. Application architecture
+
 - **Migrations**: `migrations/NNN_description.{sql,py}`, applied by `tools/run_migrations.py`,
   tracked in a `migrations` table. `app.py`'s `ensure_database_ready()` runs the base schema, each
-  module's own tables, and every migration on every boot — no manual step. Current range:
-  001–003, 007–024 (004–006 unused). 024 is the most recent (Qmail drafts).
-- **74 application tables on boot, 76 in a running database** — counted directly against a
-  freshly-migrated throwaway database, not estimated from an older doc (75 on boot if you count
-  SQLite's own `sqlite_sequence`). The other two are created on first use, not on boot:
-  `chat_read_state` by `notify_core.py` and `election_cycle_config` by `election_core.py`. The
-  legacy `election_history` table is no longer created. Full list with purposes in
-  `docs/DATA_MODEL.md`.
-- **Four in-process scheduler jobs** (APScheduler, `BackgroundScheduler`): daily folder sync
-  (00:00), daily lunar-pipeline tick (00:00 IST), and the Post Testing cycle's monthly post job
-  (1st, 02:00 IST) and weekly vote job (Monday, 02:00 IST). `QM_DISABLE_SCHEDULER` turns all of
-  them off, used in tests.
-- **No front-end framework.** Server-rendered Jinja templates, plain JavaScript in `static/js/`,
-  no build step. The two third-party JS libraries in the whole project (Leaflet, three.js) are
-  loaded via pinned-version CDN `<script>` tags, not npm — the precedent for how any future library
-  would be added, should one genuinely be needed.
-- **Astronomy is local** — pyswisseph's built-in Moshier ephemeris, no external service, no data
-  files.
-- Full architecture detail: `docs/ARCHITECTURE.md`. Every route (178 under `/api`):
-  `docs/API.md`. Every table: `docs/DATA_MODEL.md`. All three were brought up to date at `065cecc`
-  and match the DPG pack's own copies byte for byte.
+  module's own tables, and every migration on every boot — no manual step. **Current range: 001–003,
+  007–035** (verified by listing `migrations/` fresh this session; 035 is `osm_proximity.py`, the
+  most recent).
+- **Table count**: **96 tables on boot**, counted fresh this session against a freshly-migrated
+  throwaway database (not estimated from an older doc — the previous handover's "74 on boot" figure
+  is stale and superseded). A small number of additional tables are created on first use rather
+  than on boot (e.g. `chat_read_state`, `election_cycle_config`) — not recounted individually this
+  pass. Full list with purposes: `docs/DATA_MODEL.md` (itself drifted — see §2).
+- **Scheduler jobs** (APScheduler, `BackgroundScheduler`): daily folder sync, daily lunar-pipeline
+  tick, the Post Testing cycle's monthly post/weekly vote jobs, the election-test daily tick
+  (`election_test_scheduler.py`), and the provisional-location reconciliation job
+  (`provisional_location_core.init_scheduler`). `QM_DISABLE_SCHEDULER` turns all of them off —
+  used in every test run.
+- **The membership rule that matters most**: a user counts toward the total members of exactly one
+  location — their **present residence** (`users.present_location_json`), set only by an explicit,
+  user-initiated action, never GPS/IP/a scheduled job. `location_elements.total_users` is
+  present-location-keyed. `location_elements.birth_users` is separate, metadata-only — never
+  counted toward membership, voting, or participation. This rule is also the input to Q-Punch
+  address generation (§9) and to the provisional-location activation threshold (§6) — a location's
+  real member count is the single source every subsystem that counts "who lives here" depends on.
 
-## 3. Database schema — what's new since the last stable baseline
+---
 
-| Migration | What it added |
-|---|---|
-| 015 | `qoins` (one row per physical denominated Qoin a wallet holds), `recognition_stars` (permanent record of a positively-recognised board post, independent of the post's own lifecycle) |
-| 016 | `users.is_demo`, `users.is_removed` — both default 0 |
-| 017 | `board_posts.post_kind` (`member`/`test`/`council_update`), `.is_test`, `.is_demo_post`, `.test_reward_inr`; `board_votes.voted_at`; new table `testing_windows` |
-| 018 | `location_elements.birth_users` |
-| 019 | `admin_export_log` (the member-export tool's audit trail) |
-| 020 | `admin_queries`, `admin_query_replies` (the Admin Panel's general-query ticket type) |
-| 021 | `users.qmail_username`, `qmail_addresses`, `qmail_messages` — Qmail, internal member-to-member messaging (§4.7) |
-| 022 | `qpunch_addresses`, `qpunch_queue_messages`, `qpunch_queue_actions` — Q-Punch council addresses and their shared queue (§4.8) |
-| 023 | `qmail_attachments` — compose-time file attachments, stored as SQLite BLOBs (§4.10) |
-| 024 | `qmail_drafts` — unsent compose-form state, autosaved on close (§4.7) |
-| 025 | `profile_change_requests.request_type`/`.location_level`/`.location_id`, `profile_change_attachments`, `users.birth_time_known` |
-| 026 | `family_nodes`, `family_parent_links`, `family_spouse_links`, `family_groups`, `family_group_members`, `family_group_messages`, `family_group_nodes`, `users.timeline_activated_at` — the Family Tree, Phase 1 (§4.12) |
-| 027 | `family_groups.husband_node_id`/`.wife_node_id`/`.husband_parent_group_id`/`.wife_parent_group_id`/`.marriage_status`, `people_requests.target_node_id` — the Nuclear Family Node pivot (§4.12) |
-| 028 | `users.profile_picture` (BLOB), `.profile_picture_updated_at` — profile pictures (§4.13) |
-| 029 | `users.middle_name` — optional, feeds the Family Group naming code (§4.13) |
-| 030 | `referral_bonus_awards` — one-time weekly referral-volume bonus Qoins (§4.16) |
+## 4. Geography hierarchy and master data
 
-**The invariant that matters most**: `board_posts.is_test = (post_kind == 'test')`, enforced by
-writing all three fields (`post_kind`, `is_test`, `is_demo_post`) in a single `INSERT`, never a
-follow-up `UPDATE`.
+Eight nested levels, in order: **Village → Tehsil → District → State → Zone → Country → Continent
+→ Earth.** Every member, post, council seat, and governance mechanism in the project is scoped to
+one of these levels.
 
-**The membership rule that matters most**: a user counts toward the total members of exactly one
-location — their **present residence** (`users.present_location_json`), set only by an explicit,
-user-initiated action, never GPS/IP/a scheduled job. `location_elements.total_users` is
-present-location-keyed (`is_demo=0 AND is_removed=0`). `location_elements.birth_users` is
-separate, metadata-only — never counted toward membership, voting or participation. Full rationale
-in `docs/member_count_design.md`. **This rule is now also the input to Q-Punch address generation**
-(§4.8) — a location's real member count is the single source both subsystems depend on.
+- **Canonical source**: `Qumanity_Master.json`, a non-git-tracked file on the owner's own machine
+  (outside this repository, under `~/Desktop/0_Earth/`). It is the authoritative geography source
+  — not a script-generated artifact — and derived datasets (`static/data/subcontinent_districts.json`,
+  `static/data/india_districts_tehsils.json`, the `india_villages` table) are read-only reflections
+  of it for the application to query quickly.
+- **Geography IDs are stable, load-bearing identifiers** — dotted codes like `CS.DL.3.4.1A`. **No
+  renumbering, reparenting, or deduplication without an approved migration and crosswalk.** This is
+  a hard rule, not a style preference: these IDs are embedded in `users.present_location_json`,
+  `users.birth_location_json`, board posts, council addresses, and more. A proposed
+  `location_id_history` crosswalk table schema exists (`docs/location_id_crosswalk_schema.md`) but
+  is **not built and not populated** — schema only.
+- `Qumanity_Master.json` **is** authored by in-repository, one-off scripts
+  (`scripts/add_navi_mumbai_locations.py`, `scripts/add_ganesh_pura_tri_nagar.py`, and similar),
+  each with its own backup-then-write convention — this corrects an earlier documentation claim
+  that no script in the repository writes to it.
+- **India location deduplication remains proposal-only.** A full national audit
+  (`scripts/audit_all_india_duplicates.py`) found **74 Tehsil-level and 15 Village-level duplicate
+  groups nationally, 0 at State/District level**, across all 37 States/UTs. One pair (Bawana,
+  `CS.DL.3.4`/`CS.DL.3.E`) has been resolved **only in the two derived JSON files**, not in
+  `Qumanity_Master.json` itself — this was a narrow pilot correction, not a nationwide
+  deduplication. `docs/india_dedup_migration_plan.md` is explicitly marked **AWAITING APPROVAL —
+  DO NOT EXECUTE**. At least one open case (Tri Nagar) has real user references on both candidate
+  survivor IDs, so the remaining groups cannot all be resolved the same way Bawana was. **No
+  further deduplication is authorized.**
+- `~/Desktop/0_Earth/` and its archived materials (`~/Desktop/0_Earth_Archive/`) have established
+  preservation constraints — the live tree must never be restructured or deleted without being
+  asked, and no filesystem changes were made to it during this documentation pass.
+- `scripts/edit_master_location.py` is a safe, tested, but **uncommitted** single-record
+  add/rename/remove tool (hex-suffix ID validation, duplicate prevention, a full 16-table reference
+  audit before any removal, backup + SHA-256 + atomic write). It is a tool for making one
+  controlled edit at a time, not a bulk deduplication mechanism.
 
-## 4. Major subsystems
+---
 
-### 4.1 Qoin / wallet reward redesign
+## 5. Main application modules and their implementation status
 
-`qoin_core.rank_reward_inr(rank, n, level)` uses a **variable top-tier rule**, not a fixed top-5:
-`top_tier_count(n)` is flat 1 for `n ≤ 10`, else `n // largest_power_of_ten_strictly_below_n`.
-Reward fraction is `1 - position/remaining`, exact integer arithmetic. `board_core.py`'s `settle()`
-branches on `post_kind`: a `test` post computes and stores `test_reward_inr` but never actually
-credits anything; a `member` post does the real thing.
+Status as verified in this session (git state + direct code inspection), not carried over from an
+older summary.
 
-### 4.2 The Post Testing cycle (migration 017 + `test_cycle_scheduler.py`)
-
-A one-year automated demo-user testing system. Monthly job posts one test post per demo voter;
-weekly job runs a top-up voting round. `cast_vote()` rejects only `post_kind == 'council_update'`.
-**Council Updates** are a third post kind: never voted on, never frozen/elevated/rewarded,
-read-only except for Agree/Disagree reactions.
-
-Demo users: `scripts/seed_demo_voters.py` (50 demo voters) and `scripts/mark_existing_demo_users.py`
-(pre-existing users 25/26). Separate from the ~500 DB-only election-demo users already in Rohini
-Sector 24 from the earlier election pilot.
-
-### 4.3 Member count correction
-
-Fixed in two layers: five live-query public-stats endpoints were missing `is_demo=0 AND
-is_removed=0` filters; `location_elements` was birth-location-keyed, not present-location-keyed.
-Fixed via `elemental_core.recompute_location_elements(conn, dry_run=False)`,
-`scripts/backfill_location_elements.py`. Small-count suppression (`_suppress_small_count`):
-counts 1–4 render as `"<5"`, 0 stays 0.
-
-### 4.4 About page — the quantum qualities section
-
-Maps six quantum-physics qualities to real features on `templates/about.html`. Explicitly honest
-about which are live vs. built-not-active (Non-locality, the lunar pipeline). Now also describes
-Qmail (as an example of Entanglement — the 30-day forward window linking old and new addresses)
-and the Admin Panel (as an example of Coherence — a different kind, behind the sign-in wall).
-
-### 4.5 Homepage redesign
-
-Moved `templates/home.html` off a standalone dark theme onto the site's shared light palette, kept
-a dark sticky nav/footer as the one deliberate dark anchor. Cut from 9 sections to 6. All four
-must-stay elements (live stats + globe, Founder's Message teaser, inline sign-in, small-count
-suppression display) preserved.
-
-### 4.6 Dashboard onboarding tour — 12 steps to 5
-
-`static/js/tutorial.js` is a live spotlight overlay over the real dashboard. Storage:
-`review_core.py`'s `user_onboarding.tour_status`. Reduced to 5 steps: tabs, board feed, Citizen
-Reports + My Reports, Qoins + Karma, closing CTA.
-
-### 4.7 Qmail — internal member-to-member messaging
-
-Full design: `docs/QMAIL.md`. An email-shaped internal messaging system — **not real inbound
-internet mail**; `@qumanity.in` is an addressing convention a message never leaves. Address format
-`[username]-[account_id]@qumanity.in`, e.g. `rohit.delhi-KR3-EO-GMA2-ZAI-CS.DL.3.4.1A@qumanity.in`.
-`qmail_username` lives once on `users` (own unique index); `qmail_addresses` is history, one row
-per `account_id` epoch, with a 30-day `forward_until` window so a just-changed address still
-resolves for a month. `social_core.regenerate_account_id()` is the **single choke point** both
-`account_id` itself and Qmail's address-sync run through — the one function that changes either,
-by design, so they can never fall out of sync the way `account_id` itself once did (Path A/Path B,
-fixed earlier in this project's history). The smart "To" field's autocomplete is scoped entirely
-by `social_core.connected_user_ids()` (Personal Group membership unioned with active private
-chats) — a disconnected member never appears, under any circumstance.
-
-**The member mailbox UI lives on its own page, `/qmail`, not the dashboard's Private tab** — see
-§4.11. The dashboard keeps only a small activation card (username chooser, address, an
-"Open Qmail →" link). Message bodies are plain text with a narrow whitelist markup (`**bold**`,
-`_italic_`, `[text](url)`) — never HTML, on either side. The client builds `<b>`/`<i>`/`<a>` DOM
-nodes directly from the parsed text (`static/js/qmail_format.js`'s `qmRenderFormattedText`, shared
-by the Admin Panel's council detail view and `/qmail`'s own reading pane); no HTML string is ever
-constructed from user input, so there is no sanitizer installed and no `|safe` anywhere in this
-codebase — **deliberately, not an oversight** (`docs/QMAIL.md` §12 says this explicitly, for
-exactly the reason a future contributor might otherwise "fix" it). A link's URL is scheme-checked
-(`http(s)://` only) before becoming clickable. Attachments are compose-time only, stored as SQLite
-BLOBs (`qmail_attachments`, migration 023) — a prototype choice, not permanent architecture, chosen
-because the database already carries the volume-persistence guarantee a disk path on Railway would
-need a new, separately-configured path to earn. Capped at 2 MB, enforced twice independently
-(Flask's app-wide `MAX_CONTENT_LENGTH` as a first line of defense, `qmail_core.save_attachment()`'s
-own precise byte check against the decoded data). Images are attachment-only, never inline by
-URL — a privacy decision (an inline `<img src>` to an external host leaks the viewer's IP at
-render time), not a style one.
-
-**Drafts** (`qmail_drafts`, migration 024): unsent compose-form state, autosaved silently when the
-compose overlay closes with any field non-empty. Scoped by `user_id`, same 404-not-403 shape as
-the council queue. Sending from a draft deletes it atomically with the send — the commit that does
-this lives inside `qmail_core.delete_draft()` itself, not where it looks like it should (full
-explanation in `docs/QMAIL.md` §13, worth reading before touching that function). **No cleanup job
-for abandoned drafts** — a stated limitation, not an oversight (Gmail behaves the same way); the
-delete route exists so a member can clean up their own drafts by hand.
-
-### 4.8 Q-Punch council addresses
-
-Full design: `docs/QMAIL.md` §11. An extension of Qmail that addresses a **location**, not a
-member: `<level>-<location_id>@qumanity.in`, e.g. `village-CS.DL.3.4.1A@qumanity.in`. A location
-gets one **permanent** row in `qpunch_addresses` the first time its real member count reaches its
-level's threshold — never retired or reactivated afterward, at any level, even if the count later
-drops:
-
-| Level | Threshold | Reachable today |
+| Module | Status | Notes |
 |---|---|---|
-| village | 5 | Yes |
-| tehsil | 10 | Yes |
-| district | 100 | No |
-| state | 1,000 | No |
-| zone | 10,000 | No |
-| country | 100,000 | No |
-| continent | 1,000,000 | No (theoretical at current scale) |
-| earth | 10,000,000 | No (theoretical at current scale) |
-
-Generation hooks into `elemental_core.recompute_location_elements()` (`qmail_core.
-sync_qpunch_addresses`, same transaction, so a dry run creates nothing). **Village-only
-reachability is one constant** (`qmail_core.QPUNCH_REACHABLE_LEVELS = {"village"}`), read by two
-consumers — `resolve_address()` for delivery, the board-line renderer for display — not two
-independently-maintained gates that could drift apart. The Collective Board's existing Q-Punch
-popup (`/api/qpunch/<level>`, `board.js`'s `openQp()` — a pre-existing five-seat governance
-display, not something this feature invented) now shows the address plus who currently receives
-it: "Village Council — `<address>`" when a seat is filled, "Village Council (received by the
-Founder until the first election) — `<address>`" when it's empty, "`<Level>` Council (not yet
-reachable in this prototype) — `<address>`" above village.
-
-**The council queue**: a council message is never delivered into `qmail_messages` — it has no
-fixed recipient (the heads change at every election), so it goes into `qpunch_queue_messages`
-instead, a shared, location-keyed inbox read through the Admin Panel (§4.9), never through an
-individual's personal Qmail. A village head's own personal Qmail address and inbox are completely
-untouched by any of this — two addresses, two surfaces, no crossover. Every touch on the queue
-(view, reply, close) writes a `qpunch_queue_actions` row naming the real actor, the same
-transparency posture `id_recovery_reveals` already established for this codebase.
-
-**The resident reads the reply in Qmail.** Until `c09b91f` a member who wrote to their council, or
-sent the Admin a query, was notified of a reply but no route returned the reply's text, and the
-notification never cleared. Now `GET /api/qmail/sent/council/<id>` and `GET /api/queries/mine/<id>`
-return the sender's original with each reply's text and time — never the action log, and never who
-on the council or admin side replied — and opening either clears the notification through the
-existing `chat_read_state` table (kinds `council` and `query`). Both are sender-only, with the same
-404-not-403 shape as the queue. `tests/test_reply_read.py` covers them.
-
-### 4.9 The Admin Panel's scope evolution
-
-Full design: `docs/ADMIN_PANEL.md`. Built as a single **filterable list + detail pane** (not three
-or four separate panes — an earlier design description called it "three-pane," which was wrong),
-originally over three sources (Citizen Reports, ID recovery, member queries), gated by
-`_is_admin_panel_user()`. That function now returns a **scope descriptor** instead of a bool —
-`None`, `{"scope": "global"}` (the Founder, all four sources), or `{"scope": "location", "level":
-"village", "location_id": ...}` (a currently-serving village head, their own council queue only,
-nothing else) — read fresh from `village_council` on every request, no caching, so an expired term
-drops a head out of scope on their very next request. The council queue slotted in as a **fourth
-filter button** and one new detail renderer, not a new pane — confirming the original list+detail
-shape was built generic enough to absorb it cheaply. Four scoping invariants (404-not-403 for an
-out-of-scope message id, the location handler taking no request argument at all, the no-caching
-re-check, no audit row on a rejected cross-location write) are recorded in full in
-`docs/ADMIN_PANEL.md` §8, each proven by a named test, not just asserted.
-
-### 4.10 The attachment system
-
-Covered in §4.7 above (member mailbox) and §4.8 (council queue, which shares the same storage and
-serve route). One thing worth restating here because it's easy to miss: `GET
-/api/qmail/attachments/<id>` is the **only** way an attachment's bytes ever leave the server, and
-it re-derives access on every request from the message the attachment belongs to — sender or
-recipient for a member message, sender or panel scope (reusing `_qpunch_message_in_scope()`
-directly) for a council one. There is no bare, unguarded file URL anywhere in this feature.
-
-**Fixed at `f1edd55`: attachments used to be served inline** with the sender-declared content type
-and no file-type allowlist, so an HTML or SVG attachment could run script on qumanity.in. They are
-now always served as downloads with `X-Content-Type-Options: nosniff`, and uploads are limited to a
-15-type allowlist (`qmail_core.AttachmentTypeError`, a `ValueError` subclass, so the compose route
-returns 400 for a disallowed type, not the size limit's 413). A file whose browser declares a blank
-or unknown type is rejected — deliberate strictness, and a limitation members may notice. The fix
-changed the serve route, not stored data, so attachments already stored are covered without a
-migration. `tests/test_qmail_attachments.py` section 6 covers it.
-
-**A known, stated gap**: whether a `<script>` tag in a message body actually renders as inert text,
-and whether a `javascript:`-scheme link actually fails to become clickable, are DOM-rendering
-properties of `static/js/qmail_format.js`'s `qmRenderFormattedText()` (extracted out of
-`dashboard.js` and **rewritten**, not merely relocated — see §4.11) with no Python-testable surface
-in this stack (no Selenium/Playwright/jsdom installed). Both were verified directly in a live
-browser once, by hand, this session — not by an automated regression test. `tests/
-test_qmail_attachments.py` covers everything a backend test *can* verify about this feature
-(size limits, access control, that the server never mangles a body); it cannot and does not
-re-check the renderer. A future change to that function could reintroduce an XSS path and nothing
-in this project's test suite would catch it — recorded here so the next person knows the renderer
-is unguarded by automation, not assumed safe forever because it passed once.
-
-### 4.11 The `/qmail` page
-
-A standalone route (`@app.route("/qmail")`), not a dashboard tab — every page in this codebase is
-already a self-contained template with no shared layout, so a dedicated route is the established
-pattern here, not a departure; it gets a real URL, back-button correctness, and its own scroll
-context with no risk of colliding with the dashboard's own overlay stack. `GET /qmail` redirects
-an unactivated member to `/dashboard`, where the activation card lives — this page assumes an
-address already exists.
-
-**At commit `ab01267`, `#qm-qmail-card` on the dashboard stopped being a mailbox and became a
-door.** It shows only activation (username chooser), the member's address, and an "Open Qmail →"
-link — the inbox/sent/compose UI it used to hold moved to `/qmail` entirely. A future contributor
-reading `templates/dashboard.html` and wondering why this card is just a link rather than a
-mailbox should read this as the deliberate endpoint of that move, not a card someone forgot to
-finish building.
-
-**`static/css/qmail.css` is its own file, not appended to `dashboard.css`.** `/qmail` doesn't load
-`dashboard.css` at all (same pattern `templates/elements.html` already used: `style.css` +
-`register.css` + one page-specific stylesheet). Appending would mean loading the Admin Panel's
-grid, `.pv-card`, and every stats-panel rule on a page that needs none of them. Two small utility
-classes (`.qm-dash-empty`, `.sg-btn`) are redefined verbatim in `qmail.css` because they only
-existed in `dashboard.css` before — **if `.sg-btn` ever looks like an accidental duplicate, it
-isn't; see `docs/QMAIL.md` §14 before "fixing" it into one shared file.**
-
-**The renderer was rewritten, not just moved, at commit `e99eced`.** `qmRenderFormattedText` used
-to live in `dashboard.js` and build elements through that file's own local `apEl()` helper;
-extracted into standalone `qmail_format.js`, it was rewritten to call
-`document.createElement`/`.textContent` directly, since `apEl()` wasn't reachable from the new
-file. Same output, different code — a future reader diffing against an old `dashboard.js` should
-know the implementation changed at that commit, not just its address.
-
-**Two bugs found only by a live browser walkthrough, neither with a static-test surface:**
-- `.qmail-compose-overlay`'s unconditional `display: flex` overrode the browser's own `[hidden] {
-  display: none }` default — the `hidden` attribute and the JS reading it were both correct, only
-  the rendered pixels were wrong. Fixed with an explicit `.qmail-compose-overlay[hidden] { display:
-  none; }`. Lesson for any future `hidden`-toggled element in this codebase: if its class also
-  declares `display` unconditionally, it needs that same explicit override, or `hidden` does
-  nothing.
-- The smart-To autocomplete's close-to-save-draft path read the input's *display* text ("Page
-  Target (pagetargetqm-…)") instead of the resolved address it had already captured in a separate
-  variable. Every draft composed via the autocomplete — the common case, not an edge one — silently
-  saved an unresolvable `to_address`; reopening and sending such a draft failed every time with
-  "address not recognized." Fixed by preferring the stored resolved address over the input's
-  display text. General lesson: **any autocomplete that writes a human-readable label into the
-  same field it resolves a value from must persist the resolved value, not the input's current
-  text** — this will recur wherever else a "Name (value)" autocomplete feeds something that gets
-  saved and re-submitted later.
-
-**Deleting the dashboard's old inline mailbox UI was a real removal, not a left-to-no-op.**
-`#qm-mail-card` and the legacy `#qm-messagebox-card` placeholder are gone from
-`templates/dashboard.html`; `static/js/dash_extras.js` lost the ~124 lines of inbox/sent/compose
-logic that only `#qm-mail-card` ever drove. That block would have safely no-op'd once the element
-left the DOM (`if (mailCard) { … }` already guarded it) — it was removed anyway, because a safe
-no-op left in the file is still something a future reader has to read and confirm is unreachable
-before trusting that it is.
-
-**Known structural debt, named so nobody "fixes" it without knowing it grew that way
-deliberately**: `static/js/dashboard.js` carries two unrelated jobs in one file — the dashboard's
-own tab/profile logic, and the Admin Panel's list+detail rendering (`apEl`, `apLoadFeed`,
-`apOpenReport`/`apOpenQuery`/`apOpenCouncil`, etc.). They ended up in the same file because the
-Admin Panel was built as an extension of the existing dashboard page, not a separate one. Splitting
-them into two files is a reasonable future cleanup, not something broken today.
-
-**A known gap, not an oversight**: the member-profile popup (`static/js/dashboard.js:508-520`,
-shown when clicking another member's card elsewhere in the app) still shows a disabled "✉️ Send
-Message" button with a "Coming soon" note, even though Qmail fully exists now. Wiring it to
-`/qmail`'s compose flow (or to a lighter in-place compose) is a reasonable future pass; it simply
-hasn't been done yet.
-
-### 4.12 The Family Tree — Nuclear Family Node architecture (`family_core.py`, 2026-10-20)
-
-**A `family_groups` row is a marriage unit, not a generic container.** The model went through an
-earlier "lineage vs. marital group" pass (kept below in git history, not here — it's fully retired)
-before settling on this: a unit names its two founders directly —
-`husband_node_id`/`wife_node_id` (one may still be an unclaimed placeholder) — plus
-`husband_parent_group_id`/`wife_parent_group_id` pointing at each founder's own birth unit, if the
-tree already knows it, and `marriage_status` (`active`/`separated`/`dissolved`). `family_nodes` /
-`family_parent_links` are unchanged by the pivot: a node is still just a person, claimed or empty.
-`family_spouse_links` is **deprecated** — a marriage IS the unit's own husband/wife pair now, so new
-marriages never write to it; `tree_for_group()` (the legacy whole-group view) synthesizes an
-equivalent spouse-link entry from the pair so it keeps rendering correctly. `family_group_nodes`
-still holds a unit's **unmarried** children — a couple's kids who haven't founded their own unit
-yet are plain nodes here, not units themselves. `activate_timeline()` (father+mother) and
-`marry_timeline()` (self+spouse) both now route through one shared `_find_or_create_couple_group()`
-— finding an existing unit if either side already belongs to one (e.g. a sibling activated first),
-never auto-adding members to a *found* unit so the join-request consent model stays intact.
-
-**Why one couple per unit, not a full tree**: a child has two parents, and `d3.hierarchy()` allows
-exactly one — the project's original DAG problem. Making a unit *be* the couple fixes that at the
-schema level, but reintroduces the identical problem one generation up: a married unit has **two**
-parent units (husband's birth family, wife's), almost always two unrelated ancestries meeting only
-at this one marriage, so no single tree view can still render arbitrarily many generations at once.
-**The chosen fix: render one unit's own immediate neighborhood at a time** — `static/js/family_tree.js`
-fetches `GET /api/family/node/<group_id>/neighborhood` (despite the route saying "node," `<id>` is a
-`family_groups.id` — a unit — under this model) and lays out exactly three fixed rows: up to 2
-parent units above, the current unit (highlighted) in the middle, its unmarried children and child
-units below. No `d3.hierarchy()`/`d3.tree()` layout algorithm is needed any more — a unit is already
-a couple, so there's no DAG left to flatten; each row is placed directly from the response's own
-shape. Clicking any unit card except the current one re-centers the view by fetching *its*
-neighborhood, so navigating the whole tree is a sequence of one-generation steps in either
-direction, never one all-encompassing render.
-
-**Dormancy is computed live, never stored** (`_group_is_dormant()`) — a unit is dormant once
-*neither* founder slot is a filled, alive node, same "never trust a stale snapshot" discipline the
-rest of this module already uses for a claimed node's name/DOB. **Admin succession walks both
-ancestral lines, with no patrilineal/matrilineal default** (`_is_admin_of_group()`): a living founder
-(or the unit's creator — see below) is always its admin while the unit is active; once dormant,
-authority for anything reached through it recurses up through *either*
-`husband_parent_group_id` or `wife_parent_group_id`, to any reachable active ancestor on either
-side — "if both the husband's parents and the wife's parents are alive, both sets of grandparents
-have admin rights over the dormant child's unit" was the explicit, approved design. This **resolves
-the handover's previous open item** ("Family Group admin succession is unsolved if a group's sole
-admin's own node is later marked deceased") — succession is no longer a speculative gap.
-
-**The creator of a freshly-founded unit is also always granted admin**, additive to founder-based
-admin, not a replacement for it — a real gap, not a hypothetical: strict founder-only admin would
-leave a brand-new unit with **zero** admins the moment both founder slots start out as unclaimed
-placeholders (e.g. a child activating with parents who've never registered), unable to fix a typo or
-link a parent once they sign up. Mirrors the pre-pivot model, which granted the creator admin
-unconditionally.
-
-**Claiming an empty founder slot (a spousal join) swaps the unit's slot to the joiner's own
-existing self-node — it never tries to claim the placeholder node directly.** A real bug caught by
-the test suite, not by review: the joiner already has their own self-node from activation (required
-before `request_join_group()` accepts the request at all), and `family_nodes.claimed_user_id` is
-globally unique — one node per real person, not per group — so setting it on the placeholder too
-collided with that constraint. `add_member()`'s `target_node_id` path (threaded through
-`people_requests.target_node_id`, a small additive schema change) now re-points the group's
-`husband_node_id`/`wife_node_id` at the joiner's real self-node instead, leaving the original
-placeholder in place but unreferenced by that unit.
-
-**Node editing is unchanged by the pivot**: `POST /api/family/node/<id>/name` only ever renames an
-empty node (refused outright on an already-claimed one, whose visible name always comes live from
-`users.name`); `POST /api/family/node/<id>/link` claims an empty node for a real user and — new
-this pass — automatically grants that person admin if the claimed node turns out to be a unit's
-founder slot (`_grant_founder_admin_if_applicable()`), the natural structural consequence of founder
-status, not a new privilege smuggled into linking.
-
-**Known, deliberately unsolved limitation**: husband/wife slot assignment is derived from
-`users.gender` (whichever side is male becomes `husband_node_id`) — a named limitation of the
-husband/wife-shaped schema for same-gender couples or `gender='both'` users, inherited directly from
-the architecture's own column naming, not silently expanded or hidden.
-
-### 4.13 Explicit tree growth and the Family Group naming code (`family_core.py`, 2026-10-20)
-
-**The D3 neighborhood view grows the tree by hand, not just through the Activation/Marriage
-wizards.** Two new routes: `POST /api/family/node/<group_id>/add-parents` (`side`:
-`husband`/`wife`, plus `father`/`mother` name entries) wraps the existing
-`_link_known_parents_group()` — the same mechanism the wizards already use one generation at a
-time — and rejects if that side's parents' unit is already known. `POST
-/api/family/node/<group_id>/add-child` is one primitive serving **both** "+ Add Child" and "+ Add
-Sibling" in the UI: a plain unclaimed placeholder, linked as a child-member of `group_id`'s two
-founders — "Add Child" passes the viewer's own unit, "Add Sibling" (an in-law, structurally a
-child of the *spouse's* parents' unit, not a peer of the viewer) passes that unit's `group_id`
-instead. `static/js/family_tree.js`'s top row always renders exactly 2 slots (a real unit card or
-a dashed "+ Add Father's/Mother's Family" placeholder); the bottom row always trails a dashed "+
-Add Child"; a dashed "+ Add Sibling" attaches beside the spouse's parent card only once that
-card is real.
-
-**Family Group naming replaced the old "name after the single eldest-and-alive founder" rule**
-(`_group_name_from()`, now dead code) **with a code built from *both* founders**:
-`_group_name_from_couple()` → `[HusbandCode]-[WifeCode]-[Surname] Family`. Per founder,
-`_name_code(first, middle, last, fallback_last="")`: `pool = first + middle` (spaces stripped);
-the code's first 2 characters are `pool[:2]` (First's own letters, reaching into Middle only once
-First alone is under 2 characters); the last 2 are `last[-2:]`, or — **only if this side has no
-last name at all** — `fallback_last[-2:]` (a wife with no surname of her own borrows the
-husband's — the one asymmetric rule in the spec), or, failing both, `pool[2:4]` (a bare single
-name like "Amit" self-pads to a stable 4-character code: "AMIT"). Verified byte-for-byte against
-every worked example given for this feature, including `"A P J Abdul Kalam"` → `APAM` and
-`"Sakshi"` (no surname, husband "Kumar") → `SAAR`. The trailing surname is the husband's, or the
-wife's if he has none, or `"[HusbandLast] & [WifeLast]"` if they have different surnames, or
-omitted if neither has one. `_name_parts_for_node()` resolves (first, middle, last) for a
-`family_nodes.id`: live from `users.name` + the new `users.middle_name` column once claimed
-(`_pick_unit_eldest()` is untouched — a separate concept, still used only for
-`family_groups.eldest_node_id`); an unclaimed placeholder has no `middle_name` column at all, so
-its Middle comes from whatever tokens fall between the first and last word of its single
-`display_name` string — the same mechanism that makes `"A P J Abdul Kalam"` typed as one string
-produce the right code without ever touching a dedicated field.
-
-**`users.middle_name`** (migration 029) is optional, a plain third field alongside `name` — never
-required at registration, routed through the same council-approval queue as name/email/phone when
-edited later (`PROFILE_CHANGE_FIELDS` in `app.py`), self-service nowhere.
-
-### 4.14 Profile pictures and the Avatar Sweep (`profile_picture_core.py`, `static/js/avatar.js`, 2026-10-20)
-
-**Stored as a BLOB directly on `users`** (migration 028: `profile_picture`,
-`profile_picture_updated_at`), the same precedent as `qmail_attachments` (migration 023) and
-`profile_change_attachments` — the database already carries the volume-persistence guarantee a
-disk path on Railway would need a separately-configured mount to earn. One picture per user, so a
-direct column beats a whole new table.
-
-**Every upload is unconditionally re-encoded server-side, never stored as-is**:
-`profile_picture_core.process_image()` applies `ImageOps.exif_transpose()` (bakes in rotation
-*before* EXIF is discarded — many phones store rotation in EXIF rather than rotating the pixels),
-strips all EXIF (a phone photo's EXIF routinely carries GPS coordinates — a real location leak for
-an app already careful never to expose more location precision than a feature needs),
-center-crops to square, resizes to a fixed 256×256, and re-saves as JPEG (quality 85). Upload cap:
-3 MB raw, under `app.py`'s existing global `MAX_CONTENT_LENGTH` (also 3 MB) by design, so the two
-limits coincide rather than needing separate tuning; allowlist is png/jpg/jpeg/webp only, extension
-and declared content-type must agree (mirrors `qmail_core.allowed_attachment_type()`'s pattern,
-narrowed to images). Self-service (`POST /api/profile/picture`) — immediate, never routed through
-the `/api/dashboard/edit-request` council-approval queue, since a picture is cosmetic, not a
-foundational identity fact. Served via `GET /api/users/<id>/profile-picture`
-(`as_attachment=False`, since it renders inline in `<img>` tags, with the same `nosniff` header
-every other served file in this project carries) — **404s if the owner has `hide_identity` set and
-the viewer isn't an established family member** (`social_core.is_family_member()`), the exact same
-rule that already masks a hidden user's real name.
-
-**`window.QMAvatar.render(user, size)`** (`static/js/avatar.js`, loaded on both `dashboard.html`
-and `qmail.html`) is the one reusable avatar renderer every surface now calls instead of its own
-ad-hoc "letter in a colored circle" markup: an `<img>` if `user.profile_picture_url` is set
-(falling back to the colored-initials div on a 404, e.g. a `hide_identity` photo the viewer isn't
-entitled to), else a flat-colored div keyed by `user.gender` with the name's initials. Returns a
-real `HTMLElement`, so it works both in plain DOM (chat bubbles, board posts, Qmail rows, admin
-replies) and inside the Family Tree's SVG canvas via a `<foreignObject>`
-(`family_tree.js`'s `renderAvatar()`, which replaced its own earlier SVG-only
-clip-path/circle/text implementation). Backend listing queries updated to carry
-`user_id`/`gender`/`profile_picture_url` for this: `social_core.group_messages()` /
-`my_chats()` / `chat_messages()`, `board_core`'s post/comment/star/subgroup-chat queries,
-`/api/qmail/inbox` and `/api/qmail/sent`, and `admin_queries_core.replies_for()`. **Not yet
-wired**: the Admin Panel's combined feed row and the report/ID-recovery/council ticket detail
-views (their backends — the feed merge route, `reports_core.py`, `recovery_core.py` — weren't
-touched in this pass) still show plain text. `QMAvatar.render()`'s `hide_identity` branch (a
-neutral icon + Account ID initials, never the real name/photo) exists in the function itself, but
-no current call site feeds it `hide_identity: true` — `social_core.py`'s own docstring documents
-board posts as "unaffected by design," and chat/Qmail participants are already-connected contexts,
-so there was no existing precedent to retrofit onto.
-
-### 4.15 Group Member Lists and Public ID invites (`family_core.py`, `social_core.py`, 2026-10-25)
-
-A proper member directory (avatar, name, Admin/Member role) plus an "Add Member by Public ID"
-search box, for both group kinds in this project — they stayed two separate code paths rather than
-being unified, since their membership models genuinely differ:
-
-- **Personal groups** (Friends/Business/Custom, `social_core.py`): single-owner admin model.
-  `group_messages()`'s existing `members` list gained an `is_admin` field (`user_id ==
-  owner_user_id`) and `find_person()` now also returns `profile_picture_url`, feeding the Avatar
-  Sweep (§4.14). No new invite mechanism — reuses the existing `/api/people/invite` +
-  `people_requests(kind='group')` flow, already admin-initiated.
-- **Family Groups** (`family_core.py`): multi-admin model (`family_group_members.is_admin`). New
-  `invite_to_group(conn, admin_user_id, group_id, target_user_id)` and `group_members_for(conn,
-  viewer_user_id, group_id)`. `invite_to_group` takes an **already-resolved `user_id`**, not a raw
-  Public ID string — the caller (the frontend) confirms a name/avatar via `/api/people/search`
-  first, exactly matching `social_core.send_group_invite()`'s own signature convention. Rejects:
-  self-invite, a target that doesn't exist (404), a duplicate pending invite, and a non-admin
-  caller (403). Non-members get 404 (not 403) on the member list, the same scoped-404 convention
-  used throughout `family_core.py`.
-
-  New `people_requests` kind, `'family_group_invite'` (admin-initiated, symmetric to the existing
-  self-initiated `'family_group_join'` — the two differ in which side is `from_user_id`).
-  `social_core.decide_request()` gained a branch for it: accepting adds the **decider** (not the
-  sender) as a plain member, with no founder-admin grant. `inbox()`'s join condition and
-  text-rendering both had to cover the new kind — the text-rendering fix also incidentally repaired
-  a pre-existing bug where `'family_group_join'` rows rendered `undefined` (the frontend read a
-  field name the backend never actually returned).
-
-Two new routes: `GET /api/family-groups/<id>/members`, `POST /api/family-groups/<id>/invite`.
-
-**Caught live, not by the automated tests**: the first `invite_to_group()` signature took a raw
-Public ID string (via `_resolve_target_user_id()`), matching `link_node_to_user()`'s convention
-instead of `send_group_invite()`'s — the automated test happened to always pass a real 12-digit
-code, so it never exercised the mismatch. A live browser test (clicking "Send Invite" in the
-Family Tree's own members modal) surfaced it immediately — a silent `400 Enter a 12-digit Public
-ID`, because the frontend was already passing a resolved `user_id` from its own
-`/api/people/search` step. Fixed by changing the signature to match `send_group_invite()`'s.
-
-### 4.16 The Referral & Qoin Engine (`wallet_core.py`, `app.py`, 2026-10-25)
-
-Two things that sound like a new subsystem turned out to already be ~90% built. Both are
-deliberately thin additions on top of what existed, not a parallel system:
-
-**The Qoin split was already live.** `wallet_core.apply_free_registration()` has, since before
-this pass, minted a single ₹1-reference Qoin at every registration and split it 10 paise at a
-time across 10 shares: the 8 location tiers (80%), the referrer (10%), and the new member (10% —
-or 20% if there's no referrer, the referrer's share folding into the new member's). This pass
-**did not touch that function or its split** — the founder's ruling was to keep 80/10/10 exactly
-as-is, since changing it would retroactively alter every past registration's intended economics
-and the DPG evidence pack's own description of the economy.
-
-**What was missing was a way to NAME a referrer without being the one physically registering
-them.** Before this pass, the only way to be credited as a referrer was `helper_user_id` — a
-logged-in member filling the form in for someone else (`?assist=1`, "Register a new member"); a
-typed referral code had been deliberately removed earlier in the project's history (an
-`app.py` comment said so explicitly: "There is no referral code to type in any more"). This pass
-reverses that: a visible, optional **"Referred By (Public ID)"** field on the *ordinary*
-registration form (hidden during `?assist=1`, where `helper_user_id` already wins), auto-filled
-server-side with the signed-in visitor's own Public ID (`/register`'s new `own_public_id` context
-var, from `account_ids.search_code`), clearable, resolved the same way every other Public ID
-lookup in `app.py` is — deliberately **no PIN/identity check**, since naming someone as your
-referrer doesn't let you act as them. A blank or unrecognized Public ID is never an error, same as
-having no referrer today.
-
-**The weekly volume bonus is new** (migration 030, `referral_bonus_awards`). Tiers: 3
-referrals/week → +1 Qoin, 7 → +3 Qoins, 15 → +7 Qoins (`wallet_core.BONUS_TIERS`) — a flat,
-one-time award per tier per referrer per ISO week, checked by
-`wallet_core.check_and_award_bonus()` right after every `apply_free_registration()` call.
-**Deliberately counts `users.referred_by_user_id` + `users.created_at` directly, not
-`wallet_transactions`** — a single 10-paisa referral credit is sub-rupee and very often never
-produces a `wallet_transactions` row at all (`_credit_paisa()` only writes one once a wallet's
-accumulated paisa rolls over 100), so counting transaction rows silently undercounts and would
-have meant the bonus tier rarely fired. `referral_bonus_awards`' own
-`UNIQUE(referrer_user_id, period_type, period_key, tier)` is the actual idempotency guard, not a
-pre-check — safe to call on every qualifying registration, a repeat award is just a caught
-`sqlite3.IntegrityError`, not a double mint.
-
-### 4.17 Automatic family membership (`family_core.py`, 2026-10-26)
-
-Real-world family structure, not just the tree's genealogical facts: a marriage is a declared
-mutual fact between two people, so joining a *spouse's* family unit doesn't go through the
-approval queue every other join in this module uses (§4.12/§4.15) -- and once joined, a person's
-*active* membership in the units around them (their own birth unit, their in-laws, their
-grandparents) is now a **live-computed function** of the tree's current shape and marital status,
-the same "computed live, never stored" philosophy this module already used for dormancy (§4.12),
-rather than a set of one-off grants made by hand at the moment a wizard runs.
-
-**`_sync_family_membership(conn, user_id)`** is that single computation. It looks up the person's
-own node, then applies four bounded rules (not a general recursive walk of arbitrary tree depth):
-founder units they belong to get admin membership; their birth unit (and, transitively, its own
-two parent units -- the grandparent units, one generation further up) get plain membership,
-*unless* they've founded a marital unit of their own, in which case those birth-side memberships
-move to `'left'` instead (see §4.18 for the exit-side rules this enables); and, patrilocal only (a
-deliberate, non-configurable choice matching this schema's existing husband/wife-shaped columns
-and this project's real-world context), a wife founder's unit auto-grants her plain membership in
-her husband's parents' unit. It's called at the end of `activate_timeline()`, every exit path of
-`marry_timeline()`, `add_member()`'s founder-slot-claim branch, and both branches of
-`link_node_to_user()` -- every point a person's node identity or marital status can change.
-Idempotent and safe to call repeatedly; it never demotes an existing admin and never touches the
-tree itself (`family_group_nodes`/`family_parent_links`), only active chat membership
-(`family_group_members`).
-
-**The automatic in-law join**: when Sakshi marries Rohit -- whether by naming him fresh, by
-finding him via Public ID, or by claiming an open founder slot in a unit he (or someone else)
-already started -- `marry_timeline()` no longer routes a spousal join through
-`request_join_group()`'s approval queue. `_claim_founder_slot()` (the exact re-pointing mechanics
-`add_member()`'s accept branch already used for a generic approved join, extracted so both share
-one implementation) claims the slot synchronously, and `_sync_family_membership()` then grants her
-plain membership in Rohit's parents' unit in the same call -- no request, no approval, she's in
-both units before the API call returns.
-
-**The automatic grandparent join**: a claimed child doesn't wait to be invited into their
-grandparents' units either. The moment a child's placeholder node is linked to a real account
-(`link_node_to_user()`, or the founder-slot-claim branch of `add_member()`) --
-`_sync_family_membership()` runs for that child and finds their parents' own unit's
-`husband_parent_group_id`/`wife_parent_group_id` (set back when the parents' own marriage was
-recorded, via `marry_timeline()`'s own `spouse_father`/`spouse_mother` known-parent linking, or
-the activation wizard's grandparent fields one generation up) and grants plain membership in both,
-paternal and maternal, in one pass.
-
-**The spouse notification, not a request**: the other founder is never asked to approve the join
--- they're told it already happened. `_notify_marriage()` reuses the same plain
-`social_core.send_message_request()` precedent `notify_to_activate()` already established for
-every other identity-match courtesy ping in this module ("Sakshi has joined your family unit as
-your spouse."), landing in their inbox as an ordinary message, not a `people_requests` row with an
-accept/decline decision attached. The join has already happened by the time they read it.
-
-### 4.18 Family membership exit rules (`family_core.py`, 2026-10-26)
-
-§4.17 above covers getting *into* a unit automatically. This section covers the other half --
-when someone can **leave** one again, since "automatically added" and "automatically stuck" turned
-out to be two different design questions with two different answers per unit type.
-
-**The core fix, and the bug it fixes**: `leave_group()`'s old block -- refuse to leave if the
-user's own parent or child is *also* an active member of this same unit -- was written for exactly
-one case (a birth unit) but applied unconditionally to *every* non-founder membership. Once a
-child could be auto-joined to their mother's in-laws' unit as a grandchild, that same check started
-firing there too: a wife trying to voluntarily leave her in-laws' unit got refused, because her own
-child (now also a member of that unit) looked exactly like an "active relative" the check exists to
-protect. The fix is `_classify_membership(conn, self_node_id, group_id)` -- `'founder'` |
-`'birth'` | `'other'` -- and scoping the parent/child check to only ever run for `'birth'`.
-
-**Three real-world exit rules**, all keyed off that one classification:
-
-1. **In-laws unit (and any other non-birth membership) — voluntary leave, always allowed.** No
-   check at all. The unit's admin (e.g. a father-in-law or mother-in-law, but really any admin of
-   that unit — see point 4 below) can also remove her directly via the new `remove_member()`.
-2. **Birth unit — cannot leave voluntarily while unmarried.** The existing parent/child-active
-   check, now correctly scoped to `'birth'` only. "Cannot leave while unmarried" isn't a separate
-   marriage check — it falls out for free, since your parents are definitionally active members of
-   your own birth unit while you're both there. Once you marry, `_sync_family_membership()` has
-   already auto-moved this membership to `'left'` for you — *unless* it's a creator-admin row (you
-   activated before your parents ever registered, so you're that unit's unconditional creator-admin,
-   additive to the ordinary founder grant). A married creator-admin isn't locked in by this rule —
-   the accident of registration order that made them admin there isn't a permanent lock, so they can
-   still leave by hand if they choose.
-3. **Founder — never, full stop.** The one rule with no exception at all, not even marriage or
-   admin status. It's the unit their own marriage founded, not something they joined. `remove_member()`
-   enforces the identical boundary from the admin side — a founder can't be removed by a co-admin
-   either; removing one isn't a membership action, it would mean dissolving the marriage, which
-   this pass doesn't build a route for.
-4. **Rejoining after a leave or a removal requires an admin invite — never self-service.**
-   `request_join_group()` (the self-initiated "let me join" path) now explicitly refuses a user
-   whose row is `'left'` ("ask an admin to invite you back"), rather than queuing a normal join
-   request. `invite_to_group()` (admin-initiated) is the only way back in: it now writes the
-   target's row from `'left'` to a new third status, `'pending'`, at the moment the invite is
-   sent — previously the row sat at `'left'` showing nothing had changed until they actually
-   accepted. `add_member()`'s existing accept-time `UPDATE ... SET status = 'approved'` already
-   overwrites `'pending'` the same unconditional way it already overwrote `'left'`, so no change
-   was needed there. `family_group_members.status` is now `approved | left | pending`.
-
-New route: `POST /api/family-groups/<id>/remove-member` with `{"user_id": <int>}`, admin-only
-(`_is_admin_of_group()`, checked generically — deliberately not scoped to in-laws units, so a
-birth unit's admin can remove a plain, non-founder member too; the member's node stays in the
-tree, only their active chat membership is revoked).
-
-## 5. DPG Evidence Pack — status at this handover
-
-The master copy of the pack is a non-git directory on the owner's Mac, `~/Desktop/My Mac/DPG/`:
-the 11 DPG Standard evidence docs plus its own `API.md`, `ARCHITECTURE.md` and `DATA_MODEL.md`.
-The 18 October 2026 pass brought it up to date with Qmail, Q-Punch council addresses, the council
-queue, the Admin Panel's scope, attachments, drafts, `/qmail`, the Admin member export and the
-registration email. Statements the new features had made false were corrected in place, each with
-a note saying what it used to say and when it changed. Its Forward Plan (Doc 10) is the tracked
-list of open gaps; Doc 11 holds the application form answers (40 of 45 fields Ready).
-
-**The pass found two real bugs, both by checking a pack claim against what the routes actually do,
-not by reading the tests**, so it also served as a second review of the code. Both were fixed
-before submission rather than only disclosed:
-- `f1edd55` — Qmail attachments could run script on qumanity.in (§4.10).
-- `c09b91f` — a member could not read a council's or the Admin's reply to their own message (§4.8).
-
-**The README was also wrong, and was fixed at `065cecc`.** The front page still described a
-deliberately disconnected prototype, pointing at `identity_core.py` and `global_core.py` on "the
-real platform" (neither module exists in this repository), plus a manual `db/init_db.py` step the
-app no longer needs, a 12-route API table (there are 178), two "known simplifications" that had
-already been fixed, and nothing on Qmail, council addresses or the Admin Panel. Anyone reading that
-commit's diff should know the old text was out of date, not that the project changed direction.
-
-The pack's content is current as of `065cecc`; the pack itself was committed to `docs/dpg_evidence/`
-at `7fda4cb`. As it says of itself, it will go stale as the code moves.
-
-## 6. Gotchas and lessons learned worth not re-discovering
-
-- `db.py`'s `DB_PATH` binds at import time — set `QM_DB_PATH` before any project import in any
-  throwaway script.
-- `cast_vote()`'s gate must reject by `post_kind == 'council_update'`, not `!= 'member'` — the
-  latter silently also blocks voting on test posts, and a unit smoke test that never tries to vote
-  won't catch it. Only an actual in-browser walkthrough did.
-- SVG `<!-- comments -->` cannot contain a literal `--` even mid-sentence; breaks XML parsing.
-- The registration wizard's `/api/auth/register` route only strictly requires
-  `birth_location.country.id`; `present_location` needs `country.id` and `state.id` — the rest are
-  UI conveniences, not backend requirements. Useful for scripting throwaway test accounts.
-- A `data-i18n` attribute's English text is captured as the fallback at page-load time; rewriting
-  the visible English copy on an element that keeps its `data-i18n` key means other languages show
-  stale translated text until re-translated — an accepted trade-off, not a bug.
-- This codebase accumulates real, harmless dead code when pages get trimmed down — worth an
-  occasional audit rather than assuming unused-looking selectors are a mistake to "fix" reactively.
-- **Run `ls migrations/` before naming a new migration file, every time.** Two sessions working on
-  this tree at roughly the same time both independently named a file `020_*.py` — Qmail's and the
-  Admin Panel's. Neither checked first. The fix was a rename (`020_qmail.py` → `021_qmail.py`),
-  proven idempotent empirically against a DB that already had the old name applied before pushing,
-  not assumed safe. The collision that actually happened is the argument for the rule.
-- **A missing module-level import breaks `import app` itself, not just the one feature.**
-  `admin_queries_core.py` was nearly left out of its own commit's file list — `app.py` imports it
-  at module level, so shipping `app.py`'s changes without it would have taken down every route in
-  the application on the next boot, not just the Admin Panel. Before composing any `git add` list,
-  check what the changed files actually import at module level, and stage every one of those files
-  together.
-- **A commit state written into a document becomes false the moment the commit that carries the
-  document lands.** Name the content's last commit and the document's own commit separately, or
-  write the sentence so it stays true regardless of which commit last touched the file. This
-  pass's own handover said "the pack is current at `065cecc`", which was true when written and
-  false one commit later, once the pack itself was committed at `7fda4cb` (§5, §8).
-- **A worktree checkout that still imports the original directory verifies nothing.** A test
-  script's `sys.path.insert(0, ROOT)` with a hardcoded absolute path (a pre-existing pattern in
-  `tests/test_qmail.py` and others) means running "from" a fresh worktree still imports this
-  original directory's modules, not the worktree's own copy — false confidence, not real
-  isolation. The honest substitute used in this project: `git diff HEAD` returning zero lines on
-  every file a change touched proves the working tree and the committed tree are byte-identical,
-  which is what running tests against the working copy is actually standing in for. State that
-  explicitly rather than claim a worktree run proved something it didn't.
-- **Re-read a diff for lifecycle ordering before running it — tests will not always have the data
-  that triggers the bug.** A loop that fetches per-row data (e.g. attachments for each message)
-  placed *after* `conn.close()` only fails once there's a row to iterate over; an empty-result test
-  run passes silently. This was caught by re-reading the diff itself, not by any test failing.
-- **The formatted-text DOM renderer is safe by construction but unguarded by automated tests.**
-  See §4.10's closing note — verified live once, not regression-tested, because no browser
-  automation framework exists in this project.
-- **An unconditional `display` rule on a class beats the browser's own `[hidden] { display: none
-  }` default.** `.qmail-compose-overlay { display: flex; }` with no `[hidden]` override meant the
-  overlay rendered even while its `hidden` attribute was correctly `true` — the DOM was right, the
-  JS was right, only the cascade was wrong. No static-file test can see this; only opening the page
-  caught it (§4.11). Give any `hidden`-toggled element with its own `display` rule an explicit
-  `.your-class[hidden] { display: none; }`.
-- **A "Name (value)" autocomplete must persist the resolved value, not the input's display text,
-  anywhere that value gets saved and reused later.** The `/qmail` compose overlay's draft autosave
-  read the To field's own text instead of the address already captured in a separate variable —
-  every autocomplete-composed draft silently saved something `resolve_address()` could never match,
-  failing on every reopen-and-send. Found only by a live walkthrough (§4.11); will recur in any
-  future autocomplete field feeding something persisted.
-
-## 7. Standing operational rules for this project
-
-- No access to Railway/production from an assistant session — always hand the user exact commands
-  to run themselves.
-- Never guess or use real member/admin credentials, even locally. Dev test accounts are created
-  via the real `/api/auth/register` route with synthetic data, or via a documented dev fixture
-  (`QM_TEST_PIN` in `.claude/launch.json`) — never by guessing.
-- The local Admin's real Private ID has been rotated at least once after an earlier leak; the
-  current one is never referenced in any file, commit or doc.
-- Git: never force-push, never amend without being asked, stage named files only (never `git add
-  -A`), one commit per approved task, `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>`
-  trailer.
-- The DPG pack directory is not a git repo — edits there are saved as plain files, never committed
-  or pushed anywhere. `docs/dpg_evidence/` inside this repo is a copy of the pack and is changed
-  only when the owner asks for it; the Mac master is the source (§5).
-- Folder/master JSON rules, India location data, and the live user-account tree under `0_Earth`
-  must never be restructured or deleted without being asked.
-
-## 8. Current state
-
-- Commits at this handover, all on `main` and pushed: `7fda4cb` (the DPG pack's 18 October 2026
-  revision), `065cecc` (the README and `docs/API.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`), and
-  the two code fixes before them, `c09b91f` and `f1edd55` (§5). The commit that adds this file
-  comes after them.
-- Migration range: 001–003, 007–024 (024 is `qmail_drafts`) as of this handover's original
-  17-18 October baseline; 028/029 (profile pictures, middle name) were added in the 25 October
-  refresh (§3) without re-verifying the rest of this "Current state" section, which otherwise
-  reflects the 18 October snapshot. Tables: 74 on boot, 76 in a running database (§2), also not
-  re-counted in the 25 October pass.
-- 11 test scripts in `tests/`, all passing at `c09b91f` (`065cecc` changed docs only). Each is a
-  standalone script that prints PASS or FAIL; each hard-codes the owner's checkout path, so run
-  them with `PYTHONPATH=.`, and four of them also read files through that path (§9).
-- Docs current as of this handover: `README.md`, `docs/QMAIL.md`, `docs/ADMIN_PANEL.md`,
-  `docs/EMAIL.md`, `docs/API.md`, `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`,
-  `docs/HANDOVER.md` (this file).
-
-## 9. Open items
-
-Not exhaustive — the Forward Plan in the DPG pack (Doc 10, section 10.2) is the full tracked list,
-and the row numbers below are its rows.
-
-- **Members can't yet submit an Admin query, and replies need Qmail** (row 36).
-  `admin_queries_core.create()` exists but no route calls it. The asker can already read replies
-  (`GET /api/queries/mine/<id>`), but only on `/qmail`, which needs Qmail activated, so the
-  submission work must also give a member without Qmail a way to open them.
-- **Councils can only reply, not start a conversation** (row 37). Needs `sent_as_level` /
-  `sent_as_location_id` columns that do not exist yet (`docs/QMAIL.md` §11,
-  `docs/ADMIN_PANEL.md` §9).
-- **Council addresses above village can't receive messages** (row 38). They are created and shown,
-  but no elected councils exist above village yet (`QPUNCH_REACHABLE_LEVELS`, §4.8).
-- **Council addresses can lag the member count** (row 39). They are created only when the
-  member-count recompute runs, and only the manual backfill script runs it.
-- **Attachments are SQLite BLOBs** (row 40), a prototype choice; move them to object storage if
-  attachment volume outgrows SQLite (§4.7).
-- **The test scripts hard-code the owner's checkout path** (row 41). Resolving the root from each
-  script's own location fixes the import for all 11; the four that also read files through the
-  path need those reads changed too.
-- **The registration-notification email (now Resend, not SMTP — `email_core.py`, 2026-10-20) has
-  not yet been verified end-to-end in production.** `RESEND_API_KEY`/`RESEND_FROM_EMAIL` are
-  reportedly set on Railway; still needs a real registration run to confirm the Admin actually
-  receives it (`docs/EMAIL.md`).
-- **DMCA ticket #4870732 is awaiting action on GitHub's side**; a cached `refs/pull/1/head` still
-  serves the poem files in the meantime.
-
-Also open, but not tracked in Doc 10:
-
-- The member-profile popup's "Send Message" button (`static/js/dashboard.js:518`) is still disabled
-  with a "Coming soon" note, even though Qmail exists (§4.11).
-- Production verification at `https://qumanity.in` of the homepage, dashboard tour, Qmail, Q-Punch,
-  Admin Panel and attachment changes; only local verification was done for them.
-- **Self-registration response no longer carries the `donation` object** (found 2026-10-26 by the
-  phone app's `Qumanity_App/tools/website-check/check_app_api.py`). The check expects
-  `donation.kind == "free"` after a free registration; the response now has no `donation`
-  key. Probably a field renamed or dropped when the payment code was removed. Decide which
-  side is right, then fix the response or the check. Not fixed yet, on purpose.
-- **Week-4 election results lose the winners** (same check, a simulated Libra 2026 cycle on a DB
-  copy). After voting closes, `election_core.election_summary()` returns
-  `winners = {male: None, female: None, male_votes: 0, female_votes: 0}` while the candidates show
-  15 and 11 votes. That points at the closing tally (`_ensure_tallied` / the
-  `male_winner_user_id`/`female_winner_user_id` columns) rather than the vote counting. Not fixed
-  yet, on purpose.
+| Collective Board (post/vote/escalation) | ✅ Implemented | `board_core.py` |
+| Citizen Reports | ✅ Implemented | 10-day SLA, `docs/reports_design.md` |
+| Zodiac Council elections | 🟡 Piloted, one village | Rohini Sector 24 only; see §9 |
+| Karma | ✅ Implemented | Never convertible to Qoins, by design |
+| Qoins wallet | ✅ Implemented | Payments fully removed; `qoin_core.py` |
+| Qmail (internal messaging) | ✅ Implemented | Retention/delete-on-request still pending |
+| Q-Punch council addresses | ✅ Implemented, village-only reachable | See §9 |
+| Admin Panel | ✅ Implemented | Council-scoped queue |
+| Referral engine (registration attribution + bonus) | ✅ Implemented | Distinct from the separate, unfinished board-level referrer-code system — see `docs/dpg_evidence/13_referral_engine_evidence.md` |
+| Family Tree (Nuclear Family Node model + cascade + grandparent backfill) | ✅ Implemented & committed | See §8 |
+| Dashboard (multi-view layout, Stats Modal) | ✅ Implemented | Not touched by this documentation pass |
+| Multi-religion Marquee | ✅ Infrastructure implemented; content partially rights-cleared | See §9 |
+| Provisional Locations (crowdsourced location MVP) | ✅ Implemented | See §6 |
+| OSM Proximity (backend) | ✅ Implemented | See §6 |
+| Q-Map (public map UI) | ✅ Implemented & committed, `6b8e5b5` | See §7 |
+| Perception Calculator | ✅ Implemented | 10 countries + an India zone, no State-level |
+| Notifications | ✅ Implemented, read-time aggregation only | `notify_core.py` synthesizes notifications by querying existing unread-message/reply state — there is no durable, independently-written notification log |
+| Report / Block member | ❌ Not built | Named gap; see §13 |
+| Privacy Policy / Terms of Service pages | ❌ Not built | Registration links to `#`; named gap, see §13 |
+| "Export my data" / "Delete my account" | ❌ Not built | Named gap; see §13 |
+
+---
+
+## 6. Provisional Locations and the Crowdsourced Location System
+
+**Why it exists**: a member registering their birth or present location may find their real
+Village or Tehsil missing from the verified directory (`static/data/subcontinent_districts.json`
+and India's deeper tiers). Provisional Locations are a controlled fallback so that member can still
+register, without inventing a fake verified ID or forcing a manual geography edit before they can
+sign up.
+
+**Module**: `provisional_location_core.py` (~700 lines), migration `034_provisional_locations.py`,
+tests `tests/test_provisional_locations.py` (76 checks, confirmed current). The module's own
+docstring describes three strictly separate data layers:
+
+1. **Layer A, the VERIFIED directory** — `static/data/subcontinent_districts.json` /
+   `india_districts_tehsils.json` / the `india_villages` table. Read-only here; the canonical
+   Master JSON is never written to by this subsystem.
+2. **Layer B, PROVISIONAL submissions** — `provisional_locations`, `provisional_location_members`,
+   `location_submission_events`.
+3. **Layer C, GPS observations** — `user_location_observations`, `location_centroid_observations`.
+
+A provisional location's id is never a verified-style dotted code — it is always exposed as the
+string `"PROV-<row id>"` wherever it needs to sit inside `present_location_json`, so the rest of
+the app's location-reading code keeps working unmodified.
+
+### The four distinct concepts, defined precisely
+
+- **A user GPS observation** (`user_location_observations` row): one consented or declined capture
+  of a member's device coordinates at one point in time, with its own `status`
+  (`pending`/`accepted`/`rejected_outlier`/`denied`/`unavailable`/`withdrawn`). Only `accepted`
+  rows ever carry a real, non-null coordinate.
+- **An OSM feature match** (`user_osm_proximity` row, written by `osm_proximity_core.py`, §6
+  continued below): a link between one *accepted* GPS observation and a nearby real-world OSM
+  feature (road/building/POI) found within 200 metres — entirely independent of whether that
+  observation is also tied to a provisional location.
+- **A provisional location** (`provisional_locations` row): a candidate Village or Tehsil the
+  verified directory does not yet contain, with a `status` lifecycle
+  (`provisional → eligible_for_activation/pending_review → active`, or `rejected`/`merged`/`inactive`)
+  and a count of qualifying present-resident members.
+- **A canonical Qumanity location**: a row that exists in `Qumanity_Master.json` with a real,
+  stable dotted ID (e.g. `CS.DL.3.4.1A`) — the only kind of location ID the rest of the platform
+  (board posts, council addresses, Q-Punch, member counts) ultimately depends on being stable.
+
+### What the "24-user threshold" actually does
+
+`activation_threshold()` (`provisional_location_core.py:151`) returns the value of
+`QM_PROVISIONAL_LOCATION_THRESHOLD`, defaulting to **24** qualifying present-resident members (a
+"qualifying" member is a real, non-demo, non-removed account — `is_qualifying_user()`).
+
+Once a provisional location's live qualifying-member count reaches this threshold,
+**`evaluate_activation()`** (`provisional_location_core.py:462`) — the single, controlled place
+that is ever allowed to set `status = 'active'` — runs two further checks before promoting it:
+
+1. A **village** whose parent is itself only a provisional (not-yet-active) tehsil is held at
+   `pending_review` rather than activated, so a village can never outrun its own tehsil.
+2. A **duplicate check**: if another provisional location with the same normalized name under the
+   same parent is already `active`, this one is held at `pending_review` instead (it should have
+   been merged, not independently promoted).
+
+If both checks pass, the row is updated to `status = 'active'`. **This is an automatic promotion
+within the provisional-location system itself — it is explicitly NOT a promotion into the
+canonical `Qumanity_Master.json` geography.** The schema's own `activated_as_verified_id` column
+exists for a future manual step that would assign a real, stable, canonical ID once/if a
+provisional location is folded into the authoritative master file — **no code anywhere currently
+writes that column**. This separation is itself the control that prevents a provisional location
+from silently becoming authoritative: reaching 24 members makes a location real and usable
+*within the provisional system*, never an automatic edit to the canonical geography file.
+
+`reconcile_all()` is the background half of this (a scheduled job, disabled under
+`QM_DISABLE_SCHEDULER`) — it re-evaluates every non-terminal provisional location in bounded
+batches, catching anything a single registration's immediate check might have missed.
+
+**Relationship to OSM proximity**: GPS observations (`user_location_observations`) are shared
+infrastructure between the provisional-location system and `osm_proximity_core.py`. Consent fields
+on each observation (`consent_internal_storage`, `consent_centroid_aggregation`,
+`consent_external_overpass_lookup`) gate what each subsystem is allowed to do with it
+independently — a location-fallback submission does not automatically authorize an OSM proximity
+lookup, and vice versa.
+
+---
+
+## 7. Location and mapping architecture
+
+### 7.1 OSM Proximity (backend)
+
+**Purpose**: link a consenting member's own accepted GPS observation to nearby real-world OSM
+features (roads, buildings, points of interest such as hospitals), entirely server-side, with no
+raw coordinates ever exposed in a public response.
+
+- `osm_http_core.py` — the shared, rate-limited Overpass HTTP layer (backoff, User-Agent,
+  `Retry-After` handling), reused (not duplicated) from the earlier `scripts/
+  fetch_north_west_delhi_osm.py` pilot script.
+- `osm_proximity_core.py` — schema (`osm_proximity_jobs`, `osm_feature_cache`,
+  `user_osm_proximity`), consent-gated job enqueueing, the proximity-matching worker, withdrawal,
+  and `get_user_nearby()` (the function that ultimately serves Q-Map's own data).
+- `osm_proximity_worker.py` — a standalone CLI that claims pending jobs and processes them against
+  the live Overpass API, in small batches with real throttling. **This worker is the only part of
+  the whole OSM-proximity/Q-Map feature set that ever makes a live Overpass request.** It runs as
+  its own scheduled/manual process, never inline with a user-facing request.
+- **200-metre radius**: a matched feature must be within 200 metres of the accepted observation's
+  coordinate (`_nearest_distance_meters()`), node- or way-geometry aware.
+- **Fresh, re-confirmed consent required**: `provisional_location_core.CONSENT_VERSION` was bumped
+  specifically so this feature never retroactively queries an observation accepted under an older
+  consent wording — a stale "when this service becomes available" consent is never silently
+  treated as covering a live Overpass lookup.
+- **`GET /api/qmap/user-nearby/<user_id>`** (`@login_required`): `session.get("user_id") !=
+  user_id → 403`. A member can only ever read their own proximity data; this is the real
+  authorization boundary, independently re-verified by `tests/test_osm_proximity.py` and again by
+  `tests/test_qmap.py`.
+- **Raw GPS coordinates are never returned** by `get_user_nearby()` — only `osm_type`, `osm_id`,
+  `category`, `distance_meters`, a safe tag subset, and attribution. This is a deliberate
+  privacy-by-design choice, confirmed directly in the function's own code and by a dedicated test
+  assertion that no response key is ever `lat`/`lon`/`latitude`/`longitude`.
+- **Rate limiting / safeguards**: Overpass's own 429 responses are honored via `Retry-After`
+  backoff in `osm_http_core.post_overpass()`; the worker processes small batches, never a burst.
+  **Known, flagged operational risk**: querying the public Overpass API per user at production
+  scale risks violating its fair-use policy — this should be revisited (possibly a self-hosted
+  mirror) before this becomes a volume feature; not yet addressed.
+- **Stored proximity results vs. live querying**: `user_osm_proximity` rows are the *stored*,
+  already-matched result of a worker run. Nothing in the Q-Map page or its API ever triggers a new
+  live Overpass query — see §7.2.
+
+### 7.2 Q-Map (the public map UI) — ✅ Implemented & committed, `6b8e5b5`
+
+**Route**: `GET /qmap` — public, no login required for the base pilot map. Files:
+`app.py` (the `/qmap` route), `templates/qmap.html`, `static/css/qmap.css`, `static/js/qmap.js`,
+`static/data/pilot/north_west_delhi_osm.geojson`, `tests/test_qmap.py` (33 checks). A nav link was
+added to `templates/home.html`'s existing footer "Account" column — the Dashboard and its Stats
+Modal were deliberately not touched.
+
+**Pilot dataset**: `static/data/pilot/north_west_delhi_osm.geojson`, re-counted fresh this session
+at **25,365 features, ~22.3 MB on disk** — 10,810 road features (LineString), 14,500 building
+features (Polygon), 56 hospital features (49 Point + 7 Polygon). **This is a North West Delhi
+pilot, explicitly not a complete India-wide OSM dataset** — the file is committed directly to git
+(no LFS needed at this size) for production deployment.
+
+**Rendering**: Leaflet 1.9.4 (the same version already used across the rest of the site via a
+pinned unpkg CDN — no second Leaflet version was introduced), an OSM raster tile basemap, and three
+independently toggleable `L.layerGroup()` overlays built from the pilot GeoJSON's own
+pre-classified `properties.categories` (derived from real OSM tags — `highway=*`, `building=*`,
+`amenity=hospital` — never geometry type alone). Roads and Hospitals are visible by default;
+Buildings starts off (14,500 polygons is heavy to render immediately) and can be switched on via
+the layer control. A hospital represented as a Polygon gets both its outline and a centroid marker
+(`layer.getBounds().getCenter()`) so every hospital gets a consistent marker regardless of source
+geometry.
+
+**User GPS/proximity layer** (signed-in members only):
+- The `/qmap` route itself reads the member's own most recent `status='accepted'` row from
+  `user_location_observations` server-side and passes it into the page as the initial map center —
+  a narrow, read-only exception to "no new data API route," matching this project's existing
+  pattern for per-session personalization (compare `api_poems_meta()`). It is **not** a new JSON
+  API endpoint.
+- The page's own JS then calls the **existing** `GET /api/qmap/user-nearby/<user_id>` for the
+  actual linked-feature list, using only the session's own id — never a client-editable value.
+- The member's own marker never displays raw coordinate text; its popup summarizes linked feature
+  categories only ("Linked nearby: 1 road, 1 building…"), confirmed live in this session's browser
+  verification.
+- No GPS/no linked-feature states show the exact friendly messages specified for this feature
+  ("Register your present location and share GPS to see your map.", "Your OSM proximity data is
+  being prepared. Please check again later.") — never a fabricated `0,0` center, and never a
+  silently empty map.
+- Confirmed live, this session: zero Overpass requests are ever made from the Q-Map page (network
+  inspection); the pilot GeoJSON is fetched exactly once per page load from the local static URL.
+
+### 7.3 Public base map vs. private user data — the privacy line
+
+**The pilot base map (roads, buildings, hospitals) is public and visible to every visitor, signed
+in or not.** A member's own GPS location and their own OSM-linked proximity features are private
+and restricted to that member's own authenticated session — never exposed to another user, never
+exposed to an anonymous visitor, and never queryable by a different user's id (independently
+re-verified: a 403 for a mismatched `user_id`, confirmed again this session). Do not confuse public
+map *visibility* with public access to personal location *data* — they are deliberately kept on
+opposite sides of the login wall.
+
+---
+
+## 8. Family Tree architecture
+
+Full design history: §4.12–§4.18 of the prior handover version (preserved in git history, retained
+here in condensed form) and `docs/dpg_evidence/12_family_tree_evidence.md`.
+
+- **A `family_groups` row is a marriage unit, not a generic container** — it names its two founders
+  directly (`husband_node_id`/`wife_node_id`), plus each founder's own parent unit if known
+  (`husband_parent_group_id`/`wife_parent_group_id`), plus `marriage_status`. `family_spouse_links`
+  is deprecated (a marriage *is* the unit's own husband/wife pair now).
+- **One unit's own immediate neighborhood is rendered at a time** (`GET
+  /api/family/node/<group_id>/neighborhood`) — up to 2 parent units above, the current unit in the
+  middle, its children below. No `d3.hierarchy()`/`d3.tree()` layout algorithm — a unit is already a
+  couple, so there's no DAG left to flatten.
+- **Automatic family membership cascade** (`_sync_family_membership()`): a person's active
+  membership in the units around them (birth unit, in-laws, grandparent units) is a **live-computed
+  function** of the tree's current shape, never a set of one-off grants — bounded to four fixed
+  rules, not a general recursive walk.
+- **Grandparent backfill (Option B)** — ✅ **committed**, `family_core.py` (commit `0a8ab5b`,
+  confirmed clean/committed in this session's `git status`):
+  - `GRANDPARENT_BACKFILL_MAX_GENERATIONS = 2` — a **strict, hard-coded cap**, not configurable.
+  - `_backfill_parent_group_links()` performs a **breadth-first walk by hop count**, discovering and
+    writing `husband_parent_group_id`/`wife_parent_group_id` wherever currently `NULL` but a real
+    link can now be established, walking up to 2 additional hops above the starting unit.
+  - **Cycle-safe**: a `_visited` set (shared across one call) means a group can never be processed
+    twice, even across a pathological loop in the data.
+  - **Idempotent**: safe to call repeatedly; a group already linked is a no-op.
+  - **Direct-roster-only, by construction**: backfilling a parent-group *link* does not, on its
+    own, grant anyone new membership beyond what the existing direct-roster cascade already
+    exposes for each newly reached group — it was built and reviewed this way specifically to avoid
+    being an unrestricted ancestor-crawling/discovery system. Its one real, documented consequence
+    is that it extends `_is_admin_of_group()`'s own dormant-ancestor-succession reach one hop
+    further once two groups become linked.
+  - This is **not** unrestricted family-tree crawling: it walks at most two generations beyond the
+    unit that triggered it, and only ever follows an existing, already-known parent-link path — it
+    never invents a relationship.
+- **Profile Card UI**: every person node is clickable (`ft-profile-modal`), combined name/gender/age
+  editor. Backend routes for this were already committed earlier; by this handover the frontend
+  pieces (`templates/dashboard.html`, `static/css/dashboard.css`, `static/js/family.js`,
+  `static/js/family_tree.js`) are also part of the `e7490db` commit — confirmed clean in `git
+  status` this session, i.e. no longer the "uncommitted" state an earlier status snapshot recorded.
+
+---
+
+## 9. Religious Marquee and content licensing; Q-Punch and nested governance
+
+### 9.1 Multi-religion Marquee
+
+**Architecture** (`religious_text_core.py`): **four tables**, not five —
+`religious_traditions` → `text_collections` → `text_collection_languages` → `text_entries`. (An
+earlier 4-workstream proposal also specified a fifth table, `religion_collection_access`, for a
+future many-to-many religion↔collection relationship — it was deliberately not built; revisit only
+if a real need for many-to-many access arises.)
+
+- Each collection is individually gated by `rights_status`/`review_status`/`marquee_eligible`; only
+  a `review_status='approved' AND marquee_eligible=1` row is ever resolvable
+  (`resolve_collection()`). A collection with no eligible row returns `None`, surfaced to the
+  client as `coming_soon` — never substituted or invented content.
+- **Profile religion vs. reading preference**: a signed-in member's reading religion defaults to
+  their own profile religion, but can be switched to any other approved, content-backed tradition
+  via an allowlist-checked query parameter on the existing `/api/poems/meta` /
+  `/api/poems/<lang>/<index>` routes — no new route was added. This reading choice is stored
+  **client-side only** (`localStorage`) and **never writes `users.religion_belief`** — verified
+  directly against the database.
+- **Anonymous/default behavior**: every logged-out visitor, and any member with no profile religion
+  set, sees Hindu/Hindi content by default (`DEFAULT_MARQUEE_RELIGION = "hindu"`).
+- **Hide/Show Marquee**: a persisted per-user preference (`users.hide_marquee`, migration 033).
+- **Original Qumanity content vs. externally sourced texts**: the Hindu tradition's default content
+  is **original Qumanity Hindi poetry** (`Poems/hindu_original/poems_hindi.json`), not a Gita
+  Press/Vinaya Patrika transcription — those original poems must never be attributed to Gita Press
+  or labeled Vinaya Patrika.
+
+**Currently live collections** (verified against the committed database-seeding code and the
+`Poems/` directory this session):
+
+| Tradition | Collection | Language(s) | Rights basis |
+|---|---|---|---|
+| Hindu | Original Qumanity Ram-bhakti poetry | Hindi | Original Qumanity content |
+| Christian | Psalms | English (KJV, public domain) + Hindi (selected 8 verses, Biblica Open Hindi Contemporary Version, CC BY-SA 4.0 — a **derivative excerpt, not a complete Bible**) | Mixed — see licensing note below |
+| Muslim | Quran, Surah Al-Fatiha | Arabic | Tanzil Project, CC BY 3.0 |
+| Buddhist | Dhammapada ch. 1, vv. 1–5 | Pali + English (Max Müller, 1881, public domain/Project Gutenberg) | Public domain |
+
+**Licensing note on the Christian Hindi collection**: it is treated as a derivative work under CC
+BY-SA 4.0 (eight selected, reformatted verses — not an unmodified full copy). The Biblica®
+trademark is never used in Qumanity's own UI/docs for this collection; the license's own
+attribution wording is used instead: *"The original work by Biblica, Inc. is available for free at
+www.biblica.com and open.bible."*
+
+**Not yet available — pending rights review** (code-complete, content blocked — **do not present
+any of these as approved or available**):
+
+| Area | Status |
+|---|---|
+| Urdu Quran | Tanzil contact route not yet located; translator's own rights still under copyright through 2033 |
+| Sikh Gurbani | A real contact route for Khalis Foundation was found; permission not yet requested/granted |
+| Hindi Dhammapada | A plausible-public-domain 1933 translation found, but conflicting license tags on existing scans and the US/URAA question are unresolved |
+| Jain texts | Dedicated source research required; no translation yet cleared for any Jain sub-tradition |
+| Gita Press / Vinaya Patrika | `not_permitted` — no verified publication permission has been established; distinct from the four `pending_rights_review` items above |
+
+Full research trail and prepared (unsent) outreach drafts: `docs/marquee_religious_text_sources.md`
+and `docs/marquee_rights_roadmap.md`. **A religion or language is never marked content-complete
+merely because the database infrastructure can support it.**
+
+**Public notice page**: `/copyright/religious-texts` covers all six current rights questions,
+clearly distinguishes available collections from pending ones, and links Qumanity's own verified
+contact plus the verified third-party contact routes found during research. `/copyright/gita-press`
+is a separate, pre-existing copyright/attribution notice — not a grant of publishing rights.
+
+Tests: `tests/test_poems_marquee.py` (226 checks), `tests/test_copyright_pages.py` (37 checks,
+covers both notice pages).
+
+### 9.2 Q-Punch and nested geography
+
+The eight-level hierarchy (§4) is also the governance structure: **Q-Punch council addresses**
+(`<level>-<location_id>@qumanity.in`) let a resident write to their own level's council. A
+location gets one **permanent** row in `qpunch_addresses` (`qmail_core.py`) the first time its real
+member count reaches its level's threshold — never retired or reactivated afterward, even if the
+count later drops.
+
+**Current reachability is strictly village-only**, confirmed directly in code this session:
+
+```python
+# qmail_core.py:45
+QPUNCH_REACHABLE_LEVELS = {"village"}
+```
+
+Address *rows* are created for village and tehsil once their member-count thresholds are crossed
+(`QPUNCH_THRESHOLDS`, `qmail_core.py:30`), but **only an address at a reachable level can actually
+receive a message** — `resolve_address()` and the board-line renderer both read
+`QPUNCH_REACHABLE_LEVELS` as their one shared gate. Council addresses above village (and a tehsil
+address, despite existing as a row) are created and shown, but cannot receive messages, because no
+elected councils exist above village yet. Do not describe Q-Punch as already operating at all
+eight levels — the architectural *vision* is eight levels; the current *implementation boundary* is
+one.
+
+A council message is never delivered into a member's personal Qmail inbox — it goes into a
+separate, shared, location-keyed queue (`qpunch_queue_messages`), read only through the Admin
+Panel's council-scoped view.
+
+---
+
+## 10. DPG evidence and documentation
+
+The DPG Standard evidence pack lives at `docs/dpg_evidence/` (11 numbered indicator documents +
+a Forward Plan + application-form-answers compilation + copies of `API.md`/`ARCHITECTURE.md`/
+`DATA_MODEL.md`). Its master working copy is a non-git directory on the owner's own machine;
+`docs/dpg_evidence/` inside this repository is a copy, changed only when the owner asks for it.
+
+**What "frozen" means here**: every document in the pack explicitly marks itself, in its own
+banner, as *"DPG Evidence Refresh — internal correction pass, not a DPGA resubmission."* **No
+document in this repository claims formal Digital Public Goods certification, DPG Registry
+acceptance, or external endorsement** — the pack is internal evidence-preparation and
+self-assessment work, written so a reviewer *could* use it to assess the project against the DPG
+Standard's 9 indicators, not a record of a completed registry submission or an award received.
+
+**Application form answers** (`docs/dpg_evidence/11_application_form_answers.md`, verified fresh
+this session): **40 of 45 fields marked "Ready"**; the 5 still open are the privacy policy URL,
+data export/delete, and the moderation/harassment (Report, Block, minimum age) fields — these
+track directly to the same unresolved gaps listed in §13.
+
+**Forward Plan** (`docs/dpg_evidence/10_forward_plan.md`): a prioritized, dated gap-closure list
+across code gaps, legal/entity gaps (LLP registration, trademark filing, copyright assignment —
+still pending), and a repository public-flip checklist (completed). It is explicitly marked "not a
+required DPG document" — a supplement for a reviewer's benefit, not part of the Standard itself.
+
+**A known, material staleness finding — not corrected by this documentation pass, flagged for
+separate authorization**: an untracked research document,
+`docs/audit_dpg_unfinished_features_2026_11.md` (2026-11-01, read-only, not yet committed),
+establishes that:
+- `docs/dpg_evidence/ARCHITECTURE.md` has **diverged** from the main `docs/ARCHITECTURE.md` by 16
+  lines (missing `family_core.py`/`profile_picture_core.py` rows and an understated migration
+  range) — the pack's own claim that these copies match "byte for byte" is stale.
+- **Family Tree and the Referral Engine are both absent from every `dpg_evidence/` document** —
+  `01_sdg_relevance.md`'s feature inventory and `DATA_MODEL.md`'s table list do not mention either
+  subsystem, even though both are substantial, committed features.
+- `01_sdg_relevance.md` still describes the election-test cron as "planned, not built" — it is in
+  fact wired and running (`election_test_scheduler.py`).
+- `08_standards.md` still describes SMTP email delivery — the code uses Resend's HTTPS API
+  exclusively.
+
+**This documentation pass did not correct the `dpg_evidence/` pack itself** — per this task's own
+operating rules, the frozen evidence pack is not silently rewritten to appear more complete; a
+re-sync of the pack against current code is recommended as its own, separately authorized task
+(see §13).
+
+---
+
+## 11. Testing and verification
+
+**No single aggregate test-runner command exists in this repository.** Each file in `tests/` is a
+standalone script using a shared convention: a disposable tempfile SQLite database set via the
+`QM_DB_PATH` environment variable **before** importing `app` (required — `db.py`'s `DB_PATH` binds
+at import time), a `check(label, cond)` helper that prints `[PASS]`/`[FAIL]`, and `sys.exit(1)` on
+any failure. Run one file directly:
+
+```bash
+python3 tests/test_qmap.py
+```
+
+To run the full regression and get a real total, iterate every file and tally:
+
+```bash
+for f in tests/*.py; do python3 "$f" || echo "FAILED: $f"; done
+```
+
+**Fresh result, this session (2026-11-02): 30 files, 1,380 checks, 0 failures.** Per-file counts:
+
+| File | Checks |
+|---|---:|
+| test_account_id_sync.py | 13 |
+| test_admin_panel_council_scope.py | 40 |
+| test_avatar_sweep.py | 14 |
+| test_copyright_pages.py | 37 |
+| test_council_updates.py | 17 |
+| test_edit_master_location.py | 33 |
+| test_election_test_scheduler.py | 31 |
+| test_email_core.py | 46 |
+| test_family_tree.py | 211 |
+| test_family_tree_cascade.py | 115 |
+| test_fetch_north_west_delhi_osm.py | 47 |
+| test_fix_haryana_districts.py | 30 |
+| test_group_members.py | 22 |
+| test_identity_correction.py | 41 |
+| test_import_india_villages_verify.py | 5 |
+| test_india_geography_classification.py | 22 |
+| test_osm_proximity.py | 44 |
+| test_poems_marquee.py | 226 |
+| test_post_kinds.py | 55 |
+| test_provisional_locations.py | 76 |
+| test_qmail.py | 32 |
+| test_qmail_activation_diagnostics.py | 17 |
+| test_qmail_attachments.py | 30 |
+| test_qmail_drafts.py | 29 |
+| test_qmail_format_extraction.py | 18 |
+| test_qmail_page.py | 8 |
+| test_qmap.py | 33 |
+| test_qpunch.py | 25 |
+| test_referral_engine.py | 12 |
+| test_reply_read.py | 51 |
+| **Total (30 files)** | **1,380** |
+
+### Practical setup and development instructions
+
+- **Environment**: Python 3 with Flask, no other framework. `.claude/launch.json` has working dev
+  server configurations (`python3 app.py` on various ports); `QM_TEST_PIN` is the documented dev
+  fixture PIN for locally created test accounts.
+- **Running locally**: `python3 app.py` (respects `QM_DB_PATH` if set, otherwise the project's
+  default DB path). Never point a dev run at a production database.
+- **Disposable test database**: always set `QM_DB_PATH` to a fresh `tempfile.mkstemp()` path
+  **before** any project import, in any throwaway script — this is the single most common mistake
+  that silently corrupts a real database during ad hoc testing.
+- **Migrations**: inspect `migrations/` directly; `tools/run_migrations.py` applies every
+  `.sql`/`.py` file there against whatever DB the current `QM_DB_PATH` points at, in order.
+- **Geography data**: read `static/data/subcontinent_districts.json` /
+  `india_districts_tehsils.json` for the verified directory; never edit `Qumanity_Master.json`
+  directly — use `scripts/edit_master_location.py` for a single controlled record change, and read
+  §4 first regarding deduplication being proposal-only.
+- **Working safely with GPS/consent data**: never fabricate a `0,0` coordinate; always check
+  `status` before trusting a `user_location_observations` row's coordinate (`accepted` only); never
+  bypass the consent-version check in `osm_proximity_core.py`/`provisional_location_core.py`.
+- **Updating documentation and evidence**: the DPG evidence pack's master copy lives outside this
+  repository; `docs/dpg_evidence/` here is a copy, updated only when asked. See §10 for the known,
+  currently-uncorrected drift.
+
+---
+
+## 12. Privacy, security, consent, and data-integrity rules
+
+These rules are load-bearing across multiple subsystems (§6, §7, §9) and must be preserved by any
+future work, including the phone application:
+
+- **Stable geography identifiers** — §4. No silent renumbering, reparenting, or deduplication.
+- **Consent-based GPS collection and use** — a GPS observation is only ever stored with an explicit
+  consent record (`consent_internal_storage`/`consent_centroid_aggregation`/
+  `consent_external_overpass_lookup`), versioned (`consent_version`), and a change in consent
+  wording requires a fresh, re-confirmed consent rather than retroactively reinterpreting an old
+  one.
+- **Authenticated access to personal location data only** — the Q-Map proximity endpoint's
+  `session.get("user_id") != user_id → 403` pattern is the model for any future personal-data
+  endpoint: never confirm or deny another user's data by varying the response shape.
+- **Separation of public map data and private user data** — §7.3.
+- **Rights-gated religious content** — §9.1. A collection is never served until it is explicitly
+  `review_status='approved' AND marquee_eligible=1`.
+- **OSM attribution and ODbL obligations are mandatory** wherever OSM-derived data is shown — the
+  attribution text and link to `https://www.openstreetmap.org/copyright` must remain visible and
+  clickable on Q-Map and any future map surface.
+- **Controlled canonical geography changes only** — no bulk edit without an approved migration and
+  crosswalk.
+- **Evidence-based implementation status** — never describe a partial, pilot-only, or
+  rights-pending feature as complete, certified, or fully operational (this document's own
+  standard, applied throughout).
+- **No sanitizer is installed anywhere in this codebase, deliberately** — Qmail/council message
+  bodies use a narrow, explicit whitelist markup renderer
+  (`static/js/qmail_format.js`) rather than raw HTML, precisely so no HTML-escaping layer is needed
+  or expected; do not "fix" this into a generic HTML pipeline without understanding why it was
+  built this way.
+- **User GPS data is sensitive** and must never be exposed in a public response, a popup visible to
+  another user, or a log accessible outside the owner's own operational tooling.
+
+---
+
+## 13. Known limitations and unresolved work
+
+Not exhaustive — `docs/dpg_evidence/10_forward_plan.md` is the fuller tracked list. Headline items,
+re-confirmed against the code this session where practical:
+
+- **No Privacy Policy / Terms of Service pages published** — the registration link still goes to
+  `#`.
+- **No "export my data" / "delete my account" self-service** for a member.
+- **No Report / Block member mechanism anywhere** — a member can be messaged via Qmail with no
+  consent step and no reporting/blocking recourse.
+- **No published community rules, no named grievance contact.**
+- **No minimum-age or parental-consent gate** at registration.
+- **Village member names are visible without sign-in** on some public demographic routes.
+- **`dpg_evidence/ARCHITECTURE.md` has drifted from the main `docs/ARCHITECTURE.md`**, and Family
+  Tree + the Referral Engine are undocumented in the evidence pack — see §10. Re-syncing the pack
+  is recommended as its own task.
+- **`docs/API.md`/`ARCHITECTURE.md`/`DATA_MODEL.md` route/table counts are stale** relative to the
+  current codebase (confirmed drifted in `docs/audit_dpg_unfinished_features_2026_11.md`).
+- **India location deduplication is proposal-only** — 73 of 74 Tehsil-level duplicate groups and
+  all 15 Village-level groups remain unresolved; do not execute `docs/india_dedup_migration_plan.md`
+  without separate, explicit approval.
+- **The OSM proximity worker's production-scale Overpass usage has not been load-tested against
+  Overpass's fair-use policy** — flagged as an operational risk to revisit before this becomes a
+  volume feature.
+- **Council addresses above village cannot yet receive messages** (no elected councils above
+  village exist) and **a council cannot start a conversation, only reply.**
+- **Qmail/council messages and attachments are retained indefinitely** — no delete-on-request path
+  yet (ties to the data-export/delete gap above).
+- **Test scripts hard-code or otherwise depend on the owner's own checkout conventions** in a few
+  places — not fully portable to an arbitrary new checkout without adjustment.
+- **The phone app's own API-contract check** (`Qumanity_App/tools/website-check/check_app_api.py`,
+  per the prior handover) had found two live discrepancies against this backend (a missing
+  `donation` object in the registration response, and a vote-tally display bug after an election
+  closes) — status of these should be re-verified against the current `HEAD` before phone-app work
+  resumes; not re-checked in this documentation pass.
+- **Qumanity Lok LLP is still in registration** — the IP has not yet been formally assigned;
+  copyright assignment, trademark filing, and domain transfer are all gated on that completing.
+
+---
+
+## 14. Git and release state
+
+- Branch `main`. `HEAD` = `origin/main` = **`6b8e5b5`**, confirmed by `git fetch origin main` +
+  `git rev-parse HEAD origin/main` in this session.
+- `6b8e5b5` is the Q-Map commit (§7.2) — the most recent feature work on this branch. This
+  documentation refresh is the commit immediately after it.
+- **Pre-existing, unrelated uncommitted changes exist in the working tree** at the time of this
+  handover and were **not** touched by this documentation pass: `db.py`, six
+  `folder_export/Earth/*.json` mirror files, `tests/test_post_kinds.py` (all modified), plus a
+  number of untracked files — `Poems/christian/README.md` and `psalms_kjv_en.json`,
+  `Poems/hindu_original/`, several `docs/audit_*_2026_11.md` research documents,
+  `docs/family_tree/`, `docs/identity_cards/`, several `folder_export/Earth/*` export directories,
+  and a set of location-data maintenance scripts under `scripts/`. These represent other,
+  independently scoped work in progress and should be picked up, reviewed, and committed on their
+  own terms by whoever owns that work next — not bundled into any future commit without a
+  deliberate decision to do so.
+- **Standing git rules for this project**: no `git add -A`/`git add .` — stage named files only.
+  Never force-push. Never amend without being explicitly asked. One commit per approved task.
+  `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>` trailer on commits made by an
+  assistant session.
+- No access to Railway/production from an assistant session — hand the user exact commands to run
+  themselves. Never guess or use real member/admin credentials, even locally.
+
+---
+
+## 15. Next-phase handover instructions for the phone application
+
+The website feature-development phase is complete as of this handover. The next phase is the
+**phone application** (`qumanity-app`, a separate repository, React Native/Expo), which already
+authenticates against this same backend's `/api` routes via a signed bearer token (treated exactly
+like a website session).
+
+**The phone application must not independently redefine:**
+- **Location IDs or the geography hierarchy** (§4) — it must read and write the same dotted IDs
+  this backend already uses, never mint its own location identity scheme.
+- **Consent rules** (§6, §7.1, §12) — GPS/location consent must follow the same versioned-consent
+  model already implemented server-side, not a separate mobile-only consent flow.
+- **User identity** — the 9-digit Private ID + PIN model, and the same bearer-token-as-session
+  pattern, are the established identity contract; do not introduce a parallel identity system.
+
+**Before resuming phone-app work**, re-verify the two previously flagged API-contract
+discrepancies noted in §13 (the registration response's missing `donation` object, and the
+post-election winner-tally display bug) against the current `HEAD`, since they may affect the
+app's own existing integration code.
+
+**Open design/legal items the phone app project must respect, not re-decide on its own**: Q-Punch
+reachability remains village-only (§9.2); the India location deduplication plan remains
+unexecuted (§4); the DPG evidence pack has known, uncorrected drift (§10); Qumanity Lok LLP
+registration (and the resulting copyright/trademark/domain transfer) is still pending (§13).
+
+---
+
+*This document supersedes all prior versions of `docs/HANDOVER.md`. For the concise, frequently
+updated status tracker, see `docs/MASTER_STATUS.md`. For a partner- and public-facing overview of
+the project, see `docs/QUMANITY_WHITEPAPER.md`.*
