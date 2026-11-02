@@ -41,12 +41,13 @@ revision note at the bottom for what changed and when.
 
 ## Full regression baseline
 
-**Final (Phase 6, after all implementation phases) -- re-baselined 2026-11-02, twice the same day:**
-first after the Marquee infrastructure commit (`a0bd6ca`, `test_poems_marquee.py` 79 -> 193,
-suite total 1,163 -> 1,277), then again after this pass's copyright-notice page and DPG
-documentation work added `tests/test_copyright_pages.py` (34 checks, new), moving the total to
-**1,311 across 29 files**. Every other suite's count is unchanged from the Phase 6 baseline below
--- re-run fresh this session, not copied from memory.
+**Final (Phase 6, after all implementation phases) -- re-baselined 2026-11-02, three times the same
+day:** first after the Marquee infrastructure commit (`a0bd6ca`, `test_poems_marquee.py` 79 -> 193,
+suite total 1,163 -> 1,277), then after the copyright-notice page and DPG documentation work added
+`tests/test_copyright_pages.py` (34 checks, new, total -> 1,311 across 29 files), then again after
+the Biblica Hindi Bible content import added 33 new checks to `test_poems_marquee.py` (193 -> 226),
+moving the total to **1,347 across 29 files**. Every other suite's count is unchanged from the
+Phase 6 baseline below -- re-run fresh this session, not copied from memory.
 
 | Suite | Pass | Fail |
 |---|---:|---:|
@@ -67,7 +68,7 @@ documentation work added `tests/test_copyright_pages.py` (34 checks, new), movin
 | test_import_india_villages_verify.py | 5 | 0 |
 | test_india_geography_classification.py | 22 | 0 |
 | test_osm_proximity.py (new, Phase 4) | 44 | 0 |
-| test_poems_marquee.py (193, up from 79 -- multi-religion marquee, 2026-11-02) | 193 | 0 |
+| test_poems_marquee.py (226, up from 79 -- multi-religion marquee + Biblica Hindi Bible import, 2026-11-02) | 226 | 0 |
 | test_post_kinds.py | 55 | 0 |
 | test_provisional_locations.py | 76 | 0 |
 | test_qmail.py | 32 | 0 |
@@ -79,7 +80,7 @@ documentation work added `tests/test_copyright_pages.py` (34 checks, new), movin
 | test_qpunch.py | 25 | 0 |
 | test_referral_engine.py | 12 | 0 |
 | test_reply_read.py | 51 | 0 |
-| **Total (29 files)** | **1,311** | **0** |
+| **Total (29 files)** | **1,347** | **0** |
 
 (Phase 1 baseline, before any implementation this task: 26 files, 1,065 checks, 0 failures.)
 
@@ -120,13 +121,15 @@ architecture, not a single hardcoded Hindu/Christian dict:
   the old hardcoded 5-entry `CHIP_BY_RELIGION` client table this entry previously flagged as a
   "known limitation" — a tradition with no `religious_traditions` row (jain/other/prefer_not_to_say)
   still correctly shows no chip at all, by design, no fallback.
-- **Currently live content** (4 traditions): Hindu (original Qumanity Hindi poetry, not Gita
-  Press/Vinaya Patrika — see the Gita Press note below), Christian (Psalms KJV, English), Muslim
-  (Quran Surah Al-Fatiha, Arabic, Tanzil Project CC BY 3.0), Buddhist (Dhammapada ch. 1 vv. 1-5,
-  Pali + English/Max Müller). **5 content areas remain blocked pending rights review** — see
-  **"Marquee — Pending Rights (Content Only)"** below; this is a content gap, not a code gap.
-- Tests: `tests/test_poems_marquee.py`, **193 passing** (up from 79) — see the regression table
-  below for the updated suite-wide total. No uncommitted Marquee changes remain.
+- **Currently live content** (4 traditions, 5 language editions): Hindu (original Qumanity Hindi
+  poetry, not Gita Press/Vinaya Patrika — see the Gita Press note below), Christian (Psalms KJV
+  English + Psalms Biblica Open Hindi Contemporary Version, added 2026-11-02, owner-authorized),
+  Muslim (Quran Surah Al-Fatiha, Arabic, Tanzil Project CC BY 3.0), Buddhist (Dhammapada ch. 1
+  vv. 1-5, Pali + English/Max Müller). **4 content areas remain blocked pending rights review** —
+  see **"Marquee — Pending Rights (Content Only)"** below; this is a content gap, not a code gap.
+- Tests: `tests/test_poems_marquee.py`, **226 passing** (up from 79, then 193, then 226 after the
+  Hindi Bible import's own tests, re-run fresh) — see the regression table below for the updated suite-wide
+  total. No uncommitted Marquee changes remain.
 
 ### 2. Gita Press (copyright page)
 **✅ Implemented & Committed** (commit `82c5454`). Route `/copyright/gita-press`,
@@ -295,19 +298,20 @@ hashes: see Phase 3's own report in the final completion report below.
 
 The Marquee's **infrastructure is complete and committed** (`a0bd6ca`, see entry 1 above): the
 database architecture, Religion Selector, Language Selector, and rights-gating mechanism all work
-and are fully capable of serving any tradition the moment its content clears rights review. **Five
+and are fully capable of serving any tradition the moment its content clears rights review. **Four
 content areas remain blocked** — this is content-only follow-up work, not an infrastructure gap.
-None of the five is currently offered by the Religion/Language Selector or servable through the
+None of the four is currently offered by the Religion/Language Selector or servable through the
 existing API, by any query-parameter combination; `religious_text_core.resolve_collection()`
 returns `None` for every one of them, which `api_poems_meta()` reports as `coming_soon`, never
 substituted or invented content. Full research trail: `docs/marquee_religious_text_sources.md`.
 
-> **Updated 2026-11-02 (deeper research pass, same day).** Every item below was re-investigated in
-> more depth (named translators, direct contact routes, license-file checks rather than README
-> prose) — see the research doc for full quotes and sources. One item (Hindi Bible) now has a
-> candidate edition with both verified license terms and verified real text; it stays blocked here
-> only because this pass's own authorization explicitly excluded importing any of the five
-> collections, pending owner review.
+> **Updated 2026-11-02 (deeper research pass, same day), then updated again the same day after
+> owner authorization.** Every item below was re-investigated in more depth (named translators,
+> direct contact routes, license-file checks rather than README prose) — see the research doc for
+> full quotes and sources. **One item that was on this list, the Hindi Bible, has since moved OFF
+> it entirely**: the owner reviewed and explicitly authorized the Biblica Open Hindi Contemporary
+> Version candidate, which was imported and is now live (commit below) — see "Christian Hindi,
+> now live" immediately after this list, not among the four still-pending items.
 
 ### 1. Urdu Quran
 
@@ -350,30 +354,28 @@ Next step:
   restrictions must not be bypassed.
 - Do not publish Gurbani text or translations without a verified source and permission.
 
-### 3. Hindi Bible
+### Christian Hindi (Biblica) — moved from pending to Live, 2026-11-02
 
-**Status:** `pending_rights_review — code complete, content blocked` (one candidate now has both
-verified terms and verified text, but import is not authorized by this pass)
+**Status:** `approved_with_conditions — imported and live` (commit `<set at commit time, see
+entry 1 above>`). The owner reviewed and explicitly authorized importing the Biblica Open Hindi
+Contemporary Version candidate identified in the deeper research pass above. Eight Psalm verses
+(the same references already used by the existing English KJV collection) were fetched live,
+verse-by-verse, directly from `ebible.org/hincv/` and added as a second language (`hi`) on the
+existing `christian_psalms_kjv` collection row — not a new collection, following the same
+"one collection, multiple language editions" pattern already used for Buddhist's Pali+English
+Dhammapada. English KJV remains the Christian default language, completely unaffected; Hindi is a
+reader-selected addition only. Treated as a derivative work under CC BY-SA 4.0 (eight verses
+selected and reformatted, not an unmodified full copy): the Biblica® trademark is never used in
+Qumanity's own UI/docs for this collection, and the license's own derivative-work attribution
+wording is used instead — *"The original work by Biblica, Inc. is available for free at
+www.biblica.com and open.bible."* Files: `Poems/christian/hindi_biblica/poems_hindi.json` (8
+verses), `Poems/christian/hindi_biblica/README.md`. See `docs/marquee_religious_text_sources.md`
+§2b for the full re-verified license trail and `/copyright/religious-texts` for the public notice.
+The 1914 BFBS Hindi Bible edition (Candidates 1-3 in the research doc) remains separately
+unavailable — its rights are clean but no clean transcription exists; it is not part of this
+import and would be a distinct, independent addition if ever pursued.
 
-Findings this pass: the 1914 BFBS edition's public-domain rights are solidly confirmed, but no
-clean (non-OCR-garbled) transcription exists anywhere this pass could locate, including a check of
-Hindi Wikisource (no Bible content at all). **Biblica's Hindi Contemporary Version
-(`ebible.org/hincv`) is now `approved_with_conditions`**: exact CC BY-SA 4.0 terms quoted directly
-from the primary source, and real Hindi verse text (Psalm 23) was retrieved and verified live.
-
-Next step:
-- Owner review of the Biblica CC BY-SA 4.0 conditions (see
-  `docs/marquee_religious_text_sources.md` §2b): publish the Hindi text in its own clearly-licensed
-  file, visible Biblica attribution, no unauthorized use of the Biblica® trademark, and no
-  relicensing of the surrounding application code (a standalone attributed JSON file is a
-  defensible, commonly-used reading of the share-alike scope, not a guaranteed legal conclusion).
-- If approved, import is a separate, future content-only commit — not authorized by this research
-  pass.
-- Alternatively, the 1914 BFBS edition remains available as a public-domain path if a clean
-  transcription is ever produced.
-- Keep the Hindi Bible collection unavailable until the owner has reviewed and explicitly approved.
-
-### 4. Hindi Dhammapada
+### 3. Hindi Dhammapada
 
 **Status:** `pending_rights_review — code complete, content blocked`
 
@@ -391,7 +393,7 @@ Next step:
 - Do not generate or present an unverified machine translation as an established Hindi
   Dhammapada translation.
 
-### 5. Jain texts
+### 4. Jain texts
 
 **Status:** `pending_rights_review — code complete, content blocked`
 
@@ -437,9 +439,10 @@ Next step:
 | Quran Arabic collection | Available with documented conditions |
 | Dhammapada Pali collection | Available with documented conditions |
 | Dhammapada English collection | Available |
+| Christian Hindi (Biblica) | **Available with documented conditions — imported 2026-11-02, owner-authorized** |
 | Urdu Quran | Pending rights review — code complete, content blocked |
 | Sikh Gurbani | Pending rights review — code complete, content blocked |
-| Hindi Bible | Pending rights review — one candidate (Biblica CC BY-SA 4.0) has verified terms + text; owner approval still required before import |
+| Hindi Bible (1914 BFBS edition) | Pending rights review — rights clean, no usable clean text; distinct from the now-live Biblica edition above |
 | Hindi Dhammapada | Pending rights review — code complete, content blocked |
 | Jain collection | Pending rights review — code complete, content blocked |
 | Gita Press Vinaya Patrika | Unavailable pending permission (not_permitted, pre-existing finding) |
@@ -605,3 +608,13 @@ Nagar/Haryana scripts, `folder_export/Earth/`, `Poems/`, `docs/family_tree/`,
   matching `ARCHITECTURE.md` updates in both locations. Suite total re-baselined again to 1,311
   across 29 files, re-run fresh this session. No application code, tests outside the two new test
   files, migrations, or user data were changed.
+- 2026-11-02 (separate, later-still task, owner-authorized content import): the Biblica Open Hindi
+  Contemporary Version (8 Psalm verses, CC BY-SA 4.0) was imported as a second language on the
+  existing `christian_psalms_kjv` collection -- the Marquee's first content collection to move
+  from `pending_rights_review` to actually live. `religious_text_core.py`'s `_seed_collection()`
+  helper was extended to idempotently add a new language to an already-seeded collection (verified
+  against a simulated pre-existing database, not just a fresh one). Updated the Marquee entry, the
+  Pending Rights section (now 4 items, not 5 -- Hindi Bible moved to its own "now live" note), the
+  code-complete/content-complete table, and the regression baseline (`test_poems_marquee.py` 193 ->
+  226, suite total 1,311 -> 1,347, re-run fresh). The other four blocked collections and Gita Press
+  were re-confirmed unaffected and still blocked.

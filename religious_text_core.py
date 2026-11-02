@@ -135,24 +135,46 @@ def _seed_collection(conn, *, tradition_id, slug, display_title, is_original_wor
                       languages):
     """languages: list of dicts {code, display_name, script_direction, is_original_language,
     translator_name, entries_path (Path to a {id,marker,text} JSON file, or None for a
-    rights-pending placeholder with no servable text yet)}. Idempotent on `slug` -- re-running
-    this (e.g. every app boot, via ensure_tables()'s caller) is a no-op once the row exists, same
-    pattern as every other *_core.py table in this codebase."""
+    rights-pending placeholder with no servable text yet)}. Idempotent on `slug` AND, separately,
+    on each language's own `code` within that collection (2026-11-02, added for the Christian
+    Hindi/Biblica addition): re-running this on an already-seeded collection never duplicates the
+    collection row or any language it already has, but DOES add any language in `languages` the
+    existing row doesn't have yet (and refreshes the collection's own metadata columns to the
+    caller's current values -- e.g. an attribution_text that now needs to describe two languages'
+    distinct rights instead of one). This is what lets a later task add a new language to an
+    already-live collection without a one-off migration, the same `CREATE TABLE IF NOT EXISTS`-
+    style idempotent-seed pattern every other `*_core.py` module in this codebase already uses."""
     existing = conn.execute("SELECT id FROM text_collections WHERE slug = ?", (slug,)).fetchone()
     if existing:
-        return existing["id"]
-    cur = conn.execute(
-        """INSERT INTO text_collections
-           (tradition_id, slug, display_title, is_original_work, source_book, author_or_translator,
-            publisher, source_url, edition, rights_status, attribution_text, license_notes,
-            review_status, marquee_eligible, sort_order)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (tradition_id, slug, display_title, int(is_original_work), source_book, author_or_translator,
-         publisher, source_url, edition, rights_status, attribution_text, license_notes,
-         review_status, int(marquee_eligible), sort_order),
-    )
-    collection_id = cur.lastrowid
+        collection_id = existing["id"]
+        conn.execute(
+            """UPDATE text_collections SET display_title=?, is_original_work=?, source_book=?,
+               author_or_translator=?, publisher=?, source_url=?, edition=?, rights_status=?,
+               attribution_text=?, license_notes=?, review_status=?, marquee_eligible=?,
+               sort_order=?, updated_at=datetime('now') WHERE id=?""",
+            (display_title, int(is_original_work), source_book, author_or_translator, publisher,
+             source_url, edition, rights_status, attribution_text, license_notes, review_status,
+             int(marquee_eligible), sort_order, collection_id),
+        )
+    else:
+        cur = conn.execute(
+            """INSERT INTO text_collections
+               (tradition_id, slug, display_title, is_original_work, source_book, author_or_translator,
+                publisher, source_url, edition, rights_status, attribution_text, license_notes,
+                review_status, marquee_eligible, sort_order)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (tradition_id, slug, display_title, int(is_original_work), source_book, author_or_translator,
+             publisher, source_url, edition, rights_status, attribution_text, license_notes,
+             review_status, int(marquee_eligible), sort_order),
+        )
+        collection_id = cur.lastrowid
     for lang in languages:
+        already = conn.execute(
+            "SELECT id FROM text_collection_languages WHERE collection_id = ? AND language_code = ?",
+            (collection_id, lang["code"]),
+        ).fetchone()
+        if already:
+            continue  # this language (and its entries) was already seeded in an earlier run
         lcur = conn.execute(
             """INSERT INTO text_collection_languages
                (collection_id, language_code, display_name, script_direction, is_original_language, translator_name)
@@ -211,21 +233,47 @@ def seed_builtin_collections(conn):
         ],
     )
 
-    # Christian: Psalms, King James Version -- public domain worldwide (1611).
+    # Christian: Psalms, King James Version (English, public domain, 1611) + a short Hindi
+    # selection from Biblica's Open Hindi Contemporary Version (CC BY-SA 4.0, added 2026-11-02).
+    # One collection row, two languages -- same "one collection, multiple language editions"
+    # pattern already used for Buddhist's Pali+English Dhammapada, not a second Christian
+    # collection row (which resolve_collection() would never reach, since it resolves exactly one
+    # collection per religion by sort_order). English remains sort-order/`is_original_language`
+    # first, so it stays the Christian default language -- selecting Hindi is an explicit reader
+    # choice, never automatic. attribution_text/license_notes below cover BOTH languages' own,
+    # genuinely different rights situations explicitly, since those two columns are per-collection,
+    # not per-language, and must never understate either one.
     _seed_collection(
         conn, tradition_id="christian", slug="christian_psalms_kjv",
+        # display_title is collection-level, not per-language (the schema's own real limit -- see
+        # this task's own "do not redesign the database" boundary), so it stays the existing,
+        # already-tested English edition name exactly as before this change; the Hindi edition's
+        # own name is fully disclosed in attribution_text instead, which the API also returns.
         display_title="Psalms, King James Version", is_original_work=False,
-        source_book="Psalms", author_or_translator="King James Version (1611)",
-        publisher=None, source_url=None, edition="1611 KJV",
-        rights_status="public_domain",
-        attribution_text="Psalms, King James Version (1611) -- public domain.",
-        license_notes="Published 1611; the Crown's UK printing patent is a commercial-printing "
-                       "restriction in the UK only, not a copyright, and does not reach this "
-                       "non-commercial, non-UK-printed use. See Poems/christian/README.md.",
+        source_book="Psalms", author_or_translator="King James Version (1611); Biblica Open Hindi Contemporary Version",
+        publisher=None, source_url="https://ebible.org/hincv/copyright.htm", edition="1611 KJV (English); Biblica Open Hindi CV, © 1978/2009/2016/2019 (Hindi)",
+        rights_status="cc_licensed",  # the stricter of the two languages' own terms -- see license_notes
+        attribution_text="English: Psalms, King James Version (1611) -- public domain, no attribution required. "
+                          "Hindi: Biblica Open Hindi Contemporary Version, licensed CC BY-SA 4.0 "
+                          "(creativecommons.org/licenses/by-sa/4.0/). The original work by Biblica, Inc. is "
+                          "available for free at www.biblica.com and open.bible. Eight verses selected and "
+                          "reformatted by Qumanity -- a derivative use under that license, so this text is "
+                          "credited with the license's own derivative-work wording above rather than the "
+                          "Biblica trademark symbol, which is deliberately not reproduced here.",
+        license_notes="English (KJV): public domain worldwide, no conditions. Hindi (Biblica Open Hindi CV): "
+                       "CC BY-SA 4.0, re-verified directly at ebible.org/hincv/copyright.htm 2026-11-02 -- "
+                       "conditions are attribution, share-alike on any redistribution of this JSON file, and "
+                       "(since this is a derivative/selected-and-reformatted use, not a verbatim full copy) "
+                       "using the license's own derivative-work attribution wording in place of the Biblica "
+                       "trademark symbol, which this project deliberately never reproduces. See "
+                       "Poems/christian/README.md and Poems/christian/hindi_biblica/README.md.",
         review_status="approved", marquee_eligible=True, sort_order=0,
         languages=[
             {"code": "en", "display_name": "English", "script_direction": "ltr", "is_original_language": True,
              "entries_path": poems_dir / "christian" / "psalms_kjv_en.json"},
+            {"code": "hi", "display_name": "हिन्दी", "script_direction": "ltr", "is_original_language": False,
+             "translator_name": "Biblica, Inc. (Open Hindi Contemporary Version)",
+             "entries_path": poems_dir / "christian" / "hindi_biblica" / "poems_hindi.json"},
         ],
     )
 

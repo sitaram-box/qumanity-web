@@ -102,8 +102,19 @@ check("the page DOES state the Arabic Quran (Al-Fatiha) is available",
       "Surah Al-Fatiha" in html_norm and "is available" in html_norm)
 check("the page DOES state the Dhammapada Pali/English collections are available",
       "Dhammapada collections" in html_norm and "are available" in html_norm)
-check("the 'where things stand' summary lists exactly the four live collections",
-      "the original Qumanity Hindu Hindi poetry, the English Psalms (KJV), the Arabic Quran (Surah Al-Fatiha), and the Dhammapada in" in html_norm)
+check("the page DOES state the Hindi Psalms (Biblica) are also available (2026-11-02 import)",
+      "a Hindi selection is" in html_norm and "also available" in html_norm
+      and "Biblica" in html_norm and "Open Hindi Contemporary Version" in html_norm)
+check("the page's Biblica attribution uses the licence's own derivative-work wording, never the Biblica(R) trademark symbol",
+      "The original work by Biblica, Inc. is available for free at" in html_norm
+      and "Biblica®" not in html and "Biblica®" not in html)
+check("the 1914 BFBS Hindi Bible edition is still explicitly described as unavailable, distinct from the Biblica import",
+      "1914 British and Foreign Bible Society Hindi edition" in html_norm
+      and "it remains unavailable" in html_norm)
+check("the 'where things stand' summary lists exactly the five live collections, including Hindi Psalms",
+      "the original Qumanity Hindu Hindi poetry, the English and Hindi Psalms (King James Version and "
+      "Biblica Open Hindi Contemporary Version), the Arabic Quran (Surah Al-Fatiha), and the Dhammapada in"
+      in html_norm)
 
 print()
 print("=" * 70)

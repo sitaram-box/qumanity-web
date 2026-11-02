@@ -133,8 +133,10 @@ check("hindu's collection is flagged as original Qumanity work", hindu_resolved[
 christian_resolved = religious_text_core.resolve_collection(_conn, "christian")
 check("christian resolves to its own real collection", christian_resolved is not None)
 check("christian's title is its own real source label", christian_resolved["title"] == "Psalms, King James Version")
-check("christian's only available language is English (no Hindi Bible -- pending rights review)",
-      {l["code"] for l in christian_resolved["languages"]} == {"en"})
+check("christian's available languages are English (KJV) and Hindi (Biblica, added 2026-11-02)",
+      {l["code"] for l in christian_resolved["languages"]} == {"en", "hi"})
+check("christian's default resolved language (no override) is still English, not Hindi",
+      christian_resolved["resolved_language"] == "en")
 
 muslim_resolved = religious_text_core.resolve_collection(_conn, "muslim")
 check("muslim resolves to a real collection (Quran, Al-Fatiha, Tanzil Arabic)", muslim_resolved is not None)
@@ -229,8 +231,9 @@ check("no Poems/sikh/ directory exists at all (Sikh research: pending_rights_rev
       not (appmod.POEMS_DIR / "sikh").exists())
 check("no Gita Press/Vinaya Patrika file exists under Poems/hindu/",
       not (appmod.POEMS_DIR / "hindu").exists() or not any((appmod.POEMS_DIR / "hindu").glob("*.json")))
-check("no Hindi Bible file exists under Poems/christian/",
-      not list((appmod.POEMS_DIR / "christian").glob("*hi*")))
+check("no 1914-BFBS-edition Hindi Bible file exists under Poems/christian/ (only the approved "
+      "Biblica hindi_biblica/ directory, added 2026-11-02 -- see the dedicated section below)",
+      sorted(p.name for p in (appmod.POEMS_DIR / "christian").iterdir() if p.is_dir()) == ["hindi_biblica"])
 check("no Urdu Quran directory/file exists under Poems/muslim/ (only quran_ar/)",
       not (appmod.POEMS_DIR / "muslim" / "quran_ur").exists()
       and sorted(p.name for p in (appmod.POEMS_DIR / "muslim").iterdir() if p.is_dir()) == ["quran_ar"])
@@ -403,7 +406,7 @@ print("=" * 70)
 
 _EXPECTED = {
     "hindu": {"label": "सीताराम", "langs": {"hi"}, "title": "मौलिक राम-भक्ति कविताएँ"},
-    "christian": {"label": "Jesus", "langs": {"en"}, "title": "Psalms, King James Version"},
+    "christian": {"label": "Jesus", "langs": {"en", "hi"}, "title": "Psalms, King James Version"},
     "muslim": {"label": "الله", "langs": {"ar"}, "title": "القرآن الكريم — سورة الفاتحة"},
     "buddhist": {"label": "Buddha", "langs": {"pi", "en"}, "title": "Dhammapada"},
 }
@@ -621,7 +624,7 @@ login(christian_user["private_code"])
 # parameter -- none can ever reach content outside the resolved, allowlisted collection, because
 # religious_text_core only ever does DB lookups keyed by exact language_code match, never
 # constructs a filesystem path from either parameter.
-for attack_lang in ("hindu", "hindu_original", "../hindu_original/poems_hindi", "hi"):
+for attack_lang in ("hindu", "hindu_original", "../hindu_original/poems_hindi", "ur"):
     res = client.get(f"/api/poems/{attack_lang}/0")
     check(f"lang={attack_lang!r} (no religion override, christian profile): correctly 404s, never leaks another collection's content",
           res.status_code == 404)
@@ -629,9 +632,15 @@ for attack_religion in ("../../etc/passwd", "hindu_original", "DROP TABLE users"
     res = client.get(f"/api/poems/en/0?religion={attack_religion}")
     check(f"?religion={attack_religion!r}: never 500s (falls back to the member's own profile religion cleanly)",
           res.status_code in (200, 404))
-# The one real, legitimate language this christian member has:
+# "hi" is now a genuinely legitimate language for this christian member (2026-11-02, Biblica Hindi
+# addition) -- explicitly confirmed as the one deliberate exception to the attack list above, not
+# an oversight: it must succeed, not 404.
+res = client.get("/api/poems/hi/0")
+check("lang='hi' (no religion override, christian profile) now legitimately succeeds (Biblica Hindi, not an attack)",
+      res.status_code == 200 and any("ऀ" <= ch <= "ॿ" for ch in res.get_json().get("text", "")))
+# The christian member's own real DEFAULT language:
 res = client.get("/api/poems/en/0")
-check("the christian member's own real language (en) correctly returns Psalms, not Hindu content",
+check("the christian member's own default language (en) correctly returns Psalms, not Hindu content",
       res.status_code == 200 and "राम" not in res.get_json().get("text", ""))
 logout()
 
@@ -642,6 +651,122 @@ check("a wildly out-of-range index 404s cleanly", client.get("/api/poems/hi/9999
 check("a negative index does not route at all (int: converter rejects it) or 404s",
       client.get("/api/poems/hi/-1").status_code == 404)
 check("index 0 (the first poem) succeeds", client.get("/api/poems/hi/0").status_code == 200)
+logout()
+
+print()
+print("=" * 70)
+print("18. Christian Hindi (Biblica Open Hindi Contemporary Version) -- the first content import")
+print("    into the rights-gated architecture, 2026-11-02, owner-authorized")
+print("=" * 70)
+
+_conn = appmod.get_db()
+_biblica_row = _conn.execute(
+    "SELECT * FROM text_collections WHERE slug = 'christian_psalms_kjv'"
+).fetchone()
+check("1. the Biblica Hindi collection is seeded (same christian_psalms_kjv row, now with 2 languages)",
+      _biblica_row is not None)
+check("3. the collection has the correct Christian religion association",
+      _biblica_row["tradition_id"] == "christian")
+_biblica_langs = _conn.execute(
+    "SELECT * FROM text_collection_languages WHERE collection_id = ?", (_biblica_row["id"],)
+).fetchall()
+_lang_codes = {l["language_code"] for l in _biblica_langs}
+check("4. Hindi is associated with the collection (language_code='hi')", "hi" in _lang_codes)
+check("4b. English (the existing KJV language) is still associated too -- nothing was replaced",
+      "en" in _lang_codes)
+check("5. rights_status reflects the stricter of the two languages' own conditional licenses (cc_licensed)",
+      _biblica_row["rights_status"] == "cc_licensed")
+check("6. marquee_eligible is enabled", _biblica_row["marquee_eligible"] == 1)
+check("6b. review_status is approved", _biblica_row["review_status"] == "approved")
+check("7. source and attribution metadata are present and name Biblica specifically",
+      bool(_biblica_row["attribution_text"]) and "Biblica" in _biblica_row["attribution_text"]
+      and "CC BY-SA 4.0" in _biblica_row["attribution_text"])
+check("7b. the Biblica(R) trademark symbol is never used in the attribution (derivative-work condition)",
+      "Biblica®" not in _biblica_row["attribution_text"])
+check("7c. the derivative-work attribution wording from the license itself is used verbatim",
+      "The original work by Biblica, Inc. is available for free at www.biblica.com and open.bible"
+      in _biblica_row["attribution_text"])
+_conn.close()
+
+# 2. Seed idempotence: re-running the seed must not duplicate the language row or its entries.
+religious_text_core.seed_builtin_collections(appmod.get_db())
+_conn = appmod.get_db()
+_lang_count = _conn.execute(
+    "SELECT COUNT(*) AS n FROM text_collection_languages WHERE collection_id = ?", (_biblica_row["id"],)
+).fetchone()["n"]
+check("2. re-running the seed does not duplicate the Hindi language row (still exactly 2 languages)",
+      _lang_count == 2)
+_entry_count = _conn.execute(
+    "SELECT COUNT(*) AS n FROM text_entries te JOIN text_collection_languages tcl "
+    "ON te.collection_language_id = tcl.id WHERE tcl.collection_id = ? AND tcl.language_code = 'hi'",
+    (_biblica_row["id"],),
+).fetchone()["n"]
+check("2b. re-running the seed does not duplicate the Hindi verse entries (still exactly 8)",
+      _entry_count == 8)
+_conn.close()
+
+# 8-11: the JSON file itself, parsed directly.
+_biblica_path = appmod.POEMS_DIR / "christian" / "hindi_biblica" / "poems_hindi.json"
+check("8. Poems/christian/hindi_biblica/poems_hindi.json exists and parses as valid JSON",
+      _biblica_path.exists())
+_biblica_entries = _json.loads(_biblica_path.read_bytes().decode("utf-8"))
+check("8b. exactly 8 verses, the required {id, marker, text} record format",
+      len(_biblica_entries) == 8
+      and all({"id", "marker", "text"} <= set(p.keys()) for p in _biblica_entries))
+check("9. verse ids are unique and contiguous", [p["id"] for p in _biblica_entries] == list(range(1, 9)))
+_expected_markers = {"Psalm 23:1", "Psalm 46:1", "Psalm 100:5", "Psalm 118:24", "Psalm 121:1-2",
+                     "Psalm 34:8", "Psalm 37:4", "Psalm 19:14"}
+check("10. canonical Book Chapter:Verse markers are preserved, matching the existing KJV collection's own selection",
+      {p["marker"] for p in _biblica_entries} == _expected_markers)
+check("11. Unicode Devanagari text is retained in every entry (not Latin transliteration, not corrupted)",
+      all(any("ऀ" <= ch <= "ॿ" for ch in p["text"]) for p in _biblica_entries))
+check("11b. no verse text contains HTML/script-like content", all(
+    "<" not in p["marker"] and ">" not in p["marker"] and "<" not in p["text"] and ">" not in p["text"]
+    for p in _biblica_entries
+))
+
+print()
+print("=" * 70)
+print("19. Christian Hindi, live end-to-end through the real API")
+print("=" * 70)
+
+logout()
+hindi_meta = client.get("/api/poems/meta?religion=christian&lang=hi").get_json()
+check("12. Christian metadata includes Hindi in its languages list", "hi" in {l["code"] for l in hindi_meta.get("languages", [])})
+check("13. requesting Christian/Hindi resolves the Biblica collection (count=8, religion=christian)",
+      hindi_meta.get("religion") == "christian" and hindi_meta.get("count") == 8 and hindi_meta.get("default") == "hi")
+check("13b. the Christian gold-chip label is unchanged by the Hindi addition", hindi_meta.get("label") == "Jesus")
+
+hindi_poem = client.get("/api/poems/hi/0?religion=christian").get_json()
+check("14. at least one real Hindi verse is returned (not a placeholder, not empty)",
+      bool(hindi_poem.get("text")) and any("ऀ" <= ch <= "ॿ" for ch in hindi_poem["text"]))
+check("14b. the returned verse's marker matches the expected canonical reference",
+      hindi_poem.get("marker") == "Psalm 23:1")
+
+english_meta = client.get("/api/poems/meta?religion=christian").get_json()
+check("15. existing English KJV behavior remains intact: English is still the Christian DEFAULT language",
+      english_meta.get("default") == "en")
+check("15b. the English collection's own verse count is unaffected (still 8, the original KJV selection)",
+      english_meta.get("count") == 8)
+english_poem = client.get("/api/poems/en/0?religion=christian").get_json()
+check("15c. an English request still returns genuine KJV text, never Hindi text",
+      english_poem.get("text") == "The LORD is my shepherd; I shall not want."
+      and not any("ऀ" <= ch <= "ॿ" for ch in english_poem["text"]))
+
+# 16-20: every other previously-pending collection remains blocked -- this import changed nothing
+# about the rights gate itself. (Already covered in depth by sections 2, 4, and 11 above; repeated
+# explicitly here, scoped to this specific task's own required checklist, for a self-contained
+# record that none of them were accidentally affected by the Christian Hindi addition.)
+check("16. Urdu Quran remains blocked (?religion=muslim&lang=ur still 404s)",
+      client.get("/api/poems/ur/0?religion=muslim").status_code == 404)
+check("17. Sikh Gurbani remains blocked (sikh has zero eligible collections)",
+      religious_text_core.resolve_collection(appmod.get_db(), "sikh") is None)
+check("18b. Hindi Dhammapada remains blocked (?religion=buddhist&lang=hi still 404s)",
+      client.get("/api/poems/hi/0?religion=buddhist").status_code == 404)
+check("19b. Jain remains blocked (jain has zero eligible collections)",
+      religious_text_core.resolve_collection(appmod.get_db(), "jain") is None)
+check("20. Gita Press remains blocked (no Poems/hindu/ file; Hindu default still the original collection)",
+      not (appmod.POEMS_DIR / "hindu").exists() or not any((appmod.POEMS_DIR / "hindu").glob("*.json")))
 logout()
 
 print()
