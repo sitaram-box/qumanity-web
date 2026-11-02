@@ -14,9 +14,16 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/india_map.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}" />
+  <!-- Phase A, 2026-11-03: the Cosmic Homepage & Mandala Portal design system. Loaded last so it
+       can scope-override home.css's own tokens for body.hm only -- see cosmic.css's own header
+       comment for why this never touches any other page. -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/cosmic.css') }}" />
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
 </head>
 <body class="hm">
+  <!-- Phase A cosmic particle field (static/js/cosmic.js) -- decorative only, aria-hidden, never
+       intercepts pointer events, sits behind every other element via cosmic.css's z-index rules. -->
+  <canvas id="qm-cosmic-canvas" class="qm-cosmic-canvas" aria-hidden="true"></canvas>
   <a class="hm-skip" href="#main">Skip to content</a>
 
   <!-- ============ Navigation ============ -->
@@ -61,59 +68,88 @@
         <div class="hm-hero-stars"></div>
         <div class="hm-hero-orbit"></div>
       </div>
-      <div class="hm-wrap hm-hero-wordmark" aria-hidden="true">
-        <span class="hm-hero-wordmark-en">Qumanity</span>
-      </div>
 
       <div class="hm-wrap hm-hero-inner">
-        <p class="hm-chip"><span class="hm-chip-dot"></span> <span data-i18n="hero_chip">Quantum&nbsp;+&nbsp;Humanity</span></p>
+        <div class="qm-cosmic-hero-grid">
 
-        <!-- The homepage's only sign-in entry point (the nav/footer "Login" links are gone).
-             Reuses /login's own field markup, validation and POST /login call almost verbatim --
-             see home_signin.js. Element ids below are load-bearing; do not rename them.
-             2026-10-28: moved directly under the wordmark/chip -- the center-focus primary action
-             for a returning member, ahead of the headline copy a first-time visitor needs instead
-             (both audiences are served, just in the order each one actually wants). This is the
-             SAME reordering the mobile breakpoint already did with a flexbox `order` override
-             ("a real UX failure on a phone" -- now true at every width, so it's just the DOM
-             order here instead of a breakpoint-only override; see home.css). -->
-        <div class="hm-signin-wrap" id="hm-signin-slot">
-          <div class="hm-panel hm-glass hm-signin-panel">
-            <h3 class="hm-signin-title">Already a member? Sign in</h3>
-            <form id="hm-login-form" class="qm-form" novalidate>
-              <label class="qm-field">
-                <span>🔢 9-digit Private ID</span>
-                <input type="text" id="hm-field-private-id" required inputmode="numeric" pattern="[0-9]{9}" maxlength="9" autocomplete="off" autocorrect="off" autocapitalize="off" placeholder="e.g. 583294017" />
-              </label>
-              <label class="qm-field">
-                <span>🔑 5-character PIN</span>
-                <input type="password" id="hm-field-pin" required pattern="(?=.*[A-Za-z0-9])[A-Za-z0-9!@#$%^&amp;*()_+\-=\[\]{}|;:'&quot;,.&lt;&gt;/?]{5}" maxlength="5" autocomplete="current-password" placeholder="•••••" />
-              </label>
-              <button type="submit" class="qm-btn qm-btn-primary qm-form-submit">Sign in →</button>
-            </form>
-            <p class="qm-summary-error" id="hm-login-error" hidden></p>
-            <div class="hm-signin-actions">
-              <a class="qm-btn qm-btn-ghost" href="{{ url_for('register') }}">New here? Register</a>
-              <button type="button" class="hm-signin-forgot-btn" id="hm-forgot-btn" aria-expanded="false">Forgot Private ID or PIN?</button>
-              <div class="hm-signin-forgot-links" id="hm-forgot-links" hidden>
-                <a href="{{ url_for('forgot_pin_page') }}">Forgot your PIN?</a>
-                <a href="{{ url_for('recover_id_page') }}">Forgot your Private ID?</a>
+          <!-- LEFT: identity + headline + the existing calls to action, unchanged in substance --
+               only wrapped and reflowed for the new two-column cosmic layout. -->
+          <div class="qm-cosmic-hero-copy">
+            <div class="hm-hero-wordmark" aria-hidden="true">
+              <img class="qm-hero-logo" src="{{ url_for('static', filename='images/logo-qumanity.svg') }}" alt="" width="96" height="96" />
+              <span class="hm-hero-wordmark-en">Qumanity</span>
+            </div>
+            <p class="hm-chip"><span class="hm-chip-dot"></span> <span data-i18n="hero_chip">Quantum&nbsp;+&nbsp;Humanity</span></p>
+            <h1><span data-i18n="hero_title">One Humanity. Infinite Possibilities. Connected Communities.</span></h1>
+            <p class="hm-lead" data-i18n="hero_lead">Every village and every member has a verified place on one open record — where you live now, not just where you were born. Build your family tree and connect with your lineage. Elections rotate by the zodiac calendar. Service is logged and, in time, rewarded. Nothing here needs to be re-verified, and nothing can quietly disappear.</p>
+            <div class="hm-cta-row hm-cta-center">
+              <a class="qm-btn qm-btn-primary qm-btn-lg" href="{{ url_for('register') }}"><span data-i18n="hero_cta">Create your account</span> <span aria-hidden="true">→</span></a>
+              <a class="qm-btn qm-btn-ghost qm-btn-lg" href="#live" data-i18n="hero_see_live">See who's here</a>
+            </div>
+            <ul class="hm-trust">
+              <li><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/></svg>Built and stewarded by one founder</li>
+              <li><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Open &amp; auditable</li>
+              <li><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>Voluntary by design</li>
+            </ul>
+          </div>
+
+          <!-- RIGHT: the Mandala Portal. Same #hm-signin-slot id, same #hm-login-form markup,
+               same field ids, same POST /login contract (home_signin.js, unchanged) -- only the
+               presentation around it is new. Decorative SVG rings sit behind the glass panel and
+               never intercept clicks (pointer-events: none, aria-hidden). -->
+          <div class="qm-mandala-portal-wrap">
+            <div class="qm-mandala-rings" aria-hidden="true">
+              <svg viewBox="0 0 400 400" focusable="false">
+                <g class="qm-cosmic-spin">
+                  <circle class="qm-orbit-ring" cx="200" cy="200" r="190"/>
+                  <circle class="qm-orbit-ring" cx="200" cy="200" r="190" stroke-dasharray="2 14"/>
+                </g>
+                <g class="qm-cosmic-spin is-reverse">
+                  <circle class="qm-orbit-ring is-saffron" cx="200" cy="200" r="150"/>
+                  <polygon class="qm-orbit-ring" points="200,70 310,135 310,265 200,330 90,265 90,135" />
+                </g>
+                <g class="qm-cosmic-spin">
+                  <polygon class="qm-orbit-ring is-saffron" points="200,110 280,155 280,245 200,290 120,245 120,155" transform="rotate(30 200 200)"/>
+                </g>
+                <circle class="qm-orbit-ring" cx="200" cy="200" r="108"/>
+                <g class="qm-cosmic-pulse">
+                  <circle class="qm-orbit-dot" cx="200" cy="10" r="4"/>
+                  <circle class="qm-orbit-dot" cx="390" cy="200" r="3"/>
+                  <circle class="qm-orbit-dot" cx="200" cy="390" r="4"/>
+                  <circle class="qm-orbit-dot" cx="10" cy="200" r="3"/>
+                </g>
+              </svg>
+            </div>
+
+            <div class="hm-signin-wrap qm-mandala-panel qm-glass-panel" id="hm-signin-slot">
+              <div class="hm-panel hm-glass hm-signin-panel">
+                <div class="qm-mandala-badge"><img src="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" alt="Qumanity" width="56" height="56" /></div>
+                <h3 class="hm-signin-title qm-mandala-title">Already a member? Sign in</h3>
+                <form id="hm-login-form" class="qm-form" novalidate>
+                  <label class="qm-field">
+                    <span>🔢 9-digit Private ID</span>
+                    <input type="text" id="hm-field-private-id" required inputmode="numeric" pattern="[0-9]{9}" maxlength="9" autocomplete="off" autocorrect="off" autocapitalize="off" placeholder="e.g. 583294017" />
+                  </label>
+                  <label class="qm-field">
+                    <span>🔑 5-character PIN</span>
+                    <input type="password" id="hm-field-pin" required pattern="(?=.*[A-Za-z0-9])[A-Za-z0-9!@#$%^&amp;*()_+\-=\[\]{}|;:'&quot;,.&lt;&gt;/?]{5}" maxlength="5" autocomplete="current-password" placeholder="•••••" />
+                  </label>
+                  <button type="submit" class="qm-btn qm-btn-primary qm-form-submit">Sign in →</button>
+                </form>
+                <p class="qm-summary-error" id="hm-login-error" hidden></p>
+                <div class="hm-signin-actions">
+                  <a class="qm-btn qm-btn-ghost" href="{{ url_for('register') }}">New here? Register</a>
+                  <button type="button" class="hm-signin-forgot-btn" id="hm-forgot-btn" aria-expanded="false">Forgot Private ID or PIN?</button>
+                  <div class="hm-signin-forgot-links" id="hm-forgot-links" hidden>
+                    <a href="{{ url_for('forgot_pin_page') }}">Forgot your PIN?</a>
+                    <a href="{{ url_for('recover_id_page') }}">Forgot your Private ID?</a>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <h1><span data-i18n="hero_title">A fair account of every place, and everyone who calls it home.</span></h1>
-        <p class="hm-lead" data-i18n="hero_lead">Every village and every member has a verified place on one open record — where you live now, not just where you were born. Build your family tree and connect with your lineage. Elections rotate by the zodiac calendar. Service is logged and, in time, rewarded. Nothing here needs to be re-verified, and nothing can quietly disappear.</p>
-        <div class="hm-cta-row hm-cta-center">
-          <a class="qm-btn qm-btn-primary qm-btn-lg" href="{{ url_for('register') }}"><span data-i18n="hero_cta">Create your account</span> <span aria-hidden="true">→</span></a>
-          <a class="qm-btn qm-btn-ghost qm-btn-lg" href="#live" data-i18n="hero_see_live">See who's here</a>
         </div>
-        <ul class="hm-trust">
-          <li><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/></svg>Built and stewarded by one founder</li>
-          <li><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Open &amp; auditable</li>
-          <li><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>Voluntary by design</li>
-        </ul>
       </div>
 
       <div class="hm-marquee" aria-label="Ways to contribute">
@@ -122,6 +158,126 @@
           <span>🌾 Farm regeneratively</span><span>🎭 Preserve a tradition</span><span>🤝 Mediate a dispute</span><span>🏛️ Serve on a council</span>
           <span aria-hidden="true">🌱 Plant a tree</span><span aria-hidden="true">📚 Teach an hour</span><span aria-hidden="true">👵 Care for an elder</span><span aria-hidden="true">💧 Restore water</span>
           <span aria-hidden="true">🌾 Farm regeneratively</span><span aria-hidden="true">🎭 Preserve a tradition</span><span aria-hidden="true">🤝 Mediate a dispute</span><span aria-hidden="true">🏛️ Serve on a council</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ THE JOURNEY: Earth -> India -> Village -> Individual (Phase A, 2026-11-03) ===
+         Pure visual storytelling -- no new data, no new routes, no change to the geography
+         hierarchy or any location ID. State and District are represented narratively inside the
+         India section, matching the brief's "five principal sections" structure. Each section is
+         semantic (<section>, one <h2>), reveals once via cosmic.js's IntersectionObserver (already
+         fully visible without JS / under prefers-reduced-motion), and never traps scroll. -->
+
+    <!-- EARTH -->
+    <section class="qm-section-cosmic qm-reveal-el" id="journey-earth" aria-labelledby="journey-earth-h">
+      <div class="hm-wrap qm-section-grid">
+        <div class="qm-section-copy">
+          <p class="qm-section-kicker">Earth</p>
+          <h2 id="journey-earth-h">Humanity as One Connected System.</h2>
+          <p>Qumanity's vision begins at the whole-planet scale: every community, everywhere,
+            sharing one common structure for being seen, heard, and counted. The Indian
+            Sub-continent is where that structure is live today — the long-term vision reaches
+            further, place by place, as the platform grows.</p>
+        </div>
+        <div class="qm-section-visual" aria-hidden="true">
+          <svg viewBox="0 0 400 400" focusable="false">
+            <circle class="qm-orbit-ring qm-cosmic-spin" cx="200" cy="200" r="170"/>
+            <circle class="qm-orbit-ring is-saffron qm-cosmic-spin is-reverse" cx="200" cy="200" r="130"/>
+            <circle class="qm-orbit-ring" cx="200" cy="200" r="90" stroke-dasharray="3 10"/>
+            <circle cx="200" cy="200" r="58" fill="url(#journeyEarthGlow)"/>
+            <defs>
+              <radialGradient id="journeyEarthGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#d4af37" stop-opacity="0.35"/>
+                <stop offset="1" stop-color="#d4af37" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+            <g class="qm-cosmic-pulse">
+              <circle class="qm-orbit-node" cx="140" cy="140" r="4"/>
+              <circle class="qm-orbit-node" cx="270" cy="150" r="3"/>
+              <circle class="qm-orbit-node" cx="230" cy="280" r="4"/>
+              <circle class="qm-orbit-node" cx="120" cy="250" r="3"/>
+              <circle class="qm-orbit-node" cx="290" cy="240" r="3"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- INDIA (State + District represented narratively within this section) -->
+    <section class="qm-section-cosmic qm-reveal-el" id="journey-india" aria-labelledby="journey-india-h">
+      <div class="hm-wrap qm-section-grid qm-reverse">
+        <div class="qm-section-copy">
+          <p class="qm-section-kicker">India</p>
+          <h2 id="journey-india-h">A Connected Structure for Country-Level Governance.</h2>
+          <p>Beneath Country sits a nested structure built for real administrative geography —
+            Zone, State, District, Tehsil, down to the Village itself. Each level connects local
+            participation upward, so what happens in one village is never disconnected from the
+            larger structures that govern it.</p>
+        </div>
+        <div class="qm-section-visual" aria-hidden="true">
+          <svg viewBox="0 0 400 400" focusable="false">
+            <polygon class="qm-orbit-ring qm-cosmic-spin" points="200,40 340,120 340,280 200,360 60,280 60,120"/>
+            <polygon class="qm-orbit-ring is-saffron" points="200,100 290,150 290,250 200,300 110,250 110,150"/>
+            <polygon class="qm-orbit-ring qm-cosmic-spin is-reverse" points="200,150 250,180 250,220 200,250 150,220 150,180"/>
+            <circle class="qm-orbit-dot" cx="200" cy="200" r="5"/>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- VILLAGE -->
+    <section class="qm-section-cosmic qm-reveal-el" id="journey-village" aria-labelledby="journey-village-h">
+      <div class="hm-wrap qm-section-grid">
+        <div class="qm-section-copy">
+          <p class="qm-section-kicker">Village</p>
+          <h2 id="journey-village-h">Real Change Begins at the Local Level.</h2>
+          <p>This is where Qumanity feels most human: neighbors recognizing each other's work,
+            local knowledge finding a permanent record, and shared civic needs finding a shared
+            space to be raised. Not every village has an active council yet — participation grows
+            one community at a time.</p>
+        </div>
+        <div class="qm-section-visual" aria-hidden="true">
+          <svg viewBox="0 0 400 400" focusable="false">
+            <g class="qm-cosmic-pulse">
+              <circle class="qm-orbit-node" cx="200" cy="200" r="7"/>
+              <circle class="qm-orbit-node" cx="110" cy="140" r="5"/>
+              <circle class="qm-orbit-node" cx="290" cy="140" r="5"/>
+              <circle class="qm-orbit-node" cx="120" cy="270" r="5"/>
+              <circle class="qm-orbit-node" cx="280" cy="270" r="5"/>
+              <circle class="qm-orbit-node" cx="200" cy="320" r="5"/>
+            </g>
+            <line class="qm-orbit-line" x1="200" y1="200" x2="110" y2="140"/>
+            <line class="qm-orbit-line" x1="200" y1="200" x2="290" y2="140"/>
+            <line class="qm-orbit-line" x1="200" y1="200" x2="120" y2="270"/>
+            <line class="qm-orbit-line" x1="200" y1="200" x2="280" y2="270"/>
+            <line class="qm-orbit-line" x1="200" y1="200" x2="200" y2="320"/>
+            <circle class="qm-orbit-ring" cx="200" cy="200" r="150" stroke-dasharray="2 12"/>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- INDIVIDUAL -->
+    <section class="qm-section-cosmic qm-reveal-el" id="journey-individual" aria-labelledby="journey-individual-h">
+      <div class="hm-wrap qm-section-grid qm-reverse">
+        <div class="qm-section-copy">
+          <p class="qm-section-kicker">Individual</p>
+          <h2 id="journey-individual-h">Your Role in the Whole.</h2>
+          <p>No one here is a number on a dashboard. Every member keeps a verified identity, a
+            place on the record that's truly their own, and a direct line from their own daily
+            participation up through Village, District, State, Country, all the way to Earth.</p>
+          <div class="hm-cta-row">
+            <a class="qm-btn qm-btn-primary qm-btn-lg" href="{{ url_for('register') }}">Become Part of Qumanity <span aria-hidden="true">→</span></a>
+          </div>
+        </div>
+        <div class="qm-section-visual" aria-hidden="true">
+          <svg viewBox="0 0 400 400" focusable="false">
+            <circle class="qm-orbit-ring qm-cosmic-spin" cx="200" cy="200" r="160"/>
+            <circle class="qm-orbit-ring is-saffron" cx="200" cy="200" r="110"/>
+            <circle class="qm-orbit-ring" cx="200" cy="200" r="60" stroke-dasharray="2 8"/>
+            <circle class="qm-orbit-dot qm-cosmic-pulse" cx="200" cy="200" r="10"/>
+          </svg>
         </div>
       </div>
     </section>
@@ -353,6 +509,9 @@
   <script src="{{ url_for('static', filename='js/india_map.js') }}"></script>
   <script src="{{ url_for('static', filename='js/earth.js') }}"></script>
   <script src="{{ url_for('static', filename='js/home.js') }}"></script>
+  <!-- Phase A: particle field + journey-section reveal. Self-contained, only queries
+       #qm-cosmic-canvas and .qm-reveal-el, so it cannot collide with any other script's state. -->
+  <script src="{{ url_for('static', filename='js/cosmic.js') }}"></script>
   <script src="{{ url_for('static', filename='js/home_signin.js') }}"></script>
   <script src="{{ url_for('static', filename='js/scoreboard.js') }}"></script>
   <script src="{{ url_for('static', filename='js/home_i18n.js') }}"></script>

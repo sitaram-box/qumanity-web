@@ -1,0 +1,359 @@
+/* cosmic.css — Qumanity Cosmic Homepage & Mandala Portal (Phase A, 2026-11-03)
+   =================================================================================
+   Scope: templates/home.html ONLY (loaded nowhere else). Every selector below is either a new
+   `.qm-cosmic-*` / `.qm-mandala-*` / `.qm-glass-*` / `.qm-section-*` class added fresh to
+   home.html, or a `body.hm { --qm-token: ... }` SCOPED re-declaration of the shared tokens
+   style.css/home.css/register.css/poems.css already read via var(--qm-...). Re-declaring a
+   custom property inside `body.hm { }` only changes what var() resolves to for elements INSIDE
+   body.hm -- every other page keeps style.css's own light-theme values untouched. This file never
+   edits style.css/home.css/register.css/poems.css directly, so nothing here can leak into the
+   Dashboard, Q-Map, QMail, Family Tree, or any other authenticated/public page.
+
+   Design system: deep-space navy/obsidian ground, restrained gold+saffron light, ivory text.
+   Luminous, not neon -- every glow token below is a soft, low-alpha radial/box-shadow, not a
+   saturated neon color. */
+
+/* ---------------------------------------------------------------------------------------------
+   1. DESIGN TOKENS
+   --------------------------------------------------------------------------------------------- */
+:root {
+  /* Mandatory cosmic tokens (exact values, per spec -- do not rename or replace) */
+  --qm-bg-deep: #0a0a1a;
+  --qm-bg-mid: #1a1a3a;
+  --qm-accent-gold: #d4af37;
+  --qm-accent-saffron: #ff9933;
+  --qm-text-primary: #f5f5dc;
+  --qm-text-muted: #a0a0b0;
+
+  /* Complementary surface/border/highlight tokens (additive, not a replacement for the above) */
+  --qm-surface-1: #12122a;
+  --qm-surface-2: #1f1f42;
+  --qm-cosmic-border: rgba(212, 175, 55, 0.28);
+  --qm-cosmic-border-soft: rgba(212, 175, 55, 0.14);
+  --qm-cosmic-highlight: rgba(245, 245, 220, 0.08);
+
+  /* Spacing scale */
+  --qm-space-1: 0.25rem;
+  --qm-space-2: 0.5rem;
+  --qm-space-3: 0.75rem;
+  --qm-space-4: 1rem;
+  --qm-space-6: 1.5rem;
+  --qm-space-8: 2rem;
+  --qm-space-12: 3rem;
+  --qm-space-16: 4rem;
+  --qm-space-24: 6rem;
+
+  /* Radius scale */
+  --qm-radius-sm: 0.5rem;
+  --qm-radius-md: 0.875rem;
+  --qm-radius-lg: 1.25rem;
+  --qm-radius-xl: 1.75rem;
+  --qm-radius-pill: 999px;
+  --qm-radius-circle: 50%;
+
+  /* Shadow / glow */
+  --qm-shadow-deep: 0 20px 60px rgba(0, 0, 0, 0.45);
+  --qm-shadow-gold: 0 0 30px rgba(212, 175, 55, 0.16);
+  --qm-glow-gold: 0 0 18px rgba(212, 175, 55, 0.22);
+  --qm-glow-saffron: 0 0 22px rgba(255, 153, 51, 0.16);
+
+  /* Typography -- Fraunces (already loaded by home.html) stays the display face; body copy stays
+     on the project's existing system-ui stack. No new font dependency introduced. */
+  --qm-font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --qm-font-body: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+/* ---------------------------------------------------------------------------------------------
+   2. SCOPED DARK-THEME TOKEN OVERRIDE (body.hm only)
+   Re-points the shared tokens style.css/home.css/register.css already use throughout home.html's
+   existing markup (panels, buttons, form fields, the stats/globe/founder/final sections, the
+   footer) at cosmic-dark equivalents -- zero edits to those files, zero effect on any other page.
+   --------------------------------------------------------------------------------------------- */
+body.hm {
+  --qm-bg: var(--qm-bg-deep);
+  --qm-panel-bg: var(--qm-surface-1);
+  --qm-text: var(--qm-text-primary);
+  --qm-text-dim: var(--qm-text-muted);
+  --qm-border: var(--qm-cosmic-border);
+  --qm-input-bg: rgba(10, 10, 26, 0.55);
+  --qm-input-border: var(--qm-cosmic-border);
+  --qm-navy: var(--qm-bg-deep);
+  --qm-gold-text: var(--qm-accent-gold);
+  --qm-saffron: var(--qm-accent-saffron);
+  --qm-gold: var(--qm-accent-gold);
+  background:
+    radial-gradient(900px 600px at 15% -5%, rgba(255, 153, 51, 0.10), transparent 60%),
+    radial-gradient(1000px 700px at 85% 10%, rgba(212, 175, 55, 0.08), transparent 60%),
+    linear-gradient(180deg, var(--qm-bg-deep) 0%, var(--qm-bg-mid) 45%, var(--qm-bg-deep) 100%);
+  background-attachment: fixed;
+}
+
+/* Panels/cards throughout the existing page (stats panel, globe card, founder panel, carousel
+   cards, sidebar lists, etc.) read var(--qm-panel-bg)/var(--qm-border) already -- they pick up
+   the dark-glass treatment automatically. These two rules add the restrained luminous edge the
+   brief asks for without touching home.css's own selectors. */
+body.hm .hm-panel,
+body.hm .hm-carousel-card,
+body.hm .hm-action-glyph,
+body.hm .hm-sb-details summary,
+body.hm .hm-float,
+body.hm .dq-modal-box {
+  box-shadow: var(--qm-shadow-deep);
+  background-color: var(--qm-surface-1);
+}
+body.hm .hm-globe-card { background-color: var(--qm-surface-1); }
+
+/* The old light-mode "dark freckle" star field (dark dots meant for a pale hero) is superseded by
+   the Canvas particle field (cosmic.js) + the mandala/orbit geometry below -- hide it rather than
+   recolor it, so there is exactly one star layer, not two fighting for attention. */
+body.hm .hm-hero-stars { display: none; }
+
+/* ---------------------------------------------------------------------------------------------
+   3. CANVAS PARTICLE FIELD
+   --------------------------------------------------------------------------------------------- */
+.qm-cosmic-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.85;
+}
+/* Everything else in body.hm sits above the fixed canvas. main/header/footer already have their
+   own backgrounds (the gradient above, or solid panel colors), so the canvas only truly shows
+   through intentional gaps -- the hero's own transparent zones and the thin space between
+   sections. */
+body.hm > .hm-nav,
+body.hm > main,
+body.hm > .hm-footer,
+body.hm .pm-bar,
+body.hm .pm-restore-btn,
+body.hm .dq-modal {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------------------------------------------------------------------------------------------
+   4. GLASS PANELS
+   --------------------------------------------------------------------------------------------- */
+.qm-glass-panel {
+  background: linear-gradient(165deg, rgba(31, 31, 66, 0.55), rgba(10, 10, 26, 0.65));
+  border: 1px solid var(--qm-cosmic-border);
+  border-radius: var(--qm-radius-xl);
+  box-shadow: var(--qm-shadow-deep), inset 0 1px 0 rgba(245, 245, 220, 0.06);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+/* backdrop-filter fallback: a flat, still-dark, still-legible panel */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .qm-glass-panel { background: rgba(14, 14, 32, 0.94); }
+}
+
+/* ---------------------------------------------------------------------------------------------
+   5. SECTION KICKER / HEADLINE TREATMENT FOR THE NEW JOURNEY SECTIONS
+   --------------------------------------------------------------------------------------------- */
+.qm-section-cosmic {
+  position: relative;
+  padding: var(--qm-space-24) 0;
+  overflow: hidden;
+}
+.qm-section-cosmic + .qm-section-cosmic { padding-top: 0; }
+.qm-section-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--qm-space-2);
+  margin: 0 0 var(--qm-space-4);
+  padding: 6px 14px;
+  border-radius: var(--qm-radius-pill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--qm-accent-gold);
+  background: rgba(212, 175, 55, 0.08);
+  border: 1px solid var(--qm-cosmic-border-soft);
+}
+.qm-section-cosmic h2 {
+  margin: 0 0 var(--qm-space-4);
+  font-family: var(--qm-font-display);
+  font-weight: 600;
+  font-size: clamp(1.9rem, 3.6vw, 2.8rem);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--qm-text-primary);
+}
+.qm-section-copy {
+  max-width: 620px;
+  font-size: 1.02rem;
+  line-height: 1.75;
+  color: var(--qm-text-muted);
+}
+.qm-section-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--qm-space-16);
+}
+.qm-section-grid.qm-reverse { direction: rtl; }
+.qm-section-grid.qm-reverse > * { direction: ltr; }
+.qm-section-visual { position: relative; display: grid; place-items: center; }
+.qm-section-visual svg { width: 100%; max-width: 440px; height: auto; }
+
+/* Orbital ring decoration reused across the journey sections */
+.qm-orbit-ring { fill: none; stroke: var(--qm-accent-gold); stroke-opacity: 0.28; stroke-width: 1; }
+.qm-orbit-ring.is-saffron { stroke: var(--qm-accent-saffron); stroke-opacity: 0.22; }
+.qm-orbit-dot { fill: var(--qm-accent-gold); }
+.qm-orbit-node { fill: var(--qm-text-primary); fill-opacity: 0.7; }
+.qm-orbit-line { stroke: var(--qm-accent-gold); stroke-opacity: 0.35; stroke-width: 1; }
+
+.qm-cosmic-spin { transform-origin: center; animation: qm-spin 120s linear infinite; }
+.qm-cosmic-spin.is-reverse { animation-direction: reverse; animation-duration: 90s; }
+.qm-cosmic-pulse { animation: qm-pulse-soft 4.5s ease-in-out infinite; }
+@keyframes qm-spin { to { transform: rotate(360deg); } }
+@keyframes qm-pulse-soft { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+/* ---------------------------------------------------------------------------------------------
+   6. SCROLL-REVEAL (progressive enhancement; see cosmic.js — content is in normal flow and fully
+   visible without JS or with prefers-reduced-motion, this only adds a gentle fade/rise-in)
+   --------------------------------------------------------------------------------------------- */
+.qm-reveal-el { opacity: 0; transform: translateY(28px); transition: opacity 0.9s ease, transform 0.9s cubic-bezier(0.16, 0.8, 0.3, 1); }
+.qm-reveal-el.is-in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .qm-reveal-el { opacity: 1; transform: none; transition: none; }
+  .qm-cosmic-spin, .qm-cosmic-pulse { animation: none; }
+}
+
+/* ---------------------------------------------------------------------------------------------
+   7. HERO: identity (left) + Mandala Portal (right)
+   --------------------------------------------------------------------------------------------- */
+/* home.css's own .hm-hero-inner is 760px/centered -- too narrow for a two-column layout. Scoped
+   override only (0,2,0 beats home.css's 0,1,0 on specificity, so this always wins on this page). */
+body.hm .hm-hero-inner { max-width: 1140px; text-align: left; padding-bottom: var(--qm-space-16); }
+
+.hm-hero-wordmark { display: flex; align-items: center; gap: var(--qm-space-4); padding-top: 0; text-align: left; margin-bottom: var(--qm-space-4); }
+.qm-hero-logo { width: 72px; height: 72px; flex: 0 0 auto; filter: drop-shadow(var(--qm-glow-gold)); }
+.qm-cosmic-hero-copy .hm-hero-wordmark-en { font-size: clamp(2rem, 4.4vw, 3.2rem); }
+
+.qm-cosmic-hero-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  grid-template-areas: "copy portal";
+  align-items: center;
+  gap: var(--qm-space-16);
+  text-align: left;
+}
+.qm-cosmic-hero-copy { grid-area: copy; }
+.qm-cosmic-hero-copy .hm-chip,
+.qm-cosmic-hero-copy .hm-cta-row,
+.qm-cosmic-hero-copy .hm-trust { justify-content: flex-start; }
+.qm-cosmic-hero-copy .hm-lead { margin-left: 0; margin-right: 0; }
+.qm-mandala-portal-wrap { grid-area: portal; position: relative; display: grid; place-items: center; padding: var(--qm-space-8) 0; }
+
+/* ---------------------------------------------------------------------------------------------
+   8. MANDALA GEOMETRY + GLASS LOGIN PANEL
+   --------------------------------------------------------------------------------------------- */
+.qm-mandala-rings {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  z-index: 0;
+}
+.qm-mandala-rings svg { width: 128%; max-width: 620px; height: auto; }
+
+.qm-mandala-panel {
+  position: relative;
+  z-index: 1;
+  width: min(420px, 100%);
+  padding: var(--qm-space-8) var(--qm-space-8);
+  text-align: left;
+}
+.qm-mandala-badge {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--qm-space-4);
+}
+.qm-mandala-badge img { width: 56px; height: 56px; filter: drop-shadow(var(--qm-glow-gold)); }
+.hm-signin-title.qm-mandala-title {
+  text-align: center;
+  font-size: 1.3rem;
+  margin-bottom: var(--qm-space-6);
+  color: var(--qm-text-primary);
+}
+.qm-mandala-panel .qm-field span { color: var(--qm-text-muted); letter-spacing: 0.04em; }
+.qm-mandala-panel .qm-field input {
+  background: rgba(10, 10, 26, 0.55);
+  border-color: var(--qm-cosmic-border);
+  color: var(--qm-text-primary);
+}
+.qm-mandala-panel .qm-field input::placeholder { color: rgba(245, 245, 220, 0.35); }
+.qm-mandala-panel .qm-field input:focus {
+  border-color: var(--qm-accent-saffron);
+  box-shadow: 0 0 0 3px rgba(255, 153, 51, 0.18);
+}
+.qm-mandala-panel .qm-btn-primary {
+  background: linear-gradient(90deg, var(--qm-accent-saffron), var(--qm-accent-gold));
+  box-shadow: var(--qm-glow-gold);
+}
+.qm-mandala-panel .qm-btn-ghost {
+  background: rgba(245, 245, 220, 0.05);
+  border-color: var(--qm-cosmic-border);
+  color: var(--qm-text-primary);
+}
+.qm-mandala-panel .qm-btn-ghost:hover { background: rgba(212, 175, 55, 0.12); }
+.qm-mandala-panel .hm-signin-forgot-btn { color: var(--qm-text-muted); }
+.qm-mandala-panel .hm-signin-forgot-btn:hover { color: var(--qm-accent-gold); }
+.qm-mandala-panel .hm-signin-forgot-links a { color: var(--qm-accent-gold); }
+.qm-mandala-panel .qm-summary-error { color: #ff8a80; }
+
+/* ---------------------------------------------------------------------------------------------
+   9. "WAYS TO CONTRIBUTE" HERO STRIP + MARQUEE (poems) — restrained cosmic touch-up only
+   --------------------------------------------------------------------------------------------- */
+body.hm .hm-marquee {
+  background: rgba(10, 10, 26, 0.5);
+  border-top-color: var(--qm-cosmic-border-soft);
+}
+body.hm .hm-marquee span {
+  background: rgba(31, 31, 66, 0.5);
+  border-color: var(--qm-cosmic-border-soft);
+  color: var(--qm-text-muted);
+}
+
+/* The bottom religious-text Marquee (templates/_poems_marquee.html) is ALREADY a deep-navy/gold
+   bar (poems.css) -- these three rules only add a faint luminous top edge and align its border
+   hue with the rest of the cosmic page; everything else (behavior, controls, JS) is untouched. */
+body.hm .pm-bar { border-top: 1px solid var(--qm-cosmic-border-soft); box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.35); }
+body.hm .pm-restore-btn { box-shadow: var(--qm-glow-gold); }
+
+/* ---------------------------------------------------------------------------------------------
+   10. RESPONSIVE
+   --------------------------------------------------------------------------------------------- */
+@media (max-width: 980px) {
+  .qm-cosmic-hero-grid { grid-template-columns: 1fr; grid-template-areas: "copy" "portal"; text-align: center; gap: var(--qm-space-8); }
+  .hm-hero-wordmark { flex-direction: column; justify-content: center; text-align: center; }
+  .qm-cosmic-hero-copy .hm-chip,
+  .qm-cosmic-hero-copy .hm-cta-row,
+  .qm-cosmic-hero-copy .hm-trust { justify-content: center; }
+  .qm-section-grid { grid-template-columns: 1fr; gap: var(--qm-space-8); text-align: center; }
+  .qm-section-grid.qm-reverse { direction: ltr; }
+  .qm-section-visual { order: -1; }
+  .qm-section-copy { max-width: none; margin: 0 auto; }
+  .qm-section-copy .hm-cta-row { justify-content: center; }
+}
+@media (max-width: 620px) {
+  .qm-section-cosmic { padding: var(--qm-space-16) 0; }
+  .qm-mandala-rings svg { width: 100%; max-width: 340px; }
+  .qm-mandala-panel { padding: var(--qm-space-6); }
+  .qm-section-visual svg { max-width: 260px; }
+}
+
+/* ---------------------------------------------------------------------------------------------
+   11. REDUCED MOTION (page-wide, for anything new in this file not already covered above)
+   --------------------------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .qm-cosmic-canvas { opacity: 0.6; }
+}
