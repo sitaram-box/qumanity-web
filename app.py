@@ -297,6 +297,19 @@ def copyright_gita_press():
     return render_template("copyright_gita_press.html")
 
 
+@app.route("/copyright/religious-texts")
+def copyright_religious_texts():
+    """Public transparency notice (2026-11-02) covering all six current religious-text rights
+    questions the Marquee's content depends on -- the Gita Press page above covers only the first
+    of these in depth; this page is the general, always-current summary of every tradition's
+    status, approved or pending. Static content (the six areas' status text is written here, not
+    computed from religious_text_core.py) -- when a collection's rights_status changes, this page
+    is updated by hand, the same editorial process as the Gita Press page. Public, no login
+    needed, same pattern as /founders-message and /copyright/gita-press. See
+    docs/marquee_religious_text_sources.md for the full research trail behind every claim here."""
+    return render_template("copyright_religious_texts.html")
+
+
 @app.route("/api/founder-message")
 def api_founder_message():
     conn = get_db()
