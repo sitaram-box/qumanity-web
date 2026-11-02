@@ -1,0 +1,94 @@
+{
+  "earth_root": "/Users/macmudgal/Desktop/0_Earth",
+  "continents": {
+    "exists": true,
+    "directory_count": 493302,
+    "file_count": 216,
+    "ds_store_count": 34,
+    "total_bytes": 113015982,
+    "max_depth": 17
+  },
+  "loose_files": [
+    {
+      "name": ".DS_Store",
+      "size_bytes": 8196,
+      "modified": "2026-09-05T01:03:39",
+      "referenced_in_repo": [
+        "/Users/macmudgal/Desktop/Qumanity_DPG/scripts/audit_0_earth_usage.py"
+      ]
+    },
+    {
+      "name": "O.json",
+      "size_bytes": 24869,
+      "modified": "2026-09-03T23:58:02",
+      "referenced_in_repo": []
+    },
+    {
+      "name": "Qumanity_Master.before_ganesh_pura_fix_20261028_173803.json",
+      "size_bytes": 34024732,
+      "modified": "2026-10-28T17:38:03",
+      "referenced_in_repo": []
+    },
+    {
+      "name": "Qumanity_Master.before_haryana_fix_20261025_194513.json",
+      "size_bytes": 34024123,
+      "modified": "2026-10-25T19:45:13",
+      "referenced_in_repo": [
+        "/Users/macmudgal/Desktop/Qumanity_DPG/docs/audit_india_location_data_2026_11.md"
+      ]
+    },
+    {
+      "name": "Qumanity_Master.before_haryana_fix_manual_20261025_194439.json",
+      "size_bytes": 120570007,
+      "modified": "2026-10-25T19:44:39",
+      "referenced_in_repo": []
+    },
+    {
+      "name": "Qumanity_Master.before_navi_mumbai_fix_20261028_173822.json",
+      "size_bytes": 34024788,
+      "modified": "2026-10-28T17:38:22",
+      "referenced_in_repo": []
+    },
+    {
+      "name": "Qumanity_Master.json",
+      "size_bytes": 34028539,
+      "modified": "2026-10-28T17:38:23",
+      "referenced_in_repo": [
+        "/Users/macmudgal/Desktop/Qumanity_DPG/tests/test_india_geography_classification.py",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/tests/test_fix_haryana_districts.py",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/tests/test_import_india_villages_verify.py",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/docs/ENVIRONMENT.md",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/docs/ARCHITECTURE.md",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/docs/DATA_MODEL.md",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/docs/location_consolidation_report.md",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/docs/india_dedup_migration_plan.md",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/docs/location_architecture_decision.md",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/docs/audit_india_location_data_2026_11.md",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/docs/INSTALL.md",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/docs/go_live_hardening_2026_10.md",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/docs/dpg_evidence/ARCHITECTURE.md",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/docs/dpg_evidence/DATA_MODEL.md",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/docs/dpg_evidence/10_forward_plan.md",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/docs/dpg_evidence/05_documentation.md",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/docs/india_location_fix.md",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/docs/DASHBOARD_REDESIGN_PLAN.md",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/folder_connector.py",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/static/data/reference/README.md",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/static/data/reference/india_electoral_revenue_classification.md",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/scripts/extract_india_districts_tehsils.py",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/scripts/add_navi_mumbai_locations.py",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/scripts/import_india_villages.py",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/scripts/_retired/import_india_villages_SITAXML.py",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/scripts/fix_haryana_districts.py",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/scripts/build_subcontinent_data.py",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/scripts/audit_india_master_locations.py",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/scripts/audit_all_india_duplicates.py",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/scripts/classify_india_electoral_vs_revenue_geography.py",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/scripts/regenerate_location_data.py",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/scripts/dedupe_bawana_tehsil.py",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/scripts/add_ganesh_pura_tri_nagar.py",
+        "/Users/macmudgal/Desktop/Qumanity_DPG/app.py"
+      ]
+    }
+  ]
+}

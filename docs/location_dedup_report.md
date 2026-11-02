@@ -38,3 +38,49 @@ The P0 fix merged the *wrong* (`india_districts_tehsils.json`) district/tehsil d
 ## Bottom line for Part A
 
 There is no real duplicate-ID problem to resolve. The "single source of truth" requirement is already satisfied in substance: one correct JSON file (`subcontinent_districts.json`) and one correct SQL table (`india_villages`), both derived from and verified against `SITAXML.xml`, mutually consistent. See `docs/location_consolidation_report.md` for the fuller picture and a recommendation on whether the larger unified-schema work (Steps A4–A9 of the original ask) is still worth doing given this.
+
+---
+
+## Addendum — 2026-11-02: this report's own "bottom line" above is superseded, not current
+
+**Everything above this line describes the data as it existed on 2026-10-06, against the
+since-retired `SITAXML.xml` source. It is preserved here unedited as historical record. It is
+NOT current. Do not read "zero duplicates" above as a statement about today's data.**
+
+What changed in between, traced via `git log --oneline -- docs/location_dedup_report.md` and the
+surrounding commit history:
+
+- **Commit `9672e02` (2026-10-11), five days after the report above:** "fix(locations): correct
+  India village/district ID scheme" — intentionally rewrote `scripts/import_india_villages.py` to
+  source from `Qumanity_Master.json` (not `SITAXML.xml`) as "the authoritative source, matches the
+  0_Earth tree," explicitly because of "two layered instances of ID scheme mismatch between
+  SITAXML.xml and Qumanity_Master.json." This is a deliberate, documented, intentional retirement
+  of the very source this report's "zero duplicates" finding was about. Under the new,
+  Master.json-based scheme, `CS.DL.3` became North West Delhi/Bawana again (the scheme this
+  report's P0 correction had reverted *away* from) — not a regression, but a different,
+  independently-adopted numbering that happens to reuse the same-looking IDs for different real
+  content than SITAXML did.
+- **The Bawana duplicate (`CS.DL.3.4` vs. `CS.DL.3.E`, both named "Bawana") was already present in
+  commit `9672e02` itself** — confirmed by inspecting that commit's own version of
+  `subcontinent_districts.json` directly. It is a side effect of the Master-JSON-based re-import
+  this commit introduced, not something that appeared later.
+- **Commit `211480c` (2026-11-01):** "feat: crowdsourced location MVP and OSM pilot script" —
+  included a narrow, read-only-audited correction removing `CS.DL.3.E` from the two *derived*
+  files only (`static/data/subcontinent_districts.json`, `static/data/india_districts_tehsils.json`).
+  **`Qumanity_Master.json` itself was explicitly not touched by that task** and still contains
+  both `CS.DL.3.4` and `CS.DL.3.E`, both named "Bawana," as of this writing.
+- **This pass's own national audit** (`scripts/audit_all_india_duplicates.py`, run 2026-11-01/02
+  against the current, live `Qumanity_Master.json`) found the Bawana pair is **not isolated**: 74
+  Tehsil-level duplicate groups and 15 Village-level duplicate groups nationally (0 at State or
+  District level) — 61 of the 74 Tehsil groups are within Delhi's 7 districts, the remaining 13
+  spread across Andaman & Nicobar, Assam, Karnataka, Tamil Nadu, Mizoram, and Odisha. Full detail,
+  methodology, and every group: `docs/india_duplicate_audit_2026-11-01.csv` and
+  `docs/india_location_integrity_report.md`.
+
+**This is the current investigation, and it does not authorize any further data correction beyond
+the already-committed Bawana pilot.** See `docs/india_location_integrity_report.md` for the full
+findings, `docs/location_architecture_decision.md` for the canonical-source recommendation, and
+`docs/india_dedup_migration_plan.md` (marked AWAITING APPROVAL — DO NOT EXECUTE) for how any of
+the remaining 88 duplicate groups would be resolved, if and when approved. Nothing in this
+addendum changed any source data — it is a documentation-only correction to this report's own
+"bottom line," written after a read-only audit.
