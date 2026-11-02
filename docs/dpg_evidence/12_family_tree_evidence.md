@@ -219,12 +219,25 @@ to be individually re-found:
   Explicitly skips the founder-side cascade (never guesses) when the person founds more than one
   active marital unit at once — see the multi-unit section above.
 
-**Explicitly NOT implemented, by deliberate owner decision, not an oversight or a planned
-near-term addition:** grandparent-group backfilling. The cascade never writes
-`husband_parent_group_id`/`wife_parent_group_id`, and never recurses into a linked child's own
-further-married units. This is Option A of two designs considered; the deeper, recursive option
-(Option B) was explicitly deferred pending a separate privacy/consent review, and remains deferred
-as of this writing.
+**Option B (grandparent-group backfill) — implemented 2026-11-02, uncommitted, pending separate
+approval to commit.** The owner approved it after the privacy/consent review this section
+previously said was pending; the review's own finding (recorded in
+`_backfill_parent_group_links()`'s own docstring, `family_core.py`) is that backfilling a link
+does not grant any new ad-hoc membership beyond the same bounded direct-roster rule every other
+cascade call already uses — what it DOES change is `_is_admin_of_group()`'s own dormant-ancestor
+succession reach, which should keep being watched as the tree grows deeper. Mechanics:
+`_backfill_parent_group_links(conn, start_group_id, max_additional_hops, _visited)`
+(`family_core.py`, added 2026-11-02) does a breadth-first walk, strictly capped at
+`GRANDPARENT_BACKFILL_MAX_GENERATIONS = 2` hops above each of `_cascade_relatives_after_link()`'s
+existing source groups — discovering and writing `husband_parent_group_id`/`wife_parent_group_id`
+wherever currently `NULL` and a real link can be established via `_find_parents_group_for_node()`,
+and cascading each newly-reached ancestor group's own direct roster (same Option A rule, just
+applied one and two hops further up). A third hop (great-grandparent) is never attempted. Cycle-safe
+via a shared `_visited` set; idempotent (re-running makes no further writes); still never recurses
+into a linked child's own further-married *descendant* units — only the parent chain, and still
+never touches `family_spouse_links`. Tests: 21 new checks in `tests/test_family_tree_cascade.py`
+(now 115 total, up from 94), covering discovery, the 3rd-generation exclusion, direct-roster-only
+cascading, idempotency, a manufactured cycle, and a missing-parent-group case.
 
 ## Profile Card and relationship functionality
 
@@ -296,7 +309,7 @@ constraint to catch it.
 | Suite | What it verifies |
 |---|---|
 | `tests/test_family_tree.py` (211 checks, re-run 2026-11-01) | Core unit creation, activation/marriage flows, join/invite/accept, the three leave-group exit rules, founder-removal rejection, rejoin-after-removal going through `pending` not straight to `approved` |
-| `tests/test_family_tree_cascade.py` (94 checks, re-run 2026-11-01) | The direct-roster cascade specifically: 3-claimed-direct-member fixture, idempotency on a repeated cascade, the multi-unit founder-side skip (reusing a fixture where the same person founds two active units) |
+| `tests/test_family_tree_cascade.py` (115 checks, re-run 2026-11-02) | The direct-roster cascade: 3-claimed-direct-member fixture, idempotency, the multi-unit founder-side skip; plus (new, 2026-11-02) Option B's grandparent-group backfill: 4-generation discovery, the 3rd-generation exclusion, a manufactured cycle, a missing-parent-group case |
 | `tests/test_group_members.py` | Partially relevant: covers `family_core.invite_to_group()`/`group_members_for()`'s admin-only invite flow and `social_core.decide_request()`'s matching `family_group_invite` accept branch — alongside unrelated coverage of `social_core.py`'s own personal (Friends/Business/Custom) groups, which are a separate subsystem, not part of the Family Tree |
 
 ## Evidence summary
@@ -304,6 +317,6 @@ constraint to catch it.
 | | Status |
 |---|---|
 | Source evidence | `family_core.py` (2,540 lines), `migrations/026_family_tree.py`, `migrations/027_family_nuclear_nodes.py`, `app.py` (route block, lines 1885-2215), `static/js/family.js`, `static/js/family_tree.js` |
-| Test evidence | 211 + 94 = 305 directly-dedicated checks (re-run 2026-11-01), plus partial coverage from `tests/test_group_members.py` |
+| Test evidence | 211 + 115 = 326 directly-dedicated checks (re-run 2026-11-02), plus partial coverage from `tests/test_group_members.py` |
 | Operational evidence | None independently verified this pass — all testing above ran against local throwaway databases; production deployment behavior of this subsystem has not been checked |
-| Remaining limitations | Grandparent-group backfilling (Option B) is deliberately not implemented; a married child's own further-married children are never swept into a cascade; a multi-unit founder always requires an explicit `group_id` from the caller for the one operation (`add_child_to_node`) that needs it today |
+| Remaining limitations | A married child's own further-married children are never swept into a cascade (Option B's own cap is strictly on the ancestor/parent chain, not descendants); a multi-unit founder always requires an explicit `group_id` from the caller for the one operation (`add_child_to_node`) that needs it today; Option B is implemented and tested but **uncommitted** pending a separate approval to commit (see `docs/MASTER_STATUS.md`) |

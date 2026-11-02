@@ -121,7 +121,7 @@ Enumerated by inspecting the real code this pass, not inferred:
 
 | Path | Reads | Writes |
 |---|---|---|
-| `Qumanity_Master.json` (`~/Desktop/0_Earth/...`, resolved via `scripts/import_india_villages.resolve_master_json_path()`) | `scripts/import_india_villages.py`, `scripts/build_subcontinent_data.py`, `scripts/regenerate_location_data.py`, `scripts/audit_all_india_duplicates.py` (this pass), `app.py:5925-5954`'s boot-time validation | **Unknown by repository evidence alone.** No script in this repository writes to it — it is edited by some process outside this codebase (a manual editor, a separate authoring tool, or hand edits against the `0_Earth` tree). This is flagged as unknown, not invented, per this task's own instruction. |
+| `Qumanity_Master.json` (`~/Desktop/0_Earth/...`, resolved via `scripts/import_india_villages.resolve_master_json_path()`) | `scripts/import_india_villages.py`, `scripts/build_subcontinent_data.py`, `scripts/regenerate_location_data.py`, `scripts/audit_all_india_duplicates.py` (this pass), `app.py:5925-5954`'s boot-time validation | **CORRECTED (Phase 3, 2026-11-02) — the original claim above ("no script in this repository writes to it... unknown") was wrong and is corrected here rather than silently edited away.** It IS written by scripts in this repository — just not by any of the generator scripts checked originally. Found by actually grepping every untracked script in `scripts/` for `Qumanity_Master` and a write-mode call, not assumed: `scripts/add_navi_mumbai_locations.py` and `scripts/add_ganesh_pura_tri_nagar.py` both write `master_path` directly (`.write_text(json.dumps(...))`), each after its own timestamped backup (`Qumanity_Master.before_<name>_fix_<timestamp>.json` — exactly the four backup files `docs/0_earth_cleanup_proposal.md` found sitting in `0_Earth/`). **The real authoring workflow is: one-off, purpose-built Python scripts, each making one narrow, documented correction, each with a dry-run/`--apply` convention and its own pre-write backup — not an external tool, not a separate repository, not manual hand-editing.** `scripts/add_navi_mumbai_locations.py`'s own docstring even says to finish with `python3 scripts/regenerate_location_data.py --apply` to propagate the change outward — confirming this is the established, repeatable pattern, just never previously formalized into one reusable tool (which is exactly what `scripts/edit_master_location.py`, Phase 3's own deliverable, now provides for a single-record edit). Separately: `folder_connector.py`'s own docstring references a README section ("Nested folder integration") that does not exist in the current `README.md` — a minor, stale internal cross-reference, noted for the owner's awareness, not fixed here (out of scope for this correction). |
 | `static/data/subcontinent_districts.json` | `app.py` (`_load_json`, several routes), `provisional_location_core.py` (cached), `scripts/dedupe_bawana_tehsil.py`, this audit's own cross-reference | `scripts/build_subcontinent_data.py` (via `regenerate_location_data.py`'s orchestration), `scripts/dedupe_bawana_tehsil.py` (the one narrow, already-committed exception) |
 | `static/data/india_districts_tehsils.json` | `app.py`, `elemental_core.py`-driven routes, this audit | `scripts/extract_india_districts_tehsils.py`'s logic as reimplemented inside `scripts/regenerate_location_data.py`'s `build_india_districts_tehsils()`, `scripts/dedupe_bawana_tehsil.py` |
 | `india_villages` (SQLite) | `app.py` (`GET /api/india-villages/<tehsil_id>`), `app.py:5957-5989`'s boot check | `scripts/import_india_villages.py` (full `DELETE`+reimport), `scripts/regenerate_location_data.py` (orchestrates the same) |
@@ -139,10 +139,13 @@ any of these paths — all writes are developer-invoked scripts, never automatic
 - **What stays generated:** `static/data/subcontinent_districts.json`,
   `static/data/india_districts_tehsils.json`, `india_villages` — unchanged, still rebuilt from
   Master JSON by the existing generator for a full refresh.
-- **How location data would be authored and reviewed going forward:** unchanged by this
-  recommendation, since the authoring process outside this repository is not something this pass
-  can observe or redesign — **this is itself an open question for the owner** (where/how is
-  `Qumanity_Master.json` actually edited today?), not resolved here.
+- **How location data would be authored and reviewed going forward:** per the Phase 3 correction
+  above, the real workflow is already **inside** this repository — one-off Python scripts, each
+  with its own backup/dry-run/`--apply` convention. The recommendation is to route every future
+  single-record edit through the new `scripts/edit_master_location.py` (Phase 3's own
+  deliverable) instead of a fresh one-off script per correction, and reserve a bespoke script
+  only for a genuinely bulk/structural change (an entire new region's worth of nodes, as
+  `scripts/add_navi_mumbai_locations.py` was).
 - **How tests would prevent future duplicates:** `scripts/audit_all_india_duplicates.py` (this
   pass's own deliverable) can be added to the test suite as a one-off CI-style check: a non-zero
   duplicate-group count would fail the check, giving the project its first automated regression
@@ -150,8 +153,8 @@ any of these paths — all writes are developer-invoked scripts, never automatic
 - **Staging without breaking registration:** none of the above requires a cutover — every change
   is additive (a new crosswalk table, a new check in an existing script) and can be built and
   tested independently of a live deployment.
-- **Decisions requiring owner approval before any of this is built:** (1) confirming where/how
-  `Qumanity_Master.json` is actually authored today, since that determines whether a duplicate
-  check can be enforced *before* a bad edit ever reaches this repository, or only after; (2)
-  approving the `location_id_history` schema; (3) approving which script gets the extracted safety
+- **Decisions requiring owner approval before any of this is built:** (1) now resolved by the
+  Phase 3 correction above — the authoring workflow is in-repository, one-off scripts; the
+  remaining decision is whether to require future single-record edits to go through `scripts/
+  edit_master_location.py` as policy; (2) approving the `location_id_history` schema; (3) approving which script gets the extracted safety
   helper first.

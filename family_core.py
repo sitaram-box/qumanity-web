@@ -1540,6 +1540,71 @@ def _direct_roster_of_group(conn, group_id):
     return [r["claimed_user_id"] for r in rows]
 
 
+GRANDPARENT_BACKFILL_MAX_GENERATIONS = 2  # strictly capped -- see _backfill_parent_group_links()'s own docstring
+
+
+def _backfill_parent_group_links(conn, start_group_id: int, max_additional_hops: int, _visited: set) -> list[dict]:
+    """Option B of the Family Tree cascade (2026-11, approved after the privacy/consent review
+    this module's own evidence doc -- docs/dpg_evidence/12_family_tree_evidence.md -- said Option
+    A's own grandparent-backfill omission was deferred pending): discovers and writes
+    husband_parent_group_id/wife_parent_group_id wherever it is currently NULL but a real link can
+    be established, starting from start_group_id and walking UP TO max_additional_hops MORE hops
+    above it -- a breadth-first walk by hop count, never deeper. This is the ONE thing Option A
+    explicitly never did; everything else about the cascade (direct-roster-only per group, no
+    recursion into a linked child's own further-married units, idempotency) is unchanged.
+
+    PRIVACY NOTE (the review this feature was waiting on): backfilling this link does not, by
+    itself, grant anyone NEW ad-hoc membership or chat access beyond what _direct_roster_of_group()
+    already exposes for each newly-reached group -- the same bounded, direct-roster rule every
+    other cascade call in this module uses. What it DOES change is _is_admin_of_group()'s own
+    dormant-ancestor-succession reach: once a link is backfilled, an admin of a now-connected
+    ancestor group gains succession authority over the newly-linked DESCENDANT group once it goes
+    dormant (see that function's own docstring) -- this is the real, documented consequence a
+    future deeper review should keep watching, not a new vulnerability introduced silently here.
+
+    Returns every group reached, each tagged with its own hop distance from start_group_id (hop 0
+    = start_group_id itself, already known), for the caller to cascade each one's own direct
+    roster. _visited is the caller's own set, shared across all of ONE _cascade_relatives_after_link
+    call so a group reached from two different starting points is only processed once.
+
+    Cycle-safe (a group can never be visited twice, even across a pathological loop in the data).
+    No commit here -- runs inside the caller's existing transaction, same convention as every
+    other helper in this cascade."""
+    if start_group_id in _visited:
+        return []
+    _visited.add(start_group_id)
+    reached = [{"group_id": start_group_id, "hop": 0}]
+    frontier = [start_group_id]
+    hop = 0
+    while hop < max_additional_hops and frontier:
+        hop += 1
+        next_frontier = []
+        for gid in frontier:
+            group = conn.execute(
+                "SELECT husband_node_id, wife_node_id, husband_parent_group_id, wife_parent_group_id "
+                "FROM family_groups WHERE id = ?", (gid,),
+            ).fetchone()
+            if not group:
+                continue
+            for node_col, parent_col in (("husband_node_id", "husband_parent_group_id"),
+                                          ("wife_node_id", "wife_parent_group_id")):
+                node_id = group[node_col]
+                parent_group_id = group[parent_col]
+                if parent_group_id is None and node_id:
+                    discovered = _find_parents_group_for_node(conn, node_id)
+                    if discovered and discovered != gid:
+                        conn.execute(
+                            f"UPDATE family_groups SET {parent_col} = ? WHERE id = ?", (discovered, gid)
+                        )
+                        parent_group_id = discovered
+                if parent_group_id and parent_group_id not in _visited:
+                    _visited.add(parent_group_id)
+                    reached.append({"group_id": parent_group_id, "hop": hop})
+                    next_frontier.append(parent_group_id)
+        frontier = next_frontier
+    return reached
+
+
 def _cascade_relatives_after_link(conn, user_id: int) -> dict:
     """After user_id's real node is newly connected into a group (link_node_to_user()'s
     existing_self_node branch, or _claim_founder_slot()'s callers -- add_member()'s
@@ -1612,6 +1677,34 @@ def _cascade_relatives_after_link(conn, user_id: int) -> dict:
                 continue
             _sync_family_membership(conn, member_user_id)
             synced.add(member_user_id)
+
+    # Option B, grandparent-group backfill (2026-11, approved -- see _backfill_parent_group_links()'s
+    # own docstring for the privacy note this was waiting on). Each source group's own direct
+    # roster is already cascaded above (hop 0); this walks up to 2 MORE hops above each source
+    # group, backfilling husband_parent_group_id/wife_parent_group_id wherever a real link can now
+    # be established, and cascades each newly-reached ancestor group's own direct roster too --
+    # never recursing into any group's DESCENDANT units, only its own parent chain, and never past
+    # the 2-hop cap.
+    out["backfilled_links"] = []
+    out["ancestor_groups"] = []
+    visited_for_backfill = set()  # shared across source groups so a common ancestor is only processed once
+    for group_id in source_group_ids:
+        reached = _backfill_parent_group_links(
+            conn, group_id, GRANDPARENT_BACKFILL_MAX_GENERATIONS, visited_for_backfill
+        )
+        for entry in reached:
+            if entry["hop"] == 0:
+                continue  # the source group itself -- already cascaded above, not an ancestor
+            ancestor_group_id = entry["group_id"]
+            out["backfilled_links"].append(entry)
+            roster = _direct_roster_of_group(conn, ancestor_group_id)
+            out["ancestor_groups"].append({"group_id": ancestor_group_id, "hop": entry["hop"], "member_count": len(roster)})
+            for member_user_id in roster:
+                if member_user_id in synced:
+                    continue
+                _sync_family_membership(conn, member_user_id)
+                synced.add(member_user_id)
+
     out["synced_user_ids"] = sorted(synced)
     return out
 

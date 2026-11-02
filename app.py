@@ -54,6 +54,7 @@ import karma_core
 import notify_core
 import perception_core
 import provisional_location_core
+import osm_proximity_core
 import qmail_core
 import qoin_core
 import reactions_core
@@ -4023,10 +4024,60 @@ def api_location_observation():
     except ValueError as e:
         conn.close()
         return jsonify({"error": str(e)}), 400
+    # Phase 4 (OSM Coordinate Linking, 2026-11): queue the Overpass proximity lookup, but ONLY
+    # when the observation was actually accepted with real coordinates -- enqueue_job_if_eligible()
+    # itself re-checks both consent flags and the current consent_version, so an observation
+    # accepted under the OLD "preference only" wording is never queued. Never raises: a queueing
+    # failure must not turn an otherwise-successful GPS submission into an error response.
+    if result.get("stored_coordinates") and result.get("observation_id"):
+        try:
+            osm_proximity_core.ensure_tables(conn)
+            osm_proximity_core.enqueue_job_if_eligible(conn, session["user_id"], result["observation_id"])
+        except Exception as e:
+            print(f"[osm_proximity] enqueue failed for observation_id={result.get('observation_id')}: {e}")
     conn.close()
     # Never echoes the coordinates back -- Section 4.5's explicit "do not expose submitted
     # coordinates in the API response" requirement.
     return jsonify({"status": result["status"], "stored_coordinates": result["stored_coordinates"]}), 201
+
+
+@app.route("/api/location/observation/withdraw-overpass", methods=["POST"])
+@login_required
+def api_location_observation_withdraw_overpass():
+    """Lets a user withdraw their external-OSM-lookup consent at any time: cancels any pending
+    lookup job and marks their existing OSM associations unavailable to Q-Map (see
+    osm_proximity_core.withdraw_overpass_consent()'s own docstring for why rows are marked, not
+    deleted)."""
+    conn = get_db()
+    osm_proximity_core.ensure_tables(conn)
+    try:
+        result = osm_proximity_core.withdraw_overpass_consent(conn, session["user_id"])
+    finally:
+        conn.close()
+    return jsonify(result)
+
+
+@app.route("/api/qmap/user-nearby/<int:user_id>")
+@login_required
+def api_qmap_user_nearby(user_id):
+    """Returns a user's own OSM-linked nearby features for Q-Map. Authorization: the user
+    themselves only, for now -- this data is coordinate-adjacent (distance + category to real
+    OSM features near where someone lives), so it defaults to the narrowest possible rule rather
+    than an open 'any logged-in member' read. A future admin/map-moderator role could be added
+    here explicitly if ever needed; it is deliberately NOT included yet. Returns 403 (not a 404
+    that would need to distinguish 'exists but not yours' from 'does not exist') for anyone else,
+    including an admin -- never confirms or denies another user's id by varying the response."""
+    if session.get("user_id") != user_id:
+        return jsonify({"error": "You can only view your own Q-Map proximity data"}), 403
+    conn = get_db()
+    osm_proximity_core.ensure_tables(conn)
+    try:
+        features = osm_proximity_core.get_user_nearby(conn, user_id)
+    finally:
+        conn.close()
+    return jsonify({"user_id": user_id, "features": features,
+                     "attribution": "© OpenStreetMap contributors",
+                     "license": "Open Database License (ODbL) -- https://www.openstreetmap.org/copyright"})
 
 
 @app.route("/api/country/stats/<path:country_id>")
@@ -6101,6 +6152,12 @@ election_test_scheduler.init_scheduler(app)
 # provisional_location_core.reconcile_all()'s own docstring for why the immediate per-registration
 # check alone isn't sufficient).
 provisional_location_core.init_scheduler(app)
+
+# OSM Coordinate Linking (2026-11, Phase 4 of the Q-Map foundation task): a FIFTH, independent
+# BackgroundScheduler instance -- processes queued Overpass proximity lookups in small, throttled
+# batches every 15 minutes. See osm_proximity_core.py's own module docstring for the consent
+# model and the Overpass fair-use caveat.
+osm_proximity_core.init_scheduler(app)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))

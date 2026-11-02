@@ -573,7 +573,17 @@ def init_scheduler(app) -> None:
 
 # ---- Phase C: GPS observations ------------------------------------------------------------------
 
-CONSENT_VERSION = "2026-11-mvp-v1"
+# Bumped 2026-11-02 (Phase 4 of the OSM Coordinate Linking task): the external-OSM-lookup checkbox
+# used to say "when this service becomes available" -- a preference, not live consent, and
+# submit_observation() below never queued anything because of it (see its own comment, still
+# accurate for that era). The service now exists (osm_proximity_core.py), so this version bump is
+# the trigger: osm_proximity_core.enqueue_job_if_eligible() only ever acts on an observation whose
+# consent_version equals the CURRENT value of this constant, which is how every observation
+# captured under the OLD "2026-11-mvp-v1" wording is excluded from this feature without a
+# blanket retroactive query -- a user who consented before this feature existed is asked again
+# (fresh), never assumed. Do not bump this again without updating the matching copy in
+# templates/register.html's #gps-consent-overpass label.
+CONSENT_VERSION = "2026-11-osm-v2"
 
 
 def submit_observation(conn, user_id: int, latitude, longitude, accuracy_meters,
@@ -618,8 +628,13 @@ def submit_observation(conn, user_id: int, latitude, longitude, accuracy_meters,
     observation_id = cur.lastrowid
     conn.commit()
 
-    # consent_external_overpass_lookup is recorded as a PREFERENCE only -- no job is ever queued,
-    # no request ever made, this phase (Part 9's absolute boundary). Nothing else happens here.
+    # consent_external_overpass_lookup is recorded here only -- this function itself still never
+    # queues anything (unchanged boundary from the original MVP). Phase 4 of the OSM Coordinate
+    # Linking task added osm_proximity_core.enqueue_job_if_eligible(), called from app.py's own
+    # route right after this function returns, which is what actually turns this consent flag
+    # into a queued job -- kept in app.py, not here, to leave this module's own boundary
+    # unchanged. enqueue_job_if_eligible() re-checks consent_version itself, so an observation
+    # accepted under an older consent wording is still never retroactively queried.
 
     if consent_centroid_aggregation:
         target_type = "provisional_location" if provisional_location_id else "verified_location"

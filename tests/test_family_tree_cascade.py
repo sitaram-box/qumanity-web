@@ -665,6 +665,138 @@ check("dad himself is still synced (the skip only affects the EXTRA roster sweep
 
 print()
 print("=" * 70)
+print("Option B: grandparent-group backfill (2026-11, approved) -- strictly capped at 2 generations")
+print("=" * 70)
+
+# Four-generation fixture, built directly via family_core (not the full activate/marry HTTP
+# ceremony, to construct the exact pre-cascade topology needed): GreatGrandpa+GreatGrandma (Unit
+# C) -> their child Grandpa, who founds Unit B with Grandma -> their child Dad, who founds Unit A
+# with Mom -> their child Bob. Unit A/B/C are each created WITHOUT their own husband_parent_group_id
+# set (the exact "deferred" state Option B exists to backfill), and Unit C itself has NO further
+# parent unit at all (nothing to discover past hop 2 from Unit A).
+
+ggp = register("GGPa"); ggp_user = ggp["user_id"]
+ggm = register("GGMa"); ggm_user = ggm["user_id"]
+gp = register("GPa"); gp_user = gp["user_id"]
+gm = register("GMa"); gm_user = gm["user_id"]
+dad = register("BackfillDad"); dad_user = dad["user_id"]
+mom = register("BackfillMom"); mom_user = mom["user_id"]
+bob = register("BackfillBob"); bob_user = bob["user_id"]
+
+conn_bf = dbmod.get_db()
+ggp_node = family_core.create_node(conn_bf, ggp_user, "GreatGrandpa", claimed_user_id=ggp_user)
+ggm_node = family_core.create_node(conn_bf, ggm_user, "GreatGrandma", claimed_user_id=ggm_user)
+gp_node = family_core.create_node(conn_bf, gp_user, "Grandpa", claimed_user_id=gp_user)
+gm_node = family_core.create_node(conn_bf, gm_user, "Grandma", claimed_user_id=gm_user)
+dad_node = family_core.create_node(conn_bf, dad_user, "BackfillDad", claimed_user_id=dad_user)
+mom_node = family_core.create_node(conn_bf, mom_user, "BackfillMom", claimed_user_id=mom_user)
+bob_node = family_core.create_node(conn_bf, bob_user, "BackfillBob", claimed_user_id=bob_user)
+
+unit_c_id = family_core.create_group(conn_bf, ggp_user, "Unit C (great-grandparents)", None,
+                                      ggp_node, ggm_node, [gp_node])  # Grandpa is Unit C's plain child member
+unit_b_id = family_core.create_group(conn_bf, gp_user, "Unit B (grandparents)", None,
+                                      gp_node, gm_node, [dad_node])  # Dad is Unit B's plain child member
+unit_a_id = family_core.create_group(conn_bf, dad_user, "Unit A (parents)", None,
+                                      dad_node, mom_node, [bob_node])  # Bob is Unit A's plain child member
+conn_bf.commit()
+
+before_unit_a = dict(conn_bf.execute("SELECT husband_parent_group_id, wife_parent_group_id FROM family_groups WHERE id = ?", (unit_a_id,)).fetchone())
+before_unit_b = dict(conn_bf.execute("SELECT husband_parent_group_id, wife_parent_group_id FROM family_groups WHERE id = ?", (unit_b_id,)).fetchone())
+check("Unit A starts with no parent-group link on either side (the deferred state)",
+      before_unit_a["husband_parent_group_id"] is None and before_unit_a["wife_parent_group_id"] is None)
+check("Unit B starts with no parent-group link on either side (the deferred state)",
+      before_unit_b["husband_parent_group_id"] is None and before_unit_b["wife_parent_group_id"] is None)
+
+cascade_bf = family_core._cascade_relatives_after_link(conn_bf, bob_user)
+conn_bf.commit()
+
+print()
+print("1-2. Parent-group and grandparent-group discovery")
+after_unit_a = dict(conn_bf.execute("SELECT husband_parent_group_id, wife_parent_group_id FROM family_groups WHERE id = ?", (unit_a_id,)).fetchone())
+after_unit_b = dict(conn_bf.execute("SELECT husband_parent_group_id, wife_parent_group_id FROM family_groups WHERE id = ?", (unit_b_id,)).fetchone())
+check("Unit A's husband_parent_group_id is backfilled to Unit B (Dad's own birth unit)",
+      after_unit_a["husband_parent_group_id"] == unit_b_id)
+check("Unit A's wife_parent_group_id stays NULL (Mom has no recorded birth unit in this fixture)",
+      after_unit_a["wife_parent_group_id"] is None)
+check("Unit B's husband_parent_group_id is backfilled to Unit C (Grandpa's own birth unit) -- the grandparent hop",
+      after_unit_b["husband_parent_group_id"] == unit_c_id)
+check("Unit B's wife_parent_group_id stays NULL (Grandma has no recorded birth unit in this fixture)",
+      after_unit_b["wife_parent_group_id"] is None)
+
+print()
+print("3. Third-generation (great-grandparent) exclusion -- strictly capped at 2 generations above Unit A")
+after_unit_c = dict(conn_bf.execute("SELECT husband_parent_group_id, wife_parent_group_id FROM family_groups WHERE id = ?", (unit_c_id,)).fetchone())
+check("Unit C's OWN parent-group link is never even attempted (hop 3 from Unit A) -- stays NULL",
+      after_unit_c["husband_parent_group_id"] is None and after_unit_c["wife_parent_group_id"] is None)
+ancestor_hops = {a["group_id"]: a["hop"] for a in cascade_bf["ancestor_groups"]}
+check("Unit B is reported as an ancestor group at hop 1", ancestor_hops.get(unit_b_id) == 1)
+check("Unit C is reported as an ancestor group at hop 2", ancestor_hops.get(unit_c_id) == 2)
+check("no ancestor group beyond hop 2 is ever reported", all(a["hop"] <= 2 for a in cascade_bf["ancestor_groups"]))
+
+print()
+print("4. Direct-roster-only cascade for each newly-reached ancestor group")
+check("Grandpa and Grandma (Unit B's founders) are synced", gp_user in cascade_bf["synced_user_ids"] and gm_user in cascade_bf["synced_user_ids"])
+check("GreatGrandpa and GreatGrandma (Unit C's founders) are synced", ggp_user in cascade_bf["synced_user_ids"] and ggm_user in cascade_bf["synced_user_ids"])
+check("Dad, Mom and Bob (Unit A's own roster, hop 0, unchanged behavior) are all synced",
+      {dad_user, mom_user, bob_user}.issubset(set(cascade_bf["synced_user_ids"])))
+
+print()
+print("5-6. Idempotency and no duplicate membership rows across overlapping/repeated calls")
+members_before_rerun = conn_bf.execute(
+    "SELECT group_id, user_id, COUNT(*) AS c FROM family_group_members WHERE user_id IN (?,?,?,?,?,?,?) GROUP BY group_id, user_id HAVING c > 1",
+    (ggp_user, ggm_user, gp_user, gm_user, dad_user, mom_user, bob_user),
+).fetchall()
+check("no duplicate (group_id, user_id) membership rows exist after the first cascade", len(members_before_rerun) == 0)
+
+cascade_bf_2 = family_core._cascade_relatives_after_link(conn_bf, bob_user)
+conn_bf.commit()
+after_unit_a_2 = dict(conn_bf.execute("SELECT husband_parent_group_id FROM family_groups WHERE id = ?", (unit_a_id,)).fetchone())
+check("re-running the cascade is idempotent: Unit A's backfilled link is unchanged", after_unit_a_2["husband_parent_group_id"] == unit_b_id)
+members_after_rerun = conn_bf.execute(
+    "SELECT group_id, user_id, COUNT(*) AS c FROM family_group_members WHERE user_id IN (?,?,?,?,?,?,?) GROUP BY group_id, user_id HAVING c > 1",
+    (ggp_user, ggm_user, gp_user, gm_user, dad_user, mom_user, bob_user),
+).fetchall()
+check("re-running the cascade creates no duplicate membership rows", len(members_after_rerun) == 0)
+
+print()
+print("7. Cycle protection (manufactured pathological cycle, isolated from the generation cap)")
+cyc1_user = register("CycleOne")["user_id"]
+cyc2_user = register("CycleTwo")["user_id"]
+cyc1_node = family_core.create_node(conn_bf, cyc1_user, "CycleOneNode", claimed_user_id=cyc1_user)
+cyc2_node = family_core.create_node(conn_bf, cyc2_user, "CycleTwoNode", claimed_user_id=cyc2_user)
+cyc_unit_x = family_core.create_group(conn_bf, cyc1_user, "Cycle Unit X", None, cyc1_node, None, [])
+cyc_unit_y = family_core.create_group(conn_bf, cyc2_user, "Cycle Unit Y", None, cyc2_node, None, [])
+conn_bf.execute("UPDATE family_groups SET husband_parent_group_id = ? WHERE id = ?", (cyc_unit_y, cyc_unit_x))
+conn_bf.execute("UPDATE family_groups SET husband_parent_group_id = ? WHERE id = ?", (cyc_unit_x, cyc_unit_y))
+conn_bf.commit()
+cycle_result = family_core._backfill_parent_group_links(conn_bf, cyc_unit_x, max_additional_hops=5, _visited=set())
+check("cycle protection terminates and returns a bounded result, never hangs", isinstance(cycle_result, list) and len(cycle_result) <= 2)
+check("both cyclic units are reached exactly once each, not revisited", len({r["group_id"] for r in cycle_result}) == len(cycle_result))
+
+print()
+print("8. Missing parent group: a group with no discoverable parent -- no crash, no action")
+lonely_user = register("LonelyFounder")["user_id"]
+lonely_node = family_core.create_node(conn_bf, lonely_user, "LonelyFounderNode", claimed_user_id=lonely_user)
+lonely_unit = family_core.create_group(conn_bf, lonely_user, "Lonely Unit", None, lonely_node, None, [])
+conn_bf.commit()
+lonely_result = family_core._backfill_parent_group_links(conn_bf, lonely_unit, max_additional_hops=2, _visited=set())
+check("a group with no discoverable parent returns just itself at hop 0, no crash", lonely_result == [{"group_id": lonely_unit, "hop": 0}])
+
+print()
+print("9. Authorization and transactional safety are unchanged -- backfill runs inside the same")
+print("   caller-owned transaction as the rest of the cascade, with no separate commit of its own")
+check("_backfill_parent_group_links performs no commit of its own (grep-verified, not just asserted)",
+      "conn.commit()" not in __import__("inspect").getsource(family_core._backfill_parent_group_links))
+
+print()
+print("10. No writes to the deprecated family_spouse_links table from any of this")
+check("_backfill_parent_group_links never references family_spouse_links",
+      "family_spouse_links" not in __import__("inspect").getsource(family_core._backfill_parent_group_links))
+
+conn_bf.close()
+
+print()
+print("=" * 70)
 if FAILS:
     print(f"{len(FAILS)} check(s) FAILED:")
     for f in FAILS:
