@@ -7,6 +7,17 @@ factual evidence section the main 01-09 pack did not previously cover.
 > **DPG Evidence Refresh — 2026-11-01.** Internal correction pass, not a DPGA resubmission. This
 > is a new addition, not a revision of a previously submitted claim.
 
+> **Line-reference re-verification — 2026-11-02.** Every `family_core.py`/`app.py` line citation in
+> this document was re-checked against the current repository (not re-stated from memory). Every
+> citation from `_sync_family_membership()` onward had drifted +93 lines (the Option B backfill
+> code, `family_core.py:1513-1607`, was inserted between this document's original citations and
+> those functions after this document was first written) and has been corrected below. One cascade
+> cross-reference (`family_core.py:1543`) was pointing at what is now the
+> `GRANDPARENT_BACKFILL_MAX_GENERATIONS` constant, not `_cascade_relatives_after_link()` — corrected
+> to `family_core.py:1608`. A handful of `app.py` family-route citations had drifted by a separate,
+> unrelated 2 lines and were also corrected. No claim about behavior, schema, or test counts changed
+> — only the line numbers pointing at where that behavior lives.
+
 ## What this covers
 
 Qumanity's Family Tree subsystem: schema, relationship model, membership rules, the ambiguous-
@@ -101,10 +112,12 @@ genuine data conflict ("a genuine data conflict that would need a human to resol
 anyway, not a silent guess dressed up as correct" — `family_core.py:771-773`), not a silently
 invented resolution.
 
-`activate_timeline()` (`family_core.py:1715-1814`) is the signed-in user's own onboarding wizard:
+`activate_timeline()` (`family_core.py:1808-1934`, re-verified 2026-11-02 -- shifted +93 lines
+since this document was first written, by the Option B backfill code added between it and the
+membership-state-machine functions above) is the signed-in user's own onboarding wizard:
 creates/links their own self-node, finds-or-creates their parents' unit (if named) and their own
 future unit (if they have children), and calls `_sync_family_membership()` at the end.
-`marry_timeline()` (`family_core.py:1842-1988`) is the marriage flow: finds-or-creates the couple's
+`marry_timeline()` (`family_core.py:1935-2081`) is the marriage flow: finds-or-creates the couple's
 own unit, attaches any declared children (`_attach_children_to_group()`, `family_core.py:1815`),
 and — per the 2026-10-26 ruling above — claims either spouse's founder slot directly and
 synchronously rather than queuing an approval request.
@@ -181,7 +194,7 @@ pre-existing marital unit elsewhere (a "deliberately separate, harder decision,"
 function's own docstring, lines 544-549), so the same node can end up as `husband_node_id`/
 `wife_node_id` of two different `family_groups` rows that were never reconciled into one marriage.
 
-`add_child_to_node()` (`family_core.py:2453-2489`) is where this ambiguity surfaces concretely and
+`add_child_to_node()` (`family_core.py:2546-2582`) is where this ambiguity surfaces concretely and
 is handled explicitly, never guessed: if the target person founds exactly one active unit, the
 optional `group_id` parameter may be omitted and the call still succeeds unambiguously. If they
 found **more than one**, the caller (Phase 2's Profile Card, which always has a definite unit
@@ -189,15 +202,15 @@ already in view — the neighborhood the card was opened from) **must** pass `gr
 omitting it in that case raises `ValueError("This person has more than one family unit on record —
 specify which one with group_id")` rather than silently picking one (e.g. "whichever was created
 most recently"). The route layer threads this through directly: `POST /api/family/person/<node_id>
-/child` accepts an optional `group_id` in its JSON body (`app.py:2112-2127`).
+/child` accepts an optional `group_id` in its JSON body (`app.py:2114-2127`).
 
 The same multi-unit reality is also why `_cascade_relatives_after_link()` (below) explicitly
 *skips*, rather than guesses, the founder-side cascade when a linked person founds more than one
 active unit — the two places in this codebase that must disambiguate a multi-unit person both
 refuse to guess, by the same underlying design decision.
 
-A user's own list of units they belong to (`my_family_groups()`, `family_core.py:1989-2019`,
-surfaced via `GET /api/family/status`, `app.py:1885-1906`) is deliberately narrower than "every
+A user's own list of units they belong to (`my_family_groups()`, `family_core.py:2082-2112`,
+surfaced via `GET /api/family/status`, `app.py:1887-1906`) is deliberately narrower than "every
 unit this node appears in" — it excludes dormant units entirely (they still render in the D3 tree,
 faded, as root ancestors, just not as a chat to open) and tags each row with `is_founder` and the
 honest `role` label so the frontend can distinguish "My Family" (a unit the viewer founded) from
@@ -206,7 +219,7 @@ honest `role` label so the frontend can distinguish "My Family" (a unit the view
 ## Direct-roster cascade (Option A, non-recursive)
 
 When an admin links an empty placeholder to a real person who already has their own pre-existing
-node, two helpers (added 2026-11, `family_core.py:1513` and `family_core.py:1543`) cascade that
+node, two helpers (added 2026-11, `family_core.py:1513` and `family_core.py:1608`) cascade that
 person's own directly-represented family into active membership, instead of requiring each member
 to be individually re-found:
 
@@ -215,12 +228,16 @@ to be individually re-found:
   traversal.
 - `_cascade_relatives_after_link(conn, user_id)` — resolves up to two source groups for the linked
   person (the unit they found, if unambiguous; their birth unit, if known) and re-syncs every
-  claimed member of each, via the pre-existing `_sync_family_membership()` (`family_core.py:1619`).
+  claimed member of each, via the pre-existing `_sync_family_membership()` (`family_core.py:1712`).
   Explicitly skips the founder-side cascade (never guesses) when the person founds more than one
   active marital unit at once — see the multi-unit section above.
 
-**Option B (grandparent-group backfill) — implemented 2026-11-02, uncommitted, pending separate
-approval to commit.** The owner approved it after the privacy/consent review this section
+**Option B (grandparent-group backfill) — implemented AND committed 2026-11-02** (commit `0a8ab5b`,
+"feat: OSM proximity, grandparent backfill, and location tooling" — re-verified this pass via
+`git status --short family_core.py tests/test_family_tree_cascade.py`, both clean/unmodified
+relative to `HEAD`; this corrects this document's own prior claim that it remained uncommitted,
+which was already stale by the time of that same-day commit). The owner approved it after the
+privacy/consent review this section
 previously said was pending; the review's own finding (recorded in
 `_backfill_parent_group_links()`'s own docstring, `family_core.py`) is that backfilling a link
 does not grant any new ad-hoc membership beyond the same bounded direct-roster rule every other
@@ -241,17 +258,17 @@ cascading, idempotency, a manufactured cycle, and a missing-parent-group case.
 
 ## Profile Card and relationship functionality
 
-`_relationship_label()` (`family_core.py:2048`) and `cascade_for_node()` (`family_core.py:2351`)
+`_relationship_label()` (`family_core.py:2141`) and `cascade_for_node()` (`family_core.py:2444`)
 compute a viewer-relative relationship label (Father/Mother/Grandfather/Uncle/Cousin/Nephew, etc.)
 and the Profile Card's neighborhood view, entirely read-only, derived from the graph — never
 touched by the direct-roster cascade above. `neighborhood_for_group()`/`tree_for_group()`
-(`family_core.py:2216`, `2271`) render one unit's own immediate surroundings at a time rather than
+(`family_core.py:2309`, `2364`) render one unit's own immediate surroundings at a time rather than
 a single multi-generation hierarchy, since a married couple almost always has two separate,
 unrelated ancestries meeting only at that one marriage — not representable as one `d3.tree()`.
 
 ## Relevant routes
 
-Every `/api/family...` route is `@login_required`; `app.py:1885-2215`:
+Every `/api/family...` route is `@login_required`; `app.py:1887-2214`:
 
 | Route | Core function |
 |---|---|
@@ -319,4 +336,4 @@ constraint to catch it.
 | Source evidence | `family_core.py` (2,540 lines), `migrations/026_family_tree.py`, `migrations/027_family_nuclear_nodes.py`, `app.py` (route block, lines 1885-2215), `static/js/family.js`, `static/js/family_tree.js` |
 | Test evidence | 211 + 115 = 326 directly-dedicated checks (re-run 2026-11-02), plus partial coverage from `tests/test_group_members.py` |
 | Operational evidence | None independently verified this pass — all testing above ran against local throwaway databases; production deployment behavior of this subsystem has not been checked |
-| Remaining limitations | A married child's own further-married children are never swept into a cascade (Option B's own cap is strictly on the ancestor/parent chain, not descendants); a multi-unit founder always requires an explicit `group_id` from the caller for the one operation (`add_child_to_node`) that needs it today; Option B is implemented and tested but **uncommitted** pending a separate approval to commit (see `docs/MASTER_STATUS.md`) |
+| Remaining limitations | A married child's own further-married children are never swept into a cascade (Option B's own cap is strictly on the ancestor/parent chain, not descendants); a multi-unit founder always requires an explicit `group_id` from the caller for the one operation (`add_child_to_node`) that needs it today. Option B is implemented **and committed** (commit `0a8ab5b`, corrected this pass from this document's own prior stale claim — see `docs/MASTER_STATUS.md`) |

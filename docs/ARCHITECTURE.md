@@ -81,6 +81,7 @@ Every Python module at the repository root.
 | `folder_sync.py` | Daily mirror of location statistics from the database to the folder tree |
 | `family_core.py` | The Family Tree: Nuclear Family Node units (a unit is a married couple, not a generic container), explicit tree-growth routes (add a unit's missing parents, add a child or sibling-in-law placeholder), and the Family Group naming code (`_name_code`/`_group_name_from_couple`) |
 | `profile_picture_core.py` | Profile pictures: Pillow processing (EXIF strip, center-crop, 256×256 JPEG), upload validation, and `hide_identity`-aware serving |
+| `religious_text_core.py` | The Poems Marquee's religious-text library (added 2026-11-02): a 4-table registry (`religious_traditions` -> `text_collections` -> `text_collection_languages` -> `text_entries`), each collection individually gated by `rights_status`/`review_status`/`marquee_eligible` -- only an approved, eligible collection is ever resolvable by `api_poems_meta`/`api_poem` (`app.py`) |
 
 Supporting folders: `db/` (base schema and first-run seed), `migrations/` (001–003 and 007–029; 004–006 are unused), `tools/` (migration runner and verification scripts), `scripts/` (one-off data import and build scripts), `templates/`, `static/` (CSS, JS, map data, locales, images), `translations/`.
 
@@ -118,6 +119,7 @@ Added 25 October 2026. `window.QMAvatar.render(user, size)` is the one avatar re
 | Karma | 3 | Karma entries, collective karma and its log |
 | Qoins | 4 | Wallets, wallet transactions, physical denominated Qoins, recognition stars |
 | Referrals | 2 | Referrers and referrer applications |
+| Marquee religious-text library | 4 | `religious_traditions`, `text_collections`, `text_collection_languages`, `text_entries` (added 2026-11-02, `religious_text_core.py`) — like `family_core.py`'s 7 tables and `referral_bonus_awards` (added since this section's "76 tables" total was last corrected, 18 October 2026), not yet reflected in that total below; a full recount is out of scope for this pass |
 | Elections and councils | 6 | Election cycles, candidates, votes, village councils, cycle configuration, election history (`election_history_entries`; the legacy `election_history` table is no longer created) |
 | Perception | 4 | Country and zone sentiment votes and frozen yearly totals |
 | Citizen Reports | 2 | Reports and their updates |

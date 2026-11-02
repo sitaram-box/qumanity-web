@@ -11,6 +11,11 @@ This describes the qumanity-web repository as of 11 October 2026, updated 14 Oct
 > yet appear to count `family_core.py`'s 7 tables, `provisional_location_core.py`'s tables, or
 > `referral_bonus_awards` — a main-document staleness this pass does not fix (out of scope; see
 > this refresh's final report for the owner note).
+>
+> **2026-11-02 addition:** `religious_text_core.py` (Module map) and its 4-table Marquee
+> religious-text registry (Data model summary) were added this pass, with the same "not yet
+> counted in the grand total" caveat as the pre-existing gaps above — see `14_marquee_evidence.md`
+> for the full Marquee evidence.
 
 ## Components
 
@@ -91,6 +96,7 @@ Every Python module at the repository root.
 | `folder_sync.py` | Daily mirror of location statistics from the database to the folder tree |
 | `family_core.py` | The Family Tree: Nuclear Family Node units (a unit is a married couple, not a generic container), explicit tree-growth routes (add a unit's missing parents, add a child or sibling-in-law placeholder), and the Family Group naming code (`_name_code`/`_group_name_from_couple`). See `12_family_tree_evidence.md` |
 | `profile_picture_core.py` | Profile pictures: Pillow processing (EXIF strip, center-crop, 256×256 JPEG), upload validation, and `hide_identity`-aware serving |
+| `religious_text_core.py` | The Poems Marquee's religious-text library (added 2026-11-02): a 4-table registry (`religious_traditions` -> `text_collections` -> `text_collection_languages` -> `text_entries`), each collection individually gated by `rights_status`/`review_status`/`marquee_eligible` -- only an approved, eligible collection is ever resolvable. See `14_marquee_evidence.md` |
 
 Supporting folders: `db/` (base schema and first-run seed), `migrations/` (001–003 and 007–029; 004–006 are unused), `tools/` (migration runner and verification scripts), `scripts/` (one-off data import and build scripts), `templates/`, `static/` (CSS, JS, map data, locales, images), `translations/`.
 
@@ -128,6 +134,7 @@ Added 25 October 2026. `window.QMAvatar.render(user, size)` is the one avatar re
 | Karma | 3 | Karma entries, collective karma and its log |
 | Qoins | 4 | Wallets, wallet transactions, physical denominated Qoins, recognition stars |
 | Referrals | 2 | Referrers and referrer applications. Does not count `referral_bonus_awards` (migration 030) — see `13_referral_engine_evidence.md`, which also establishes that the "Referrers" code here has no redemption path anywhere in the application |
+| Marquee religious-text library | 4 | `religious_traditions`, `text_collections`, `text_collection_languages`, `text_entries` (added 2026-11-02, `religious_text_core.py`) — not yet counted in this section's grand total below, same pre-existing staleness this document's own refresh note already flags for `family_core.py`/`provisional_location_core.py`/`referral_bonus_awards`; see `14_marquee_evidence.md` |
 | Elections and councils | 6 | Election cycles, candidates, votes, village councils, cycle configuration, election history (`election_history_entries`; the legacy `election_history` table is no longer created) |
 | Perception | 4 | Country and zone sentiment votes and frozen yearly totals |
 | Citizen Reports | 2 | Reports and their updates |

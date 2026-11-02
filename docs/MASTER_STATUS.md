@@ -41,17 +41,19 @@ revision note at the bottom for what changed and when.
 
 ## Full regression baseline
 
-**Final (Phase 6, after all implementation phases) -- re-baselined 2026-11-02 after the Marquee
-infrastructure commit (`a0bd6ca`):** `test_poems_marquee.py` grew from 79 to 193 checks (new
-multi-religion/rights-gating/JSON-validation coverage), moving the suite-wide total from 1,163 to
-**1,277**. Every other suite's count is unchanged from the Phase 6 baseline below -- re-run fresh
-this session, not copied from memory.
+**Final (Phase 6, after all implementation phases) -- re-baselined 2026-11-02, twice the same day:**
+first after the Marquee infrastructure commit (`a0bd6ca`, `test_poems_marquee.py` 79 -> 193,
+suite total 1,163 -> 1,277), then again after this pass's copyright-notice page and DPG
+documentation work added `tests/test_copyright_pages.py` (34 checks, new), moving the total to
+**1,311 across 29 files**. Every other suite's count is unchanged from the Phase 6 baseline below
+-- re-run fresh this session, not copied from memory.
 
 | Suite | Pass | Fail |
 |---|---:|---:|
 | test_account_id_sync.py | 13 | 0 |
 | test_admin_panel_council_scope.py | 40 | 0 |
 | test_avatar_sweep.py | 14 | 0 |
+| test_copyright_pages.py (new, this pass) | 34 | 0 |
 | test_council_updates.py | 17 | 0 |
 | test_edit_master_location.py (new, Phase 3) | 33 | 0 |
 | test_election_test_scheduler.py | 31 | 0 |
@@ -77,7 +79,7 @@ this session, not copied from memory.
 | test_qpunch.py | 25 | 0 |
 | test_referral_engine.py | 12 | 0 |
 | test_reply_read.py | 51 | 0 |
-| **Total (28 files)** | **1,277** | **0** |
+| **Total (29 files)** | **1,311** | **0** |
 
 (Phase 1 baseline, before any implementation this task: 26 files, 1,065 checks, 0 failures.)
 
@@ -300,25 +302,48 @@ existing API, by any query-parameter combination; `religious_text_core.resolve_c
 returns `None` for every one of them, which `api_poems_meta()` reports as `coming_soon`, never
 substituted or invented content. Full research trail: `docs/marquee_religious_text_sources.md`.
 
+> **Updated 2026-11-02 (deeper research pass, same day).** Every item below was re-investigated in
+> more depth (named translators, direct contact routes, license-file checks rather than README
+> prose) — see the research doc for full quotes and sources. One item (Hindi Bible) now has a
+> candidate edition with both verified license terms and verified real text; it stays blocked here
+> only because this pass's own authorization explicitly excluded importing any of the five
+> collections, pending owner review.
+
 ### 1. Urdu Quran
 
 **Status:** `pending_rights_review — code complete, content blocked`
 
+Findings this pass: Fateh Muhammad Jalandhry's translation is **confirmed still under copyright**
+(Pakistan's Copyright Ordinance 1962, 50 years from the year after the author's 1982 death ->
+protected through 1 Jan 2033); Abul A'la Maududi's *Tafheem-ul-Quran* publisher (Idara
+Tarjuman-ul-Quran, Lahore) has no locatable website or contact route; Tanzil Project's own
+redistribution clause remains unresolved and no contact route for Tanzil could be found this pass
+either.
+
 Next step:
 - Contact the Tanzil Project for written clarification about the exact Urdu translation/edition
   and whether its text may be redistributed in Qumanity's JSON collection and displayed on a
-  public website (their own Terms of Use page carries an ambiguous redistribution clause that
-  could not be resolved by reading the page alone).
-- Verify the translation's author, edition, copyright holder, and precise licensing conditions.
+  public website — no working contact route was found this pass; locating one (e.g. the live
+  site's own footer) is itself the first step.
+- A draft outreach message is prepared in `docs/marquee_religious_text_sources.md` §3b, for owner
+  review before sending.
 - Do not add Urdu Quran text until redistribution and display permission are clear.
 
 ### 2. Sikh Gurbani
 
 **Status:** `pending_rights_review — code complete, content blocked`
 
+Findings this pass: Khalis Foundation/BaniDB's GitHub repo has a real MIT LICENSE file, but it
+covers the API code only — the README still explicitly withholds the Gurbani text dataset itself.
+A new lead, `github.com/shabados/database`, self-asserts the Gurmukhi original is public domain
+(not court-tested, and does not cover any English translation). SriGranth's "all rights reserved"
+footer is unchanged. **A real contact route for Khalis Foundation was found**: a physical address,
+phone/WhatsApp number, and contact form on `khalisfoundation.org`.
+
 Next step:
-- Contact Khalis Foundation/BaniDB and the relevant rights holders or publishers of any proposed
-  Gurbani translation.
+- Send a permission request to Khalis Foundation via their contact form (draft prepared in
+  `docs/marquee_religious_text_sources.md` §4a, for owner review before sending) and separately
+  the relevant rights holders or publishers of any proposed Gurbani translation.
 - Request explicit written permission for digital redistribution, public display, and any
   required modifications or segmentation.
 - SriGranth's reported all-rights-reserved terms and BaniDB/Khalis Foundation's reported
@@ -327,26 +352,42 @@ Next step:
 
 ### 3. Hindi Bible
 
-**Status:** `pending_rights_review — code complete, content blocked`
+**Status:** `pending_rights_review — code complete, content blocked` (one candidate now has both
+verified terms and verified text, but import is not authorized by this pass)
+
+Findings this pass: the 1914 BFBS edition's public-domain rights are solidly confirmed, but no
+clean (non-OCR-garbled) transcription exists anywhere this pass could locate, including a check of
+Hindi Wikisource (no Bible content at all). **Biblica's Hindi Contemporary Version
+(`ebible.org/hincv`) is now `approved_with_conditions`**: exact CC BY-SA 4.0 terms quoted directly
+from the primary source, and real Hindi verse text (Psalm 23) was retrieved and verified live.
 
 Next step:
-- Obtain a clean transcription of the proposed 1914 British and Foreign Bible Society Hindi
-  edition and verify it against the original page images; the earlier retrieved OCR was garbled
-  and must not be published.
-- Alternatively, evaluate Biblica's Hindi Contemporary Version and verify the exact CC BY-SA 4.0
-  terms, required attribution, and share-alike obligations before adoption.
-- Keep the Hindi Bible collection unavailable until the complete text and rights requirements are
-  verified.
+- Owner review of the Biblica CC BY-SA 4.0 conditions (see
+  `docs/marquee_religious_text_sources.md` §2b): publish the Hindi text in its own clearly-licensed
+  file, visible Biblica attribution, no unauthorized use of the Biblica® trademark, and no
+  relicensing of the surrounding application code (a standalone attributed JSON file is a
+  defensible, commonly-used reading of the share-alike scope, not a guaranteed legal conclusion).
+- If approved, import is a separate, future content-only commit — not authorized by this research
+  pass.
+- Alternatively, the 1914 BFBS edition remains available as a public-domain path if a clean
+  transcription is ever produced.
+- Keep the Hindi Bible collection unavailable until the owner has reviewed and explicitly approved.
 
 ### 4. Hindi Dhammapada
 
 **Status:** `pending_rights_review — code complete, content blocked`
 
+Findings this pass: Rahul Sankrityayan's 1933 Hindi Dhammapada translation was located and its
+publication facts confirmed directly (Mahabodhi Sabha, Sarnath, 1933) — a work of his would
+plausibly be public domain in India from 1 January 2024 (life+60, d. 1963), but (a) archive.org
+hosts two scans of the same book with conflicting license tags (CC0 vs. CC BY-NC-ND), neither
+authoritative, and (b) the US/URAA restoration question is unresolved, which matters because
+Qumanity is a US-reachable website. No clean verbatim text could be extracted from the OCR either.
+
 Next step:
-- Identify a reliable public-domain or openly licensed Hindi translation.
-- Verify the translator, edition, source organization, redistribution rights, and attribution
-  requirements.
-- Compare the digital text with the source edition to establish accuracy.
+- Obtain a one-time legal/rights confirmation covering both the India life+60 and US/URAA
+  questions for the Sankrityayan 1933 edition specifically.
+- Separately, produce a clean transcription or a better OCR pass against the original page images.
 - Do not generate or present an unverified machine translation as an established Hindi
   Dhammapada translation.
 
@@ -354,11 +395,21 @@ Next step:
 
 **Status:** `pending_rights_review — code complete, content blocked`
 
+Findings this pass (first research cycle for this tradition): the Tattvartha Sutra is confirmed
+cross-sect-accepted (Digambara, Svetambara, and minor sub-traditions), but its common English
+translation (Nathmal Tatia/Institute of Jainology) is fully copyrighted, and the one
+plausibly-public-domain English translation found (J.L. Jaini, 1920) is only accessible through a
+rights-restricted `jainqq.org` wrapper. The Namokar Mantra (the tradition's universal prayer, with
+real sect-specific wording variants) has a public-domain-by-age Prakrit original and a usable CC
+BY-SA 4.0 Wikipedia translation as a fallback — the most promising lead of the two researched, not
+yet fully clear.
+
 Next step:
-- Conduct a dedicated research phase to identify the specific Jain scripture or text collection
-  to be supported.
-- Establish the appropriate original language, edition, and reliable digital source.
-- Verify the rights of any modern translation or transcription.
+- Resolve JAINpedia's CC-BY-NC-SA-vs-"all rights reserved" footer discrepancy with the Institute
+  of Jainology, or locate a clean HathiTrust/archive.org scan of J.L. Jaini's 1920 Tattvartha Sutra
+  translation that bypasses `jainqq.org`'s restrictive wrapper.
+- Establish the appropriate original language, edition, and reliable digital source for whichever
+  candidate is pursued.
 - Obtain permission where necessary before creating public collection files.
 - Do not assume that one text or translation represents all Jain traditions.
 
@@ -388,12 +439,55 @@ Next step:
 | Dhammapada English collection | Available |
 | Urdu Quran | Pending rights review — code complete, content blocked |
 | Sikh Gurbani | Pending rights review — code complete, content blocked |
-| Hindi Bible | Pending rights review — code complete, content blocked |
+| Hindi Bible | Pending rights review — one candidate (Biblica CC BY-SA 4.0) has verified terms + text; owner approval still required before import |
 | Hindi Dhammapada | Pending rights review — code complete, content blocked |
 | Jain collection | Pending rights review — code complete, content blocked |
 | Gita Press Vinaya Patrika | Unavailable pending permission (not_permitted, pre-existing finding) |
+| `/copyright/religious-texts` notice page | Implemented and committed — see entry below |
 
 A religion is never marked content-complete merely because the infrastructure can support it.
+
+### Public copyright notice page
+
+**✅ Implemented & Committed** — `/copyright/religious-texts` (`app.py`'s
+`copyright_religious_texts()`, `templates/copyright_religious_texts.html`), alongside the
+pre-existing `/copyright/gita-press`. Covers all six current rights questions (Hindu/Gita Press,
+Muslim/Urdu Quran, Christian/Hindi Bible, Sikh/Gurbani, Buddhist/Hindi Dhammapada, Jain), clearly
+distinguishes the four currently-available collections from the pending ones, never claims
+ownership of any scripture, and includes Qumanity's own verified public contact
+(`founder@qumanity.in`, already used elsewhere on the live About page and in the existing Gita
+Press outreach letter — not invented for this page) plus verified third-party contact links
+(Tanzil Project, Khalis Foundation, Biblica) where found. Linked from the homepage footer, public
+for both logged-in and logged-out visitors, responsive (no horizontal overflow at 375px, verified
+live). Tests: `tests/test_copyright_pages.py` (new), covering both copyright pages — see the
+regression table below.
+
+### DPG evidence audit (this pass)
+
+Three documents re-verified against the current repository rather than trusted from a prior
+session's own summary:
+
+- `docs/dpg_evidence/12_family_tree_evidence.md` — most `family_core.py` line citations from
+  `_sync_family_membership()` onward had drifted +93 lines (the Option B grandparent-backfill code
+  was inserted after this document was first written) — corrected. **Material correction:** the
+  document's own claim that Option B remained "uncommitted, pending separate approval to commit"
+  was stale — it is actually already committed, `0a8ab5b`, the same day it was implemented. No
+  behavioral claim changed, only line numbers and the commit-status claim.
+- `docs/dpg_evidence/13_referral_engine_evidence.md` — the test count was stated as 14 in two
+  places; `tests/test_referral_engine.py` actually has 12 checks (re-run fresh). Most `app.py` line
+  citations in its §1 had drifted ~42 lines; corrected. The underlying findings (no redemption path
+  for the council Referrer code, zero test coverage for that system) were re-confirmed unchanged by
+  direct repository search, not just re-stated.
+- `docs/dpg_evidence/14_marquee_evidence.md` (new) — documents the Marquee's actual 4-table schema
+  (explicitly correcting an earlier proposal document's 5-table design, which was never built),
+  the religion-resolution chain, rights gating, and test coverage.
+- `docs/dpg_evidence/ARCHITECTURE.md` and `docs/ARCHITECTURE.md` (main) — both gained a
+  `religious_text_core.py` module-map row and a 4-table Marquee data-model row, with the same
+  "not yet counted in the grand total" caveat the pre-existing `family_core.py`/
+  `referral_bonus_awards` gaps already carried.
+
+No application code, tests, migrations, or user data were changed as part of this audit — only
+documentation.
 
 ---
 
@@ -499,3 +593,15 @@ Nagar/Haryana scripts, `folder_export/Earth/`, `Poems/`, `docs/family_tree/`,
   content areas plus the pre-existing Gita Press finding), and re-baselined the full regression
   table (`test_poems_marquee.py` 79 -> 193, suite total 1,163 -> 1,277, re-run fresh this session).
   No other subsystem entry in this document was touched.
+- 2026-11-02 (separate, later-still task): deeper rights research for all five pending Marquee
+  content areas (named translators, direct contact routes, license-file checks) -- updated each
+  item's findings and next steps, flagged the Biblica Hindi Bible candidate as now having both
+  verified terms and verified text (still not imported, pending owner review). Added the new
+  `/copyright/religious-texts` public notice page entry and `tests/test_copyright_pages.py` (34
+  checks, new) to the regression table. Added a DPG evidence audit entry covering corrections to
+  `docs/dpg_evidence/12_family_tree_evidence.md` (stale line numbers, a stale "uncommitted" claim
+  for Option B that was actually already committed) and `13_referral_engine_evidence.md` (a stale
+  test count, stale line numbers), plus the new `docs/dpg_evidence/14_marquee_evidence.md` and
+  matching `ARCHITECTURE.md` updates in both locations. Suite total re-baselined again to 1,311
+  across 29 files, re-run fresh this session. No application code, tests outside the two new test
+  files, migrations, or user data were changed.

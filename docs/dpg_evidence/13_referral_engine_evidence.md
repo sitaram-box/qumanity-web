@@ -7,6 +7,14 @@ did not previously cover.
 > **DPG Evidence Refresh — 2026-11-01.** Internal correction pass, not a DPGA resubmission. This
 > is a new addition, not a revision of a previously submitted claim.
 
+> **Re-verification — 2026-11-02.** Every claim re-checked against the current repository rather
+> than re-stated from memory. Two corrections: the test count was stated as 14 in two places but
+> `tests/test_referral_engine.py` actually has **12** checks (re-run fresh this pass); and most
+> `app.py` line citations in §1 had drifted roughly +42 lines (unrelated edits elsewhere in `app.py`
+> since this document was first written) and are corrected below. The underlying behavioral
+> findings — redemption-path absence for the council Referrer code, zero test coverage for that
+> system, the eligibility gap — were all re-confirmed unchanged by direct repository search.
+
 ## What this covers, and an important distinction made up front
 
 The repository contains **two separate, unrelated features that both use the word "referral,"**
@@ -44,17 +52,17 @@ There is no separately "generated" referral code for this path — a referrer is
 own pre-existing, permanent 12-digit Public ID (`account_ids.search_code`), the same identifier
 already used throughout the app for account lookup (e.g. `social_core.find_person()`'s own exact-
 code search). Two distinct ways a referrer gets attributed, both writing `users.referred_by_user_id`
-(`app.py:121`, a plain nullable column on `users`):
+(`app.py:123`, a plain nullable column on `users`):
 
 - **Assisted registration**: an existing member physically does the registering for someone else
   (`helper_user_id`); that helper is unconditionally the new user's referrer (`app.py:4448`,
   written right after the `INSERT`, before the field below is even consulted).
 - **Self-registration with a named referrer**: an optional "Referred By (Public ID)" field on the
-  ordinary registration form (`app.py:4508-4520`). Resolution strips non-digits and matches against
+  ordinary registration form (`app.py:4550-4562`). Resolution strips non-digits and matches against
   `account_ids.search_code WHERE is_current = 1`; a blank or unrecognized Public ID is never an
   error — the referral is simply absent, exactly as if the field had never existed (the block has
-  no `else`/raise branch at all, `app.py:4508-4520`). Deliberately **no PIN or identity check** on
-  the named Public ID (`app.py:4506`'s own comment: "naming someone as your referrer doesn't let
+  no `else`/raise branch at all, `app.py:4550-4562`). Deliberately **no PIN or identity check** on
+  the named Public ID (`app.py:4548`'s own comment: "naming someone as your referrer doesn't let
   you act as them, so it doesn't need that bar").
 - An autocomplete endpoint, `GET /api/public-ids/suggest` (`app.py:2679-2703`), backs the field:
   public (registration happens logged out), requires a minimum 6-digit prefix before it will even
@@ -92,7 +100,7 @@ Two separate, real reward mechanisms, both confirmed in source:
 
 ### Eligibility, duplicate handling, abuse prevention
 
-- A referrer cannot be the registrant themselves — `app.py:4515` explicitly excludes
+- A referrer cannot be the registrant themselves — `app.py:4557` explicitly excludes
   `row["user_id"] != user_id` when resolving a self-named Public ID (self-referral via the
   assisted path is structurally impossible, since the helper and the new account are always
   different rows).
@@ -109,7 +117,7 @@ Two separate, real reward mechanisms, both confirmed in source:
 ### Relevant routes, migrations, and frontend integration
 
 - Registration itself: `POST /api/auth/register` (the existing route; referral resolution is one
-  step inside it, `app.py:4508-4520`).
+  step inside it, `app.py:4550-4562`).
 - `GET /api/public-ids/suggest` (`app.py:2679-2703`).
 - `migrations/030_referral_bonus_awards.py` — the `referral_bonus_awards` table only; the
   per-referral credit itself needs no migration (`wallet_transactions` already existed).
@@ -118,7 +126,7 @@ Two separate, real reward mechanisms, both confirmed in source:
 
 ### Relevant tests
 
-`tests/test_referral_engine.py` (14 checks) — per its own docstring, covers exactly: resolution of
+`tests/test_referral_engine.py` (12 checks, re-run 2026-11-02 -- corrected from this document's prior "14" claim) — per its own docstring, covers exactly: resolution of
 `referred_by_public_id` into `referrer_user_id` feeding the existing, unchanged
 `apply_free_registration` split; a blank/unrecognized Public ID never being an error; and 3
 referrals in the same ISO week awarding tier 1 (+1 Qoin) exactly once via
@@ -156,7 +164,7 @@ sub-schema (`SUB_SCHEMA`, `board_core.py:541-549`):
   (`board_core.py:691-702`) — on approval, calls `_new_referral_code()` (`board_core.py:681-688`,
   a 6-character code from a 33-character alphabet excluding visually ambiguous characters, prefixed
   `REF-`, retried up to 50 times against a uniqueness check) and inserts the `referrers` row.
-- Routes, all `@login_required`, council-admin-gated where relevant (`app.py:910-958`):
+- Routes, all `@login_required`, council-admin-gated where relevant (`app.py:912-959`):
   `POST /api/referrer/apply`, `GET /api/referrer/me`, `GET /api/referrer/applications`
   (403 for a non-admin), `POST /api/referrer/applications/<id>/decide` (403 for a non-admin).
 
@@ -210,8 +218,8 @@ repository-wide search of `tests/`). This subsystem has zero automated regressio
 
 | | Status |
 |---|---|
-| Source evidence (registration attribution + bonus) | `app.py` (lines 121, 2679-2703, 4508-4520), `wallet_core.py` (lines 88-100, 349-401), `migrations/030_referral_bonus_awards.py`, `static/js/register.js` (lines 279-292, 1402) |
-| Source evidence (council Referrer role) | `board_core.py` (lines 541-549, 664-717), `app.py` (lines 910-958) |
-| Test evidence | `tests/test_referral_engine.py` — 14 checks (registration attribution + bonus tier 1 only); **zero** tests for the council Referrer role |
+| Source evidence (registration attribution + bonus) | `app.py` (lines 123, 2681-2703, 4550-4562 -- re-verified 2026-11-02, corrected from this document's prior 121/2679-2703/4508-4520 citations), `wallet_core.py` (lines 88-100, 357-401), `migrations/030_referral_bonus_awards.py`, `static/js/register.js` (lines 279-292, 1402) |
+| Source evidence (council Referrer role) | `board_core.py` (lines 524-547 for the referrer tables within `SUB_SCHEMA`, 664-717), `app.py` (lines 912-959) |
+| Test evidence | `tests/test_referral_engine.py` — 12 checks, re-run 2026-11-02 (registration attribution + bonus tier 1 only); **zero** tests for the council Referrer role |
 | Operational evidence | None independently verified this pass — all testing ran against local throwaway databases |
 | Known limitations | No referrer-side eligibility gate on the attribution path; only tier 1 of 3 bonus tiers is tested; the entire council Referrer-code system has no redemption path, no frontend, and no tests |
