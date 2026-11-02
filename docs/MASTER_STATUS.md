@@ -305,6 +305,26 @@ existing API, by any query-parameter combination; `religious_text_core.resolve_c
 returns `None` for every one of them, which `api_poems_meta()` reports as `coming_soon`, never
 substituted or invented content. Full research trail: `docs/marquee_religious_text_sources.md`.
 
+> **Practical roadmap: `docs/marquee_rights_roadmap.md`** (new, 2026-11-02). That document is the
+> owner-facing action plan for all six religious-text areas (not just the four still pending) --
+> it holds the verified rights-holder contact routes (Khalis Foundation's address/phone/contact
+> form, Biblica's permission-request form; Tanzil Project and the Hindi Dhammapada/Jain
+> rights-holders are explicitly marked "no verified direct contact found" rather than guessed),
+> the prepared-but-unsent outreach drafts for Tanzil and Khalis Foundation, the specific next step
+> for each of the four blocked collections, a priority/dependency timeline, and the exact approval
+> gates (source identified, rights verified, owner sign-off, verbatim text retrieved) that must
+> all be satisfied before any of them is ever imported. Read it before starting any further
+> outreach or research on this subsystem.
+
+| Religious-text area | Current status |
+|---|---|
+| Hindu — Gita Press Vinaya Patrika | Awaiting response to the letter already sent; unavailable |
+| Christian — Biblica Hindi Bible | **Live** under CC BY-SA 4.0 conditions (commit `fbc0a5e`) |
+| Muslim — Urdu Quran | Pending Tanzil clarification; owner must send the prepared request (once a contact route is located) |
+| Sikh — Gurbani | Pending rights-holder clarification through the verified Khalis Foundation contact routes |
+| Buddhist — Hindi Dhammapada | New source research required |
+| Jain — Jain texts | Dedicated source research required |
+
 > **Updated 2026-11-02 (deeper research pass, same day), then updated again the same day after
 > owner authorization.** Every item below was re-investigated in more depth (named translators,
 > direct contact routes, license-file checks rather than README prose) — see the research doc for
@@ -621,3 +641,15 @@ Nagar/Haryana scripts, `folder_export/Earth/`, `Poems/`, `docs/family_tree/`,
   code-complete/content-complete table, and the regression baseline (`test_poems_marquee.py` 193 ->
   226, suite total 1,311 -> 1,347, re-run fresh). The other four blocked collections and Gita Press
   were re-confirmed unaffected and still blocked.
+- 2026-11-02 (separate, later-still task, documentation and Git housekeeping only): corrected the
+  `<set at commit time...>` placeholder in the Christian Hindi (Biblica) entry to the real commit
+  hash (`fbc0a5e`, full `fbc0a5ed2ab0c55c183786be6e464f7f14eaec1f`) -- confirmed via
+  `git show --stat` that this was the only accidental commit-reference placeholder anywhere in
+  this document or the DPG evidence pack before fixing it. Created `docs/marquee_rights_roadmap.md`
+  (new) -- the practical, owner-facing action plan for all six religious-text areas, with verified
+  contact routes and prepared-but-unsent outreach drafts reproduced from
+  `docs/marquee_religious_text_sources.md`. Added a prominent reference to it, plus a six-area
+  status table, at the top of the "Marquee — Pending Rights (Content Only)" section above. No
+  application code, database schema, rights-gating logic, or religious-text content was touched by
+  this pass -- three separate documentation-only commits (hash correction, new roadmap, this
+  reference) were made and pushed, none combined.
