@@ -1,0 +1,73 @@
+.qmap-body { background: var(--qm-bg); color: var(--qm-text); }
+
+.qmap-main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 48px; }
+
+.qmap-intro { margin-bottom: 16px; }
+.qmap-title {
+  font: 700 2rem/1.2 "Fraunces", Georgia, serif;
+  color: var(--qm-gold-text);
+  margin: 0 0 8px;
+}
+.qmap-desc { font: 400 1rem/1.6 "Inter", system-ui, sans-serif; color: var(--qm-text); margin: 0; }
+.qmap-desc a { color: var(--qm-gold-text); }
+
+/* The map itself always has an explicit height (never "auto" -- Leaflet needs a real pixel size
+   at init time, and a responsive height here is what keeps the map usable across breakpoints
+   below) and lives in its own positioned frame so the status/loading/error overlays and the map
+   can stack without affecting page layout. */
+.qmap-frame { position: relative; border-radius: 14px; overflow: hidden; border: 1px solid rgba(201, 150, 12, 0.3); }
+.qmap-map { height: 70vh; min-height: 420px; max-height: 760px; width: 100%; background: #e5e7eb; }
+
+.qmap-status {
+  position: absolute; inset: 0; z-index: 500; display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 24px; font: 500 1rem "Inter", system-ui, sans-serif;
+  background: var(--qm-panel-bg); color: var(--qm-text);
+}
+.qmap-status[hidden] { display: none; }
+.qmap-status-error { color: #b91c1c; }
+.qmap-status-empty { background: rgba(5, 11, 20, 0.88); color: #f4d9a4; font-weight: 600; }
+
+.qmap-legend {
+  display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; font: 500 0.9rem "Inter", system-ui, sans-serif;
+}
+.qmap-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.qmap-swatch { display: inline-block; width: 16px; height: 16px; border-radius: 3px; text-align: center; line-height: 16px; font-size: 12px; }
+.qmap-swatch-road { background: #2563eb; }
+.qmap-swatch-building { background: #9ca3af; border: 1px solid #6b7280; }
+.qmap-swatch-hospital, .qmap-swatch-you { background: transparent; width: auto; }
+
+.qmap-attribution-note {
+  margin-top: 14px; font: 400 0.82rem/1.5 "Inter", system-ui, sans-serif; color: #9fb0c3;
+}
+.qmap-attribution-note a { color: inherit; text-decoration: underline; }
+
+/* Leaflet's own attribution control must stay visible and clickable -- never hidden, and never
+   covered by the layer control on narrow screens (the max-width below keeps it from overlapping
+   the attribution corner at mobile widths). */
+.leaflet-control-attribution { font-size: 11px; max-width: 70vw; }
+.leaflet-control-attribution a { color: #0a1929; }
+
+/* Keep the layer control (and its popups) inside the map frame at narrow widths -- Leaflet's own
+   default styling already handles most of this; these are the few overrides needed for small
+   screens specifically. */
+@media (max-width: 640px) {
+  .qmap-map { height: 60vh; min-height: 320px; }
+  .qmap-title { font-size: 1.5rem; }
+  .leaflet-control-layers { font-size: 0.85rem; }
+  .leaflet-popup-content { max-width: 60vw; }
+}
+
+/* Hospital marker (DivIcon) */
+.qmap-hospital-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: #dc2626; border: 2px solid #ffffff; box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  font-size: 14px; line-height: 1;
+}
+/* "Your location" marker (DivIcon) */
+.qmap-you-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #ffd24a; border: 3px solid #1a1205; box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  font-size: 15px; line-height: 1;
+}

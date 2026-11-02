@@ -4061,6 +4061,55 @@ def api_location_observation_withdraw_overpass():
     return jsonify(result)
 
 
+@app.route("/qmap")
+def qmap_page():
+    """Public Q-Map page (2026-11-02): renders the North West Delhi OSM pilot dataset
+    (static/data/pilot/north_west_delhi_osm.geojson, loaded client-side from this same static
+    URL -- never re-fetched or re-generated here) for every visitor, logged in or not. For a
+    signed-in member, ALSO passes their own most recent consented GPS observation (if any) as the
+    map's initial center -- a direct, read-only query against user_location_observations, the
+    same table api_qmap_user_nearby() already reads from indirectly via osm_proximity_core.
+    Deliberately NOT a new data API route: this is the page's own initial render context, exactly
+    the narrow exception Qumanity's existing pattern already allows (compare api_poems_meta()'s
+    own per-session personalization) -- the client-side Q-Map JS still calls the EXISTING, already
+    strictly self-only-authorized GET /api/qmap/user-nearby/<user_id> for the actual proximity
+    features, using the user_id embedded here (same `var QM_USER_ID = {{ session.user_id | tojson
+    }}` convention dashboard.html already uses, never a client-editable value) -- that route's own
+    `session.get("user_id") != user_id` check remains the real security boundary regardless of
+    what any client-side value claims.
+
+    Only the most recent 'accepted' observation is used (the only status submit_observation() ever
+    gives a real coordinate -- see provisional_location_core.py's own comments): a 'pending'/
+    'denied'/'unavailable'/'withdrawn' row is never shown, and a user with no 'accepted' row at all
+    gets no center override (the frontend falls back to the pilot's own bounds). The coordinate is
+    only ever placed in THIS session's own page render, with Cache-Control: private, no-store, and
+    is never returned by any route another user's browser could call."""
+    user_id = session.get("user_id")
+    gps_center = None
+    if user_id:
+        conn = get_db()
+        row = conn.execute(
+            "SELECT latitude, longitude FROM user_location_observations "
+            "WHERE user_id = ? AND status = 'accepted' ORDER BY id DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        conn.close()
+        if row and row["latitude"] is not None and row["longitude"] is not None:
+            gps_center = {"lat": row["latitude"], "lon": row["longitude"]}
+    resp = Response(render_template(
+        "qmap.html",
+        user_id=user_id,
+        gps_center=gps_center,
+        geojson_url=url_for("static", filename="data/pilot/north_west_delhi_osm.geojson"),
+    ))
+    if user_id:
+        # This specific response embeds this member's own GPS coordinate -- must never be served
+        # from a shared/CDN cache to any other visitor (same rule api_poems_meta() already follows
+        # for its own per-session personalization).
+        resp.headers["Cache-Control"] = "private, no-store"
+    return resp
+
+
 @app.route("/api/qmap/user-nearby/<int:user_id>")
 @login_required
 def api_qmap_user_nearby(user_id):

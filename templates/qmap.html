@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Q-Map — Qumanity</title>
+  <meta name="description" content="Qumanity's Q-Map: the North West Delhi OSM pilot dataset, and, for signed-in members, their own consented GPS location and nearby OSM features." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <!-- Leaflet 1.9.4 -- the exact version/CDN already used by dashboard.html, home.html,
+       register.html, india_map.html and location_select.html. Never a second Leaflet version. -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/qmap.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body class="qmap-body">
+  <header class="qm-header">
+    <a href="{{ url_for('index') }}" style="display:contents">
+      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+    </a>
+    <div class="qm-header-text">
+      <h1>Qumanity</h1>
+      <p>Quantum + Humanity</p>
+    </div>
+    <nav class="qm-header-actions">
+      {% if user_id %}
+      <a class="qm-btn qm-btn-ghost" href="{{ url_for('dashboard') }}">← Dashboard</a>
+      {% else %}
+      <a class="qm-btn qm-btn-ghost" href="{{ url_for('index') }}">← Home</a>
+      {% endif %}
+    </nav>
+  </header>
+
+  <main class="qmap-main">
+    <div class="qmap-intro">
+      <h2 class="qmap-title">Q-Map</h2>
+      <p class="qmap-desc">The base map below is the <strong>North West Delhi OSM pilot
+        dataset</strong> — roads, buildings and hospitals captured from OpenStreetMap for one
+        research pilot area. Use the layer control to show or hide each category.
+        {% if user_id %}Your own consented GPS location and nearby OSM-linked features, if any,
+        appear as a separate layer below.{% else %}
+        <a href="{{ url_for('login') }}">Sign in</a> to see your own GPS-linked map features.
+        {% endif %}</p>
+    </div>
+
+    <div class="qmap-frame">
+      <div id="qmap-loading" class="qmap-status" role="status">Loading the North West Delhi pilot map…</div>
+      <div id="qmap-error" class="qmap-status qmap-status-error" role="alert" hidden></div>
+      <div id="qmap-empty" class="qmap-status qmap-status-empty" hidden></div>
+      <div id="qmap-map" class="qmap-map" aria-label="Q-Map: North West Delhi OSM pilot map"></div>
+    </div>
+
+    <div class="qmap-legend">
+      <span class="qmap-legend-item"><span class="qmap-swatch qmap-swatch-road"></span> Roads</span>
+      <span class="qmap-legend-item"><span class="qmap-swatch qmap-swatch-building"></span> Buildings</span>
+      <span class="qmap-legend-item"><span class="qmap-swatch qmap-swatch-hospital">🏥</span> Hospitals</span>
+      {% if user_id %}
+      <span class="qmap-legend-item"><span class="qmap-swatch qmap-swatch-you">📍</span> Your location</span>
+      {% endif %}
+    </div>
+
+    <p class="qmap-attribution-note">
+      Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>,
+      available under the <a href="https://opendatacommons.org/licenses/odbl/" target="_blank" rel="noopener noreferrer">Open Database License (ODbL)</a>.
+      Qumanity does not own the underlying map data.
+    </p>
+  </main>
+
+  <script>
+    // Server-rendered, session-sourced only -- never read from a URL query parameter, a form
+    // field, or localStorage. QM_USER_ID is this request's own signed-in session user id (or
+    // null for an anonymous visitor) exactly like dashboard.html's own `var QM_USER_ID` -- the
+    // one place qmap.js is allowed to learn "whose data to ask for," and even this is only ever
+    // used to call the EXISTING, independently-authorized GET /api/qmap/user-nearby/<user_id>,
+    // which re-checks session identity itself regardless of what this value says.
+    var QM_USER_ID = {{ user_id | tojson }};
+    var QM_GPS_CENTER = {{ gps_center | tojson }};
+    var QM_GEOJSON_URL = {{ geojson_url | tojson }};
+  </script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{{ url_for('static', filename='js/qmap.js') }}"></script>
+</body>
+</html>
