@@ -33,10 +33,19 @@ revision note at the bottom for what changed and when.
 - The real India-wide duplicate count is 74 Tehsil-level + 15 Village-level groups nationally (0
   State/District) — see the Location Data Integrity entry. None of this is a launch blocker on its
   own; it is scoped, measured, and awaiting a case-by-case survivor decision, not an emergency.
+- **2026-11-02 (separate task, later the same day):** the Universal Multi-Religion Marquee
+  infrastructure is implemented, tested (193 new Marquee checks, 1,277 suite-wide), and pushed —
+  commit `a0bd6ca`. Five content areas (Urdu Quran, Sikh Gurbani, Hindi Bible, Hindi Dhammapada,
+  Jain) remain `pending_rights_review`; see **"Marquee — Pending Rights (Content Only)"** below.
+  This did not touch Family Tree, Dashboard, QMail, OSM/Q-Map, or any location data.
 
 ## Full regression baseline
 
-**Final (Phase 6, after all implementation phases):**
+**Final (Phase 6, after all implementation phases) -- re-baselined 2026-11-02 after the Marquee
+infrastructure commit (`a0bd6ca`):** `test_poems_marquee.py` grew from 79 to 193 checks (new
+multi-religion/rights-gating/JSON-validation coverage), moving the suite-wide total from 1,163 to
+**1,277**. Every other suite's count is unchanged from the Phase 6 baseline below -- re-run fresh
+this session, not copied from memory.
 
 | Suite | Pass | Fail |
 |---|---:|---:|
@@ -56,7 +65,7 @@ revision note at the bottom for what changed and when.
 | test_import_india_villages_verify.py | 5 | 0 |
 | test_india_geography_classification.py | 22 | 0 |
 | test_osm_proximity.py (new, Phase 4) | 44 | 0 |
-| test_poems_marquee.py | 79 | 0 |
+| test_poems_marquee.py (193, up from 79 -- multi-religion marquee, 2026-11-02) | 193 | 0 |
 | test_post_kinds.py | 55 | 0 |
 | test_provisional_locations.py | 76 | 0 |
 | test_qmail.py | 32 | 0 |
@@ -68,18 +77,54 @@ revision note at the bottom for what changed and when.
 | test_qpunch.py | 25 | 0 |
 | test_referral_engine.py | 12 | 0 |
 | test_reply_read.py | 51 | 0 |
-| **Total (28 files)** | **1,163** | **0** |
+| **Total (28 files)** | **1,277** | **0** |
 
 (Phase 1 baseline, before any implementation this task: 26 files, 1,065 checks, 0 failures.)
 
 ## Subsystem status
 
 ### 1. Marquee (Poems)
-**✅ Implemented & Committed** (commit `82c5454`, plus earlier). Source: `app.py`'s
-`_marquee_religion_for_session()`/`api_poems_meta()`, `templates/_poems_marquee.html`,
-`static/js/poems.js`, `static/css/poems.css`/`home.css`. Tests: `tests/test_poems_marquee.py`, 79
-passing. No uncommitted changes. Known limitation: only 5 religions have a chip
-(`CHIP_BY_RELIGION`); others render with no chip, by design (no fallback).
+**✅ Implemented & Committed & Pushed** (commit `a0bd6ca`, "feat: multi-religion marquee with
+rights-gated database architecture" — supersedes the earlier `82c5454` single-religion cut this
+entry previously described). The Marquee is now a **Universal Multi-Religion, Multi-Language**
+architecture, not a single hardcoded Hindu/Christian dict:
+
+- **Database architecture** (`religious_text_core.py`, new): four tables —
+  `religious_traditions` -> `text_collections` -> `text_collection_languages` -> `text_entries` —
+  each collection individually gated by `rights_status`/`review_status`/`marquee_eligible`; only a
+  `review_status='approved' AND marquee_eligible=1` row is ever resolvable
+  (`resolve_collection()`). Seeded idempotently on every boot via `tools/run_migrations.py`
+  (`religious_text_core.seed_builtin_collections()`, keyed by `slug`, re-running is a no-op).
+  **Note on the earlier 4-workstream proposal** (`docs/audit_multi_religion_marquee_proposal_2026_11.md`
+  §3.6): that proposal's schema also included a fifth table, `religion_collection_access`, for a
+  future many-to-many religion<->collection relationship. It was deliberately **not** built —
+  `text_collections.tradition_id` already gives every current collection a direct, sufficient
+  mapping, and the many-to-many case (e.g. a shared "interfaith" collection) has no concrete use
+  yet. Revisit only if a real need for many-to-many access actually arises.
+- **Public default (unchanged from the prior entry):** Hindu/Hindi for every logged-out visitor
+  and any member with no profile religion, via `app.py`'s `_marquee_religion_for_session()` ->
+  `DEFAULT_MARQUEE_RELIGION = "hindu"`.
+- **Independent Religion Selector + Language Selector** (`static/js/poems.js`,
+  `templates/_poems_marquee.html`'s new "Reading tradition" accordion section): a signed-in
+  member's reading religion defaults to their own profile religion when it has content, but can be
+  switched to any other **approved, content-backed** tradition via an explicit, allowlist-checked
+  `?religion=`/`&lang=` query parameter on the *same two existing routes*
+  (`/api/poems/meta`, `/api/poems/<lang>/<index>` — no new route was added). This reading choice
+  is stored client-side only (`localStorage`, scoped per signed-in member's own Private Code) and
+  **never writes `users.religion_belief`** — verified directly against the database in
+  `tests/test_poems_marquee.py` (§8) and live in-browser (a Muslim-profile test account was
+  switched to Hindu reading content; `users.religion_belief` remained `'muslim'`).
+- **Gold-box label is now fully server-driven** (`religious_traditions.default_label`), replacing
+  the old hardcoded 5-entry `CHIP_BY_RELIGION` client table this entry previously flagged as a
+  "known limitation" — a tradition with no `religious_traditions` row (jain/other/prefer_not_to_say)
+  still correctly shows no chip at all, by design, no fallback.
+- **Currently live content** (4 traditions): Hindu (original Qumanity Hindi poetry, not Gita
+  Press/Vinaya Patrika — see the Gita Press note below), Christian (Psalms KJV, English), Muslim
+  (Quran Surah Al-Fatiha, Arabic, Tanzil Project CC BY 3.0), Buddhist (Dhammapada ch. 1 vv. 1-5,
+  Pali + English/Max Müller). **5 content areas remain blocked pending rights review** — see
+  **"Marquee — Pending Rights (Content Only)"** below; this is a content gap, not a code gap.
+- Tests: `tests/test_poems_marquee.py`, **193 passing** (up from 79) — see the regression table
+  below for the updated suite-wide total. No uncommitted Marquee changes remain.
 
 ### 2. Gita Press (copyright page)
 **✅ Implemented & Committed** (commit `82c5454`). Route `/copyright/gita-press`,
@@ -244,6 +289,114 @@ hashes: see Phase 3's own report in the final completion report below.
 
 ---
 
+## Marquee — Pending Rights (Content Only)
+
+The Marquee's **infrastructure is complete and committed** (`a0bd6ca`, see entry 1 above): the
+database architecture, Religion Selector, Language Selector, and rights-gating mechanism all work
+and are fully capable of serving any tradition the moment its content clears rights review. **Five
+content areas remain blocked** — this is content-only follow-up work, not an infrastructure gap.
+None of the five is currently offered by the Religion/Language Selector or servable through the
+existing API, by any query-parameter combination; `religious_text_core.resolve_collection()`
+returns `None` for every one of them, which `api_poems_meta()` reports as `coming_soon`, never
+substituted or invented content. Full research trail: `docs/marquee_religious_text_sources.md`.
+
+### 1. Urdu Quran
+
+**Status:** `pending_rights_review — code complete, content blocked`
+
+Next step:
+- Contact the Tanzil Project for written clarification about the exact Urdu translation/edition
+  and whether its text may be redistributed in Qumanity's JSON collection and displayed on a
+  public website (their own Terms of Use page carries an ambiguous redistribution clause that
+  could not be resolved by reading the page alone).
+- Verify the translation's author, edition, copyright holder, and precise licensing conditions.
+- Do not add Urdu Quran text until redistribution and display permission are clear.
+
+### 2. Sikh Gurbani
+
+**Status:** `pending_rights_review — code complete, content blocked`
+
+Next step:
+- Contact Khalis Foundation/BaniDB and the relevant rights holders or publishers of any proposed
+  Gurbani translation.
+- Request explicit written permission for digital redistribution, public display, and any
+  required modifications or segmentation.
+- SriGranth's reported all-rights-reserved terms and BaniDB/Khalis Foundation's reported
+  restrictions must not be bypassed.
+- Do not publish Gurbani text or translations without a verified source and permission.
+
+### 3. Hindi Bible
+
+**Status:** `pending_rights_review — code complete, content blocked`
+
+Next step:
+- Obtain a clean transcription of the proposed 1914 British and Foreign Bible Society Hindi
+  edition and verify it against the original page images; the earlier retrieved OCR was garbled
+  and must not be published.
+- Alternatively, evaluate Biblica's Hindi Contemporary Version and verify the exact CC BY-SA 4.0
+  terms, required attribution, and share-alike obligations before adoption.
+- Keep the Hindi Bible collection unavailable until the complete text and rights requirements are
+  verified.
+
+### 4. Hindi Dhammapada
+
+**Status:** `pending_rights_review — code complete, content blocked`
+
+Next step:
+- Identify a reliable public-domain or openly licensed Hindi translation.
+- Verify the translator, edition, source organization, redistribution rights, and attribution
+  requirements.
+- Compare the digital text with the source edition to establish accuracy.
+- Do not generate or present an unverified machine translation as an established Hindi
+  Dhammapada translation.
+
+### 5. Jain texts
+
+**Status:** `pending_rights_review — code complete, content blocked`
+
+Next step:
+- Conduct a dedicated research phase to identify the specific Jain scripture or text collection
+  to be supported.
+- Establish the appropriate original language, edition, and reliable digital source.
+- Verify the rights of any modern translation or transcription.
+- Obtain permission where necessary before creating public collection files.
+- Do not assume that one text or translation represents all Jain traditions.
+
+### Gita Press / Vinaya Patrika (separate rights note, not one of the five items above)
+
+- No verified publication permission has been established for the Gita Press Hindi Vinaya
+  Patrika translation (re-confirmed this task — see `docs/marquee_religious_text_sources.md`
+  §1b).
+- The original Qumanity Hindu Hindi poetry collection (`Poems/hindu_original/`) remains the
+  public default.
+- The original poems must not be attributed to Gita Press or labeled Vinaya Patrika.
+- Any future Gita Press content addition requires its own verified rights clearance and a
+  separate, content-only commit.
+- **Status:** `not_permitted` (distinct from the five `pending_rights_review` items above — this
+  one was already investigated once, in an earlier phase, and found blocked; it is not a new gap).
+
+### Code-complete vs. content-complete
+
+| Area | Status |
+|---|---|
+| Multi-religion Marquee architecture | Implemented and committed |
+| Religion Selector | Implemented and committed |
+| Language Selector | Implemented and committed |
+| Rights-gating mechanism | Implemented and committed |
+| Quran Arabic collection | Available with documented conditions |
+| Dhammapada Pali collection | Available with documented conditions |
+| Dhammapada English collection | Available |
+| Urdu Quran | Pending rights review — code complete, content blocked |
+| Sikh Gurbani | Pending rights review — code complete, content blocked |
+| Hindi Bible | Pending rights review — code complete, content blocked |
+| Hindi Dhammapada | Pending rights review — code complete, content blocked |
+| Jain collection | Pending rights review — code complete, content blocked |
+| Gita Press Vinaya Patrika | Unavailable pending permission (not_permitted, pre-existing finding) |
+
+A religion is never marked content-complete merely because the infrastructure can support it.
+
+---
+
 ## Complete working-tree inventory (at the start of this task)
 
 | Path | Git status | Pre-existing or new this task | Subsystem | Planned action |
@@ -340,3 +493,9 @@ Nagar/Haryana scripts, `folder_export/Earth/`, `Poems/`, `docs/family_tree/`,
   authoring-workflow correction, 0_Earth archiving), Phase 4 (OSM coordinate linking), Phase 5
   (grandparent backfill, Dashboard investigation), and Phase 6 (full regression, final
   verification).
+- 2026-11-02 (separate, later task): updated after the Universal Multi-Religion Marquee
+  infrastructure commit (`a0bd6ca`, pushed and verified against `origin/main`) -- rewrote the
+  Marquee subsystem entry, added the "Marquee — Pending Rights (Content Only)" section (5 blocked
+  content areas plus the pre-existing Gita Press finding), and re-baselined the full regression
+  table (`test_poems_marquee.py` 79 -> 193, suite total 1,163 -> 1,277, re-run fresh this session).
+  No other subsystem entry in this document was touched.
