@@ -28,13 +28,25 @@
   </div>
 
   <div class="pm-ctl">
-    <!-- Only Speed and Language live here now. Picking a value closes the whole menu; open it
-         again to change something else — 2026-09-28. -->
+    <!-- Reading tradition, Language, and Speed live here. Picking a value closes the whole menu;
+         open it again to change something else — 2026-09-28, Religion Selector added 2026-11-02
+         (Universal Multi-Religion Marquee). "Reading tradition" is deliberately NOT labeled
+         "Religion" -- see poems.js's own comments: this selects which tradition's verses this
+         BROWSER reads, independent of (and never written back to) the member's own account
+         religion. -->
     <div class="pm-pop" id="pm-menuwrap">
-      <button type="button" class="pm-dot pm-dot-menu" id="pm-menubtn" aria-haspopup="true" aria-expanded="false" aria-label="Marquee settings" title="Speed and language">
+      <button type="button" class="pm-dot pm-dot-menu" id="pm-menubtn" aria-haspopup="true" aria-expanded="false" aria-label="Marquee settings" title="Reading tradition, language, and speed">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
       </button>
       <div class="pm-menu pm-combo" id="pm-combomenu" hidden>
+        <button type="button" class="pm-accordion-head" id="pm-religionhead" aria-expanded="false" aria-controls="pm-religionmenu">
+          <span>Reading tradition</span>
+          <span class="pm-accordion-right"><span class="pm-accordion-val" id="pm-religionval">Hindu</span>
+            <svg class="pm-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </span>
+        </button>
+        <ul class="pm-combo-list pm-accordion-body" id="pm-religionmenu" role="listbox" aria-label="Reading tradition" hidden></ul>
+
         <button type="button" class="pm-accordion-head" id="pm-speedhead" aria-expanded="false" aria-controls="pm-speedmenu">
           <span>Speed</span>
           <span class="pm-accordion-right"><span class="pm-accordion-val" id="pm-speedval">1.0×</span>
@@ -53,12 +65,19 @@
       </div>
     </div>
 
-    <!-- Permanent dismiss (2026-10-28): see app.py's POST /api/marquee/hide and poems.js's
-         HIDE_KEY -- hides the bar (and the homepage symbol, if present) for good. -->
-    <button type="button" class="pm-dot pm-dot-hide" id="pm-hide" aria-label="Hide this marquee" title="Hide">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg>
+    <!-- Hide/restore (2026-11-02, replaces the old permanent "X" dismiss): slides the bar out of
+         view and shows #pm-restore (below, fixed bottom-right) to bring it back -- never a
+         one-way dismiss any more. See poems.js's HIDE_KEY/applyHiddenState(). -->
+    <button type="button" class="pm-dot pm-dot-hide" id="pm-hide" aria-label="Hide marquee" title="Hide">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 10l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
     </button>
   </div>
 </div>
+<!-- Floating restore control -- fixed bottom-right, hidden whenever the marquee itself is
+     visible; shown only while the marquee is hidden. Lives outside #pm-bar (not inside it) since
+     it must stay reachable even while the bar itself carries the `hidden` attribute. -->
+<button type="button" class="pm-restore-btn" id="pm-restore" aria-label="Show marquee" title="Show" hidden>
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 14l6-6 6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+</button>
 <script src="{{ url_for('static', filename='js/poems.js') }}" defer></script>
 {% endif %}

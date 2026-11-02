@@ -17,6 +17,44 @@
 .pm-bar[hidden] { display: none; }
 body.pm-on { padding-bottom: var(--pm-h); }
 
+/* Hide/restore slide transition (2026-11-02). .pm-bar starts translated to 0; adding
+   .pm-sliding-out moves it down by its own height and fades it, THEN poems.js sets the `hidden`
+   attribute once the transition ends (never abruptly -- see applyHiddenState()). Restoring does
+   the reverse: the `hidden` attribute is removed first (bar re-enters the layout already
+   translated down), then .pm-sliding-out is removed on the next frame so the transition plays
+   back into position. transform/opacity only -- cheap to animate, no layout thrash. */
+.pm-bar { transition: transform 0.32s ease, opacity 0.32s ease; }
+.pm-bar.pm-sliding-out { transform: translateY(100%); opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .pm-bar { transition: none; }
+}
+
+/* Floating restore control -- fixed bottom-right, independent of .pm-bar's own `hidden` state so
+   it stays reachable the entire time the marquee itself is hidden. */
+.pm-restore-btn {
+  position: fixed; right: 18px; bottom: 18px; z-index: 91;
+  width: 46px; height: 46px; border-radius: 50%; border: 1px solid rgba(255, 210, 74, 0.55);
+  background: rgba(5, 11, 20, 0.94); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  color: var(--qm-gold-text, #ffd24a);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  cursor: pointer; padding: 0;
+  transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+}
+.pm-restore-btn svg { width: 20px; height: 20px; }
+.pm-restore-btn:hover { box-shadow: 0 0 0 4px rgba(255, 210, 74, 0.22), 0 6px 20px rgba(0, 0, 0, 0.45); }
+.pm-restore-btn:focus-visible {
+  outline: 2px solid var(--qm-gold-text, #ffd24a); outline-offset: 2px;
+}
+.pm-restore-btn[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .pm-restore-btn { transition: none; }
+}
+/* Keep the floating button clear of mobile UI chrome (e.g. iOS Safari's own bottom bar). */
+@media (max-width: 520px) {
+  .pm-restore-btn { right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); width: 42px; height: 42px; }
+}
+
 /* The standalone bottom-left religious symbol was removed 2026-11-XX -- the bar spans full width
    on every page now, homepage included; religious identity lives only in .pm-chip below. */
 
@@ -31,6 +69,10 @@ body.pm-on { padding-bottom: var(--pm-h); }
   font: 700 1.4rem/1.1 "Noto Sans Devanagari", "Kohinoor Devanagari", "Devanagari Sangam MN", "Mangal", sans-serif;
   color: #ffd24a; letter-spacing: 0.01em; text-shadow: 0 0 18px rgba(255, 153, 51, 0.5);
 }
+/* 2026-11-02: the gold chip's own label is now server-driven (any tradition's default_label, see
+   poems.js's syncChip()) -- an Arabic label (e.g. "الله") needs its own font, set dynamically via
+   dir="rtl" (poems.js detects this from the label's own Unicode range, not a per-religion table). */
+.pm-name[dir="rtl"] { font-family: "Noto Naskh Arabic", "Geeza Pro", "Segoe UI", system-ui, sans-serif; }
 .pm-marker { margin-top: 2px; font: 600 0.74rem "Inter", system-ui, sans-serif; color: #f4d9a4; white-space: nowrap; }
 
 /* The poem surface itself: pure white background, pure black text, always -- a fixed,
@@ -55,10 +97,21 @@ body.pm-on { padding-bottom: var(--pm-h); }
   font-family: "Noto Sans Devanagari", "Kohinoor Devanagari", "Devanagari Sangam MN", "Mangal", sans-serif;
   font-size: var(--pm-hi-poem-size); line-height: 1.6;
 }
+/* 2026-11-02 (Universal Multi-Religion Marquee): Arabic (Quran, Surah Al-Fatiha) is the first
+   RTL collection. The ticker's own SCROLL direction never flips (always the same physical
+   left-to-right motion, for every language, ticker-style) -- only the text WITHIN each segment
+   shapes/orders itself per poems.js's own el.dir = currentDir() (from meta.languages[].dir,
+   server-side from text_collection_languages.script_direction). */
+.pm-seg[lang="ar"] {
+  font-family: "Noto Naskh Arabic", "Geeza Pro", "Segoe UI", system-ui, sans-serif;
+  font-size: 1.5rem; line-height: 1.7;
+}
 .pm-seg .pm-sep { color: #ff9933; padding: 0 0.9em; }
-/* poem number shown where each poem begins, so the join between two poems is obvious */
+/* poem number shown where each poem begins, so the join between two poems is obvious.
+   margin-inline-end (not margin-right) so this gap automatically lands on the correct side of the
+   badge once flexbox reverses pm-mk/text order for an RTL segment (dir="rtl" above). */
 .pm-seg .pm-mk {
-  margin-right: 1.1rem; padding: 2px 14px; border-radius: 999px; font-size: 0.82em; font-weight: 700; color: #1a1205;
+  margin-inline-end: 1.1rem; padding: 2px 14px; border-radius: 999px; font-size: 0.82em; font-weight: 700; color: #1a1205;
   background: linear-gradient(120deg, #ff8a1f, #ffd24a);
 }
 /* "Coming soon" notice for a religion with no verses yet -- a static single line, not a

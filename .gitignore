@@ -13,6 +13,8 @@ instance/
 
 # Database (never commit user data)
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 
@@ -55,7 +57,15 @@ node_modules/
 
 # Marquee poems: Poddar Hindi translations are in copyright until 1 Jan 2032.
 # Kept off the public repo; see docs/marquee_poems_archive/README.md.
-Poems/
+# Poems/christian/, Poems/hindu_original/, Poems/buddhist/, and Poems/muslim/ are carved back in
+# below -- public-domain, original-authorship, or CC-licensed-with-confirmed-conditions text only
+# (see each directory's own README.md). Poems/sikh/ stays gitignored: that research came back
+# pending_rights_review (no confirmed-safe source), so no Sikh text file exists at all yet.
+Poems/*
+!Poems/christian/
+!Poems/hindu_original/
+!Poems/buddhist/
+!Poems/muslim/
 docs/marquee_poems_archive/*
 !docs/marquee_poems_archive/README.md
 

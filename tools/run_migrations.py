@@ -37,6 +37,7 @@ def _ensure_source_tables(conn) -> None:
     import karma_core
     import perception_core
     import reactions_core
+    import religious_text_core
     import review_core
     import social_core
 
@@ -50,6 +51,8 @@ def _ensure_source_tables(conn) -> None:
     review_core.ensure_tables(conn)
     reactions_core.ensure_tables(conn)
     election_core.ensure_council_columns(conn)
+    religious_text_core.ensure_tables(conn)
+    religious_text_core.seed_builtin_collections(conn)
     conn.execute("""CREATE TABLE IF NOT EXISTS profile_change_requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, fields_json TEXT NOT NULL,
         reason TEXT, status TEXT NOT NULL DEFAULT 'pending', decided_by INTEGER, decided_at TEXT,

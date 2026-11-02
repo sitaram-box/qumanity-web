@@ -59,6 +59,7 @@ import qmail_core
 import qoin_core
 import reactions_core
 import recovery_core
+import religious_text_core
 import review_core
 import social_core
 import timebox_core
@@ -3573,92 +3574,29 @@ def _marquee_flag():
     return {"marquee_enabled": QM_MARQUEE_ENABLED}
 
 
-# One JSON file per language per religion-content-source in Poems/<dir>/, each a list of {id,
-# marker, text} with the same ids in the same order within that source. Personalized by the
-# signed-in member's users.religion_belief (2026-10-28, Part 4 of the homepage-redesign brief).
-# A LOGGED-OUT visitor is never assigned a religion (2026-11-XX correction -- see
-# api_poems_meta()'s "anonymous" branch): no default, no inferred symbol, no inferred content.
+# Every religion's verses now live in religious_text_core's DB-backed library (traditions ->
+# collections -> per-language entries), not flat Poems/<dir>/*.json read directly by this file --
+# see religious_text_core.py's own module docstring for the full rationale. Poems/ still holds the
+# actual JSON text (religious_text_core imports it once, at boot, into SQLite) so it remains a
+# valid interchange format, and every existing README.md under Poems/<dir>/ is still the source of
+# truth for a given collection's own rights story.
 #
-# Only religions with a confirmed public-domain, cleanly-licensed, or newly-written-and-uncopied
-# text are listed here; every other religion_belief value (muslim/sikh/buddhist/jain/other/
-# prefer_not_to_say) shows "coming soon" (api_poems_meta's coming_soon branch) rather than nothing.
-#
-# "hindu" has TWO possible content sources, resolved by _poems_dir_for() below, never both at
-# once: `dir` (Poems/hindu/) is reserved for a future rights-cleared Vinaya Patrika edition --
-# still empty today, the Hindi translation previously used was pulled from this repository for an
-# active copyright reason, see docs/marquee_poems_archive/README.md -- it stays wired up under the
-# same file names so it needs no code change to re-enable once a cleanly-licensed translation is
-# dropped in. `fallback_dir` (Poems/hindu_original/) holds a small collection of newly-written
-# Hindi Ram-bhakti poems (2026-11-01) -- original composition, not copied, translated, adapted, or
-# closely paraphrased from the removed Poddar translation or any other copyrighted source; labeled
-# distinctly in the UI ("मौलिक राम-भक्ति कविताएँ," never "Vinaya Patrika") so the two are never
-# confused. The fallback is used automatically whenever the primary `dir` has no files yet, and
-# stops being used automatically the moment a real rights-cleared edition is dropped into `dir` --
-# no code change needed either way.
+# 2026-11-02 (owner product decision, reversing the 2026-11-XX privacy-driven anonymous-neutral
+# behavior, then extended the same day into the Universal Multi-Religion Marquee): the Marquee is
+# a PUBLIC part of the website's identity and must be visible by default to everyone, including
+# logged-out visitors and any signed-in member who hasn't chosen a religion yet.
+# DEFAULT_MARQUEE_RELIGION below is the fallback used in exactly those two cases (and defensively
+# for a stored value that somehow isn't a real RELIGION_BELIEF_VALUES entry) -- never for a
+# signed-in member who HAS explicitly chosen a real, recognized religion: that member's PROFILE
+# religion is still only ever their own INITIAL reading-religion default (ending in "coming soon"
+# if it has no content yet) -- see _marquee_religion_for_session()'s own docstring. From there, the
+# reading religion is independent of the profile: a member (or an anonymous visitor) may pick any
+# OTHER available tradition via the Religion Selector (poems.js), persisted client-side only
+# (localStorage), sent back on every request as an explicit ?religion=/&lang= query parameter that
+# this file allowlist-checks against religious_text_core.list_available_traditions() -- never
+# trusted blindly, and NEVER written back to users.religion_belief (see api_poems_meta()).
+DEFAULT_MARQUEE_RELIGION = "hindu"
 POEMS_DIR = BASE_DIR / "Poems"
-RELIGION_MARQUEE_SOURCES = {
-    "hindu": {
-        "dir": "hindu",                              # reserved for a future rights-cleared Vinaya Patrika edition -- still empty
-        "fallback_dir": "hindu_original",             # newly-written, uncopied Ram-bhakti poems -- see Poems/hindu_original/README.md
-        "title": "विनय पत्रिका — गोस्वामी तुलसीदास",
-        "fallback_title": "मौलिक राम-भक्ति कविताएँ",
-        "languages": {
-            "hi": ("poems_hindi.json", "हिन्दी"),
-            "en": ("poems_english.json", "English"),
-        },
-    },
-    "christian": {
-        # Psalms, King James Version -- public domain worldwide (1611; the Crown's printing
-        # patent is a UK-only restriction on commercial printing, not a copyright, and doesn't
-        # reach this non-commercial, non-UK-printed use). See Poems/christian/README.md.
-        "dir": "christian",
-        "title": "Psalms, King James Version",
-        "languages": {
-            "en": ("psalms_kjv_en.json", "English"),
-        },
-    },
-}
-_poem_cache = {}
-
-
-def _poems_dir_for(religion):
-    """(actual_dir, title) -- whichever of this religion's content sources genuinely has files on
-    disk right now: the primary (rights-cleared) one if it does, else `fallback_dir` if that one
-    does, else (None, None). Checked fresh against the filesystem on every call (cheap -- at most
-    one directory listing), never cached, so dropping a real rights-cleared edition into `dir`
-    later takes effect immediately with no code change and no restart-dependent cache to clear --
-    exactly the re-enablement story docs/marquee_poems_archive/README.md already promises."""
-    source = RELIGION_MARQUEE_SOURCES.get(religion)
-    if not source:
-        return None, None
-    primary = POEMS_DIR / source["dir"]
-    if primary.is_dir() and any(primary.glob("*.json")):
-        return source["dir"], source.get("title", "")
-    fallback_dir = source.get("fallback_dir")
-    if fallback_dir and (POEMS_DIR / fallback_dir).is_dir() and any((POEMS_DIR / fallback_dir).glob("*.json")):
-        return fallback_dir, source.get("fallback_title", "")
-    return None, None
-
-
-def _poems(religion, lang):
-    source = RELIGION_MARQUEE_SOURCES.get(religion)
-    if not source or lang not in source["languages"]:
-        return None
-    actual_dir, _title = _poems_dir_for(religion)
-    if not actual_dir:
-        return None
-    cache_key = (religion, actual_dir, lang)
-    if cache_key not in _poem_cache:
-        path = POEMS_DIR / actual_dir / source["languages"][lang][0]
-        _poem_cache[cache_key] = sorted(_load_json(path), key=lambda p: p["id"]) if path.exists() else None
-    return _poem_cache[cache_key]
-
-
-def _poem_languages(religion):
-    source = RELIGION_MARQUEE_SOURCES.get(religion)
-    if not source:
-        return []
-    return [{"code": c, "label": label, "available": True} for c, (_, label) in source["languages"].items() if _poems(religion, c)]
 
 
 # RELIGION_HOME_SYMBOLS removed 2026-11-XX -- the standalone homepage symbol no longer exists.
@@ -3669,60 +3607,95 @@ def _poem_languages(religion):
 
 
 def _marquee_religion_for_session():
-    """(religion, user_row) for a SIGNED-IN member only. Returns (None, None) for a logged-out
-    visitor -- callers must check session.get("user_id") separately (see api_poems_meta) to tell
-    "anonymous" apart from "signed-in but hidden/no religion chosen" below; both resolve religion
-    =None here on purpose, since neither should ever see another member's, or a default, religion's
-    content (2026-11-XX: removed the previous DEFAULT_MARQUEE_RELIGION="hindu" anonymous default --
-    a logged-out visitor has not declared a religion and must never be assigned one). A signed-in
-    member's religion_belief is None when they hid the marquee (users.hide_marquee, migrations/
-    033_marquee_hide_pref.py) or haven't chosen a spiritual path yet. A signed-in member whose
-    religion_belief names a religion we have no verses source for yet gets THAT religion back
-    (not silently swapped to another religion's), so the caller can tell them their own path
-    specifically is coming soon."""
+    """(religion, user_row). `religion` is now NEVER None -- a logged-out visitor, a signed-in
+    member who hasn't chosen a spiritual path yet, and (defensively) a stored value outside
+    RELIGION_BELIEF_VALUES all resolve to DEFAULT_MARQUEE_RELIGION ("hindu"), per the 2026-11-02
+    public-Marquee decision. A signed-in member whose religion_belief names a REAL, recognized
+    religion always gets THAT religion back verbatim, even if it has no verses source yet (the
+    caller reports "coming soon" for THEIR OWN path, never silently swapping them to Hindu) --
+    unchanged from before this change.
+
+    Deliberately does NOT look at users.hide_marquee here any more: whether the Marquee is
+    currently shown or hidden is now a display-layer concern (see api_poems_meta()'s own "hidden"
+    field and poems.js's localStorage-first hide/restore control), fully decoupled from WHICH
+    religion's content gets resolved -- a member who hid the Marquee still has real, correct
+    content ready to show the instant they restore it, rather than needing a fresh fetch."""
     if not session.get("user_id"):
-        return None, None
+        return DEFAULT_MARQUEE_RELIGION, None
     conn = get_db()
     user = _current_user_row(conn)
     conn.close()
-    if not user or user["hide_marquee"] or not user["religion_belief"]:
-        return None, user
-    return user["religion_belief"], user
+    if not user:
+        return DEFAULT_MARQUEE_RELIGION, None
+    religion = user["religion_belief"]
+    if not religion or religion not in RELIGION_BELIEF_VALUES:
+        return DEFAULT_MARQUEE_RELIGION, user
+    return religion, user
 
 
 @app.route("/api/poems/meta")
 def api_poems_meta():
+    """2026-11-02: the Marquee is public by default (owner decision) -- this route now ALWAYS
+    resolves real content (via _marquee_religion_for_session()'s own Hindu-default fallback for
+    an anonymous visitor or a no-religion member) and reports "hidden" as an independent signal,
+    never a content-suppressing branch. "hidden" reflects ONLY the signed-in member's own
+    users.hide_marquee preference (always False for an anonymous visitor, who has no such row) --
+    it is a hint the client may use to seed its own localStorage-based show/hide state on first
+    load, never a reason for this route itself to omit religion/content fields. The actual
+    show/hide UI decision now lives entirely in poems.js (localStorage-first, see its own
+    comments), decoupled from this response.
+
+    Universal Multi-Religion Marquee (same day): this route still takes no religion/language
+    parameter from the URL PATH (unchanged route, unchanged signature) but now reads two OPTIONAL
+    query-string hints, `?religion=` and `?lang=`, which drive the independent reading-religion/
+    reading-language selection (poems.js's Religion/Language Selector) -- NEVER the member's own
+    profile religion, which is still resolved purely server-side exactly as before. Both are
+    allowlist-checked against religious_text_core.list_available_traditions()/the resolved
+    collection's own real languages before use; any value outside that allowlist (missing, stale,
+    tampered, or simply a tradition with no content yet) is silently ignored and this falls back
+    to the member's own profile-based default -- never an error, per the "missing collection
+    fallback" requirement. No filesystem path is ever constructed from either parameter (that
+    responsibility moved entirely into religious_text_core, which only ever does DB lookups).
+
+    Cache-Control is explicit and non-cacheable (private, no-store): this response is
+    personalized per signed-in session (and now also per requested reading-religion query
+    parameter) via the Flask session cookie and query string, and must never be served by a
+    shared/CDN cache to a different visitor."""
     if not QM_MARQUEE_ENABLED:
         return jsonify({"error": "Poems marquee is disabled"}), 404
-    if not session.get("user_id"):
-        # A logged-out visitor is never assigned a religion -- no default, no inferred identity,
-        # no inferred content (2026-11-XX privacy fix). poems.js's showAnonymousNeutral() renders
-        # the neutral "Sign in to see your own marquee" state from this field alone.
-        return jsonify({"anonymous": True})
-    religion, user = _marquee_religion_for_session()
-    if religion is None:
-        return jsonify({"hidden": True})
-    langs = _poem_languages(religion)
-    if not langs:
-        return jsonify({"coming_soon": True, "religion": religion, "hidden": False})
-    count = min(len(_poems(religion, l["code"])) for l in langs)
-    _actual_dir, title = _poems_dir_for(religion)
-    result = {"count": count, "languages": langs, "personal": False, "religion": religion, "title": title}
-    if user:
-        have = {l["code"] for l in langs}
-        # the user's own languages; ones without a poem translation yet are listed as "coming soon"
-        result["languages"] = [
-            {"code": u["code"], "label": u["native"], "available": u["code"] in have} for u in _user_languages(user)
-        ]
-        result["personal"] = True
-        result["default"] = next((u["code"] for u in _user_languages(user) if u["code"] in have), langs[0]["code"])
-        # Explicit, not just "absent": poems.js's browser-local hide flag (qm_poem_hidden, set
-        # whenever a signed-in or logged-out visitor sees the marquee hidden) can only be safely
-        # cleared on a response that POSITIVELY confirms this signed-in member is not hidden --
-        # the field being merely absent (as it is for a logged-out visitor, who has no
-        # hide_marquee row to check) must never be read as "not hidden" (2026-11-01).
-        result["hidden"] = False
-    return jsonify(result)
+    profile_religion, user = _marquee_religion_for_session()
+    server_hidden = bool(user and user["hide_marquee"])
+    requested_religion = request.args.get("religion") or ""
+    requested_language = request.args.get("lang") or None
+    conn = get_db()
+    try:
+        available = religious_text_core.list_available_traditions(conn)
+        available_codes = {a["code"] for a in available}
+        effective_religion = requested_religion if requested_religion in available_codes else profile_religion
+        label = religious_text_core.tradition_label(conn, effective_religion)
+        resolved = religious_text_core.resolve_collection(conn, effective_religion, requested_language)
+        # Lets poems.js scope its reading-preference localStorage key per signed-in member (their
+        # own private_id_9digit, the same "Private Code" already shown to them on their own
+        # account -- never a secret from themselves, and never sent anywhere but back to this
+        # same origin) so switching accounts on a shared browser doesn't leak one member's
+        # Reading Tradition choice onto another's session (2.6's own optional scoping
+        # recommendation). "anon" for a logged-out visitor, who has no account to scope by.
+        reader_scope = user["private_id_9digit"] if user else "anon"
+        base = {"religion": effective_religion, "profile_religion": profile_religion, "label": label,
+                "hidden": server_hidden, "available_religions": available, "reader_scope": reader_scope}
+        if not resolved:
+            resp = jsonify({**base, "coming_soon": True})
+            resp.headers["Cache-Control"] = "private, no-store"
+            return resp
+        count = len(religious_text_core.entries(conn, resolved["collection_id"], resolved["resolved_language"]))
+    finally:
+        conn.close()
+    result = {**base, "count": count, "languages": resolved["languages"], "personal": bool(user),
+              "title": resolved["title"], "default": resolved["resolved_language"],
+              "attribution": resolved["attribution"], "is_original_work": resolved["is_original_work"]}
+    resp = jsonify(result)
+    resp.headers["Cache-Control"] = "private, no-store"
+    return resp
 
 
 @app.route("/api/marquee/hide", methods=["POST"])
@@ -3756,18 +3729,36 @@ def api_marquee_show():
 
 @app.route("/api/poems/<lang>/<int:index>")
 def api_poem(lang, index):
-    """One poem by 0-based position (the same position is the same poem in every language) in
-    the signed-in member's own religion's source -- see _marquee_religion_for_session."""
+    """One poem by 0-based position (the same position is the same poem in every language) from
+    the caller's resolved reading-religion's source -- a signed-in member's own profile religion,
+    or the public DEFAULT_MARQUEE_RELIGION default for anyone else (anonymous, or no religion
+    chosen yet), UNLESS overridden by an explicit, allowlisted `?religion=` query parameter (the
+    independent reading-religion selection -- see api_poems_meta()'s own docstring for the full
+    allowlist/fallback rule, identical here). `lang`/`index` are still the ONLY URL-path
+    parameters (unchanged route signature -- see tests/test_poems_marquee.py's own
+    api_poem-signature security check) and are still resolved against ONLY the resolved
+    collection's own real language/entry set -- never a client-supplied filesystem path, here or
+    in religious_text_core, which only ever does DB lookups."""
     if not QM_MARQUEE_ENABLED:
         return jsonify({"error": "Poems marquee is disabled"}), 404
-    religion, _user = _marquee_religion_for_session()
-    poems = _poems(religion, lang)
+    profile_religion, _user = _marquee_religion_for_session()
+    requested_religion = request.args.get("religion") or ""
+    conn = get_db()
+    try:
+        available_codes = {a["code"] for a in religious_text_core.list_available_traditions(conn)}
+        effective_religion = requested_religion if requested_religion in available_codes else profile_religion
+        resolved = religious_text_core.resolve_collection(conn, effective_religion, lang)
+        if not resolved:
+            return jsonify({"error": "Poem not found"}), 404
+        poems = religious_text_core.entries(conn, resolved["collection_id"], lang)
+    finally:
+        conn.close()
     if not poems or not 0 <= index < len(poems):
         return jsonify({"error": "Poem not found"}), 404
     poem = poems[index]
     resp = jsonify({"index": index, "id": poem["id"], "marker": poem["marker"], "text": poem["text"]})
-    # Content now varies by the caller's own session (religion/language), so it must never be
-    # cached as a single shared "public" response the way the single-source version was.
+    # Content now varies by the caller's own session AND the requested reading-religion/language,
+    # so it must never be cached as a single shared "public" response.
     resp.headers["Cache-Control"] = "private, max-age=3600"
     return resp
 

@@ -1,0 +1,27 @@
+[
+  {
+    "id": 1,
+    "marker": "Dhammapada 1.1",
+    "text": "Manopubbaṅgamā dhammā, manoseṭṭhā manomayā; Manasā ce paduṭṭhena, bhāsati vā karoti vā; Tato naṁ dukkhamanveti, cakkaṁva vahato padaṁ."
+  },
+  {
+    "id": 2,
+    "marker": "Dhammapada 1.2",
+    "text": "Manopubbaṅgamā dhammā, manoseṭṭhā manomayā; Manasā ce pasannena, bhāsati vā karoti vā; Tato naṁ sukhamanveti, chāyāva anapāyinī."
+  },
+  {
+    "id": 3,
+    "marker": "Dhammapada 1.3",
+    "text": "Akkocchi maṁ avadhi maṁ, ajini maṁ ahāsi me; Ye ca taṁ upanayhanti, veraṁ tesaṁ na sammati."
+  },
+  {
+    "id": 4,
+    "marker": "Dhammapada 1.4",
+    "text": "Akkocchi maṁ avadhi maṁ, ajini maṁ ahāsi me; Ye ca taṁ nupanayhanti, veraṁ tesūpasammati."
+  },
+  {
+    "id": 5,
+    "marker": "Dhammapada 1.5",
+    "text": "Na hi verena verāni, sammantīdha kudācanaṁ; Averena ca sammanti, esa dhammo sanantano."
+  }
+]
