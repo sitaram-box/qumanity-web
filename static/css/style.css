@@ -309,8 +309,20 @@ html, body {
   background: var(--qm-panel-bg);
   color: var(--qm-text);
   cursor: pointer;
+  /* Global button fix (2026-11-03): .qm-btn is the one button class used across every page
+     (home, about, dashboard, register, Q-Map, QMail...), on both real <button> elements (never
+     underlined by default) and <a class="qm-btn"> anchors-as-buttons (underlined by default
+     unless overridden) -- this rule was previously missing here and only patched page-by-page
+     (about.css's .ab-hero-cta .qm-btn, style.css's own .qm-header-actions a.qm-btn, etc.),
+     leaving every other a.qm-btn on the site underlined. One rule on the base class, in every
+     state, covers all of them instead of requiring a new override per page. */
+  text-decoration: none;
   transition: background 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
 }
+.qm-btn:hover,
+.qm-btn:focus,
+.qm-btn:active,
+.qm-btn:visited { text-decoration: none; }
 .qm-btn:hover { background: rgba(255, 153, 51, 0.12); border-color: #B8860B; }
 .qm-btn:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.4); }
 .qm-btn:disabled:hover { background: var(--qm-panel-bg); border-color: var(--qm-border); }

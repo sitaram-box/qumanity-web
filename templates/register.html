@@ -8,9 +8,14 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/india_map.css') }}" />
+  <!-- Phase A completion, 2026-11-03: extends the homepage's Cosmic Design System to Registration.
+       Loaded last so it can scope-override register.css's own tokens for body.qm-cosmic-register
+       only -- see cosmic.css's own header comment. The form's own action/method/field names/
+       validation/consent logic below are completely untouched by this stylesheet. -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/cosmic.css') }}" />
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
 </head>
-<body data-logo-nav="confirm-exit" data-allow-provisional-locations="{{ 'true' if allow_provisional_locations else 'false' }}">
+<body class="qm-cosmic-register" data-logo-nav="confirm-exit" data-allow-provisional-locations="{{ 'true' if allow_provisional_locations else 'false' }}">
   <header class="qm-header">
     <a href="{{ url_for('index') }}" style="display:contents">
       <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />

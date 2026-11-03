@@ -7,6 +7,10 @@
   <meta name="description" content="Qumanity — quantum plus humanity: a nested, transparent planetary ledger of Space, Time and Consciousness — identity, timelines, the Qoin economy, Quantum Punch governance and more." />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/about.css') }}" />
+  <!-- Phase A completion, 2026-11-03: extends the homepage's Cosmic Design System to this page.
+       Loaded last so it can scope-override about.css's own tokens for body.qm-about only -- see
+       cosmic.css's own header comment; this never touches any page outside this authorized set. -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/cosmic.css') }}" />
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
 </head>
 <body class="qm-about">

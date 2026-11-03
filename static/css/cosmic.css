@@ -357,3 +357,164 @@ body.hm .pm-restore-btn { box-shadow: var(--qm-glow-gold); }
 @media (prefers-reduced-motion: reduce) {
   .qm-cosmic-canvas { opacity: 0.6; }
 }
+
+/* =================================================================================================
+   PHASE A COMPLETION (2026-11-03) — extends the same design system to About, Dashboard, Register.
+   Same technique as the homepage section above: a scoped `{ --qm-token: ... }` re-declaration on
+   each page's own body class, so style.css/about.css/dashboard.css/register.css's existing
+   `var(--qm-...)` usage repaints dark automatically, with zero edits to those three files beyond
+   the handful of genuinely hardcoded (non-token) colors patched individually below. None of this
+   section can affect Q-Map, QMail, or any other page, because none of them load this stylesheet.
+   ================================================================================================= */
+
+/* ---------------------------------------------------------------------------------------------
+   12. SHARED SCOPED DARK-THEME TOKEN OVERRIDE (About / Dashboard / Register)
+   --------------------------------------------------------------------------------------------- */
+body.qm-about,
+body.qm-cosmic-dashboard,
+body.qm-cosmic-register {
+  --qm-bg: var(--qm-bg-deep);
+  --qm-panel-bg: var(--qm-surface-1);
+  --qm-text: var(--qm-text-primary);
+  --qm-text-dim: var(--qm-text-muted);
+  --qm-border: var(--qm-cosmic-border);
+  --qm-input-bg: rgba(10, 10, 26, 0.55);
+  --qm-input-border: var(--qm-cosmic-border);
+  --qm-navy: var(--qm-bg-deep);
+  --qm-gold-text: var(--qm-accent-gold);
+  --qm-saffron: var(--qm-accent-saffron);
+  --qm-gold: var(--qm-accent-gold);
+  background:
+    radial-gradient(900px 600px at 15% -5%, rgba(255, 153, 51, 0.08), transparent 60%),
+    radial-gradient(1000px 700px at 85% 10%, rgba(212, 175, 55, 0.06), transparent 60%),
+    linear-gradient(180deg, var(--qm-bg-deep) 0%, var(--qm-bg-mid) 45%, var(--qm-bg-deep) 100%);
+  background-attachment: fixed;
+  color: var(--qm-text-primary);
+}
+body.qm-about .ab-card,
+body.qm-about .ab-stats > div,
+body.qm-cosmic-dashboard .qm-dash-card,
+body.qm-cosmic-dashboard .dq-modal-box,
+body.qm-cosmic-dashboard .bd,
+body.qm-cosmic-register .qm-panel {
+  box-shadow: var(--qm-shadow-deep);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   13. DASHBOARD — the handful of genuinely hardcoded (non-token) colors in dashboard.css, all in
+   the `.bd-*` board/chat-feed component (templates/dashboard.html's `.bd` container -- the main
+   Board feed, Family Tree chat panel, and Personal/group chats all reuse this one component).
+   --------------------------------------------------------------------------------------------- */
+body.qm-cosmic-dashboard .bd-feed,
+body.qm-cosmic-dashboard .bd-foot { background: rgba(10, 10, 26, 0.35); }
+body.qm-cosmic-dashboard .bd-empty-prompt {
+  background: rgba(212, 175, 55, 0.06);
+  border-color: var(--qm-cosmic-border);
+  color: var(--qm-text-muted);
+}
+body.qm-cosmic-dashboard .bd-post,
+body.qm-cosmic-dashboard .bd-msg {
+  background: var(--qm-surface-2);
+  border-color: var(--qm-cosmic-border-soft);
+  color: var(--qm-text-primary);
+}
+body.qm-cosmic-dashboard .bd-post.is-mine,
+body.qm-cosmic-dashboard .bd-msg.is-mine {
+  background: rgba(255, 153, 51, 0.16);
+  border-color: rgba(255, 153, 51, 0.3);
+}
+body.qm-cosmic-dashboard .bd-toggle {
+  background: rgba(212, 175, 55, 0.14);
+  color: var(--qm-accent-gold);
+  border-color: var(--qm-accent-saffron);
+}
+body.qm-cosmic-dashboard .bd-toggle:hover { background: var(--qm-accent-saffron); color: var(--qm-bg-deep); }
+/* .bd-sec (the sticky "OPEN FOR LIVE VOTING"/category header inside a board feed) was a near-
+   solid cream band (rgba(250,247,241,0.95)) -- not caught by the hex-only sweep above since it's
+   written as rgba(), found instead during live browser verification. */
+body.qm-cosmic-dashboard .bd-sec { background: rgba(10, 10, 26, 0.92); border-color: var(--qm-cosmic-border-soft); }
+body.qm-about .ab-toc { background: rgba(10, 10, 26, 0.92); }
+
+/* The dash-tab bar (.qm-dash-tabs) already ships dark (#2A3441, gold active underline) --
+   left as-is; this just adds the same restrained luminous edge every other cosmic surface has. */
+body.qm-cosmic-dashboard .qm-dash-tabs { box-shadow: var(--qm-shadow-deep); border: 1px solid var(--qm-cosmic-border-soft); }
+body.qm-cosmic-dashboard .qm-dash-tab.is-active { text-shadow: 0 0 12px rgba(255, 215, 0, 0.35); }
+
+/* Family Tree: .ft-unit-rect/.ft-single-rect/.ft-card text etc. already read var(--qm-panel-bg)/
+   var(--qm-text)/var(--qm-border) (dashboard.css) -- they repaint dark automatically. This adds
+   only the restrained glow the brief asks for on the viewer's own node. */
+body.qm-cosmic-dashboard .ft-single-rect.is-viewer,
+body.qm-cosmic-dashboard .ft-unit-rect.is-self { filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.45)); }
+body.qm-cosmic-dashboard .ft-svg-wrap { background: rgba(10, 10, 26, 0.25); border-radius: var(--qm-radius-lg); }
+
+/* ---------------------------------------------------------------------------------------------
+   14. REGISTRATION — the handful of genuinely hardcoded "white card" colors in register.css
+   (.qm-dropdown-row, .qm-private-col, the Global/Private screen's own field backgrounds and
+   section-header text colors, all pre-dating this theme and written for a light page).
+   --------------------------------------------------------------------------------------------- */
+body.qm-cosmic-register .qm-dropdown-row,
+body.qm-cosmic-register .qm-private-col,
+body.qm-cosmic-register #screen-global .qm-dropdown-field select,
+body.qm-cosmic-register #screen-private .qm-field input,
+body.qm-cosmic-register #screen-private .qm-field select {
+  background: var(--qm-input-bg);
+  border-color: var(--qm-cosmic-border);
+  color: var(--qm-text-primary);
+}
+body.qm-cosmic-register #screen-global .qm-panel-subhead,
+body.qm-cosmic-register #screen-private .qm-form-section-title,
+body.qm-cosmic-register #screen-private .qm-field > span {
+  color: var(--qm-text-primary);
+}
+body.qm-cosmic-register #screen-private .qm-field input::placeholder,
+body.qm-cosmic-register .qm-pin-hint { color: var(--qm-text-muted); }
+body.qm-cosmic-register .qm-step-index { border-color: var(--qm-cosmic-border); color: var(--qm-text-muted); }
+body.qm-cosmic-register .qm-step.is-active .qm-step-index {
+  border-color: var(--qm-accent-gold); background: var(--qm-accent-gold); color: var(--qm-bg-deep);
+  box-shadow: var(--qm-glow-gold);
+}
+body.qm-cosmic-register .qm-steps { background: rgba(10, 10, 26, 0.4); border-bottom: 1px solid var(--qm-cosmic-border-soft); }
+
+/* ---------------------------------------------------------------------------------------------
+   16. FALLBACK: unstyled form controls. A real, non-hypothetical gap found during browser
+   verification -- dozens of inputs/selects/textareas across the Dashboard (election-history
+   dropdowns, the Family Tree wizard's many name fields, board/announcement/report text areas,
+   the Qmail username field, etc.) and a few in Register's family/spouse fields carry NO class at
+   all, so they render with the plain browser-default white background and black text. That was
+   barely noticeable against the old warm-paper light page; against the dark page it's a glaring
+   white rectangle. Rather than hunt down and individually class ~70 scattered fields across
+   dashboard.html/register.html (far riskier -- touching that many lines of a functional,
+   untouched-on-purpose template), one low-specificity, element-type fallback themes anything
+   that isn't already styled by a more specific rule. Every already-styled input/select/textarea
+   in this codebase is reached through at least one class selector (`.qm-field input`, `#screen-
+   private .qm-field select`, etc.), which is equal-or-higher specificity and always wins
+   regardless of this rule's position in the cascade -- confirmed by inspecting every such rule in
+   dashboard.css/register.css before adding this. */
+body.qm-cosmic-dashboard input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+body.qm-cosmic-dashboard select,
+body.qm-cosmic-dashboard textarea,
+body.qm-cosmic-register input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+body.qm-cosmic-register select,
+body.qm-cosmic-register textarea {
+  background: var(--qm-input-bg);
+  border: 1px solid var(--qm-input-border);
+  border-radius: var(--qm-radius-sm);
+  color: var(--qm-text-primary);
+  font-family: inherit;
+  padding: 8px 10px;
+}
+body.qm-cosmic-dashboard input::placeholder,
+body.qm-cosmic-dashboard textarea::placeholder,
+body.qm-cosmic-register input::placeholder,
+body.qm-cosmic-register textarea::placeholder { color: var(--qm-text-muted); opacity: 1; }
+body.qm-cosmic-dashboard select option,
+body.qm-cosmic-register select option { color: #0a0a1a; }
+
+/* ---------------------------------------------------------------------------------------------
+   17. RESPONSIVE spot-fixes for the three newly-themed pages (desktop/tablet already inherit
+   correctly from each page's own existing breakpoints; these only correct contrast/overflow
+   details specific to the dark re-theme).
+   --------------------------------------------------------------------------------------------- */
+@media (max-width: 620px) {
+  body.qm-cosmic-register .qm-steps { overflow-x: auto; }
+}

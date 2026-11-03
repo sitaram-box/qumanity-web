@@ -11,9 +11,14 @@
        Sub-continent wizard the registration page and the /location-select demo already use. -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/india_map.css') }}" />
+  <!-- Phase A completion, 2026-11-03: extends the homepage's Cosmic Design System to the
+       Dashboard. Loaded last so it can scope-override dashboard.css's own tokens for
+       body.qm-cosmic-dashboard only -- see cosmic.css's own header comment; this never touches
+       Q-Map, QMail, or any other authenticated page that doesn't load this stylesheet. -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/cosmic.css') }}" />
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
 </head>
-<body>
+<body class="qm-cosmic-dashboard">
   <header class="qm-header">
     <a href="{{ url_for('index') }}" style="display:contents">
       {% include "partials/_logo_inline.html" %}
