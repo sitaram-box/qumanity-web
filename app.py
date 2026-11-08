@@ -3870,6 +3870,19 @@ def api_location_observation_withdraw_overpass():
     return jsonify(result)
 
 
+@app.route("/future")
+def future_page():
+    """Public Qumanity 3D Future Vision Experience (2026-11-08) -- a cinematic, four-scene
+    narrative page (present fragmentation -> the Qumanity Tree -> a unified 2126 -> "you are the
+    architect") built with Three.js + GSAP. Public, no login required -- same convention as
+    qmap_page() above: anonymous visitors see the full journey, a signed-in member additionally
+    gets an "Enter Your Dashboard" final action instead of "Register to Begin". This route does
+    nothing but render a template; it reads the session only to pick which final-scene CTA to
+    show, makes no database query and no database write, and cannot be reached by POST -- simply
+    opening this page never creates or changes any record."""
+    return render_template("future.html", is_authenticated=bool(session.get("user_id")))
+
+
 @app.route("/qmap")
 def qmap_page():
     """Public Q-Map page (2026-11-02): renders the North West Delhi OSM pilot dataset

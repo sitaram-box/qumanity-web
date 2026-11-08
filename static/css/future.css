@@ -1,0 +1,157 @@
+/* future.css — Qumanity 3D Future Vision Experience (templates/future.html only, 2026-11-08).
+   Uses the mandatory cosmic design tokens from cosmic.css's unscoped :root block directly
+   (var(--qm-bg-deep), var(--qm-accent-gold), etc.) -- no new/competing color system, and no
+   scoped body-class override added to cosmic.css itself (this page needs none of the generic
+   --qm-bg/--qm-text aliases cosmic.css re-declares for existing light-themed component classes;
+   it is its own bespoke, always-dark page). */
+
+html, body.qmf-body {
+  margin: 0;
+  background: var(--qm-bg-deep);
+  color: var(--qm-text-primary);
+  overflow-x: hidden;
+}
+
+/* ---- Fixed 3D stage, pinned behind the scrolling scene text ---- */
+.qmf-canvas-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(1200px 800px at 50% 30%, rgba(26, 26, 58, 0.55), transparent 60%),
+    var(--qm-bg-deep);
+}
+#qmf-canvas { display: block; width: 100%; height: 100%; }
+
+.qmf-fallback {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+}
+.qmf-fallback-orb {
+  width: 46vmin; height: 46vmin; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(245, 245, 220, 0.22), rgba(212, 175, 55, 0.18) 45%, rgba(10, 10, 26, 0.9) 75%);
+  box-shadow: 0 0 120px rgba(212, 175, 55, 0.25), inset 0 0 60px rgba(0, 0, 0, 0.5);
+  animation: qmf-orb-breathe 6s ease-in-out infinite;
+}
+@keyframes qmf-orb-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.03); opacity: 1; }
+}
+
+/* ---- Skip control -- mandatory, always visible, above everything ---- */
+.qmf-skip {
+  position: fixed; top: var(--qm-space-4); right: var(--qm-space-4); z-index: 40;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 18px; border-radius: var(--qm-radius-pill);
+  background: rgba(10, 10, 26, 0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--qm-cosmic-border);
+  color: var(--qm-text-primary); font: 600 0.85rem/1 var(--qm-font-body);
+  text-decoration: none; letter-spacing: 0.02em;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.qmf-skip:hover, .qmf-skip:focus-visible { background: rgba(212, 175, 55, 0.18); border-color: var(--qm-accent-gold); }
+
+.qmf-home-link {
+  position: fixed; top: var(--qm-space-4); left: var(--qm-space-4); z-index: 40;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 42px; height: 42px; border-radius: var(--qm-radius-circle);
+  background: rgba(10, 10, 26, 0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--qm-cosmic-border);
+}
+.qmf-home-link img { width: 22px; height: 22px; display: block; }
+
+/* ---- Progress dots ---- */
+.qmf-progress {
+  position: fixed; top: 50%; right: var(--qm-space-6); transform: translateY(-50%); z-index: 40;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.qmf-progress-dot {
+  width: 10px; height: 10px; border-radius: 50%; padding: 0; cursor: pointer;
+  background: rgba(245, 245, 220, 0.25); border: 1px solid var(--qm-cosmic-border-soft);
+  transition: background 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+}
+.qmf-progress-dot.is-active {
+  background: var(--qm-accent-gold); transform: scale(1.3);
+  box-shadow: var(--qm-glow-gold);
+}
+
+/* ---- Scenes: each a full-viewport section of normal document flow -- scrolling is native
+   browser scrolling, never hijacked. ---- */
+.qmf-journey { position: relative; z-index: 10; }
+.qmf-scene {
+  min-height: 100vh;
+  display: flex; align-items: center;
+  padding: var(--qm-space-16) var(--qm-space-8);
+}
+.qmf-scene-copy {
+  max-width: 560px;
+  opacity: 0; transform: translateY(18px);
+  transition: opacity 0.9s ease, transform 0.9s ease;
+}
+.qmf-scene.is-active .qmf-scene-copy { opacity: 1; transform: translateY(0); }
+
+.qmf-eyebrow {
+  margin: 0 0 var(--qm-space-2);
+  font: 600 0.78rem/1 var(--qm-font-body); letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--qm-accent-saffron);
+}
+.qmf-scene-text {
+  margin: 0 0 var(--qm-space-4);
+  font: 600 clamp(1.8rem, 4.2vw, 3rem)/1.22 var(--qm-font-display);
+  color: var(--qm-text-primary);
+  text-shadow: 0 2px 30px rgba(0, 0, 0, 0.55);
+}
+.qmf-scene-sub {
+  margin: 0 0 var(--qm-space-6);
+  font: 400 1rem/1.6 var(--qm-font-body); color: var(--qm-text-muted); max-width: 46ch;
+}
+
+.qmf-continue {
+  margin-top: var(--qm-space-6);
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: 1px solid var(--qm-cosmic-border-soft); color: var(--qm-text-muted);
+  padding: 8px 16px; border-radius: var(--qm-radius-pill); font: 500 0.85rem var(--qm-font-body);
+  cursor: pointer; transition: border-color 0.2s ease, color 0.2s ease;
+}
+.qmf-continue:hover, .qmf-continue:focus-visible { border-color: var(--qm-accent-gold); color: var(--qm-accent-gold); }
+
+/* ---- Final scene: CTA + illustrative dashboard-preview panel (static glass shapes, no real
+   data -- see future.js's own comments: nothing here is a fabricated statistic). ---- */
+.qmf-scene-action { justify-content: center; }
+.qmf-cta-panel {
+  max-width: 620px;
+  background: rgba(18, 18, 42, 0.55);
+  border: 1px solid var(--qm-cosmic-border);
+  border-radius: var(--qm-radius-xl);
+  padding: var(--qm-space-8);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--qm-shadow-deep);
+}
+.qmf-cta-dash { margin: var(--qm-space-6) 0; display: flex; flex-direction: column; gap: 10px; }
+.qmf-cta-dash-row { display: flex; gap: 10px; }
+.qmf-cta-dash-row span {
+  flex: 1; height: 34px; border-radius: var(--qm-radius-md);
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.14), rgba(255, 153, 51, 0.08));
+  border: 1px solid var(--qm-cosmic-border-soft);
+}
+.qmf-cta-dash-row-wide span { flex: 2.4; }
+.qmf-cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: var(--qm-space-6); }
+
+/* ---- Reduced motion: keep the narrative, remove continuous/parallax movement. The scroll-
+   triggered fade of .qmf-scene-copy above stays (it's the one thing that makes text legible as
+   a section becomes current, not decorative motion) but every other animation/transition this
+   page or future.js could add is suppressed here, and future.js checks the same media query
+   before doing any JS-driven camera/rotation animation. ---- */
+@media (prefers-reduced-motion: reduce) {
+  .qmf-fallback-orb { animation: none; }
+  .qmf-progress-dot, .qmf-skip, .qmf-continue { transition: none; }
+}
+
+/* ---- Mobile ---- */
+@media (max-width: 640px) {
+  .qmf-scene { padding: var(--qm-space-8) var(--qm-space-4); align-items: flex-end; padding-bottom: 72px; }
+  .qmf-progress { right: var(--qm-space-2); gap: 10px; }
+  .qmf-progress-dot { width: 8px; height: 8px; }
+  .qmf-skip { padding: 8px 14px; font-size: 0.78rem; }
+  .qmf-scene-copy { max-width: 100%; }
+  .qmf-cta-panel { padding: var(--qm-space-6); }
+}
