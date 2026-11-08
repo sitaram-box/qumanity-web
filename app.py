@@ -225,9 +225,8 @@ def _app_token_auth():
 
 @app.route("/")
 def index():
-    # The standalone bottom-left religious symbol was removed 2026-11-XX -- religious identity now
-    # lives only inside the marquee's own gold chip (templates/_poems_marquee.html), which is
-    # itself gated on QM_MARQUEE_ENABLED via its own {% if marquee_enabled %} guard.
+    # No public religion-based identity symbol or Poems Marquee exists on this page any more --
+    # removed 2026-11-08 (owner legal decision; see the note above api_global_data() below).
     return render_template("home.html")
 
 
@@ -3153,7 +3152,6 @@ def _profile_for(user_id):
         "present_location_struct": json.loads(user["present_location_json"]),
         "birth_time_known": bool(user["birth_time_known"]),
         "religion_belief": user["religion_belief"],
-        "hide_marquee": bool(user["hide_marquee"]),
         "has_profile_picture": bool(user["profile_picture"]),
         "profile_picture_updated_at": user["profile_picture_updated_at"] or "",
     }
@@ -3167,8 +3165,9 @@ RELATIONSHIP_STATUSES = ("single", "married", "divorced_widowed")
 WORK_PROFILES = ("unemployed_student", "employed", "govt", "security", "medical", "other")
 
 # Spiritual path (2026-10-28): set once at registration, then locked -- see api_auth_register
-# and migrations/031_religion_belief.py. Not every value has marquee verses yet; RELIGION_
-# MARQUEE_SOURCES further down names which ones do.
+# and migrations/031_religion_belief.py. A private Account field only -- see the note above
+# api_global_data() (around line 3568) for why this is never shown publicly and has had no
+# connection to any Marquee since 2026-11-08.
 RELIGION_BELIEF_VALUES = ("hindu", "christian", "muslim", "sikh", "buddhist", "jain", "other", "prefer_not_to_say")
 
 
@@ -3567,213 +3566,23 @@ def _move_born_here_folder(conn, user_id, old_location, new_location, element):
         shutil.rmtree(old_user_dir)
 
 
-# ---- Poems marquee (bottom bar on every page) ----
-# Marquee shows verses from Tulsidas's Vinay Patrika. Original
-# text is public domain, but the Hindi translation by Hanuman
-# Prasad Poddar (d. 1971) remains under copyright until the end of 2031 (expires 1 January 2032).
-# 2026-11-01: re-enabled. The Vinaya Patrika copyright blocker (see docs/marquee_poems_archive/
-# README.md) is a content-specific gap, not a reason to keep the whole marquee feature dark -- it
-# is now handled per-religion, inside RELIGION_MARQUEE_SOURCES/_poems_dir_for() below (the "hindu"
-# entry automatically falls back to a newly-written, uncopied original collection whenever the
-# rights-cleared Poems/hindu/ directory is empty, which it still is). This flag now only gates the
-# feature as a whole (a manual ops kill-switch, e.g. QM_MARQUEE_ENABLED=false on Railway), never a
-# stand-in for "is Vinaya Patrika itself available" -- that question is answered independently, per
-# religion, by _poems_dir_for().
-QM_MARQUEE_ENABLED = os.environ.get("QM_MARQUEE_ENABLED", "true").strip().lower() in ("1", "true", "yes")  # default True; set to "false" to force the feature off
-
-
-@app.context_processor
-def _marquee_flag():
-    return {"marquee_enabled": QM_MARQUEE_ENABLED}
-
-
-# Every religion's verses now live in religious_text_core's DB-backed library (traditions ->
-# collections -> per-language entries), not flat Poems/<dir>/*.json read directly by this file --
-# see religious_text_core.py's own module docstring for the full rationale. Poems/ still holds the
-# actual JSON text (religious_text_core imports it once, at boot, into SQLite) so it remains a
-# valid interchange format, and every existing README.md under Poems/<dir>/ is still the source of
-# truth for a given collection's own rights story.
+# ---- Poems Marquee: REMOVED 2026-11-08 (owner legal decision) ----
+# Gita Press denied permission for the Hindi Vinaya Patrika translation; rather than remove only
+# that one collection, the owner chose to discontinue the entire Poems Marquee feature and every
+# public religion-based identity symbol that went with it. Removed from here: the
+# QM_MARQUEE_ENABLED flag and its context-processor, DEFAULT_MARQUEE_RELIGION/POEMS_DIR,
+# _marquee_religion_for_session(), and the four routes that served or controlled it
+# (GET /api/poems/meta, GET /api/poems/<lang>/<index>, POST /api/marquee/hide,
+# POST /api/marquee/show). templates/_poems_marquee.html, static/js/poems.js,
+# static/css/poems.css, and the Poems/ directory's own content were deleted in the same pass.
 #
-# 2026-11-02 (owner product decision, reversing the 2026-11-XX privacy-driven anonymous-neutral
-# behavior, then extended the same day into the Universal Multi-Religion Marquee): the Marquee is
-# a PUBLIC part of the website's identity and must be visible by default to everyone, including
-# logged-out visitors and any signed-in member who hasn't chosen a religion yet.
-# DEFAULT_MARQUEE_RELIGION below is the fallback used in exactly those two cases (and defensively
-# for a stored value that somehow isn't a real RELIGION_BELIEF_VALUES entry) -- never for a
-# signed-in member who HAS explicitly chosen a real, recognized religion: that member's PROFILE
-# religion is still only ever their own INITIAL reading-religion default (ending in "coming soon"
-# if it has no content yet) -- see _marquee_religion_for_session()'s own docstring. From there, the
-# reading religion is independent of the profile: a member (or an anonymous visitor) may pick any
-# OTHER available tradition via the Religion Selector (poems.js), persisted client-side only
-# (localStorage), sent back on every request as an explicit ?religion=/&lang= query parameter that
-# this file allowlist-checks against religious_text_core.list_available_traditions() -- never
-# trusted blindly, and NEVER written back to users.religion_belief (see api_poems_meta()).
-DEFAULT_MARQUEE_RELIGION = "hindu"
-POEMS_DIR = BASE_DIR / "Poems"
-
-
-# RELIGION_HOME_SYMBOLS removed 2026-11-XX -- the standalone homepage symbol no longer exists.
-# The gold marquee chip's own per-religion mapping now lives client-side in poems.js's
-# CHIP_BY_RELIGION, driven entirely by api_poems_meta()'s "religion"/"coming_soon" fields below,
-# which already distinguish every religion case server-side; no second, parallel symbol-
-# eligibility set is needed.
-
-
-def _marquee_religion_for_session():
-    """(religion, user_row). `religion` is now NEVER None -- a logged-out visitor, a signed-in
-    member who hasn't chosen a spiritual path yet, and (defensively) a stored value outside
-    RELIGION_BELIEF_VALUES all resolve to DEFAULT_MARQUEE_RELIGION ("hindu"), per the 2026-11-02
-    public-Marquee decision. A signed-in member whose religion_belief names a REAL, recognized
-    religion always gets THAT religion back verbatim, even if it has no verses source yet (the
-    caller reports "coming soon" for THEIR OWN path, never silently swapping them to Hindu) --
-    unchanged from before this change.
-
-    Deliberately does NOT look at users.hide_marquee here any more: whether the Marquee is
-    currently shown or hidden is now a display-layer concern (see api_poems_meta()'s own "hidden"
-    field and poems.js's localStorage-first hide/restore control), fully decoupled from WHICH
-    religion's content gets resolved -- a member who hid the Marquee still has real, correct
-    content ready to show the instant they restore it, rather than needing a fresh fetch."""
-    if not session.get("user_id"):
-        return DEFAULT_MARQUEE_RELIGION, None
-    conn = get_db()
-    user = _current_user_row(conn)
-    conn.close()
-    if not user:
-        return DEFAULT_MARQUEE_RELIGION, None
-    religion = user["religion_belief"]
-    if not religion or religion not in RELIGION_BELIEF_VALUES:
-        return DEFAULT_MARQUEE_RELIGION, user
-    return religion, user
-
-
-@app.route("/api/poems/meta")
-def api_poems_meta():
-    """2026-11-02: the Marquee is public by default (owner decision) -- this route now ALWAYS
-    resolves real content (via _marquee_religion_for_session()'s own Hindu-default fallback for
-    an anonymous visitor or a no-religion member) and reports "hidden" as an independent signal,
-    never a content-suppressing branch. "hidden" reflects ONLY the signed-in member's own
-    users.hide_marquee preference (always False for an anonymous visitor, who has no such row) --
-    it is a hint the client may use to seed its own localStorage-based show/hide state on first
-    load, never a reason for this route itself to omit religion/content fields. The actual
-    show/hide UI decision now lives entirely in poems.js (localStorage-first, see its own
-    comments), decoupled from this response.
-
-    Universal Multi-Religion Marquee (same day): this route still takes no religion/language
-    parameter from the URL PATH (unchanged route, unchanged signature) but now reads two OPTIONAL
-    query-string hints, `?religion=` and `?lang=`, which drive the independent reading-religion/
-    reading-language selection (poems.js's Religion/Language Selector) -- NEVER the member's own
-    profile religion, which is still resolved purely server-side exactly as before. Both are
-    allowlist-checked against religious_text_core.list_available_traditions()/the resolved
-    collection's own real languages before use; any value outside that allowlist (missing, stale,
-    tampered, or simply a tradition with no content yet) is silently ignored and this falls back
-    to the member's own profile-based default -- never an error, per the "missing collection
-    fallback" requirement. No filesystem path is ever constructed from either parameter (that
-    responsibility moved entirely into religious_text_core, which only ever does DB lookups).
-
-    Cache-Control is explicit and non-cacheable (private, no-store): this response is
-    personalized per signed-in session (and now also per requested reading-religion query
-    parameter) via the Flask session cookie and query string, and must never be served by a
-    shared/CDN cache to a different visitor."""
-    if not QM_MARQUEE_ENABLED:
-        return jsonify({"error": "Poems marquee is disabled"}), 404
-    profile_religion, user = _marquee_religion_for_session()
-    server_hidden = bool(user and user["hide_marquee"])
-    requested_religion = request.args.get("religion") or ""
-    requested_language = request.args.get("lang") or None
-    conn = get_db()
-    try:
-        available = religious_text_core.list_available_traditions(conn)
-        available_codes = {a["code"] for a in available}
-        effective_religion = requested_religion if requested_religion in available_codes else profile_religion
-        label = religious_text_core.tradition_label(conn, effective_religion)
-        resolved = religious_text_core.resolve_collection(conn, effective_religion, requested_language)
-        # Lets poems.js scope its reading-preference localStorage key per signed-in member (their
-        # own private_id_9digit, the same "Private Code" already shown to them on their own
-        # account -- never a secret from themselves, and never sent anywhere but back to this
-        # same origin) so switching accounts on a shared browser doesn't leak one member's
-        # Reading Tradition choice onto another's session (2.6's own optional scoping
-        # recommendation). "anon" for a logged-out visitor, who has no account to scope by.
-        reader_scope = user["private_id_9digit"] if user else "anon"
-        base = {"religion": effective_religion, "profile_religion": profile_religion, "label": label,
-                "hidden": server_hidden, "available_religions": available, "reader_scope": reader_scope}
-        if not resolved:
-            resp = jsonify({**base, "coming_soon": True})
-            resp.headers["Cache-Control"] = "private, no-store"
-            return resp
-        count = len(religious_text_core.entries(conn, resolved["collection_id"], resolved["resolved_language"]))
-    finally:
-        conn.close()
-    result = {**base, "count": count, "languages": resolved["languages"], "personal": bool(user),
-              "title": resolved["title"], "default": resolved["resolved_language"],
-              "attribution": resolved["attribution"], "is_original_work": resolved["is_original_work"]}
-    resp = jsonify(result)
-    resp.headers["Cache-Control"] = "private, no-store"
-    return resp
-
-
-@app.route("/api/marquee/hide", methods=["POST"])
-@login_required
-def api_marquee_hide():
-    """A signed-in member clicking the marquee's own Hide button. Persists across devices/
-    browsers for them (api_poems_meta/_marquee_religion_for_session read hide_marquee on every
-    request); see api_marquee_show for the reverse, offered from Private Account settings."""
-    conn = get_db()
-    conn.execute("UPDATE users SET hide_marquee = 1 WHERE id = ?", (session["user_id"],))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/marquee/show", methods=["POST"])
-@login_required
-def api_marquee_show():
-    """Reverses api_marquee_hide -- the "Show marquee again" control in Private Account settings
-    (2026-10-28 brief: "Add this to the Private Account settings so users can turn it back on").
-    The browser-local qm_poem_hidden flag (poems.js) that mirrors hide_marquee on whichever
-    device the member clicked Hide from is cleared lazily, the next time THIS device's poems.js
-    sees {"hidden": false} from /api/poems/meta -- not here, since this request may come from a
-    different device than the one that's actually showing the stale hidden marquee."""
-    conn = get_db()
-    conn.execute("UPDATE users SET hide_marquee = 0 WHERE id = ?", (session["user_id"],))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/poems/<lang>/<int:index>")
-def api_poem(lang, index):
-    """One poem by 0-based position (the same position is the same poem in every language) from
-    the caller's resolved reading-religion's source -- a signed-in member's own profile religion,
-    or the public DEFAULT_MARQUEE_RELIGION default for anyone else (anonymous, or no religion
-    chosen yet), UNLESS overridden by an explicit, allowlisted `?religion=` query parameter (the
-    independent reading-religion selection -- see api_poems_meta()'s own docstring for the full
-    allowlist/fallback rule, identical here). `lang`/`index` are still the ONLY URL-path
-    parameters (unchanged route signature -- see tests/test_poems_marquee.py's own
-    api_poem-signature security check) and are still resolved against ONLY the resolved
-    collection's own real language/entry set -- never a client-supplied filesystem path, here or
-    in religious_text_core, which only ever does DB lookups."""
-    if not QM_MARQUEE_ENABLED:
-        return jsonify({"error": "Poems marquee is disabled"}), 404
-    profile_religion, _user = _marquee_religion_for_session()
-    requested_religion = request.args.get("religion") or ""
-    conn = get_db()
-    try:
-        available_codes = {a["code"] for a in religious_text_core.list_available_traditions(conn)}
-        effective_religion = requested_religion if requested_religion in available_codes else profile_religion
-        resolved = religious_text_core.resolve_collection(conn, effective_religion, lang)
-        if not resolved:
-            return jsonify({"error": "Poem not found"}), 404
-        poems = religious_text_core.entries(conn, resolved["collection_id"], lang)
-    finally:
-        conn.close()
-    if not poems or not 0 <= index < len(poems):
-        return jsonify({"error": "Poem not found"}), 404
-    poem = poems[index]
-    resp = jsonify({"index": index, "id": poem["id"], "marker": poem["marker"], "text": poem["text"]})
-    # Content now varies by the caller's own session AND the requested reading-religion/language,
-    # so it must never be cached as a single shared "public" response.
-    resp.headers["Cache-Control"] = "private, max-age=3600"
-    return resp
+# NOT removed, deliberately: `users.religion_belief` (the column, and the Private Account
+# selector that reads/writes it) and `religious_text_core.py` plus its four DB tables --
+# per the owner's explicit instruction, religion selection stays private-account-only, and a
+# database schema/module not actively served is left dormant rather than destructively dropped.
+# See docs/HANDOVER.md and docs/MASTER_STATUS.md for the full current-state record, and
+# docs/marquee_religious_text_sources.md / docs/marquee_rights_roadmap.md for the preserved
+# rights-research audit trail (including the Gita Press denial itself).
 
 
 @app.route("/api/global-data")
@@ -4070,8 +3879,8 @@ def qmap_page():
     map's initial center -- a direct, read-only query against user_location_observations, the
     same table api_qmap_user_nearby() already reads from indirectly via osm_proximity_core.
     Deliberately NOT a new data API route: this is the page's own initial render context, exactly
-    the narrow exception Qumanity's existing pattern already allows (compare api_poems_meta()'s
-    own per-session personalization) -- the client-side Q-Map JS still calls the EXISTING, already
+    the narrow exception Qumanity's existing pattern already allows for a page's own per-session
+    personalization -- the client-side Q-Map JS still calls the EXISTING, already
     strictly self-only-authorized GET /api/qmap/user-nearby/<user_id> for the actual proximity
     features, using the user_id embedded here (same `var QM_USER_ID = {{ session.user_id | tojson
     }}` convention dashboard.html already uses, never a client-editable value) -- that route's own
@@ -4104,8 +3913,7 @@ def qmap_page():
     ))
     if user_id:
         # This specific response embeds this member's own GPS coordinate -- must never be served
-        # from a shared/CDN cache to any other visitor (same rule api_poems_meta() already follows
-        # for its own per-session personalization).
+        # from a shared/CDN cache to any other visitor.
         resp.headers["Cache-Control"] = "private, no-store"
     return resp
 
@@ -4647,9 +4455,12 @@ def api_auth_register():
         print(f"[registration] free Qoin mint failed for user_id={user_id}: {e}")
     conn.close()
 
-    # Admin notification email (2026-10-18) -- notification-only, masked ID, never the real one
-    # (see email_core.py's module docstring for why). A silent no-op if SMTP isn't configured;
-    # any genuine send failure is caught here so a mail outage can never break registration.
+    # Admin notification email (2026-10-18, Resend HTTPS API since 2026-10-20) -- notification-
+    # only, masked ID, never the real one (see email_core.py's module docstring for why). A
+    # silent no-op if RESEND_API_KEY/QM_ADMIN_EMAIL aren't configured; any genuine send failure
+    # is caught here so a mail outage can never break registration. email_core.py's own _send()
+    # already logs the full Resend error body (EMAIL_SEND_HTTP_ERROR) before this re-raises --
+    # the print() below only ever carries a generic summary, not the real failure reason.
     try:
         email_core.send_registration_notification(data["name"], _flatten_location_chain(present_location), private_code)
     except Exception as e:

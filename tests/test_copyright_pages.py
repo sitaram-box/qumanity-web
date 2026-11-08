@@ -9,7 +9,13 @@
 
 Standalone script, no test framework (none installed in this project): throwaway tempfile SQLite
 DB via QM_DB_PATH before importing app, Flask test client driving real routes, PASS/FAIL printing,
-sys.exit(1) on failure -- same conventions as tests/test_poems_marquee.py.
+sys.exit(1) on failure -- the same conventions used throughout this project's tests/ directory.
+
+2026-11-08: the Poems Marquee feature itself (and its QM_MARQUEE_ENABLED flag) was discontinued;
+this file's own former "feature flag independence" check was removed since there is no longer a
+flag for these two copyright/rights-notice pages to be independent of. Both pages themselves are
+explicitly preserved as the legal/rights-research record -- see the two templates' own updated
+text about the Marquee's discontinuation.
 
 Run with: python3 tests/test_copyright_pages.py (not -I)
 """
@@ -154,19 +160,6 @@ check("the footer link's label matches the required wording",
       "Religious Text Rights &amp; Permissions" in home_html or "Religious Text Rights & Permissions" in home_html)
 check("the pre-existing Gita Press footer link is still present alongside the new one",
       "copyright/gita-press" in home_html)
-
-print()
-print("=" * 70)
-print("7. Feature flag independence: the page does not depend on QM_MARQUEE_ENABLED")
-print("=" * 70)
-
-appmod.QM_MARQUEE_ENABLED = False
-try:
-    res_off = client.get("/copyright/religious-texts")
-    check("the rights notice page still works even if the Marquee feature itself is switched off",
-          res_off.status_code == 200)
-finally:
-    appmod.QM_MARQUEE_ENABLED = True
 
 print()
 print("=" * 70)

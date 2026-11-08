@@ -70,7 +70,7 @@ Every Python module at the repository root.
 | `recovery_core.py` | Forgotten PIN (one-time code) and forgotten Private ID (admin-reviewed) |
 | `qmail_core.py` | Qmail, internal member-to-member messaging addressed `<username>-<account_id>@qumanity.in` (no internet email is sent or received); Q-Punch council addresses and the village-only reachability gate; attachments (2 MB, file-type allowlist) and drafts. See `docs/QMAIL.md` |
 | `admin_queries_core.py` | Admin Panel member queries: general questions with no location and no council escalation, read and answered by the Admin. No route lets a member submit one yet; the member who asked can read the replies (`/api/queries/mine/<id>`). See `docs/ADMIN_PANEL.md` |
-| `email_core.py` | The optional registration notice to the Admin over SMTP (standard-library `smtplib`, STARTTLS), with a masked Private ID. Does nothing unless `SMTP_HOST` and `QM_ADMIN_EMAIL` are set. See `docs/EMAIL.md` |
+| `email_core.py` | The optional registration notice to the Admin, and AI-Support ticket replies, sent over Resend's HTTPS API (not SMTP, since 2026-10-20). The registration notice carries a masked Private ID. Does nothing unless `RESEND_API_KEY` and `QM_ADMIN_EMAIL` are set. See `docs/EMAIL.md` |
 | `founder_core.py` | The Founder's Message on the homepage, in English only |
 | `cycle_middleware.py` | Stamps every activity row with the current lunar `cycle_id` |
 | `pipeline_core.py` | Aggregates a cycle's activity and transfers it up one level (Village to Earth) |

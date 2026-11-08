@@ -290,24 +290,40 @@
     }).catch(function () {});
   }
 
-  // ---- Wallet weekly history ----
+  // ---- "Your Wallet" modal (2026-11-08, Phase 1 workstream 1.5) ----
+  // Was an inline-toggled box on the Private tab's wallet card; now opens
+  // #qm-wallet-history-modal instead (see that modal's own comment in dashboard.html for why it's
+  // a new, small, dedicated modal rather than a repurposed #qm-stats-modal). The fetch/rendering
+  // itself is unchanged -- same GET /api/wallet/history (session-scoped, no id -- never another
+  // user's data), same week-grouped shape -- only its target element and the loading/error states
+  // around it are new. Cached after the first successful load (box.dataset.loaded) so reopening
+  // the modal never re-fetches needlessly; a failed load is NOT cached, so reopening retries.
   var whBtn = $("qm-wallet-history-btn");
-  if (whBtn) whBtn.addEventListener("click", function () {
-    var box = $("qm-wallet-history-box");
-    box.hidden = !box.hidden;
-    if (box.hidden || box.dataset.loaded) return;
-    box.dataset.loaded = "1";
+  var whModal = $("qm-wallet-history-modal");
+  if (whBtn && whModal) whBtn.addEventListener("click", function () {
+    openModal(whModal);
+    var box = $("qm-wallet-modal-history");
+    var loading = $("qm-wallet-modal-loading");
+    var error = $("qm-wallet-modal-error");
+    var empty = $("qm-wallet-modal-empty");
+    if (box.dataset.loaded) return; // already loaded this page view -- no duplicate request
+    loading.hidden = false; error.hidden = true; empty.hidden = true; box.innerHTML = "";
     api("/api/wallet/history").then(function (h) {
-      box.innerHTML = "";
+      loading.hidden = true;
+      box.dataset.loaded = "1";
+      if (!h.weeks.length) { empty.hidden = false; return; }
       if (h.older_weeks_hidden) box.appendChild(el("p", "qm-dash-empty", h.older_weeks_hidden + " older week(s) — council members only."));
-      if (!h.weeks.length) box.appendChild(el("p", "qm-dash-empty", "No transactions yet."));
       h.weeks.forEach(function (wk) {
         var w = el("div", "wh-week");
         w.appendChild(el("b", "", wk.start + " – " + wk.end + " · " + (wk.change >= 0 ? "+" : "") + wk.change + " Qoins"));
         wk.rows.forEach(function (r) { w.appendChild(el("small", "", (r.amount >= 0 ? "+" : "") + r.amount + " · " + r.reason)); });
         box.appendChild(w);
       });
-    }).catch(function (e) { box.innerHTML = ""; box.appendChild(el("p", "qm-dash-empty", e.message)); });
+    }).catch(function (e) {
+      loading.hidden = true;
+      error.hidden = false;
+      error.textContent = e.message || "Could not load your transaction history.";
+    });
   });
 
   // ---- Kundali (North Indian style, Moon-based -- House 1 = the Moon's own sign) ----
@@ -534,29 +550,6 @@
         .then(function () { rcForm.hidden = true; rcForm.style.display = "none"; rcSuccess.hidden = false; })
         .catch(function (err) { rcError.textContent = err.message; rcError.hidden = false; })
         .finally(function () { submitBtn.disabled = false; });
-    });
-  }
-
-  // ---- Show/Hide Marquee (2026-10-28) ----
-  // One button, label and target endpoint swap with the member's current users.hide_marquee
-  // (data-hidden, set server-side from profile.hide_marquee -- see dashboard.html). Hiding here
-  // takes the same path as the marquee bar's own Hide button (POST /api/marquee/hide); showing
-  // again calls the new POST /api/marquee/show. Reloads afterward rather than patching the DOM --
-  // simplest way to pick up the server-rendered label swap and re-evaluate the homepage symbol
-  // next time they visit it.
-  var marqueeBtn = $("marquee-visibility-btn");
-  if (marqueeBtn) {
-    marqueeBtn.addEventListener("click", function () {
-      var currentlyHidden = marqueeBtn.getAttribute("data-hidden") === "1";
-      var url = currentlyHidden ? "/api/marquee/show" : "/api/marquee/hide";
-      marqueeBtn.disabled = true;
-      api(url, {}).then(function () {
-        try { localStorage.removeItem("qm_poem_hidden"); } catch (e) {}
-        location.reload();
-      }).catch(function (err) {
-        marqueeBtn.disabled = false;
-        alert(err.message);
-      });
     });
   }
 

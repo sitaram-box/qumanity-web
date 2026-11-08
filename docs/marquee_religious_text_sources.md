@@ -1,5 +1,10 @@
 # Marquee Religious Text Sources — Rights & Provenance Research (2026-11-02)
 
+> **Superseded 2026-11-08.** The Marquee feature this research supported has been discontinued
+> entirely (owner legal decision following the Gita Press permission denial recorded below). This
+> document is preserved as the historical rights-research audit trail only. See
+> `docs/HANDOVER.md` §9.1 for the current-state record.
+
 Research conducted for the Universal Multi-Religion, Multi-Language Marquee implementation.
 Every collection actually imported into `religious_text_core.py`'s DB-backed library (seeded in
 `religious_text_core.seed_builtin_collections()`) is documented here, alongside every collection

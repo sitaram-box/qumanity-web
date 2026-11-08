@@ -23,7 +23,7 @@ per-file table: `docs/HANDOVER.md` §11. (Supersedes the previously reported 1,3
 | OSM Proximity (backend) | ✅ Implemented & Committed | `osm_proximity_core.py`, `osm_http_core.py`, `osm_proximity_worker.py`, migration 035. 200m radius, consent-gated, no raw coordinates ever returned |
 | Provisional Locations | ✅ Implemented & Committed | `provisional_location_core.py`, migration 034. 24-qualifying-member auto-activation **within the provisional system only** — never an automatic write to canonical `Qumanity_Master.json` |
 | OSM Pilot script (North West Delhi fetch) | ✅ Implemented & Committed | `scripts/fetch_north_west_delhi_osm.py`; its GeoJSON output is now also committed (via the Q-Map commit, for production deployment) |
-| Multi-religion Marquee (infrastructure) | ✅ Implemented & Committed | 4-table architecture; Religion/Language Selector; rights-gating. See **Marquee** section below for content status |
+| Multi-religion Marquee | 🔴 **Discontinued 2026-11-08** (owner legal decision) | Entirely removed — see **Marquee** section below |
 | Family Tree (core model + cascade + grandparent backfill + Profile Card UI) | ✅ Implemented & Committed | Confirmed fully clean in `git status` this session — no longer split between committed backend / uncommitted frontend |
 | Location edit tool + crosswalk schema | ✅ Implemented & Committed | `scripts/edit_master_location.py`, `docs/location_id_crosswalk_schema.md` (schema only, not populated) |
 | India location deduplication (execution) | 🔵 Researched & Waiting — **not authorized** | 74 Tehsil + 15 Village duplicate groups nationally; only one pair (Bawana) resolved, in derived JSON only, not `Qumanity_Master.json`. `docs/india_dedup_migration_plan.md` is marked AWAITING APPROVAL — DO NOT EXECUTE |
@@ -63,16 +63,23 @@ Full detail: `docs/HANDOVER.md` §7.
 
 ---
 
-## Marquee — content rights status
+## Marquee — discontinued
 
-Infrastructure is complete and committed (4 tables, Religion Selector, Language Selector,
-rights-gating). **Live content**: Hindu (original Qumanity poetry), Christian (English KJV Psalms +
-Hindi Biblica, 8 selected verses), Muslim (Quran Al-Fatiha, Arabic), Buddhist (Dhammapada ch.1
-vv.1-5, Pali + English). **Still pending rights review — code-complete, content blocked, not
-available in the live Marquee**: Urdu Quran, Sikh Gurbani, Hindi Dhammapada, Jain texts. Gita
-Press/Vinaya Patrika is separately `not_permitted`. Full research trail and next steps:
-`docs/marquee_religious_text_sources.md`, `docs/marquee_rights_roadmap.md`. A religion is never
-marked content-complete merely because the database infrastructure can support it.
+**Removed entirely, 2026-11-08, owner legal decision.** Gita Press denied permission for the Hindi
+Vinaya Patrika translation; the owner chose to discontinue the whole Marquee rather than remove
+only that one collection — this supersedes every earlier entry in this document describing the
+Marquee as live or partially live. No religious text and no religion-based public identity symbol
+is displayed anywhere on the site today.
+
+Deleted: `templates/_poems_marquee.html`, `static/js/poems.js`, `static/css/poems.css`, the
+`Poems/` directory's content, four backend routes, the `QM_MARQUEE_ENABLED` flag, and
+`tests/test_poems_marquee.py`. Preserved: `users.religion_belief` and the Private Account religion
+selector (private, never public); `religious_text_core.py` and its four tables (dormant, not
+dropped); both public rights-notice pages (`/copyright/gita-press`,
+`/copyright/religious-texts`), updated in place to describe the Marquee in the past tense without
+erasing the underlying rights research; `docs/marquee_religious_text_sources.md` and
+`docs/marquee_rights_roadmap.md` as the historical audit trail. Full detail:
+`docs/HANDOVER.md` §9.1.
 
 ---
 

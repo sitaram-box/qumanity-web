@@ -149,14 +149,15 @@
           </table>
         </article>
 
+        <!-- 2026-11-08 (Phase 1 workstream 1.5): simplified to the Qoin count + locked-share note
+             only, per the owner's request -- the full valuation/transaction breakdown now lives
+             in #qm-wallet-history-modal (see that modal's own comment for why it's separate from
+             #qm-stats-modal), reached by the same button, same id, same existing fetch. -->
         <article class="pv-card" id="qm-wallet-card">
           <h3><span class="pv-ico">💰</span> <span data-i18n="wallet">Qoins Wallet</span></h3>
           <p class="qm-wallet-balance"><span id="qm-wallet-balance">0</span> Qoins</p>
           <p class="qm-dash-empty" id="qm-wallet-locked-note" hidden>Some Qoins are locked until you cast your first election vote.</p>
-          <button class="qm-btn qm-btn-ghost" id="qm-wallet-history-btn" type="button">📊 Weekly history</button>
-          <ul class="qm-wallet-tx-list" id="qm-wallet-tx-list"></ul>
-          <p class="qm-dash-empty" id="qm-wallet-tx-empty" hidden>No transactions yet.</p>
-          <div id="qm-wallet-history-box" hidden></div>
+          <button class="qm-btn qm-btn-ghost" id="qm-wallet-history-btn" type="button">📊 Full statistics</button>
         </article>
 
         <article class="pv-card" id="qm-karma-card">
@@ -320,17 +321,6 @@
               <small class="pv-hint pv-hintline">Locked after registration. A change needs your birth village council's approval.</small>
             </div>
             {% endif %}
-
-            <div class="pv-field" style="margin-top:14px;">
-              <label>Poems marquee</label>
-              {% if profile.hide_marquee %}
-              <button type="button" class="qm-btn qm-btn-ghost" id="marquee-visibility-btn" data-hidden="1">👁️ Show Marquee Again</button>
-              <small class="pv-hint pv-hintline" id="marquee-visibility-hint">You hid the marquee. This brings it back on every device you're signed in on.</small>
-              {% else %}
-              <button type="button" class="qm-btn qm-btn-ghost" id="marquee-visibility-btn" data-hidden="0">🙈 Hide Marquee</button>
-              <small class="pv-hint pv-hintline" id="marquee-visibility-hint">Also hides the bottom-left spiritual symbol on the homepage.</small>
-              {% endif %}
-            </div>
 
             <div class="pv-field" style="margin-top:14px;">
               <button type="button" class="qm-btn qm-btn-ghost qm-logout-btn" data-i18n="logout">🚪 Sign out</button>
@@ -1017,6 +1007,34 @@
     </div>
   </div>
 
+  <!-- Your Wallet modal (2026-11-08, Phase 1 workstream 1.5): the Dashboard's always-visible
+       wallet summary (#qm-wallet-card, Private tab) now shows ONLY the Qoin count + the locked-
+       share note -- the full breakdown (valuation, transaction history) lives here instead,
+       reached via the card's own "📊 Full statistics" button (renamed from "Weekly history",
+       same button, same id, same existing GET /api/wallet/history fetch -- see dashboard.js's
+       openWalletHistoryModal()). This is a NEW small modal rather than a repurposed
+       #qm-stats-modal on purpose: that modal's stat_block is built for a LOCATION's collective
+       demographics (gender/age/elements/zodiac, level+locationId driven) and is already relied on
+       by tests/other call sites -- branching its shared markup into a second, structurally
+       different "personal" mode would have meant touching well-established, already-tested
+       behavior to save writing one small, self-contained dialog that reuses the exact same
+       .dq-modal/.dq-modal-box/.qp-history classes (zero new CSS) and the exact same personal
+       wallet-history endpoint/rendering dash_extras.js already used inline. Never shows another
+       user's data -- GET /api/wallet/history takes no id at all, session-scoped server-side. -->
+  <div class="dq-modal" id="qm-wallet-history-modal" hidden role="dialog" aria-modal="true" aria-labelledby="qm-wallet-history-title">
+    <div class="dq-modal-box">
+      <button type="button" class="dq-modal-close" data-close aria-label="Close">×</button>
+      <h3 id="qm-wallet-history-title">📊 Your Wallet</h3>
+      <p class="qm-wallet-balance"><span id="qm-wallet-modal-balance">0</span> Qoins</p>
+      <p class="qm-dash-empty" id="qm-wallet-modal-locked-note" hidden>Some Qoins are locked until you cast your first election vote.</p>
+      <div class="qm-stats-section-title">📜 Transactions</div>
+      <p class="qm-dash-empty" id="qm-wallet-modal-loading">Loading…</p>
+      <p class="qm-dash-empty" id="qm-wallet-modal-error" hidden></p>
+      <p class="qm-dash-empty" id="qm-wallet-modal-empty" hidden>No transactions yet.</p>
+      <div class="qp-history" id="qm-wallet-modal-history"></div>
+    </div>
+  </div>
+
   <div class="qm-gate-message qm-edit-modal" id="edit-profile-modal" hidden>
     <h3>Edit Profile</h3>
     <form id="edit-profile-form" class="qm-form">
@@ -1291,6 +1309,5 @@
   <script src="{{ url_for('static', filename='js/family_tree.js') }}"></script>
   <script src="{{ url_for('static', filename='js/mobile_keyboard.js') }}"></script>
   <script src="{{ url_for('static', filename='js/logo_nav.js') }}"></script>
-  {% include '_poems_marquee.html' %}
 </body>
 </html>

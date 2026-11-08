@@ -1,5 +1,12 @@
 # Marquee Religious Text Rights — Roadmap (2026-11-02)
 
+> **Superseded 2026-11-08.** The Poems Marquee feature this roadmap was written for has been
+> discontinued entirely (owner legal decision — Gita Press denied permission for the Hindi Vinaya
+> Patrika translation, and the owner chose to remove the whole feature rather than continue with
+> the other, already-cleared collections). This document is preserved as the historical
+> rights-research record; none of the next-step outreach described below is still active work.
+> See `docs/HANDOVER.md` §9.1 for the current-state record.
+
 ## 1. Purpose and scope
 
 This is the practical, owner-facing roadmap for the Marquee's six religious-text areas: what is

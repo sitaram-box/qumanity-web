@@ -407,70 +407,50 @@ here in condensed form) and `docs/dpg_evidence/12_family_tree_evidence.md`.
 
 ## 9. Religious Marquee and content licensing; Q-Punch and nested governance
 
-### 9.1 Multi-religion Marquee
+### 9.1 Multi-religion Marquee — **discontinued 2026-11-08 (owner legal decision)**
 
-**Architecture** (`religious_text_core.py`): **four tables**, not five —
-`religious_traditions` → `text_collections` → `text_collection_languages` → `text_entries`. (An
-earlier 4-workstream proposal also specified a fifth table, `religion_collection_access`, for a
-future many-to-many religion↔collection relationship — it was deliberately not built; revisit only
-if a real need for many-to-many access arises.)
+**The entire Poems Marquee feature has been removed from the application.** Gita Press denied
+permission for the Hindi Vinaya Patrika translation; rather than remove only that one collection,
+the owner chose to discontinue the whole Marquee and every public religion-based identity symbol
+that went with it (a Shivalinga/Cross/Crescent/Dharma Wheel component that had briefly existed in
+an uncommitted pass earlier the same day was removed in the same change, before ever being
+committed). No religious text of any tradition, and no religion-based public identity decoration
+of any kind, is displayed anywhere on the live site.
 
-- Each collection is individually gated by `rights_status`/`review_status`/`marquee_eligible`; only
-  a `review_status='approved' AND marquee_eligible=1` row is ever resolvable
-  (`resolve_collection()`). A collection with no eligible row returns `None`, surfaced to the
-  client as `coming_soon` — never substituted or invented content.
-- **Profile religion vs. reading preference**: a signed-in member's reading religion defaults to
-  their own profile religion, but can be switched to any other approved, content-backed tradition
-  via an allowlist-checked query parameter on the existing `/api/poems/meta` /
-  `/api/poems/<lang>/<index>` routes — no new route was added. This reading choice is stored
-  **client-side only** (`localStorage`) and **never writes `users.religion_belief`** — verified
-  directly against the database.
-- **Anonymous/default behavior**: every logged-out visitor, and any member with no profile religion
-  set, sees Hindu/Hindi content by default (`DEFAULT_MARQUEE_RELIGION = "hindu"`).
-- **Hide/Show Marquee**: a persisted per-user preference (`users.hide_marquee`, migration 033).
-- **Original Qumanity content vs. externally sourced texts**: the Hindu tradition's default content
-  is **original Qumanity Hindi poetry** (`Poems/hindu_original/poems_hindi.json`), not a Gita
-  Press/Vinaya Patrika transcription — those original poems must never be attributed to Gita Press
-  or labeled Vinaya Patrika.
+**What was removed**: `templates/_poems_marquee.html`, `static/js/poems.js`,
+`static/css/poems.css`, the `Poems/` directory's own content, the four routes that served or
+controlled it (`GET /api/poems/meta`, `GET /api/poems/<lang>/<index>`, `POST /api/marquee/hide`,
+`POST /api/marquee/show`), the `QM_MARQUEE_ENABLED` feature flag and its context-processor, the
+Private Account "Hide/Show Marquee" control, and the `{% include %}` of the Marquee partial from
+all twelve templates that had carried it. `tests/test_poems_marquee.py` (226 checks) was deleted
+with it; `tests/test_copyright_pages.py`'s own now-meaningless "feature flag independence" check
+was removed, its other 37 checks (covering the two preserved rights-notice pages) are unaffected.
 
-**Currently live collections** (verified against the committed database-seeding code and the
-`Poems/` directory this session):
+**What was deliberately preserved**:
+- `users.religion_belief` (the database column) and the Private Account's own religion
+  selector/editor — a member can still set and change their spiritual path privately; this was
+  never a Marquee-only feature and the owner explicitly required it to remain.
+- `religious_text_core.py` and its four tables (`religious_traditions`, `text_collections`,
+  `text_collection_languages`, `text_entries`) — left in place, dormant (still seeded at boot by
+  `tools/run_migrations.py`, no longer read by any active route) rather than destructively dropped.
+- The two public rights/legal pages, `/copyright/gita-press` and `/copyright/religious-texts` —
+  both updated in place to describe the Marquee in the past tense and record the discontinuation,
+  while preserving every tradition's own rights-research findings (including the Gita Press
+  denial itself) as the historical audit trail. Neither page was deleted.
+- `docs/marquee_religious_text_sources.md` and `docs/marquee_rights_roadmap.md` — the full research
+  trail, unchanged as historical record.
+- The `docs/dpg_evidence/` pack's own existing description of the Marquee (already stale relative
+  to several later changes, as prior passes of this document have already noted) was **not**
+  rewritten — the frozen evidence pack is not edited to track a feature's current status; this
+  section of `HANDOVER.md` is that current-status record instead.
 
-| Tradition | Collection | Language(s) | Rights basis |
-|---|---|---|---|
-| Hindu | Original Qumanity Ram-bhakti poetry | Hindi | Original Qumanity content |
-| Christian | Psalms | English (KJV, public domain) + Hindi (selected 8 verses, Biblica Open Hindi Contemporary Version, CC BY-SA 4.0 — a **derivative excerpt, not a complete Bible**) | Mixed — see licensing note below |
-| Muslim | Quran, Surah Al-Fatiha | Arabic | Tanzil Project, CC BY 3.0 |
-| Buddhist | Dhammapada ch. 1, vv. 1–5 | Pali + English (Max Müller, 1881, public domain/Project Gutenberg) | Public domain |
-
-**Licensing note on the Christian Hindi collection**: it is treated as a derivative work under CC
-BY-SA 4.0 (eight selected, reformatted verses — not an unmodified full copy). The Biblica®
-trademark is never used in Qumanity's own UI/docs for this collection; the license's own
-attribution wording is used instead: *"The original work by Biblica, Inc. is available for free at
-www.biblica.com and open.bible."*
-
-**Not yet available — pending rights review** (code-complete, content blocked — **do not present
-any of these as approved or available**):
-
-| Area | Status |
-|---|---|
-| Urdu Quran | Tanzil contact route not yet located; translator's own rights still under copyright through 2033 |
-| Sikh Gurbani | A real contact route for Khalis Foundation was found; permission not yet requested/granted |
-| Hindi Dhammapada | A plausible-public-domain 1933 translation found, but conflicting license tags on existing scans and the US/URAA question are unresolved |
-| Jain texts | Dedicated source research required; no translation yet cleared for any Jain sub-tradition |
-| Gita Press / Vinaya Patrika | `not_permitted` — no verified publication permission has been established; distinct from the four `pending_rights_review` items above |
-
-Full research trail and prepared (unsent) outreach drafts: `docs/marquee_religious_text_sources.md`
-and `docs/marquee_rights_roadmap.md`. **A religion or language is never marked content-complete
-merely because the database infrastructure can support it.**
-
-**Public notice page**: `/copyright/religious-texts` covers all six current rights questions,
-clearly distinguishes available collections from pending ones, and links Qumanity's own verified
-contact plus the verified third-party contact routes found during research. `/copyright/gita-press`
-is a separate, pre-existing copyright/attribution notice — not a grant of publishing rights.
-
-Tests: `tests/test_poems_marquee.py` (226 checks), `tests/test_copyright_pages.py` (37 checks,
-covers both notice pages).
+**No individual religion is ever disclosed publicly.** Verified directly: `religion`/
+`religion_belief` is never read by `social_core.py`, `board_core.py`, `elemental_core.py`, or
+`karma_core.py` — the only places it is read at all are the Private Account's own profile-display
+and profile-change-request code paths in `app.py` (both already private, both already
+council-approval-gated for an edit) and `identity_core.py`'s `religion_change` request type (same
+private, council-approval flow). About page's "Is Qumanity a religion, or does it require belief?"
+FAQ entry is about the platform's own philosophy, not any individual's data.
 
 ### 9.2 Q-Punch and nested geography
 

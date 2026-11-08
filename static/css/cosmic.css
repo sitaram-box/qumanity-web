@@ -127,8 +127,6 @@ body.hm .hm-hero-stars { display: none; }
 body.hm > .hm-nav,
 body.hm > main,
 body.hm > .hm-footer,
-body.hm .pm-bar,
-body.hm .pm-restore-btn,
 body.hm .dq-modal {
   position: relative;
   z-index: 1;
@@ -323,12 +321,6 @@ body.hm .hm-marquee span {
   color: var(--qm-text-muted);
 }
 
-/* The bottom religious-text Marquee (templates/_poems_marquee.html) is ALREADY a deep-navy/gold
-   bar (poems.css) -- these three rules only add a faint luminous top edge and align its border
-   hue with the rest of the cosmic page; everything else (behavior, controls, JS) is untouched. */
-body.hm .pm-bar { border-top: 1px solid var(--qm-cosmic-border-soft); box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.35); }
-body.hm .pm-restore-btn { box-shadow: var(--qm-glow-gold); }
-
 /* ---------------------------------------------------------------------------------------------
    10. RESPONSIVE
    --------------------------------------------------------------------------------------------- */
@@ -518,3 +510,11 @@ body.qm-cosmic-register select option { color: #0a0a1a; }
 @media (max-width: 620px) {
   body.qm-cosmic-register .qm-steps { overflow-x: auto; }
 }
+
+/* Section 18 (religion-aware identity symbol: Shivalinga/Cross/Crescent/Dharma Wheel next to the
+   hero chip) was removed 2026-11-08 -- owner legal decision, Gita Press denied permission for the
+   Hindi Vinaya Patrika translation and the owner chose to discontinue the entire Poems Marquee
+   and every public religion-based identity symbol along with it, not just that one collection.
+   See docs/HANDOVER.md / docs/MASTER_STATUS.md for the current-state record. No replacement
+   symbol was added -- the existing Qumanity brand mark (logo + wordmark) is the only identity
+   element in the hero now.*/
