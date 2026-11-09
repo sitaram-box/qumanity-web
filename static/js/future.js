@@ -1,18 +1,33 @@
 /**
- * future.js — Qumanity 3D Future Vision Experience (templates/future.html, 2026-11-08).
+ * future.js — Qumanity 3D Future Vision Experience (templates/future.html, 2026-11-08; content
+ * expanded from 4 to 8 scenes, 2026-11-09, same engine -- see the note below the scene list).
  *
- * Four scenes, driven by normal document scroll (never hijacked -- this script only reads scroll
+ * Eight scenes, driven by normal document scroll (never hijacked -- this script only reads scroll
  * position via IntersectionObserver, it never calls preventDefault on wheel/touch events):
- *   0. The Present   -- a fragmented Earth, fine luminous crack lines across the globe.
- *   1. The Thread    -- the Qumanity Tree: golden lines grow across the fractures, branching.
- *   2. The Future    -- cracks fade, the network brightens, small lit nodes (people/communities)
- *                       appear across the globe -- an illustrated vision, not live data.
- *   3. The Action    -- the globe recedes behind a CTA panel (plain HTML/CSS, not 3D -- no
- *                       fabricated statistics) inviting the visitor to register or sign in.
+ *   0. 2026 -- The Present       -- a fragmented Earth, fine luminous crack lines across the globe.
+ *   1. The Gap                   -- a sparse, clustered handful of lit points appear -- access and
+ *                                    opportunity reach only a few places, unevenly.
+ *   2. The Thread                -- the Qumanity Tree: golden lines grow across the fractures,
+ *                                    branching; the cracks begin to dim.
+ *   3. Connected Communities     -- the rest of the globe's points light up too (the earlier sparse
+ *                                    cluster was never the whole picture); cracks fade further.
+ *   4. A New Way to Participate  -- small glows at the Tree's own hub points begin a slow pulse --
+ *                                    local councils, alive and active, not just data.
+ *   5. Shared Responsibility     -- the ambient light itself warms and greens; the atmosphere glow
+ *                                    deepens -- a world connected is a world that also tends itself.
+ *   6. 2126                      -- cracks are gone, the network is at full brightness, hubs still
+ *                                    pulsing -- an illustrated vision, not live data.
+ *   7. Your Part In It           -- the globe recedes behind a CTA panel (plain HTML/CSS, not 3D --
+ *                                    no fabricated statistics) inviting the visitor to register or
+ *                                    sign in.
  *
- * One shared Three.js scene/camera/renderer persists across all four scenes; each scene only
- * changes material opacities, camera position, and which line/point groups are visible or
- * growing. No scene is ever rebuilt from scratch.
+ * Still ONE shared Three.js scene/camera/renderer persisting across all eight scenes (the
+ * 2026-11-08 architecture is unchanged); each scene only changes material opacities/colors, camera
+ * position, and which line/point/glow groups are visible, growing, or pulsing. No scene is ever
+ * rebuilt from scratch, and no new rendering technique or dependency was introduced for this
+ * expansion -- every new visual (the sparse/fill node split, the hub glows, the ambient color
+ * shift) reuses the exact same primitives (THREE.Points, THREE.Line, GSAP tweens on existing
+ * materials/lights) the original four scenes already used.
  *
  * Reuses the project's existing Three.js version/loading convention (three@0.160.0 via unpkg,
  * lazy-loaded only after a synchronous WebGL capability check -- see earth.js's own
@@ -33,6 +48,7 @@
   var sceneEls = Array.prototype.slice.call(document.querySelectorAll(".qmf-scene"));
   var progressDots = Array.prototype.slice.call(document.querySelectorAll(".qmf-progress-dot"));
   var continueBtns = Array.prototype.slice.call(document.querySelectorAll(".qmf-continue"));
+  var SCENE_COUNT = sceneEls.length; // 8
 
   var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var isMobile = window.innerWidth < 640;
@@ -40,7 +56,7 @@
   // ==================== Skip control (works even if Three.js/WebGL never loads) ====================
   // Fixed destination per the product brief: always the sign-in page, regardless of how far the
   // visitor has scrolled or whether they're already signed in (the authenticated-specific action
-  // lives only in Scene 4's own CTA, rendered server-side in future.html).
+  // lives only in the final scene's own CTA, rendered server-side in future.html).
   skipBtn.setAttribute("href", QMF_LOGIN_URL);
 
   // ==================== Scene navigation (scroll-based, plus Continue/progress-dot buttons) ====================
@@ -56,7 +72,7 @@
     dot.addEventListener("click", function () { goToScene(parseInt(dot.getAttribute("data-scene-target"), 10)); });
   });
 
-  var playedScene = [false, false, false, false];
+  var playedScene = new Array(SCENE_COUNT).fill(false);
 
   function setActiveScene(index) {
     sceneEls.forEach(function (el, i) { el.classList.toggle("is-active", i === index); });
@@ -142,11 +158,13 @@
   // ==================== Three.js scene ====================
   function initThree() {
     var renderer, scene, camera, earthGroup, earthMesh, atmosphereMesh;
-    var crackLines = [], threadLines = [], nodePoints;
+    var crackLines = [], threadLines = [], sparseNodes, fillNodes, hubGlow;
+    var ambientLight, sun;
     var rafId = null;
     var disposed = false;
     var pointerX = 0, pointerY = 0;
     var EARTH_R = 2.6;
+    var hubPulseStarted = false;
 
     function degToRad(d) { return (d * Math.PI) / 180; }
 
@@ -205,12 +223,13 @@
     atmosphereMesh = new THREE.Mesh(glowGeo, glowMat);
     earthGroup.add(atmosphereMesh);
 
-    scene.add(new THREE.AmbientLight(0x4a4a72, 1.15));
-    var sun = new THREE.DirectionalLight(0xfff2cc, 1.0);
+    ambientLight = new THREE.AmbientLight(0x4a4a72, 1.15);
+    scene.add(ambientLight);
+    sun = new THREE.DirectionalLight(0xfff2cc, 1.0);
     sun.position.set(5, 3, 5);
     scene.add(sun);
 
-    // ---- Fractures (Scene 1): fine jagged crack lines, present from the start, dim reddish-gold. ----
+    // ---- Fractures (Scene 0): fine jagged crack lines, present from the start, dim reddish-gold. ----
     var CRACK_COUNT = isMobile ? 7 : 12;
     for (var ci = 0; ci < CRACK_COUNT; ci++) {
       var lat0 = rng() * 150 - 75, lng0 = rng() * 360 - 180;
@@ -276,17 +295,14 @@
       connected.push(candidate);
     }
 
-    // ---- Nodes (Scene 3): small lit points representing people/communities, not live data. ----
-    var NODE_COUNT = isMobile ? 90 : 180;
-    var nodePositions = new Float32Array(NODE_COUNT * 3);
-    for (var ni = 0; ni < NODE_COUNT; ni++) {
-      var nlat = rng() * 160 - 80, nlng = rng() * 360 - 180;
-      var v2 = latLngToVector3(nlat, nlng, EARTH_R * 1.015);
-      nodePositions[ni * 3] = v2.x; nodePositions[ni * 3 + 1] = v2.y; nodePositions[ni * 3 + 2] = v2.z;
-    }
-    var nodeGeo = new THREE.BufferGeometry();
-    nodeGeo.setAttribute("position", new THREE.BufferAttribute(nodePositions, 3));
-    var nodeSpriteTex = (function () {
+    // ---- Nodes, split into two layers (2026-11-09 content expansion):
+    //   sparseNodes -- a small subset clustered around only 3 of the hub regions, revealed first
+    //                  (Scene 1, "The Gap") to depict uneven reach.
+    //   fillNodes   -- the remaining points, spread globally, revealed later (Scene 3, "Connected
+    //                  Communities") once the Thread already exists -- the rest of the world
+    //                  catching up, not a second unrelated dataset.
+    // Both are illustrative placement only, not live member data (same disclosure as before). ----
+    function makeNodeSprite() {
       var c = document.createElement("canvas"); c.width = c.height = 32;
       var g = c.getContext("2d");
       var grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
@@ -295,32 +311,115 @@
       grad.addColorStop(1, "rgba(245,222,130,0)");
       g.fillStyle = grad; g.fillRect(0, 0, 32, 32);
       return new THREE.CanvasTexture(c);
-    })();
-    var nodeMat = new THREE.PointsMaterial({
-      size: isMobile ? 0.09 : 0.07, map: nodeSpriteTex, transparent: true, opacity: 0,
-      depthWrite: false, blending: THREE.AdditiveBlending,
+    }
+    var nodeSpriteTex = makeNodeSprite();
+
+    function buildNodeLayer(positions, size) {
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      var mat = new THREE.PointsMaterial({
+        size: size, map: nodeSpriteTex, transparent: true, opacity: 0,
+        depthWrite: false, blending: THREE.AdditiveBlending,
+      });
+      var pts = new THREE.Points(geo, mat);
+      earthGroup.add(pts);
+      return pts;
+    }
+
+    var TOTAL_NODES = isMobile ? 90 : 180;
+    var SPARSE_COUNT = Math.round(TOTAL_NODES * 0.22); // ~ a handful of places, not the whole globe
+    var SPARSE_REGION_CENTERS = [hubs[0].vec, hubs[Math.floor(hubs.length / 3)].vec, hubs[Math.floor((hubs.length * 2) / 3)].vec];
+    var sparsePositions = new Float32Array(SPARSE_COUNT * 3);
+    for (var si = 0; si < SPARSE_COUNT; si++) {
+      var center = SPARSE_REGION_CENTERS[si % SPARSE_REGION_CENTERS.length];
+      var jitterLat = (rng() - 0.5) * 22, jitterLng = (rng() - 0.5) * 26;
+      // Walk a small random offset from the chosen hub's own lat/lng rather than resampling the
+      // whole globe, so these points genuinely cluster near just 3 regions.
+      var baseHub = hubs[(si % SPARSE_REGION_CENTERS.length) === 0 ? 0 : Math.floor(hubs.length / 3)];
+      var v = latLngToVector3(baseHub.lat + jitterLat, baseHub.lng + jitterLng, EARTH_R * 1.015);
+      sparsePositions[si * 3] = v.x; sparsePositions[si * 3 + 1] = v.y; sparsePositions[si * 3 + 2] = v.z;
+    }
+    sparseNodes = buildNodeLayer(sparsePositions, isMobile ? 0.1 : 0.08);
+
+    var FILL_COUNT = TOTAL_NODES - SPARSE_COUNT;
+    var fillPositions = new Float32Array(FILL_COUNT * 3);
+    for (var fi = 0; fi < FILL_COUNT; fi++) {
+      var flat = rng() * 160 - 80, flng = rng() * 360 - 180;
+      var fv = latLngToVector3(flat, flng, EARTH_R * 1.015);
+      fillPositions[fi * 3] = fv.x; fillPositions[fi * 3 + 1] = fv.y; fillPositions[fi * 3 + 2] = fv.z;
+    }
+    fillNodes = buildNodeLayer(fillPositions, isMobile ? 0.09 : 0.07);
+
+    // ---- Hub glow (Scene 4, "A New Way to Participate"): a small pulsing point at each Tree hub
+    // -- local councils, alive and active. Reuses the same sprite texture/blending as the nodes
+    // above, just a distinct, larger, slow-pulsing layer so it reads as "active," not "static." ----
+    var hubPositions = new Float32Array(hubs.length * 3);
+    hubs.forEach(function (h, i) {
+      var v = h.vec.clone().normalize().multiplyScalar(EARTH_R * 1.02);
+      hubPositions[i * 3] = v.x; hubPositions[i * 3 + 1] = v.y; hubPositions[i * 3 + 2] = v.z;
     });
-    nodePoints = new THREE.Points(nodeGeo, nodeMat);
-    earthGroup.add(nodePoints);
+    hubGlow = buildNodeLayer(hubPositions, isMobile ? 0.16 : 0.13);
 
     // ==================== GSAP scene choreography ====================
-    var tl = {}; // one timeline per scene index, built lazily on first play
+    // Per-scene target state, shared by play() (first visit -- also triggers one-shot growth/pulse
+    // starts) and focus() (re-visiting -- snaps/tweens straight to the same resting values, never
+    // re-running a one-shot animation). Keeping these as parallel arrays (one entry per scene)
+    // means both functions read the same numbers; a wrong value can't drift between them.
+    var CAMERA_POS = [
+      { x: 0, y: 0.1, z: 7.4 }, { x: 0.3, y: 0.15, z: 7.0 }, { x: 0.6, y: 0.2, z: 6.4 }, { x: 0.2, y: 0.1, z: 6.0 },
+      { x: -0.2, y: 0.05, z: 5.8 }, { x: -0.5, y: 0.0, z: 5.7 }, { x: -0.4, y: 0.05, z: 5.6 }, { x: 0, y: 0, z: 10.5 },
+    ];
+    var CRACK_OPACITY = [0.55, 0.55, 0.35, 0.15, 0.1, 0.08, 0, 0];
+    var SPARSE_OPACITY = [0, 0.8, 0.8, 0.8, 0.8, 0.8, 0.9, 0];
+    var FILL_OPACITY = [0, 0, 0, 0.75, 0.8, 0.8, 0.9, 0];
+    var HUB_OPACITY = [0, 0, 0, 0, 0.9, 0.9, 0.9, 0];
+    var THREAD_OPACITY = [0.85, 0.85, 1, 1, 1, 1, 1, 0];
+    var GLOW_OPACITY = [0.05, 0.05, 0.05, 0.07, 0.1, 0.22, 0.18, 0];
+    var EMISSIVE_INTENSITY = [0.6, 0.6, 0.6, 0.7, 0.8, 0.9, 1.1, 1.1];
+    var AMBIENT_COLOR = [ // THREE.Color-style 0-1 floats; scenes 0-4 keep the original cool tone,
+      // 5 onward (Shared Responsibility) warms and greens it -- never reverts, carrying into 2126.
+      { r: 0x4a / 255, g: 0x4a / 255, b: 0x72 / 255 },
+      { r: 0x4a / 255, g: 0x4a / 255, b: 0x72 / 255 },
+      { r: 0x4a / 255, g: 0x4a / 255, b: 0x72 / 255 },
+      { r: 0x4a / 255, g: 0x4a / 255, b: 0x72 / 255 },
+      { r: 0x4a / 255, g: 0x4a / 255, b: 0x72 / 255 },
+      { r: 0x5c / 255, g: 0x74 / 255, b: 0x56 / 255 },
+      { r: 0x5c / 255, g: 0x74 / 255, b: 0x56 / 255 },
+      { r: 0x5c / 255, g: 0x74 / 255, b: 0x56 / 255 },
+    ];
+    var EARTH_SCALE = [1, 1, 1, 1, 1, 1, 1, 0.4];
+    var EARTH_OPACITY = [1, 1, 1, 1, 1, 1, 1, 0];
 
     function tweenOrSet(target, props, duration) {
       if (reducedMotion || typeof gsap === "undefined") {
-        Object.keys(props).forEach(function (k) { if (k !== "ease" && k !== "onUpdate" && k !== "stagger" && k !== "delay") target[k] = props[k]; });
+        Object.keys(props).forEach(function (k) { if (k !== "ease" && k !== "onUpdate" && k !== "stagger" && k !== "delay" && k !== "repeat" && k !== "yoyo") target[k] = props[k]; });
         if (props.onUpdate) props.onUpdate();
         return;
       }
       gsap.to(target, Object.assign({ duration: duration }, props));
     }
 
+    function startHubPulse() {
+      if (hubPulseStarted || reducedMotion || typeof gsap === "undefined") return;
+      hubPulseStarted = true;
+      // A slow, gentle breathing loop -- "alive," never distracting; respects reduced-motion by
+      // simply never starting (the hub glow still shows at its base opacity via tweenOrSet above).
+      gsap.to(hubGlow.material, { opacity: HUB_OPACITY[4] * 0.55, duration: 2.2, repeat: -1, yoyo: true, ease: "sine.inOut" });
+    }
+
     function play(index) {
-      if (index === 0) {
-        tweenOrSet(camera.position, { x: 0, y: 0.1, z: 7.4 }, 1.6);
-        crackLines.forEach(function (l) { tweenOrSet(l.material, { opacity: 0.55 }, 1.2); });
-      } else if (index === 1) {
-        tweenOrSet(camera.position, { x: 0.6, y: 0.2, z: 6.4 }, 1.8);
+      tweenOrSet(camera.position, CAMERA_POS[index], 1.6);
+      tweenOrSet(ambientLight.color, AMBIENT_COLOR[index], 1.6);
+      tweenOrSet(glowMat, { opacity: GLOW_OPACITY[index] }, 1.6);
+      tweenOrSet(earthMat, { emissiveIntensity: EMISSIVE_INTENSITY[index], opacity: EARTH_OPACITY[index] }, 1.6);
+      tweenOrSet(earthGroup.scale, EARTH_SCALE[index], 1.8);
+      crackLines.forEach(function (l) { tweenOrSet(l.material, { opacity: CRACK_OPACITY[index] }, 1.2); });
+      tweenOrSet(sparseNodes.material, { opacity: SPARSE_OPACITY[index] }, 1.4);
+      tweenOrSet(fillNodes.material, { opacity: FILL_OPACITY[index] }, 1.4);
+      tweenOrSet(hubGlow.material, { opacity: HUB_OPACITY[index] }, 1.4);
+
+      if (index === 2) {
+        // One-shot: grow the Thread's arcs, staggered, the first time this scene is reached.
         threadLines.forEach(function (line, i) {
           var proxy = { n: 0 };
           var max = line.geometry.attributes.position.count;
@@ -333,40 +432,29 @@
             });
           }
         });
-      } else if (index === 2) {
-        tweenOrSet(camera.position, { x: -0.4, y: 0.05, z: 5.6 }, 1.8);
-        crackLines.forEach(function (l) { tweenOrSet(l.material, { opacity: 0 }, 1.4); });
-        tweenOrSet(glowMat, { opacity: 0.16 }, 1.6);
-        tweenOrSet(earthMat, { emissiveIntensity: 1.1 }, 1.6);
-        threadLines.forEach(function (l) { tweenOrSet(l.material, { opacity: 1 }, 1.2); });
-        tweenOrSet(nodeMat, { opacity: 0.9 }, 1.8);
-      } else if (index === 3) {
-        tweenOrSet(camera.position, { x: 0, y: 0, z: 10.5 }, 1.6);
-        tweenOrSet(earthGroup.scale, { x: 0.4, y: 0.4, z: 0.4 }, 1.8);
-        tweenOrSet(earthMat, { opacity: 0 }, 1.8);
-        tweenOrSet(glowMat, { opacity: 0 }, 1.8);
-        threadLines.forEach(function (l) { tweenOrSet(l.material, { opacity: 0 }, 1.8); });
-        tweenOrSet(nodeMat, { opacity: 0 }, 1.8);
+      } else {
+        threadLines.forEach(function (l) { tweenOrSet(l.material, { opacity: THREAD_OPACITY[index] }, 1.2); });
       }
+      if (index === 4) startHubPulse();
+      if (index === 7) threadLines.forEach(function (l) { tweenOrSet(l.material, { opacity: 0 }, 1.8); });
     }
 
     function focus(index) {
       // Re-entering an already-played scene (scrolled back up and down again, in either
-      // direction): snap camera and material state back to that scene's resting values without
-      // replaying the one-shot growth animations (the thread lines' own drawRange stays as it
-      // was -- already fully grown from scene 1 onward, which is correct either way).
-      var positions = [
-        { x: 0, y: 0.1, z: 7.4 }, { x: 0.6, y: 0.2, z: 6.4 }, { x: -0.4, y: 0.05, z: 5.6 }, { x: 0, y: 0, z: 10.5 },
-      ];
-      tweenOrSet(camera.position, positions[index], 1.0);
-      if (index < 3) {
-        tweenOrSet(earthGroup.scale, { x: 1, y: 1, z: 1 }, 0.8);
-        tweenOrSet(earthMat, { opacity: 1 }, 0.8);
-        tweenOrSet(glowMat, { opacity: index === 2 ? 0.16 : 0.05 }, 0.8);
-        tweenOrSet(nodeMat, { opacity: index === 2 ? 0.9 : 0 }, 0.8);
-        crackLines.forEach(function (l) { tweenOrSet(l.material, { opacity: index === 2 ? 0 : 0.55 }, 0.8); });
-        threadLines.forEach(function (l) { tweenOrSet(l.material, { opacity: index === 0 ? 0.85 : 1 }, 0.8); });
-      }
+      // direction): snap/tween to that scene's resting values without replaying the Thread's own
+      // one-shot growth (its drawRange stays fully grown from Scene 2 onward either way) or
+      // restarting the hub pulse loop (it just keeps running once begun).
+      tweenOrSet(camera.position, CAMERA_POS[index], 1.0);
+      tweenOrSet(ambientLight.color, AMBIENT_COLOR[index], 1.0);
+      tweenOrSet(glowMat, { opacity: GLOW_OPACITY[index] }, 0.8);
+      tweenOrSet(earthMat, { emissiveIntensity: EMISSIVE_INTENSITY[index], opacity: EARTH_OPACITY[index] }, 0.8);
+      tweenOrSet(earthGroup.scale, EARTH_SCALE[index], 0.8);
+      crackLines.forEach(function (l) { tweenOrSet(l.material, { opacity: CRACK_OPACITY[index] }, 0.8); });
+      tweenOrSet(sparseNodes.material, { opacity: SPARSE_OPACITY[index] }, 0.8);
+      tweenOrSet(fillNodes.material, { opacity: FILL_OPACITY[index] }, 0.8);
+      if (!hubPulseStarted) tweenOrSet(hubGlow.material, { opacity: HUB_OPACITY[index] }, 0.8);
+      threadLines.forEach(function (l) { tweenOrSet(l.material, { opacity: THREAD_OPACITY[index] }, 0.8); });
+      if (index >= 4) startHubPulse();
     }
 
     // ==================== Render loop, resize, visibility, pointer parallax, disposal ====================

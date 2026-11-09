@@ -37,41 +37,85 @@
     <img src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="" width="28" height="28" />
   </a>
 
+  <!-- 2026-11-09 (content expansion, 4 -> 8 scenes): progress dots now one per scene, built from
+       the same markup pattern as before -- future.js reads data-scene-target, nothing new to wire. -->
   <nav class="qmf-progress" id="qmf-progress" aria-label="Journey progress">
-    <button type="button" class="qmf-progress-dot is-active" data-scene-target="0" aria-label="Scene 1: The Present" aria-current="true"></button>
-    <button type="button" class="qmf-progress-dot" data-scene-target="1" aria-label="Scene 2: The Thread"></button>
-    <button type="button" class="qmf-progress-dot" data-scene-target="2" aria-label="Scene 3: The Future"></button>
-    <button type="button" class="qmf-progress-dot" data-scene-target="3" aria-label="Scene 4: The Action"></button>
+    <button type="button" class="qmf-progress-dot is-active" data-scene-target="0" aria-label="Scene 1: 2026 -- The Present" aria-current="true"></button>
+    <button type="button" class="qmf-progress-dot" data-scene-target="1" aria-label="Scene 2: The Gap"></button>
+    <button type="button" class="qmf-progress-dot" data-scene-target="2" aria-label="Scene 3: The Thread"></button>
+    <button type="button" class="qmf-progress-dot" data-scene-target="3" aria-label="Scene 4: Connected Communities"></button>
+    <button type="button" class="qmf-progress-dot" data-scene-target="4" aria-label="Scene 5: A New Way to Participate"></button>
+    <button type="button" class="qmf-progress-dot" data-scene-target="5" aria-label="Scene 6: Shared Responsibility"></button>
+    <button type="button" class="qmf-progress-dot" data-scene-target="6" aria-label="Scene 7: 2126"></button>
+    <button type="button" class="qmf-progress-dot" data-scene-target="7" aria-label="Scene 8: Your Part In It"></button>
   </nav>
 
   <main class="qmf-journey" id="qmf-journey">
 
-    <section class="qmf-scene" id="qmf-scene-0" data-scene="0" aria-label="Scene 1: The Present">
+    <section class="qmf-scene" id="qmf-scene-0" data-scene="0" aria-label="Scene 1: 2026 -- The Present">
       <div class="qmf-scene-copy">
-        <p class="qmf-eyebrow">The Present</p>
+        <p class="qmf-eyebrow">2026 — The Present</p>
         <h2 class="qmf-scene-text">The world is fragmented.</h2>
+        <p class="qmf-scene-sub">Villages, towns, cities and nations each keep their own records, with no common thread between them.</p>
         <button type="button" class="qmf-continue" data-scene-target="1" aria-label="Continue to the next scene">Continue <span aria-hidden="true">↓</span></button>
       </div>
     </section>
 
-    <section class="qmf-scene" id="qmf-scene-1" data-scene="1" aria-label="Scene 2: The Thread">
+    <section class="qmf-scene" id="qmf-scene-1" data-scene="1" aria-label="Scene 2: The Gap">
       <div class="qmf-scene-copy">
-        <p class="qmf-eyebrow">The Qumanity Tree</p>
-        <h2 class="qmf-scene-text">But there is a thread that connects us all.</h2>
+        <p class="qmf-eyebrow">The Gap</p>
+        <h2 class="qmf-scene-text">Where you're born still decides what you can reach.</h2>
+        <p class="qmf-scene-sub">Opportunity, public services, even a say in local decisions — unevenly spread, dense in some places, dark in others.</p>
         <button type="button" class="qmf-continue" data-scene-target="2" aria-label="Continue to the next scene">Continue <span aria-hidden="true">↓</span></button>
       </div>
     </section>
 
-    <section class="qmf-scene" id="qmf-scene-2" data-scene="2" aria-label="Scene 3: The Future">
+    <section class="qmf-scene" id="qmf-scene-2" data-scene="2" aria-label="Scene 3: The Thread">
       <div class="qmf-scene-copy">
-        <p class="qmf-eyebrow">2126</p>
-        <h2 class="qmf-scene-text">Imagine 2126. No borders. Every voice is heard.</h2>
-        <p class="qmf-scene-sub">A vision Qumanity is built toward -- not a claim of what exists today.</p>
-        <button type="button" class="qmf-continue" data-scene-target="3" aria-label="Continue to the final scene">Continue <span aria-hidden="true">↓</span></button>
+        <p class="qmf-eyebrow">The Qumanity Tree</p>
+        <h2 class="qmf-scene-text">But there is a thread that connects us all.</h2>
+        <p class="qmf-scene-sub">One shared, transparent record — Earth down to Village — lets every place finally speak to every other.</p>
+        <button type="button" class="qmf-continue" data-scene-target="3" aria-label="Continue to the next scene">Continue <span aria-hidden="true">↓</span></button>
       </div>
     </section>
 
-    <section class="qmf-scene qmf-scene-action" id="qmf-scene-3" data-scene="3" aria-label="Scene 4: The Action">
+    <section class="qmf-scene" id="qmf-scene-3" data-scene="3" aria-label="Scene 4: Connected Communities">
+      <div class="qmf-scene-copy">
+        <p class="qmf-eyebrow">Connected Communities</p>
+        <h2 class="qmf-scene-text">Your family, your neighbours, your nation — one living map.</h2>
+        <p class="qmf-scene-sub">Private, Personal, Public and Global: every circle of your life, nested in the same geography, each with its own privacy.</p>
+        <button type="button" class="qmf-continue" data-scene-target="4" aria-label="Continue to the next scene">Continue <span aria-hidden="true">↓</span></button>
+      </div>
+    </section>
+
+    <section class="qmf-scene" id="qmf-scene-4" data-scene="4" aria-label="Scene 5: A New Way to Participate">
+      <div class="qmf-scene-copy">
+        <p class="qmf-eyebrow">A New Way to Participate</p>
+        <h2 class="qmf-scene-text">Councils that answer to the people who elected them.</h2>
+        <p class="qmf-scene-sub">Elections by the calendar. Votes that are counted, not promised. Service that is logged, not forgotten.</p>
+        <button type="button" class="qmf-continue" data-scene-target="5" aria-label="Continue to the next scene">Continue <span aria-hidden="true">↓</span></button>
+      </div>
+    </section>
+
+    <section class="qmf-scene" id="qmf-scene-5" data-scene="5" aria-label="Scene 6: Shared Responsibility">
+      <div class="qmf-scene-copy">
+        <p class="qmf-eyebrow">Shared Responsibility</p>
+        <h2 class="qmf-scene-text">Every living thing, accounted for.</h2>
+        <p class="qmf-scene-sub">A world that grows closer together is a world that looks after its rivers, its forests, and every creature that depends on them too.</p>
+        <button type="button" class="qmf-continue" data-scene-target="6" aria-label="Continue to the next scene">Continue <span aria-hidden="true">↓</span></button>
+      </div>
+    </section>
+
+    <section class="qmf-scene" id="qmf-scene-6" data-scene="6" aria-label="Scene 7: 2126">
+      <div class="qmf-scene-copy">
+        <p class="qmf-eyebrow">2126</p>
+        <h2 class="qmf-scene-text">Imagine 2126. No borders. Every voice is heard.</h2>
+        <p class="qmf-scene-sub">A vision Qumanity is built toward — not a claim of what exists today.</p>
+        <button type="button" class="qmf-continue" data-scene-target="7" aria-label="Continue to the final scene">Continue <span aria-hidden="true">↓</span></button>
+      </div>
+    </section>
+
+    <section class="qmf-scene qmf-scene-action" id="qmf-scene-7" data-scene="7" aria-label="Scene 8: Your Part In It">
       <div class="qmf-scene-copy qmf-cta-panel">
         <p class="qmf-eyebrow">Your part in it</p>
         <h2 class="qmf-scene-text">You are the architect. Register to begin.</h2>
