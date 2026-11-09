@@ -1,17 +1,24 @@
 # Qumanity Master Status Tracker
 
-**Updated 2026-11-02**, from live inspection this session — `git log`, `git status`, real file
-contents, and a fresh full test run. This is a concise, navigable status tracker, not a full
-technical reference. For implementation detail, see **`docs/HANDOVER.md`**. For a high-level,
+**Updated 2026-11-09**, from live inspection this session — `git log`, a live `git ls-remote`,
+`git status`, real file contents, and a fresh full test run. This is a concise, navigable status
+tracker, not a full technical reference. For implementation detail, see **`docs/HANDOVER.md`**
+(§9.3, §14, §15 for the Global Account/C1 release and the phone-app handover). For a high-level,
 partner-facing overview of the project, see **`docs/QUMANITY_WHITEPAPER.md`**.
 
-**Repository**: `qumanity-web`, branch `main`. Local `HEAD` = `origin/main` = **`6b8e5b5`**
-("feat: add Q-Map Leaflet rendering with OSM pilot data"), confirmed identical by fetch this
-session.
+**Repository**: `qumanity-web`, branch `main`. Local `HEAD` = `origin/main` =
+**`a157d7af01e1e5791de6e2449cde2945652c8659`** ("Add Global Account registration and dashboard
+UI"), confirmed by a live `git ls-remote origin refs/heads/main` this session — the website
+feature-development phase (Global Account, Q-Punch/election hardening, and the C1 security
+correction below) is now **committed and pushed**; only pre-existing, unrelated work remains
+uncommitted (9 modified + 25 untracked files — see `docs/HANDOVER.md` §14 for the exact list).
 
-**Full regression, fresh this session: 1,380 checks across 30 test files, 0 failures.** Full
-per-file table: `docs/HANDOVER.md` §11. (Supersedes the previously reported 1,378 — a recount of
-`tests/test_qmap.py` found 33 checks, not 31.)
+**Full regression, fresh this session: 1,370 checks across 33 test files, 0 failures.** The
+mobile app's cross-repo checker: 156 passed, 1 pre-existing, unrelated failure (`"board shows the
+post, score and vote state"`, tracked separately, not fixed). Production: the live site's
+`/register` page and `register.js` were confirmed, by direct read-only inspection, to be serving
+this release's code; Railway's own deployment metadata was not independently verified (CLI
+authentication was expired) — that remains an owner action.
 
 ---
 
@@ -35,7 +42,7 @@ per-file table: `docs/HANDOVER.md` §11. (Supersedes the previously reported 1,3
 | Admin Panel | ✅ Implemented & Committed | Council-scoped queue |
 | Referral Engine (registration attribution + bonus) | ✅ Implemented & Committed | A separate, unfinished board-level referrer-code system has no redemption path or tests — do not conflate the two; see `docs/dpg_evidence/13_referral_engine_evidence.md` |
 | Copyright/religious-text notice pages | ✅ Implemented & Committed | `/copyright/gita-press`, `/copyright/religious-texts` |
-| Global Account (registration outside the 10 Public Account countries) | 🟡 **Implemented & tested, uncommitted** | See **Global Account** section below |
+| Global Account (registration outside the 10 Public Account countries) | ✅ **Implemented, tested, Committed & Pushed** (`a7d43a7`/`a157d7a`) | See **Global Account** section below |
 
 ---
 
@@ -86,7 +93,8 @@ erasing the underlying rights research; `docs/marquee_religious_text_sources.md`
 
 ## Global Account
 
-**🟡 Implemented, security-hardened & tested, uncommitted — 2026-11-08** — a user whose Present
+**✅ Implemented, security-hardened, tested, committed and pushed to `origin/main` — 2026-11-09**
+— a user whose Present
 Location's country is outside the 10 Public Account Activation countries
 (`SUBCONTINENT_COUNTRY_IDS`, now in its own `account_core.py` module: India, Nepal, Bhutan,
 Bangladesh, Myanmar, Sri Lanka, Pakistan, Balochistan, Afghanistan, Maldives — Mauritius and every
@@ -174,13 +182,16 @@ present-location at submission and independently revalidates it against the user
 account state at approval, and the screen's existing generic error handling already surfaces a
 rejection correctly. Backend authorization and validation remain the sole, authoritative gate.
 
-**Not yet committed** — `tests/test_global_account.py`: **136 checks**, all pass; plus
-`tests/test_election_winner_tally.py` (25 checks) and the new `tests/test_account_id_request_security.py`
-(31 checks); full regression is 33 files / **1,370 checks** / 0 failures (supersedes the
-previously reported 32 files / 1,339 checks). The mobile app's own cross-repo checker
-(`Qumanity_App/tools/website-check/check_app_api.py`) now shows only one remaining, pre-existing,
+**Committed and pushed to `origin/main`** (`a7d43a7` then `a157d7a`) — `tests/test_global_account.py`:
+**136 checks**, all pass; plus `tests/test_election_winner_tally.py` (25 checks) and
+`tests/test_account_id_request_security.py` (31 checks); full regression is 33 files /
+**1,370 checks** / 0 failures. The mobile app's own cross-repo checker
+(`Qumanity_App/tools/website-check/check_app_api.py`) shows only one remaining, pre-existing,
 unrelated failure ("board shows the post, score and vote state" — tracked separately, not a
-Global Account or election issue). Awaiting the owner's review before `git commit`/`push`.
+Global Account or election issue, and not fixed by this release). Production serving of this
+release's registration UI was confirmed by direct, read-only inspection of the live site; Railway's
+own deployment metadata was not independently verified (CLI authentication expired) — that remains
+an owner action.
 
 ---
 
@@ -205,10 +216,14 @@ separately authorized task. Full detail: `docs/HANDOVER.md` §10.
 
 ## Website phase → phone app transition
 
-The website feature-development phase is complete as of `6b8e5b5` plus this documentation
-consolidation. The next phase is the phone application (`qumanity-app`), which must integrate with
-the existing backend's `/api` routes and **must not** independently redefine location IDs,
-consent rules, geography, or user identity. Full handover instructions: `docs/HANDOVER.md` §15.
+The website feature-development phase is complete as of `a157d7af01e1e5791de6e2449cde2945652c8659`
+(pushed to `origin/main` 2026-11-09 — Global Account registration/authorization, Q-Punch
+winner-tally correction, and the C1 account-ID-request security correction; see `docs/HANDOVER.md`
+§9.3/§14). The next phase is the phone application (`qumanity-app` / `Qumanity_App`), which already
+has substantial prior work against this backend and must integrate with the existing `/api` routes
+and **must not** independently redefine location IDs, consent rules, geography, or user identity.
+Full, comprehensive handover instructions (API contracts to reuse, permission rules, known
+limitations, where to start): `docs/HANDOVER.md` §15.
 
 ---
 
@@ -231,6 +246,19 @@ consent rules, geography, or user identity. Full handover instructions: `docs/HA
 
 ## Revision log
 
+- 2026-11-09: documentation reconciliation following the Global Account / C1 release
+  (`a7d43a7`/`a157d7a`, pushed to `origin/main`). Corrected every remaining "uncommitted"/stale-SHA
+  reference to Global Account across this file and `docs/HANDOVER.md`; added the final regression
+  totals (33 files/1,370 checks; cross-repo checker 156 passed/1 pre-existing unrelated failure);
+  recorded that production was confirmed, by direct read-only inspection, to be serving this
+  release's code, while Railway's own deployment metadata remains unverified (expired CLI
+  authentication, an owner action); verified and updated the status of the two previously flagged
+  phone-app API discrepancies (the missing `donation` object was never a backend defect — a stale
+  checker assertion; the winner-tally display bug was real and is fixed, Task 1B); rewrote
+  `docs/HANDOVER.md` §15 into a comprehensive, standalone website-to-phone-app handover; added the
+  missing `account_core.py` row to `docs/ARCHITECTURE.md`'s module map; added a Global Account
+  section to `docs/phone_app_api.md` (the `Qumanity_App` copy of that file was not touched —
+  out of scope for this repository-scoped task).
 - 2026-11-02: full rewrite as part of the final documentation consolidation for the current website
   phase — added the Q-Map entry and its public/private data distinction, re-verified every
   subsystem's git status fresh (Family Tree is now fully committed, not split; OSM Proximity and

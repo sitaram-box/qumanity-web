@@ -30,7 +30,9 @@ phase** (`qumanity-web`, this repository). The next phase is the **phone applica
 (`qumanity-app`), which must integrate with the backend documented here rather than redefining
 identity, geography, consent, or location IDs on its own — see §15.
 
-**Repository state at this handover** (verified fresh, not carried over):
+**Repository state at this handover** (verified fresh, not carried over; **superseded by §14**,
+which reflects this document's current, later `HEAD` — `main` has moved on since the paragraph
+below was written, and §14 is the authoritative current release state, not this one):
 - Branch `main`. Local `HEAD` and `origin/main` both at **`6b8e5b5`** — `feat: add Q-Map Leaflet
   rendering with OSM pilot data` — confirmed identical by `git fetch` + `git rev-parse` in this
   session, i.e. this is genuinely the tip of `main`, not an assumption carried over from an older
@@ -183,7 +185,7 @@ older summary.
 | Provisional Locations (crowdsourced location MVP) | ✅ Implemented | See §6 |
 | OSM Proximity (backend) | ✅ Implemented | See §6 |
 | Q-Map (public map UI) | ✅ Implemented & committed, `6b8e5b5` | See §7 |
-| Global Account (worldwide registration outside the 10 Public Account countries) | ✅ Implemented & tested; ⚠️ **uncommitted** | See §9.3 |
+| Global Account (worldwide registration outside the 10 Public Account countries) | ✅ Implemented, tested, **committed and pushed to `origin/main`** (`a7d43a7`/`a157d7a`) | See §9.3 |
 | Perception Calculator | ✅ Implemented | 10 countries + an India zone, no State-level |
 | Notifications | ✅ Implemented, read-time aggregation only | `notify_core.py` synthesizes notifications by querying existing unread-message/reply state — there is no durable, independently-written notification log |
 | Report / Block member | ❌ Not built | Named gap; see §13 |
@@ -486,7 +488,7 @@ Panel's council-scoped view.
 
 ---
 
-### 9.3 Global Account (2026-11-08) — ⚠️ implemented, uncommitted, pending owner review
+### 9.3 Global Account (2026-11-08) — ✅ implemented, tested, committed and pushed to `origin/main`
 
 A user whose **Present Location's** country is outside Qumanity's 10 Public Account Activation
 countries (`SUBCONTINENT_COUNTRY_IDS` in `app.py`: India, Nepal, Bhutan, Bangladesh, Myanmar, Sri
@@ -841,18 +843,38 @@ the user's CURRENT account state at approval, which closes this path regardless 
 mobile-side change required. Backend authorization and validation remain the sole, authoritative
 gate — hiding or restyling the mobile screen would not, by itself, have been a fix.
 
-**Status as of this writing: implemented and tested, not yet committed.** `git status` shows the
-changes in `app.py`, `election_core.py`, `social_core.py`, the new `account_core.py`,
-`templates/dashboard.html`, `templates/register.html`, `static/js/register.js`,
-`static/js/tutorial.js` (a pre-existing onboarding-tour step's body text named all four tabs
-unconditionally; now computed live so it only names tabs the viewer actually has),
-`static/css/dashboard.css` (the mobile logout-button overflow fix), the updated
-`tests/test_global_account.py`, the new `tests/test_election_winner_tally.py`, the new
-`tests/test_account_id_request_security.py`, and 19 existing `tests/*.py` files that each gained a
-short `india_villages` seed block; the two newly added files `tests/test_global_account.py` and
-`tests/test_election_winner_tally.py` independently include the same seed setup (see the
-"Test-infrastructure consequence" note above) — no unrelated test logic in any of them was
-touched — awaiting the owner's review and explicit authorization to commit/push.
+**Status as of this writing: implemented, tested, committed, and pushed to `origin/main`.** The
+work landed as two commits, in this order (backend before UI, since the UI depends on the backend
+validation and the `is_global_account` field): **`a7d43a7` "Harden Global Account authorization
+and election handling"** — `app.py`, `election_core.py`, `social_core.py`, the new
+`account_core.py`, the updated `tests/test_global_account.py`, the new
+`tests/test_election_winner_tally.py`, the new `tests/test_account_id_request_security.py`, and 19
+existing `tests/*.py` files that each gained a short `india_villages` seed block (the two newly
+added test files above independently include the same seed setup); and **`a157d7a` "Add Global
+Account registration and dashboard UI"** — `templates/dashboard.html`, `templates/register.html`,
+`static/js/register.js`, `static/js/tutorial.js` (a pre-existing onboarding-tour step's body text
+named all four tabs unconditionally; now computed live so it only names tabs the viewer actually
+has), `static/css/dashboard.css` (the mobile logout-button overflow fix). Combined release: 33
+files, 3,043 insertions, 77 deletions, pushed as a clean fast-forward — `origin/main` is at
+`a157d7af01e1e5791de6e2449cde2945652c8659`, confirmed by a live `git ls-remote` immediately before
+and after the push. **Production verification**: fetching the live production site directly
+(`GET /register`, `GET /static/js/register.js`) confirms the new Global Account markup and script
+are being served — direct, read-only evidence that this release (or a later one) is live. Railway's
+own deployment metadata (build status, exact deployed SHA, health check) was **not** independently
+confirmed in that session, because the Railway CLI's OAuth token had expired
+(`railway whoami`/`railway status` both returned "Unauthorized"); re-authenticating or checking the
+Railway dashboard directly remains an owner action, not something an assistant session did or
+could verify here. Do not treat "the live site serves the new code" as equivalent to "Railway's
+deployment record was inspected and found healthy" — the two are different kinds of evidence.
+
+**Final regression at this release, re-run against the pushed `HEAD` (not assumed from an earlier
+report)**: full backend suite, every `tests/test_*.py` run individually — **33 files, 1,370
+checks, 0 failures**. The mobile app's cross-repo checker
+(`Qumanity_App/tools/website-check/check_app_api.py`, against a disposable copy of the real
+database, never production) — **156 passed, 1 failed**. That one failure,
+`"board shows the post, score and vote state"`, is pre-existing and unrelated to Global Account or
+C1 (tracked separately); it is **not** fixed, and this checker run should not be described as
+"all passing."
 
 ---
 
@@ -1052,11 +1074,26 @@ re-confirmed against the code this session where practical:
   yet (ties to the data-export/delete gap above).
 - **Test scripts hard-code or otherwise depend on the owner's own checkout conventions** in a few
   places — not fully portable to an arbitrary new checkout without adjustment.
-- **The phone app's own API-contract check** (`Qumanity_App/tools/website-check/check_app_api.py`,
-  per the prior handover) had found two live discrepancies against this backend (a missing
-  `donation` object in the registration response, and a vote-tally display bug after an election
-  closes) — status of these should be re-verified against the current `HEAD` before phone-app work
-  resumes; not re-checked in this documentation pass.
+- **The two previously flagged phone-app API-contract discrepancies have now both been verified
+  and closed, with evidence, not merely re-asserted** (checked against `check_app_api.py`'s actual
+  current source and the real test runs, this session):
+  - **Missing `donation` object in the registration response**: this was **not a backend defect**
+    to begin with. `apply_free_registration()` has never returned a `donation` object — Qoins are
+    minted server-side with no field reporting it back, which is correct, intended behavior since
+    the 2026-10 payment removal (see `docs/qoins_earn_reference.md`). The checker's own assertion
+    used to also expect a `donation.kind == "free"` key that the backend never sent; that stale
+    expectation was removed from the check (`check_app_api.py` line ~199), which now correctly
+    asserts only `s == 201 and reg.get("token") and "donation_pending_amount" not in reg`. Nothing
+    in the backend changed; the check's incorrect assumption did.
+  - **Vote-tally display bug after an election closes**: this **was** a genuine backend defect —
+    `election_core._ensure_tallied()` tallied a cycle's winners once ever per
+    `(village_id, zodiac_sign, year)`, never recomputing even after real votes arrived (Task 1B,
+    §9.3/above). Fixed by always recomputing from current `election_votes` and UPSERTing the
+    result. Verified by: `check_app_api.py`'s own `"week 4: winners have the most votes"` check
+    (line ~365), confirmed passing in the checker run above (156 passed, 1 unrelated, pre-existing
+    failure); and the dedicated
+    `tests/test_election_winner_tally.py` (25/25 passing), which reproduces the exact real-database
+    failure (a cycle tallied with zero votes on record) before proving it self-corrects.
 - **Qumanity Lok LLP is still in registration** — the IP has not yet been formally assigned;
   copyright assignment, trademark filing, and domain transfer are all gated on that completing.
 
@@ -1064,53 +1101,172 @@ re-confirmed against the code this session where practical:
 
 ## 14. Git and release state
 
-- Branch `main`. `HEAD` = `origin/main` = **`6b8e5b5`**, confirmed by `git fetch origin main` +
-  `git rev-parse HEAD origin/main` in this session.
-- `6b8e5b5` is the Q-Map commit (§7.2) — the most recent feature work on this branch. This
-  documentation refresh is the commit immediately after it.
-- **Pre-existing, unrelated uncommitted changes exist in the working tree** at the time of this
-  handover and were **not** touched by this documentation pass: `db.py`, six
-  `folder_export/Earth/*.json` mirror files, `tests/test_post_kinds.py` (all modified), plus a
-  number of untracked files — `Poems/christian/README.md` and `psalms_kjv_en.json`,
-  `Poems/hindu_original/`, several `docs/audit_*_2026_11.md` research documents,
-  `docs/family_tree/`, `docs/identity_cards/`, several `folder_export/Earth/*` export directories,
-  and a set of location-data maintenance scripts under `scripts/`. These represent other,
-  independently scoped work in progress and should be picked up, reviewed, and committed on their
-  own terms by whoever owns that work next — not bundled into any future commit without a
-  deliberate decision to do so.
+- Branch `main`. Local `HEAD` = `origin/main` = **`a157d7af01e1e5791de6e2449cde2945652c8659`**
+  (`a157d7a`), confirmed by a live `git ls-remote origin refs/heads/main` in this session (not a
+  cached ref) immediately after the push, and re-confirmed again in the documentation-reconciliation
+  pass that produced this update.
+- Two commits landed this release, in this order, both already described in full in §9.3 above:
+  `a7d43a7` ("Harden Global Account authorization and election handling" — backend) then `a157d7a`
+  ("Add Global Account registration and dashboard UI" — website UI), on top of the prior tip
+  `d5383971a246af39dc587945fcb4924e02e890a0` (the Q-Map/3D-future-vision commit). Combined release:
+  **33 files, 3,043 insertions, 77 deletions**, pushed as a single clean fast-forward (`git push
+  origin main`, no force, no rebase) — confirmed via `git merge-base` that the prior remote tip was
+  a direct ancestor of the new local `HEAD` before the push was attempted.
+- **Pre-existing, unrelated uncommitted changes remain in the working tree**, deliberately excluded
+  from both commits above and still untouched by this documentation pass: 9 modified tracked files
+  (`db.py`, 6 `folder_export/Earth/*.json` mirror files, `static/js/dashboard.js` — an unrelated
+  wallet-balance-modal refactor, ownership unresolved, see §13 — and `tests/test_post_kinds.py`,
+  dated 2026-10-27 in its own content) plus 25 untracked paths (4 `docs/audit_*_2026_11.md`
+  research documents, `docs/family_tree/`, `docs/identity_cards/`, 8 untracked
+  `folder_export/Earth/*` export subtrees, 7 location-data maintenance scripts under `scripts/`,
+  and 4 `static/data/*.before_regen_*.json` snapshot files). These represent other, independently
+  scoped work in progress and should be picked up, reviewed, and committed on their own terms by
+  whoever owns that work next — not bundled into any future commit without a deliberate decision to
+  do so.
 - **Standing git rules for this project**: no `git add -A`/`git add .` — stage named files only.
   Never force-push. Never amend without being explicitly asked. One commit per approved task.
   `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>` trailer on commits made by an
   assistant session.
-- No access to Railway/production from an assistant session — hand the user exact commands to run
-  themselves. Never guess or use real member/admin credentials, even locally.
+- No access to Railway/production from an assistant session beyond read-only, unauthenticated
+  inspection of the public site — hand the user exact commands to run themselves for anything that
+  needs Railway CLI/dashboard access (the CLI's OAuth token was expired at the time of this
+  release; re-authentication is an owner action). Never guess or use real member/admin credentials,
+  even locally.
 
 ---
 
 ## 15. Next-phase handover instructions for the phone application
 
-The website feature-development phase is complete as of this handover. The next phase is the
-**phone application** (`qumanity-app`, a separate repository, React Native/Expo), which already
-authenticates against this same backend's `/api` routes via a signed bearer token (treated exactly
-like a website session).
+**The website feature-development phase is complete and closed as of this handover.** Current
+website state: `Qumanity_DPG`, branch `main`, `origin/main` = **`a157d7af01e1e5791de6e2449cde2945652c8659`**
+(see §14 for the full release detail). The next phase is the **phone application**
+(`qumanity-app` / `Qumanity_App`, a separate repository, React Native/Expo). This section is
+written so a new development conversation can start the phone-app phase from this document alone,
+without depending on any prior chat history.
 
-**The phone application must not independently redefine:**
-- **Location IDs or the geography hierarchy** (§4) — it must read and write the same dotted IDs
-  this backend already uses, never mint its own location identity scheme.
-- **Consent rules** (§6, §7.1, §12) — GPS/location consent must follow the same versioned-consent
-  model already implemented server-side, not a separate mobile-only consent flow.
-- **User identity** — the 9-digit Private ID + PIN model, and the same bearer-token-as-session
-  pattern, are the established identity contract; do not introduce a parallel identity system.
+**This is a continuation, not a greenfield start.** The phone app already has substantial,
+previously-shipped work against this same backend — do not re-implement any of the following,
+only extend it: sign-in and registration (`mobile/src/app/register/*.tsx`), Global Account
+registration (Present Location picker with no `onlySubcontinent` restriction, `is_global_account`
+consumption — see below), the Dashboard's Public-tab filtering, Q-Punch election display
+(`mobile/src/components/ElectionCard.tsx` + `electionCard.logic.ts`), and the "Account IDs" screen
+(`mobile/src/app/account-ids.tsx`, which already calls the Path A account-ID-request flow
+described below). The living plan for this work is `Qumanity_App/docs/WEB_TO_APP_MIGRATION_PLAN.md`.
 
-**Before resuming phone-app work**, re-verify the two previously flagged API-contract
-discrepancies noted in §13 (the registration response's missing `donation` object, and the
-post-election winner-tally display bug) against the current `HEAD`, since they may affect the
-app's own existing integration code.
+### What is implemented on the website and verified, as of this release
+- Global Account registration and classification (§9.3): a Public Account (present location in
+  one of the 10 Sub-continent countries) vs. a Global Account (any other country) is decided
+  **server-side only**, derived live from `present_location_json` by
+  `account_core.account_access_type()` — never a client-supplied flag, never a persisted column.
+- The shared present-location validator, `account_core.validate_present_location_change()`, now
+  gates **every** path that can write `users.present_location_json` after registration — both the
+  website's profile-change-request flow and the account-ID-request flow below (the C1 security
+  correction, §9.3) — enforcing full geography-ancestry validation and a hard Global↔Public
+  boundary lock in both directions.
+- Election/Q-Punch winner-tally correctness (Task 1B, §9.3): a closed cycle's winners are now
+  always recomputed from current votes, not frozen at first observation.
+- All of the above verified by 1,370 passing backend checks (33 files) and the cross-repo checker
+  (156 passed, 1 pre-existing unrelated failure — see "Known API/test limitations" below), and
+  confirmed live on production by direct, read-only inspection of the deployed `/register` page
+  and `register.js` (§9.3, §14).
+
+### API contracts the phone app must reuse (not redefine)
+- **Sign-in/registration**: `POST /login` and `POST /api/auth/register`, both with `client: "app"`
+  to receive `{token}`; every subsequent call carries `Authorization: Bearer <token>`. See
+  `docs/phone_app_api.md` (identical copy in both repos) for the full, currently-accurate contract
+  table — it documents the sign-in flow, `GET /api/me`, the Account-IDs endpoints, and the Q-Punch
+  election endpoints in detail; this handover does not duplicate that table.
+- **Account classification**: `GET /api/me` returns `is_global_account: boolean`, derived
+  server-side exactly as described above. The app must treat this as authoritative for UI
+  decisions (e.g., hiding the Public tab) but must **never** assume it also grants or denies any
+  specific permission — every backend permission check (board access, Q-Punch eligibility)
+  re-derives its own authorization independently from `present_location_json`, not from this flag.
+- **Account-ID requests ("Path A")**: `POST /api/people/account-ids/request` (submit) and
+  `POST /api/admin/account-ids/<id>/decide` (admin approve/reject) — already called by
+  `mobile/src/app/account-ids.tsx`. As of this release, **both** steps run the same shared
+  validator described above: a request that would cross the Global↔Public boundary, or whose
+  geography doesn't correctly nest, is rejected (400) at submission, and re-validated again
+  (independently of what passed at submission) at approval. The app's existing generic
+  `try`/`catch` error handling on this screen already surfaces a rejection correctly — no app
+  change was needed for this fix and none is required now.
+- **Q-Punch election data**: `GET /api/qpunch/village`, `GET /api/election/status`,
+  `POST /api/election/nominate`, `POST /api/election/vote` — all already integrated
+  (`ElectionCard.tsx`). `winners.male`/`.female` are **name strings**, never user ids, and
+  `votes`/`winners` are `null` until the cycle's status is `"closed"` — the app must keep
+  displaying these fields exactly as the backend sends them, never computing a winner or detecting
+  a tie independently (there is no backend-exposed "tie" signal to read; ties are resolved inside
+  `election_core._ensure_tallied()` before the response is built).
+
+### Identity and account-type distinctions
+- Identity is the 9-digit Private ID + 5-character PIN; this is the one identity system. The phone
+  app must not introduce a parallel one.
+- Account type (Public vs. Global) is a **derived classification**, not a stored account "kind" —
+  see above. A Global Account has `present_location` stopping at Continent+Country; a Public
+  Account has the full Zone→Village chain available (though not all levels are mandatory).
+
+### Geography hierarchy and stable location-ID requirements
+- Eight nested levels: Village → Tehsil → District → State → Zone → Country → Continent → Earth
+  (§4) — except a Global Account, whose Present Location deliberately stops at Country. The app
+  must read and write the same dotted location IDs this backend already uses (e.g.
+  `CS.DL.3.4.1A`), never mint its own location identity scheme. `mobile/src/api/locations.ts`'s
+  `childrenOf()`/`toStruct()`/`isComplete()` already implement this correctly for both a Public and
+  a Global Present Location — reuse them, don't reimplement.
+
+### Permission and authorization rules
+- Every authorization check (Board access, Q-Punch nomination/voting) is enforced **server-side**
+  and re-derives its own rule from the member's actual stored `present_location_json` — the app
+  must never assume a client-side account-type flag is sufficient to gate a feature; always let the
+  server's own response (200 vs. 400/403/404) be the real gate, and treat the client-side tab
+  hiding as a convenience, not a security boundary.
+
+### GPS consent and privacy requirements
+- GPS/location consent follows the existing versioned-consent model already implemented
+  server-side (§6, §7.1, §12) — the app must not introduce a separate, mobile-only consent flow.
+
+### Q-Punch election restrictions
+- Q-Punch (Village Council election) reachability remains **village-only** (§9.2) — a Global
+  Account, and a Public Account with no resolved village, are never eligible, enforced by
+  `election_core._present_village_id()`'s independent re-check of `account_access_type()`.
+
+### Known API/test limitations (verified, not assumed)
+- The cross-repo checker's one remaining failure, `"board shows the post, score and vote state"`,
+  is pre-existing, unrelated to Global Account/Q-Punch, and tracked separately — it is **not**
+  fixed and should not block phone-app work, but should not be mistaken for a Global-Account- or
+  election-related regression if it's ever investigated.
+- Railway's own deployment metadata (build logs, exact deployed SHA, health-check result) has
+  **not** been independently verified by an assistant session for this release — only the live
+  site's actual served content was checked. Confirming Railway's own record is an owner action.
+
+### Deferred website improvements (not blockers to this phase, see §13 for the full list)
+No Report/Block-member mechanism; no Privacy Policy/Terms of Service pages; no self-service data
+export/delete; no minimum-age/parental-consent gate; some public demographic routes show village
+member names pre-sign-in; `dpg_evidence/ARCHITECTURE.md` drift; stale route/table counts in
+`API.md`/`ARCHITECTURE.md`/`DATA_MODEL.md`; India location deduplication unexecuted; OSM proximity
+worker's Overpass usage not load-tested; councils above village can't yet receive/initiate
+messages; Qmail has no delete-on-request path.
+
+### Work intentionally paused by the owner
+Qumanity Lok LLP's registration (and the resulting copyright/trademark/domain transfer) — pending,
+unrelated to code, explicitly not a development task.
+
+### Phone-app-specific next steps
+Continue the existing `Qumanity_App/docs/WEB_TO_APP_MIGRATION_PLAN.md` plan from wherever it was
+left — this handover does not re-litigate that plan's own phase numbering. Any new phone-app work
+should be scoped and approved the same way the website work in §9.3 was (explicit, narrow task
+authorization; no unilateral staging/commits/pushes).
+
+### Where to start inspecting
+`account_core.py` (the single source of truth for classification and present-location
+validation), `app.py`'s `api_auth_register()`/`_profile_for()` (registration and the `/api/me`
+shape), `social_core.py`'s `request_new_account()`/`decide_account_request()` (Path A),
+`election_core.py`'s `_present_village_id()`/`_ensure_tallied()` (Q-Punch eligibility and
+tallying), and, in the phone-app repository, `mobile/src/api/qumanity.ts` (the full typed API
+client) and `docs/phone_app_api.md` (the living API-contract reference, identical in both repos).
 
 **Open design/legal items the phone app project must respect, not re-decide on its own**: Q-Punch
 reachability remains village-only (§9.2); the India location deduplication plan remains
 unexecuted (§4); the DPG evidence pack has known, uncorrected drift (§10); Qumanity Lok LLP
-registration (and the resulting copyright/trademark/domain transfer) is still pending (§13).
+registration (and the resulting copyright/trademark/domain transfer) is still pending (above).
 
 ---
 

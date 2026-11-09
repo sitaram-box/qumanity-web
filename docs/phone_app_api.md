@@ -45,13 +45,53 @@ The app shows the tour once after the first sign-in (skippable, and it can be re
 - **Register a new member:** `POST /api/auth/register` with `assisted: true`.
   - On the website, the signed-in member is the helper and stays signed in as themself.
   - In the app, the helper has signed out and sends `helper_private_id` + `helper_pin`. These are checked **before** the account is created, with the same 5-tries lock as sign-in; a wrong PIN returns 403.
-  - The helper is the referrer and is stored in `users.referred_by_user_id`. A cash donation is split between the 8 location wallets, the helper and the new member.
+  - The helper is the referrer and is stored in `users.referred_by_user_id`.
+  - **Historical, as of this section's original 2026-09-29 date, no longer current**: at the time
+    this section was written, registration involved a **cash donation** split between the 8
+    location wallets, the helper and the new member. **That payment path was removed on
+    2026-10-11** (`ed23d01 chore(payments): remove Razorpay integration; Qoins are earned only`)
+    — confirmed against the current code: `wallet_core.py`'s own module docstring states "Qoins
+    are earned, never purchased: there is no payment or donation path," and `app.py`'s
+    registration route never reads a `donation_amount` field at all. **What happens now instead**:
+    `wallet_core.apply_free_registration()` mints a single, free (not paid, not cash) ₹1-reference
+    Qoin and splits it 10 paise at a time across the same 8 location tiers, the referrer, and the
+    new member (with no referrer, their share folds into the new member's) — the *split
+    mechanism* survives structurally, but nothing is donated and no money changes hands. The
+    registration response itself carries no `donation` object, by design (see "No payments" below).
   - Nobody is signed in afterwards: the reply carries `assisted: true` and no token.
 - **Account IDs:**
   - `GET /api/people/me` returns `account_history` (with row `id`) and `account_requests`.
   - `POST /api/people/account-ids/switch` takes `{row_id}`. The member's Public and Global pages follow the active one.
   - `POST /api/people/account-ids/request` takes `{present_location}`, one pending request at a time.
   - The council approves with `/api/admin/account-ids…`. Automatic approval through a local shop's payment is not built; it needs a shop/payments module.
+  - **2026-11-08 (C1 security correction):** both of the above now run the same present-location
+    validation the website's profile-change flow always has — full geography-ancestry checks,
+    real-village existence, and a hard Global↔Public account-boundary lock, re-checked
+    independently at both submission and approval. A request that would flip the account's
+    classification (e.g. a Global Account requesting a Subcontinent village) is rejected (400) at
+    submission and never reaches the council; a request that was valid when submitted but would
+    no longer be valid by approval time (because the member's own account state changed while it
+    sat pending) is rejected at approval too. The app's existing generic error handling on this
+    screen (`mobile/src/app/account-ids.tsx`) already surfaces a rejection's message correctly —
+    no app-side change was needed.
+
+### Global Account (2026-11-08)
+A member whose Present Location's country is outside the 10 Public Account Activation countries
+(India, Nepal, Bhutan, Bangladesh, Myanmar, Sri Lanka, Pakistan, Balochistan, Afghanistan,
+Maldives) registers as a **Global Account** instead of a Public Account. This is decided
+**server-side only**, derived live from `present_location_json`'s country — never a client-sent
+flag, never a persisted column.
+- **Registration**: for a Global Account, `present_location` in the `POST /api/auth/register` body
+  must stop at `{continent, country}` — no `state`/`zone`/`district`/`tehsil`/`village` key.
+  Submitting any of those is rejected (400), not silently dropped.
+- **`GET /api/me`** now returns `is_global_account: boolean`. Use it for UI decisions (e.g. hiding
+  the Public tab), but never as a substitute for a real authorization check — every backend
+  permission check re-derives its own rule from `present_location_json` independently.
+- **Q-Punch (village election)**: a Global Account can never be eligible — `GET
+  /api/qpunch/village`, `POST /api/election/nominate`, `POST /api/election/vote` all reject it
+  (404/400) at the backend, regardless of what the app's own UI shows or hides.
+- Birth location is unaffected — it has never been restricted to the 10 countries, for either
+  account type.
 - **Election history:** "Lok Sabha" is now **National Election** and "Vidhan Sabha" is **State Election**.
   - `/api/election-sentiment/country|state/<id>` percentages appear on Country and State pages only.
   - Party lists were updated to each country's latest election (see `election_core.PARTIES_BY_COUNTRY`).

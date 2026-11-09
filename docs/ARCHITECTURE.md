@@ -46,6 +46,7 @@ Every Python module at the repository root.
 |---|---|
 | `app.py` | Flask app: configuration, sign-in, every page and `/api` route, start-up and scheduler wiring |
 | `db.py` | SQLite connection helper (`get_db`) |
+| `account_core.py` | Single source of truth for Public/Global account classification (`account_access_type()`, `SUBCONTINENT_COUNTRY_IDS`) and the shared present-location validator (`validate_present_location_change()`) both the profile-change-request flow (`app.py`) and the account-ID-request flow (`social_core.py`) call. Added 2026-11-08, its own module (not `app.py`) specifically so other modules can reach it without a circular import. See `docs/HANDOVER.md` §9.3. |
 | `id_generator.py` | Generates the 9-digit Private ID and Account IDs; age bands |
 | `zodiac_core.py` | Sun sign, nakshatra and Vedic birth chart from birth date, time and place (pyswisseph, IANA time zones) |
 | `kundali_analyser.py` | Moon-based analysis of a birth chart |
