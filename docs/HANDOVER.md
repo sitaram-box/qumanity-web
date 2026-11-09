@@ -15,6 +15,116 @@ in this session, that is stated; where it is carried over from an earlier pass, 
 
 ---
 
+## 0. Reading map for a new conversation (A–J)
+
+**Added 2026-11-09, final handover pass before the Phone App phase.** If you are a new chat
+picking this project up cold, read this section first — each letter below either states the fact
+directly or points at the exact numbered section with the full, source-cited detail. Do not
+reconstruct project history from earlier chat transcripts; everything load-bearing is here or in
+the section it points to.
+
+**A. Project overview.** Qumanity is a free, worldwide, open-source civic platform: one
+permanent identity per person (9-digit Private ID + 5-character PIN), a nested Space/Time/
+Consciousness record from Village to Earth, village-level elections (Q-Punch), a Collective
+Board where posts rise by vote, an internal Qoin economy earned through civic activity (never
+purchased), Family Tree, Qmail (internal-only messaging), and a Q-Map. No government, company,
+or outside body operates it; one founder does, with the Admin Panel as the only privileged role.
+The website (`Qumanity_DPG`) is the single backend and business-logic source; the phone app
+(`Qumanity_App`) is a client of its `/api` routes, nothing more — see §G below and §15.
+
+**B. Current website status.** Production: `https://web-production-126c3f.up.railway.app`,
+branch `main`. Latest known deployed/pushed commit at the time of this handover pass:
+`a3afcb4a161f981c073760ef01ac01cca28ab2f8` (§14 has the full commit history and the exact
+verification evidence — don't assume this is still `HEAD` without re-checking `git log`/
+`git ls-remote`, since further approved work may have landed after this pass). Major implemented
+features: identity/registration (Public + Global Account, §9.3), Family Tree (§8,
+`12_family_tree_evidence.md`), Collective Boards, Q-Punch elections (§9.2), Qoins/Karma, Qmail,
+Q-Map, the Referral Engine (`13_referral_engine_evidence.md`), Admin Panel, 13-language interface.
+Known limitations: §13. Entry points: `/`, `/register`, `/login`, `/dashboard`, `/about`,
+`/future` (§E), `/qmap`, `/qmail`.
+
+**C. Core architecture.** Flask + SQLite, one module per subsystem at the repository root — full
+module map in `docs/ARCHITECTURE.md` (§2 below links it). API convention: session cookie for the
+website, `Authorization: Bearer <token>` for the app (`client: "app"` on login/register), both
+converging on the same route handlers. Identity/account architecture, geography hierarchy, Global
+Account, Family Tree, Referral Engine, Collective Boards/Q-Punch, Qoins/Karma, Qmail/notifications,
+Q-Map, and privacy/security/consent rules are each covered in their own section below (§4, §6, §9,
+§8, §12) and/or their own `dpg_evidence/*_evidence.md` supplement — only what's been verified
+against current code is stated as fact anywhere in this document.
+
+**D. Geography and provisional locations.** §4 and §6 have the full detail: the authoritative
+source is `Qumanity_Master.json` (outside this repo, on the owner's machine), stable dotted IDs,
+the provisional-location crowdsourcing system (24-user activation threshold), GPS consent. **Known
+geographical data-quality issue, deferred by explicit owner decision (2026-11-09): two tehsils
+both named "Tri Nagar" under district "Chandni Chowk" (`CS.DL.7.4`, 12 villages, and `CS.DL.7.14`,
+23 villages) are different, real administrative units that happen to share a display name — not a
+duplicate record. Both are retained unchanged; this is a known naming/data-quality issue, not a
+launch blocker, and is closed for this development phase.** Navi Mumbai (Ghansoli, Vashi, Nerul,
+and 11 other nodes) is fully present in the master data, derived data, database, and registration
+API — confirmed live on production 2026-11-09, no further action needed.
+
+**E. Explore the Future.** `/future` (`templates/future.html` + `static/js/future.js` +
+`static/css/future.css`) — a persistent Three.js + GSAP scroll-driven narrative, expanded
+2026-11-09 from 4 to 8 scenes (2026 fragmentation → unequal access → the Qumanity Tree →
+connected communities → civic participation → shared ecological responsibility → 2126 → the
+CTA). Engine unchanged from its original build; new scenes reuse the same primitives (crack
+lines, geodesic arcs, point sprites, GSAP tweens) — no new dependency, no new rendering
+technique. WebGL-capability check with a CSS/SVG fallback; `prefers-reduced-motion` respected;
+mobile reduces point/segment counts. Reachable only via a homepage hero CTA and an About-page hero
+CTA (§5/§6 below) — intentionally not a top-nav item. To add a scene: add a `.qmf-scene` section
+in `future.html`, a progress dot, and one more index's worth of entries in `future.js`'s
+per-scene state arrays (`CAMERA_POS`, `CRACK_OPACITY`, etc.) — the pattern is table-driven
+specifically so this doesn't require touching `play()`/`focus()`'s own logic.
+
+**F. DPG evidence.** `docs/dpg_evidence/` (11 numbered indicator documents + `API.md`/
+`ARCHITECTURE.md`/`DATA_MODEL.md` copies + 4 feature supplements). Reconciled 2026-11-09: Family
+Tree and Referral Engine were found to already be well-documented (not missing, as an earlier,
+now-superseded research pass had claimed); Resend-vs-SMTP corrected in 4 files; the
+election-test-scheduler's status corrected from "planned" to "implemented"; a new
+`15_global_account_evidence.md` added. See §10 for the full account, including what was
+deliberately **not** touched (frozen, no DPG resubmission implied by any of this).
+
+**G. Phone App integration contract.** Full detail in §15. In short: the app must reuse the
+website's identity (Private ID + PIN), its server-derived Global/Public account classification
+(`GET /api/me`'s `is_global_account`), its geography IDs, its GPS-consent model, and its Q-Punch
+eligibility rules — never reinvent any of these independently. `docs/phone_app_api.md` (identical
+copy in both repos) is the living, lower-level API-contract reference; this document does not
+duplicate its route tables.
+
+**H. Phone App development status — verified live this session, not assumed.** Repository:
+`~/Desktop/Qumanity_App` (`qumanity-app` on GitHub), branch `main`. **Actual current HEAD,
+checked via `git log`/`git status` on 2026-11-09: `40b854d4d34312a1143c6cdb8402df2dc9177984`**
+("feat(mobile): synchronize phone app with latest website backend") — working tree clean, no
+uncommitted changes. This is a separate chat's own work, already landed: it syncs the app with
+the website's Global Account release (`af01272`) — the 5-character PIN rule, Global members'
+account-ID requests outside the Sub-continent, Qmail reply counts on notifications, and own-post
+voting checks — and its own commit message records its cross-repo checker result (166 passed, 0
+failed, against a local database copy; production not independently verified by that commit) and
+one known, explicitly flagged issue it did **not** fix: a retired account's existing app token
+remains valid against production today. This is consistent with this website repo's own
+still-uncommitted `app.py` retired-account guard (§14) — the mobile-side finding predates, or
+simply reflects, that fix not being deployed yet. **Do not assume any app commit hash from an
+earlier conversation is still current** — the Phone App Chat may have continued past this point;
+re-check `git log` there before planning new work.
+
+**I. Development and release safeguards.** §12 (privacy/security/consent) and §14 (git rules) are
+the canonical sources. Headline rules: no `git add -A`/`git add .`; stage named files only; never
+force-push; one commit per approved task; `docs/dpg_evidence/` is reconciled narrowly, never
+silently rewritten wholesale; `Qumanity_Master.json` and its derived files are never
+machine-edited without an explicit, separately-authorized task; the retired-account work and any
+other unrelated uncommitted change in this repo is preserved exactly as found until its own owner
+authorizes it.
+
+**J. Next steps for the Phone App Chat.** Given §H above, the most useful next step is likely to
+continue from `40b854d` in `Qumanity_App` directly (re-verify its own test/checker status fresh,
+don't assume it's still accurate), with two carry-over items from the website side to keep in
+mind: (1) the retired-account token-invalidation gap that commit flagged is fixed on the website
+(uncommitted) but not yet deployed — coordinate before relying on it; (2) the deferred Tri Nagar
+naming issue (§D) needs no app-side handling, it's a data-display nuance only. No other website
+blocker is currently known.
+
+---
+
 ## 1. Project overview and current phase
 
 Qumanity (**Quantum + Humanity**) is a civic participation platform organised around **eight
@@ -908,25 +1018,37 @@ across code gaps, legal/entity gaps (LLP registration, trademark filing, copyrig
 still pending), and a repository public-flip checklist (completed). It is explicitly marked "not a
 required DPG document" — a supplement for a reviewer's benefit, not part of the Standard itself.
 
-**A known, material staleness finding — not corrected by this documentation pass, flagged for
-separate authorization**: an untracked research document,
-`docs/audit_dpg_unfinished_features_2026_11.md` (2026-11-01, read-only, not yet committed),
-establishes that:
-- `docs/dpg_evidence/ARCHITECTURE.md` has **diverged** from the main `docs/ARCHITECTURE.md` by 16
-  lines (missing `family_core.py`/`profile_picture_core.py` rows and an understated migration
-  range) — the pack's own claim that these copies match "byte for byte" is stale.
-- **Family Tree and the Referral Engine are both absent from every `dpg_evidence/` document** —
-  `01_sdg_relevance.md`'s feature inventory and `DATA_MODEL.md`'s table list do not mention either
-  subsystem, even though both are substantial, committed features.
-- `01_sdg_relevance.md` still describes the election-test cron as "planned, not built" — it is in
-  fact wired and running (`election_test_scheduler.py`).
-- `08_standards.md` still describes SMTP email delivery — the code uses Resend's HTTPS API
-  exclusively.
+**Reconciliation pass completed 2026-11-09** — the claims below are **superseded**; they came from
+an earlier, untracked research document (`docs/audit_dpg_unfinished_features_2026_11.md`,
+2026-11-01) whose findings were re-verified against the actual current pack this session, not
+re-stated from that document or from this handover's own prior text:
+- **Family Tree and the Referral Engine are NOT absent** — `docs/dpg_evidence/12_family_tree_evidence.md`
+  (339 lines) and `13_referral_engine_evidence.md` (225 lines) already exist, are substantial, and
+  were spot-checked against the current code this session (a sample of their file:line citations
+  all still resolve correctly) — the 2026-11-01 research document's claim was accurate only as of
+  that date; both files were added the same day, after that research pass ran.
+- **The election-test-cron "planned, not built" claim was genuinely stale and has now been
+  corrected** (`09_do_no_harm.md`, 2026-11-09): `election_test_scheduler.py` registers a daily
+  automated tick, confirmed wired up via `init_scheduler()` called unconditionally from `app.py`.
+- **The SMTP/Resend claim was genuinely stale in four files, now corrected** (2026-11-09):
+  `04_platform_independence.md`, `07_privacy_and_applicable_laws.md`,
+  `11_application_form_answers.md`, and `docs/dpg_evidence/ARCHITECTURE.md` all still described
+  SMTP/`smtplib`/`SMTP_HOST`; corrected to describe Resend's HTTPS API, which is what
+  `email_core.py` has actually used since 2026-10-20. **`08_standards.md` itself was already
+  correct** (fixed in its own 2026-11-01 pass, confirmed by re-reading it this session) — the
+  2026-11-01 research document's claim that it still described SMTP was itself inaccurate even at
+  the time it was written, or described a different file; either way, it's moot now.
+- `docs/dpg_evidence/ARCHITECTURE.md`'s module-map divergence from the main `docs/ARCHITECTURE.md`
+  is now down to exactly one row (`account_core.py`, added to the evidence-pack copy this
+  session too) — the `family_core.py`/`profile_picture_core.py` rows the 2026-11-01 document said
+  were missing are both present.
+- **New this session**: Global Account (§9.3) had zero mentions anywhere in the evidence pack —
+  added as `docs/dpg_evidence/15_global_account_evidence.md`.
 
-**This documentation pass did not correct the `dpg_evidence/` pack itself** — per this task's own
-operating rules, the frozen evidence pack is not silently rewritten to appear more complete; a
-re-sync of the pack against current code is recommended as its own, separately authorized task
-(see §13).
+This pass **did** correct the `dpg_evidence/` pack itself, narrowly: the five specific, verified
+inaccuracies above, plus the new Global Account supplement. Nothing else in the pack was rewritten
+— see the pack's own files for the exact diffs. `docs/audit_dpg_unfinished_features_2026_11.md`
+remains untracked, read-only research and was not itself edited.
 
 ---
 
