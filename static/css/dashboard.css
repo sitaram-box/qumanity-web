@@ -648,6 +648,12 @@
   .qm-logo { height: 42px; width: 42px; }
   .qm-header-text h1 { font-size: 1.05rem; margin: 0; }
   .qm-header-actions .qm-btn { padding: 6px 10px; font-size: 0.8rem; }
+  /* 2026-11-08: .qm-logout-btn's own margin-left: 4px (desktop-only breathing room from the
+     icon-button cluster) is exactly the width that pushed the header into horizontal overflow
+     at narrow phone widths, where .qm-header-actions already has its own 6px gap and no spare
+     room left -- dropping the redundant margin here (mobile-only) removes the overflow without
+     touching desktop spacing, the button's label, or its logout behavior. */
+  .qm-logout-btn { margin-left: 0; }
   .qm-location-tabs-row { overflow-x: auto; }
   .qm-location-tabs-row .qm-panel-tab { flex: 0 0 auto; padding: 13px 16px; }
   .qm-dash-tab { font-size: 0.78rem; padding: 12px 4px; }

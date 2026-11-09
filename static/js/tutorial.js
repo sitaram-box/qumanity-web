@@ -23,7 +23,15 @@
     {
       key: "tabs", tab: null, selector: ".qm-dash-tabs",
       title: "This is where it starts.",
-      body: "Four timelines of your life, side by side: Global, Public, Personal, Private. Everything else in Qumanity happens inside one of these four.",
+      // Global Account (2026-11-08): the Public tab doesn't exist for a member whose Present
+      // Location is outside the 10 Public Account countries -- the body text names only the
+      // tabs this viewer actually has, read live rather than hardcoded, same spirit as `stat`.
+      body: function () {
+        var hasPublic = !!document.getElementById("qm-dash-public");
+        var names = hasPublic ? "Global, Public, Personal, Private" : "Global, Personal, Private";
+        return (hasPublic ? "Four" : "Three") + " timelines of your life, side by side: " + names +
+          ". Everything else in Qumanity happens inside one of these.";
+      },
     },
     {
       key: "board", tab: "public", selector: "#bd-public-board .bd-feed",
@@ -131,7 +139,7 @@
     title.textContent = step.title;
     popup.appendChild(title);
     var body = document.createElement("p");
-    body.textContent = step.body;
+    body.textContent = typeof step.body === "function" ? step.body() : step.body;
     popup.appendChild(body);
 
     // 2026-10-28: the live stat line, when step.stat() has something to say right now -- omitted

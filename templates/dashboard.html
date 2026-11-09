@@ -61,7 +61,9 @@
   <main class="qm-dashboard-main">
     <div class="qm-dash-tabs">
       <button class="qm-dash-tab" data-tab="global" type="button" data-i18n="tab_global" title="Earth, your Continent and Country">Global</button>
+      {% if not profile.is_global_account %}
       <button class="qm-dash-tab" data-tab="public" type="button" data-i18n="tab_public" title="Where you live now: Zone down to Village">Public</button>
+      {% endif %}
       <button class="qm-dash-tab" data-tab="personal" type="button" data-i18n="tab_personal" title="Your Family, Friends and Business groups">Personal</button>
       <button class="qm-dash-tab is-active" data-tab="private" type="button" data-i18n="tab_private" title="Your own profile, wallet and settings">Private</button>
     </div>
@@ -464,6 +466,7 @@
       <div class="qm-stats-col">{{ stat_block("qm-dg-stats") }}</div>
     </section>
 
+    {% if not profile.is_global_account %}
     <section class="qm-dash-panel {{ 'qm-dash-3col' if profile.present_location_struct.zone }}" id="qm-dash-public" hidden>
       {% set p = profile.present_location_struct %}
       {% if p.zone %}
@@ -561,6 +564,7 @@
       <p class="qm-dash-empty">No Public Timeline yet — location data for your present country is still being compiled.</p>
       {% endif %}
     </section>
+    {% endif %}
 
     <script>
       var QM_PRESENT_LOCATION = {{ profile.present_location_struct | tojson }};

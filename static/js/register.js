@@ -47,12 +47,6 @@
   };
   var stepEls = Array.prototype.slice.call(document.querySelectorAll(".qm-step"));
 
-  var modal = document.getElementById("reg-modal");
-  var modalText = document.getElementById("reg-modal-text");
-  var modalDismiss = document.getElementById("reg-modal-dismiss");
-  function showModal(text) { modalText.textContent = text; modal.hidden = false; }
-  modalDismiss.addEventListener("click", function () { modal.hidden = true; });
-
   // ---- Shared lookups ----
   function findWorldEntry(qmCountryId) {
     if (!worldData || !qmCountryId) return null;
@@ -494,13 +488,14 @@
     QMSearchableSelect.refresh(select);
   }
   function countriesFor(continent, target) {
+    // Present Location (2026-11-08): used to be filtered down to only the 10 Sub-continent
+    // countries here -- now it lists every country in the picked continent, same as Birth
+    // Location, with the 10 Sub-continent countries still sorted to the top as a convenience
+    // (most registrants are still from one of them). Which pathway a selection actually leads
+    // to (Public Account vs. Global Account) is decided by updatePublicAccountEligibility()
+    // below, not by what this dropdown offers.
     var list = continent.countries.slice();
     var codes = QMSubcontinent.CODES;
-    if (target === "present") {
-      return codes.map(function (code) {
-        return list.filter(function (co) { return co.code === code; })[0];
-      }).filter(Boolean);
-    }
     list.sort(function (a, b) {
       var ia = codes.indexOf(a.code), ib = codes.indexOf(b.code);
       if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
@@ -520,13 +515,14 @@
     QMSearchableSelect.refresh(select);
   }
 
+  var presentGlobalAccountNote = document.getElementById("present-global-account-note");
+
   function applyLocationSelection(target, entry) {
-    if (target === "present" && !QMSubcontinent.isMember(entry.country.code)) {
-      showModal("Your present location must be in the Indian Sub-continent.");
-      presentCountrySelect.value = state.presentLocation ? state.presentLocation.country.id : "";
-      QMSearchableSelect.refreshAll();
-      return;
-    }
+    // 2026-11-08: a Present Location outside the 10 Sub-continent countries is no longer
+    // rejected -- it's the Global Account pathway (see account_access_type() in app.py). The
+    // quick-pick map/chips below only ever offer the 10 Sub-continent countries (so clicking
+    // one of those always keeps a user on the Public Account pathway); a country picked from
+    // the full dropdown can be either, decided below by whether it's a Sub-continent member.
     var loc = { continent: entry.continent, country: entry.country };
     if (target === "birth") {
       state.birthLocation = loc;
@@ -537,8 +533,11 @@
     } else {
       state.presentLocation = loc;
       document.getElementById("selected-present-location").textContent = entry.continent.name + " → " + entry.country.name;
+      presentContinentSelect.value = entry.continent.code;
+      populateCountryDropdown(presentCountrySelect, entry.continent, "present");
       presentCountrySelect.value = entry.country.id;
       presentCountryHint.hidden = true;
+      if (presentGlobalAccountNote) presentGlobalAccountNote.hidden = QMSubcontinent.isMember(entry.country.code);
     }
     QMSearchableSelect.refreshAll();
     updatePublicAccountEligibility();
@@ -563,6 +562,18 @@
     var entry = findWorldEntry(birthCountrySelect.value);
     if (entry) applyLocationSelection("birth", entry);
   });
+  presentContinentSelect.addEventListener("change", function () {
+    if (presentContinentSelect.disabled) return;
+    setGlobalTarget("present");
+    var code = presentContinentSelect.value;
+    if (!code) {
+      presentCountrySelect.disabled = true;
+      presentCountrySelect.innerHTML = '<option value="">Select a country…</option>';
+      QMSearchableSelect.refresh(presentCountrySelect);
+      return;
+    }
+    populateCountryDropdown(presentCountrySelect, findContinentByCode(code), "present");
+  });
   presentCountrySelect.addEventListener("change", function () {
     if (presentCountrySelect.disabled) return;
     setGlobalTarget("present");
@@ -570,8 +581,9 @@
     if (entry) applyLocationSelection("present", entry);
   });
 
-  // The present location is always in the Sub-continent (enforced above), so once it's set
-  // the Public Account step becomes where "Next" leads. A single "Next ->" button always
+  // Present Location may be any country on Earth (2026-11-08) -- one of the 10 Sub-continent
+  // countries leads to the Public Account step; any other leads straight to Review as a Global
+  // Account (see updatePublicAccountEligibility()/goToStep() below). A single "Next ->" button always
   // sits bottom-right next to "<- Back" (Item: button rename/reposition, 2026-10-11) --
   // previously a separate long-labelled CTA replaced "Next" entirely when eligible, which
   // broke the consistent Back-left/Next-right pairing used on every other step.
@@ -593,11 +605,15 @@
   }
   function setPresentCountryLocked(locked) {
     presentCountrySelect.disabled = locked;
+    // Present Location's continent select (2026-11-08: no longer permanently Asia-only) locks
+    // and unlocks together with the country select -- same gate, same reason.
+    presentContinentSelect.disabled = locked;
     // Setting .disabled directly on the native <select> fires no event, so the
     // QMSearchableSelect wrapper around it (the actual clickable control the user sees)
     // never learns its disabled state changed and stays stuck un-clickable even after
     // this unlocks -- explicitly refresh it to sync (Item 9 registration P0, 2026-10-11).
     QMSearchableSelect.refresh(presentCountrySelect);
+    QMSearchableSelect.refresh(presentContinentSelect);
     targetPresentBtn.disabled = locked;
     targetPresentBtn.classList.toggle("is-locked", locked);
   }
@@ -1491,7 +1507,8 @@
       populateContinentDropdown(birthContinentSelect);
       birthContinentSelect.value = "AS";
       populateCountryDropdown(birthCountrySelect, findContinentByCode("AS"), "birth");
-      populateContinentDropdown(presentContinentSelect, "AS");
+      populateContinentDropdown(presentContinentSelect);
+      presentContinentSelect.value = "AS";
       populateCountryDropdown(presentCountrySelect, findContinentByCode("AS"), "present");
       setPresentCountryLocked(!birthCountryConfirmed);
       QMSearchableSelect.refreshAll();

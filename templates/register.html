@@ -194,7 +194,9 @@
       <h2>Global Account</h2>
       <p class="qm-timeline-sub">
         Choose where you were <strong>born</strong> (anywhere on Earth) and where you <strong>live now</strong>
-        (one of the 10 countries of the Indian Sub-continent — that is where Qumanity's Public timeline operates).
+        (anywhere on Earth too). If you live in one of the 10 countries of the Indian Sub-continent,
+        you'll also set up your local Public Account next; anywhere else, you join as a Global Account
+        with Global, Personal, and Private access.
       </p>
 
       <div class="qm-target-toggle">
@@ -232,6 +234,7 @@
             <h3 class="qm-panel-subhead">Present Location</h3>
             <button type="button" class="qm-wizard-edit-link" id="edit-birth-country-link" hidden>← Edit Birth Location</button>
             <p class="qm-timeline-note" id="present-country-hint" hidden>Birth location confirmed. Now select your Present Location country to continue.</p>
+            <p class="qm-timeline-note" id="present-global-account-note" hidden>🌍 <strong>Global Account</strong> — Your Present Location is outside Qumanity's Public Account countries. You can join as a Global Account with Global, Personal, and Private access.</p>
             <label class="qm-dropdown-field"><span>Continent</span>
               <select id="present-continent-select"><option value="">Select a continent…</option></select>
             </label>
@@ -414,11 +417,6 @@
     </section>
 
   </main>
-
-  <div id="reg-modal" class="qm-gate-message" hidden>
-    <p id="reg-modal-text"></p>
-    <button class="qm-btn qm-btn-ghost" id="reg-modal-dismiss">Close</button>
-  </div>
 
   <footer class="qm-footer">
     <p>Registration is open worldwide. A present location in the Indian Sub-continent additionally unlocks a Public Account.</p>
