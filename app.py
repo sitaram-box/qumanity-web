@@ -216,11 +216,35 @@ def _app_token_auth():
     except BadSignature:  # also covers expired tokens
         return jsonify({"error": "Please sign in again"}), 401
     conn = get_db()
-    row = conn.execute("SELECT pin_hash FROM users WHERE id = ?", (data.get("uid"),)).fetchone()
+    row = conn.execute("SELECT pin_hash, is_removed FROM users WHERE id = ?", (data.get("uid"),)).fetchone()
     conn.close()
-    if not row or _pin_fingerprint(row["pin_hash"]) != data.get("pv"):
+    # A retired account (is_removed=1) is refused like any bad token -- same generic 401, no hint
+    # that the account exists. /login already refuses it (2026-10-28); without this check a token
+    # issued before retirement kept working until it expired (2026-11-09 fix).
+    if not row or row["is_removed"] or _pin_fingerprint(row["pin_hash"]) != data.get("pv"):
         return jsonify({"error": "Please sign in again"}), 401
     session["user_id"] = data["uid"]
+    return None
+
+
+@app.before_request
+def _retired_session_guard():
+    """A browser session signed in before its account was retired (is_removed=1) stops counting
+    as signed in (2026-11-09 fix). Runs after _app_token_auth() (registration order), on every
+    request, not only in login_required: some routes read session["user_id"] directly (e.g.
+    assisted registration's helper), and the session is a signed cookie the browser keeps, so a
+    copy of it can't be revoked -- the account has to be re-checked each time. Dropping user_id
+    (as /logout does) makes the request anonymous, so login_required answers with its usual
+    redirect to /login: same as for any signed-out visitor, no hint the account was retired.
+    Bearer requests were already checked by _app_token_auth(); active accounts are unaffected."""
+    uid = session.get("user_id")
+    if uid is None or request.endpoint == "static" or request.headers.get("Authorization", "").startswith("Bearer "):
+        return None
+    conn = get_db()
+    row = conn.execute("SELECT is_removed FROM users WHERE id = ?", (uid,)).fetchone()
+    conn.close()
+    if row and row["is_removed"]:
+        session.pop("user_id", None)
     return None
 
 
