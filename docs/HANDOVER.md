@@ -101,9 +101,13 @@ account-ID requests outside the Sub-continent, Qmail reply counts on notificatio
 voting checks — and its own commit message records its cross-repo checker result (166 passed, 0
 failed, against a local database copy; production not independently verified by that commit) and
 one known, explicitly flagged issue it did **not** fix: a retired account's existing app token
-remains valid against production today. This is consistent with this website repo's own
-still-uncommitted `app.py` retired-account guard (§14) — the mobile-side finding predates, or
-simply reflects, that fix not being deployed yet. **Do not assume any app commit hash from an
+remains valid against production today. *Correction, 2026-11-09: the website-side fix this
+mobile-side finding refers to is no longer uncommitted — it is committed (`e045cf1`) and deployed
+to production. What is **not** yet confirmed is the retirement scenario itself end-to-end on
+production (retiring a real account and confirming its old token is then rejected live): no safe,
+generic way to retire a test account on production exists today, so that specific confirmation is
+still open. See `## Retired-Account Authentication Security — November 2026` below for the full,
+honest account of what is and isn't verified.* **Do not assume any app commit hash from an
 earlier conversation is still current** — the Phone App Chat may have continued past this point;
 re-check `git log` there before planning new work.
 
@@ -118,10 +122,11 @@ authorizes it.
 **J. Next steps for the Phone App Chat.** Given §H above, the most useful next step is likely to
 continue from `40b854d` in `Qumanity_App` directly (re-verify its own test/checker status fresh,
 don't assume it's still accurate), with two carry-over items from the website side to keep in
-mind: (1) the retired-account token-invalidation gap that commit flagged is fixed on the website
-(uncommitted) but not yet deployed — coordinate before relying on it; (2) the deferred Tri Nagar
-naming issue (§D) needs no app-side handling, it's a data-display nuance only. No other website
-blocker is currently known.
+mind: (1) the retired-account token-invalidation gap that commit flagged is now fixed and deployed
+on the website (`e045cf1`), with the retirement scenario itself still pending a live production
+confirmation — see `## Retired-Account Authentication Security — November 2026` below before
+treating this as fully closed; (2) the deferred Tri Nagar naming issue (§D) needs no app-side
+handling, it's a data-display nuance only. No other website blocker is currently known.
 
 ---
 
@@ -1488,6 +1493,110 @@ code. No broader India-geography cleanup beyond the (deliberately deferred) Tri 
   afterward, is recorded in the task's own final report, not here — this document records what
   the code does and why, not a point-in-time deployment status that a later reader could mistake
   for current.
+
+---
+
+## Retired-Account Authentication Security — November 2026
+
+### Implementation
+
+The fix itself was written by a parallel session on 2026-11-09, found already present and
+uncommitted in the working tree; this release inspected it, confirmed it was correct and
+complete, and committed it unchanged. Two parts, both in `app.py`:
+
+- `_app_token_auth()` (the `@app.before_request` hook that signs a request in from a `Bearer`
+  token) now also selects `is_removed` alongside `pin_hash`, and refuses the request with the
+  same generic `{"error": "Please sign in again"}`, HTTP 401 used for any other invalid token —
+  a malformed token, a tampered signature, an expired token, and a retired account's
+  previously-valid token are all indistinguishable to the caller. No hint is given that the
+  account exists or was retired.
+- `_retired_session_guard()`, a new `@app.before_request` hook registered immediately after it,
+  drops `session["user_id"]` on every request (except `static` and requests already carrying a
+  `Bearer` header, which `_app_token_auth()` already handled) when the signed-in session's account
+  has since been retired. This closes the browser-session case: a signed cookie the browser
+  already holds can't be revoked server-side, so the account's `is_removed` flag is re-checked on
+  every request instead. Dropping `user_id` makes the request anonymous, so `login_required`
+  answers with its ordinary redirect to `/login` — again, no hint of retirement.
+
+**Critical check, resolved by analysis, not a new fix.** The task that authorized this release
+asked specifically whether a malformed or invalid `Authorization` header could let a retired
+account's still-valid browser-session cookie slip past `_retired_session_guard()`. Traced by hand
+through every header variant: `_app_token_auth()` is registered earlier in the file, and Flask
+runs `before_request` hooks in registration order; it either rejects the request outright
+(short-circuiting the chain, so `_retired_session_guard()` never runs at all) or re-establishes
+`session["user_id"]` to the bearer token's own already-validated identity. No bypass is possible.
+This was confirmed empirically, not just reasoned about: `tests/test_browser_session_auth.py`
+Section E exhaustively tries the retired account's real pre-retirement cookie against 10 distinct
+`Authorization` header values (absent, its own old valid token, invalid, `"Bearer "` with nothing
+after it, bare `"Bearer"`, lowercase `"bearer <token>"`, a `"Basic ..."` scheme, expired, valid for
+an unknown user id, and valid for a different active account) — every one passed. No narrow
+correction was needed or made, consistent with the task's own instruction to change only what the
+tests showed was actually broken.
+
+- **Security commit**: `e045cf1` — `fix(security): reject app tokens and sessions for retired
+  accounts` — exactly `app.py`, `tests/test_app_token_auth.py`, `tests/test_browser_session_auth.py`.
+
+### Regression
+
+Full suite re-run against the committed security fix: **35 test files, 1,467 checks, 0
+failures**, every file exiting 0. The four specifically-named suites: `tests/test_app_token_auth.py`
+(25/25), `tests/test_browser_session_auth.py` (72/72), `tests/test_global_account.py` (136/136),
+`tests/test_provisional_locations.py` (76/76) — the latter two confirmed unaffected by this
+change, as expected, since neither touches token or session authentication.
+
+### Production verification
+
+Pushed to `origin/main` and deployed via Railway's auto-deploy. Confirmed against
+`https://web-production-126c3f.up.railway.app`:
+
+- **Active-account bearer-token auth**: verified working post-deploy — a freshly registered
+  Global Account's token correctly authenticates `GET /api/me` (HTTP 200, correct profile data).
+- **Active-account browser-session auth**: verified working post-deploy — `/login` with a fresh
+  account's Private ID + PIN returns HTTP 200 and the resulting session cookie correctly
+  authenticates `GET /api/me` (HTTP 200, correct profile data).
+- **Registration**: confirmed still operational on production (three successful registrations
+  during this verification, see below).
+- **Retired-account rejection, the release's actual critical requirement, could NOT be verified
+  live on production.** Retiring a test account requires writing `is_removed = 1` for it. The only
+  code in this repository that ever does this, `scripts/retire_stray_demo_accounts.py`, is
+  deliberately hardcoded to two specific historical ids (25, 26) only and refuses to run against
+  any other account — there is no general-purpose application route or script to retire an
+  arbitrary account. An assistant session has no direct production database access and no
+  authenticated Railway CLI session (`railway whoami` reports "Unauthorized"; re-authenticating via
+  `railway login` was explicitly not authorized). Per the release task's own fallback instruction —
+  *"If a safe production test account or supported test method is unavailable, do not modify a real
+  account or perform an unsafe database operation. Stop and report exactly what is needed"* — no
+  unsafe database write was attempted. **What would close this gap**: the owner retiring one of the
+  disposable test accounts below directly against the production database (e.g. via Railway's
+  dashboard/console running `UPDATE users SET is_removed = 1 WHERE id = ?`), after which the old
+  token/session for that id can be replayed and confirmed rejected; or a future, separately
+  authorized task adding a real admin-facing retirement route that this kind of check could then
+  exercise safely and repeatably.
+- **Residual test data**: three disposable Global Account test registrations were created on
+  production during this verification attempt, each using Japan as both birth and present
+  location specifically to avoid touching any real India/Q-Punch data: user id 94 and user id 95
+  (name "QA Verify 20261109", bearer-token path), and user id 96 (name "QA Verify Session",
+  browser-session path). None was retired or modified further; no real member account was touched.
+
+### Phone App implications
+
+The website backend remains the sole source of truth for authentication and account-retirement
+state; the Phone App must not invent its own token-expiry or account-status logic. Once the
+production retirement scenario above is confirmed (by whichever path the owner chooses), the Phone
+App Chat can treat a locally cached token exactly as it already does for any other 401 — no
+app-side change is anticipated either way, since the app only ever consumes `/api/me` and the
+existing 401 contract, both unchanged by this fix.
+
+### Final website status
+
+**Not fully closed.** The code fix is committed, deployed, and exhaustively regression-tested
+(97 dedicated checks plus the full 1,467-check suite, 0 failures). Active-account authentication
+is confirmed working on production post-deploy. The one piece that remains unconfirmed is the
+release's own actual purpose: that a retired account's previously-issued token is rejected live on
+production — this requires either an owner-performed production database write on one of the
+disposable test accounts above, or a future admin-facing retirement route. Per this release's own
+explicit instruction, the website phase should not be declared fully closed until that specific
+confirmation lands.
 
 ---
 
