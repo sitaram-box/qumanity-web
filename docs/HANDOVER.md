@@ -1270,6 +1270,105 @@ registration (and the resulting copyright/trademark/domain transfer) is still pe
 
 ---
 
+## 16. Pre-Launch Fixes — November 2026
+
+A separate, narrowly-scoped pre-launch task (six owner-identified issues) on top of the Global
+Account/C1 release above. Three files changed; everything else below was investigated and found
+either already correct or deliberately left alone.
+
+### Registration styling — root cause found and fixed
+**Root cause**: `static/css/style.css`'s global `html, body { height: 100%; background: var(--qm-bg); }`
+caps `body`'s painted box at the viewport height. On any page taller than one screen — every
+cosmic-themed page, registration most visibly — the content below that point falls through to
+`<html>`'s own background (the original light cream, `var(--qm-bg)`), which is exactly the
+reported "white background at the bottom." Confirmed live, not assumed: `body.offsetHeight` was
+221px against a real `scrollHeight` of 2348px.
+**Correction**, in `static/css/cosmic.css`'s existing shared selector
+(`body.qm-about, body.qm-cosmic-dashboard, body.qm-cosmic-register`): `height: auto;
+min-height: 100vh;`. This is the one targeted fix — `<html>`'s own background was deliberately
+left untouched, since with `body` now full-height it is never visible regardless of its color.
+**Verified**: desktop and 375px mobile visual checks (local dev server, screenshotted at the
+bottom of the page after scrolling) both confirmed the white area was gone; `body.offsetHeight`
+now equals `scrollHeight` exactly at both widths.
+
+### Provisional locations — already implemented; one styling bug fixed
+The Tehsil/Village "Can't find my Tehsil?/Village?" crowdsourced submission workflow
+(`templates/register.html` + `static/js/register.js`'s `QMProvisionalLocations` module,
+backed by `provisional_location_core.create_provisional_tehsil()`/`create_provisional_village()`)
+was **already fully implemented** before this task — not built here. The existing geography-
+ancestry validation, duplicate-prevention (normalized-name + parent match, with a clear rejection
+message), `status='provisional'` (never auto-verified), and existing activation-threshold rules
+were all read and confirmed correct, and were **not** modified. The only defect found was
+cosmetic: the confirmation message's hardcoded `color: #6a5200` (register.css, written for a
+light page) was confirmed live to render as near-unreadable dark brown against this dark theme.
+Fixed with one rule in `cosmic.css`: `body.qm-cosmic-register .qm-provisional-confirm-msg { color:
+var(--qm-accent-gold); }`. **No backend or JavaScript change was required or made for this task.**
+
+### Tri Nagar — owner decision: leave both entries unchanged
+`scripts/audit_india_master_locations.py` (read-only, already in the repository) confirms exactly
+one Tri Nagar name collision in `Qumanity_Master.json`: two **different** tehsils under district
+"Chandni Chowk" — `CS.DL.7.4` (12 villages) and `CS.DL.7.14` (23 villages) — sharing a display
+name. This is not a duplicate record; both contain real, distinct geographical data. A pre-existing
+script, `scripts/add_ganesh_pura_tri_nagar.py`, already documents this exact situation and quotes
+the Founder's own prior ruling: *"The duplicate names are a known issue, but they are not this
+task."* **Owner decision (2026-11-09): both entries are retained exactly as they are.** Neither
+was merged, renamed, or deleted; their villages, ids, parent relationships, and references were
+not touched; no location-cleanup or migration script was run against them. **This is recorded
+here as a known, deferred geographical naming/data-quality issue — explicitly not a launch
+blocker.**
+
+### Navi Mumbai — already complete, re-verified
+Ghansoli, Vashi, Nerul, and the other Navi Mumbai nodes added by `scripts/add_navi_mumbai_locations.py`
+were already present, from a previous session, in: the real `Qumanity_Master.json`
+(`~/Desktop/0_Earth/Qumanity_Master.json`), the committed derived file
+`static/data/subcontinent_districts.json` (confirmed via `git diff` — zero changes), the live
+`india_villages` SQLite table, and the actual registration API (`GET /api/subcontinent/districts`).
+**No location data was changed in this task** — the insertion script was read, not re-run.
+
+### Navigation — two items removed from exactly where they existed, no broader redesign
+The site has two separate, unrelated navigation patterns — `home.html`'s own `#hm-links` nav
+(Vision/How it works/Identity/Governance/Qoins/Roadmap/Explore the Future/About) and the shared
+`qm-header-actions` component used by `about.html` and five other pages (which, on `about.html`,
+was Home/Elements/Login/Register). Neither matched a literal "Home/Login/Register/About"
+four-item target as a whole, so rather than redesign either pattern, exactly the two named items
+were removed from exactly where they existed:
+- **"Explore the Future"** removed from `home.html`'s nav (the single `#hm-links` markup reused
+  for desktop, mobile, and the collapsed/burger menu via CSS/JS toggle — one edit covers all
+  three). Retained as a homepage hero content CTA, next to "See who's here."
+- **"Elements"** removed from `about.html`'s `qm-header-actions` nav, leaving
+  Home/Login/Register. "Explore the Future" was added there too, as an About-page hero content
+  CTA next to "Read the story." The `elements_dashboard` route/page and the one unrelated
+  "Elements" footer link on the homepage were left untouched.
+**No broader navigation redesign was performed** — the other five `qm-header-actions` pages
+(dashboard, qmap, qmail, founders_message, the two copyright pages) never had Elements or
+Explore the Future in them and were not touched.
+
+### Deferred work, confirmed not attempted
+No redesign of the 3D Explore the Future slides/engine/assets. No address-parser or pincode-lookup
+code. No broader India-geography cleanup beyond the (deliberately deferred) Tri Nagar item above.
+
+### Verification and release
+- **Implementation commit**: `7840ebb` — `fix: complete pre-launch styling and navigation
+  updates` — exactly `static/css/cosmic.css`, `templates/home.html`, `templates/about.html`.
+- **Handover commit**: this documentation update, committed separately immediately after the
+  implementation commit (see `git log` for its exact hash — not self-referenced here, since a
+  commit cannot record its own hash in its own content).
+- **Regression**: re-run in full against the implementation commit (`7840ebb`), not assumed from
+  an earlier report — **35 test files, 1,467 checks, 0 failures**, every file exiting 0. The
+  specifically-named suites all independently confirmed: `tests/test_provisional_locations.py`
+  (76/76), `tests/test_global_account.py` (136/136), and the two unrelated, pre-existing
+  retired-account suites `tests/test_app_token_auth.py` (25/25) and
+  `tests/test_browser_session_auth.py` (72/72) — run only to confirm they still pass, never
+  staged or committed as part of this release.
+- **Production verification**: local dev-server verification (desktop + 375px mobile, screenshot-
+  confirmed) is **not** the same claim as production verification. Whether this release was pushed
+  and deployed, and what was confirmed live on `https://web-production-126c3f.up.railway.app`
+  afterward, is recorded in the task's own final report, not here — this document records what
+  the code does and why, not a point-in-time deployment status that a later reader could mistake
+  for current.
+
+---
+
 *This document supersedes all prior versions of `docs/HANDOVER.md`. For the concise, frequently
 updated status tracker, see `docs/MASTER_STATUS.md`. For a partner- and public-facing overview of
 the project, see `docs/QUMANITY_WHITEPAPER.md`.*
