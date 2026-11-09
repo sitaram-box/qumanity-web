@@ -61,6 +61,7 @@ Every Python module at the repository root.
 |---|---|
 | `app.py` | Flask app: configuration, sign-in, every page and `/api` route, start-up and scheduler wiring |
 | `db.py` | SQLite connection helper (`get_db`) |
+| `account_core.py` | Single source of truth for Public/Global account classification (`account_access_type()`, `SUBCONTINENT_COUNTRY_IDS`) and the shared present-location validator (`validate_present_location_change()`) both the profile-change-request flow (`app.py`) and the account-ID-request flow (`social_core.py`) call. Added 2026-11-08. See `15_global_account_evidence.md`. |
 | `id_generator.py` | Generates the 9-digit Private ID and Account IDs; age bands |
 | `zodiac_core.py` | Sun sign, nakshatra and Vedic birth chart from birth date, time and place (pyswisseph, IANA time zones) |
 | `kundali_analyser.py` | Moon-based analysis of a birth chart |
@@ -85,7 +86,7 @@ Every Python module at the repository root.
 | `recovery_core.py` | Forgotten PIN (one-time code) and forgotten Private ID (admin-reviewed) |
 | `qmail_core.py` | Qmail, internal member-to-member messaging addressed `<username>-<account_id>@qumanity.in` (no internet email is sent or received); Q-Punch council addresses and the village-only reachability gate; attachments (2 MB, file-type allowlist) and drafts. See `docs/QMAIL.md` |
 | `admin_queries_core.py` | Admin Panel member queries: general questions with no location and no council escalation, read and answered by the Admin. No route lets a member submit one yet; the member who asked can read the replies (`/api/queries/mine/<id>`). See `docs/ADMIN_PANEL.md` |
-| `email_core.py` | The optional registration notice to the Admin over SMTP (standard-library `smtplib`, STARTTLS), with a masked Private ID. Does nothing unless `SMTP_HOST` and `QM_ADMIN_EMAIL` are set. See `docs/EMAIL.md` |
+| `email_core.py` | The optional registration notice to the Admin, and AI-Support ticket replies, sent over Resend's HTTPS transactional-email API (not SMTP, since 2026-10-20), with a masked Private ID. Does nothing unless `RESEND_API_KEY` and `QM_ADMIN_EMAIL` are set. See `docs/EMAIL.md` |
 | `founder_core.py` | The Founder's Message on the homepage, in English only |
 | `cycle_middleware.py` | Stamps every activity row with the current lunar `cycle_id` |
 | `pipeline_core.py` | Aggregates a cycle's activity and transfers it up one level (Village to Earth) |
