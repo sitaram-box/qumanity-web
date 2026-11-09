@@ -40,7 +40,6 @@
         <a href="{{ url_for('about') }}#punch" data-i18n="nav_governance">Governance</a>
         <a href="{{ url_for('about') }}#qoins" data-i18n="nav_qoins">Qoins</a>
         <a href="{{ url_for('about') }}#roadmap" data-i18n="nav_roadmap">Roadmap</a>
-        <a href="{{ url_for('future_page') }}">Explore the Future</a>
         <a href="{{ url_for('about') }}" data-i18n="nav_about">About</a>
       </nav>
       <div class="hm-nav-cta">
@@ -86,6 +85,9 @@
             <div class="hm-cta-row hm-cta-center">
               <a class="qm-btn qm-btn-primary qm-btn-lg" href="{{ url_for('register') }}"><span data-i18n="hero_cta">Create your account</span> <span aria-hidden="true">→</span></a>
               <a class="qm-btn qm-btn-ghost qm-btn-lg" href="#live" data-i18n="hero_see_live">See who's here</a>
+              <!-- 2026-11-09: moved out of the top nav (owner request) -- still the same route,
+                   now reachable as a content link instead of a persistent menu item. -->
+              <a class="qm-btn qm-btn-ghost qm-btn-lg" href="{{ url_for('future_page') }}">Explore the Future →</a>
             </div>
             <ul class="hm-trust">
               <li><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/></svg>Built and stewarded by one founder</li>

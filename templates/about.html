@@ -24,7 +24,6 @@
     </div>
     <nav class="qm-header-actions">
       <a class="qm-btn qm-btn-ghost" href="{{ url_for('index') }}">Home</a>
-      <a class="qm-btn qm-btn-ghost" href="{{ url_for('elements_dashboard') }}">Elements</a>
       <a class="qm-btn qm-btn-ghost" href="{{ url_for('login') }}">Login</a>
       <a class="qm-btn qm-btn-primary" href="{{ url_for('register') }}">Register</a>
     </nav>
@@ -45,6 +44,8 @@
       <div class="ab-hero-cta">
         <a class="qm-btn qm-btn-primary" href="{{ url_for('register') }}">Create your Quantum Account</a>
         <a class="qm-btn qm-btn-ghost" href="#stop-1">Read the story ↓</a>
+        <!-- 2026-11-09: moved out of the top nav (owner request) -- same route, now a content link. -->
+        <a class="qm-btn qm-btn-ghost" href="{{ url_for('future_page') }}">Explore the Future →</a>
       </div>
       <dl class="ab-stats">
         <div><dt>10</dt><dd>countries of the Indian Sub-continent on the Public Timeline</dd></div>

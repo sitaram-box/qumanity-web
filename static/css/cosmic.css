@@ -382,6 +382,18 @@ body.qm-cosmic-register {
     linear-gradient(180deg, var(--qm-bg-deep) 0%, var(--qm-bg-mid) 45%, var(--qm-bg-deep) 100%);
   background-attachment: fixed;
   color: var(--qm-text-primary);
+  /* 2026-11-09: style.css's global `html, body { height: 100% }` caps body's painted box at the
+     viewport height; on any page taller than one screen (every cosmic page, registration most
+     visibly), the overflow below that point falls through to <html>'s own background
+     (var(--qm-bg), the original light cream) instead of this gradient -- the reported "white
+     background at the bottom". `min-height: 100vh` with `height: auto` lets body grow to its
+     real content height again so this gradient actually covers all of it; verified live
+     (body.offsetHeight went from one viewport's worth to the full scrollHeight, confirmed by
+     scrolling to the bottom and screenshotting -- no cream area left). html's own background is
+     intentionally left untouched: with body now full-height, it is never visible regardless of
+     its color, so this is the one targeted fix, not a second one layered on top. */
+  height: auto;
+  min-height: 100vh;
 }
 body.qm-about .ab-card,
 body.qm-about .ab-stats > div,
@@ -466,6 +478,13 @@ body.qm-cosmic-register .qm-step.is-active .qm-step-index {
   box-shadow: var(--qm-glow-gold);
 }
 body.qm-cosmic-register .qm-steps { background: rgba(10, 10, 26, 0.4); border-bottom: 1px solid var(--qm-cosmic-border-soft); }
+/* "Can't find my Tehsil/Village?" confirmation message -- register.css's own #6a5200 (dark
+   brown, written for a light page) is nearly unreadable against this theme's dark background;
+   confirmed live (rendered at rgb(106, 82, 0) over a transparent/dark ancestor). Everything else
+   in this panel (the search input, the match list, the note) already inherits readable cosmic
+   colors with no override needed -- checked live, not assumed -- so this is the one line that
+   needs it. */
+body.qm-cosmic-register .qm-provisional-confirm-msg { color: var(--qm-accent-gold); }
 
 /* ---------------------------------------------------------------------------------------------
    16. FALLBACK: unstyled form controls. A real, non-hypothetical gap found during browser
