@@ -35,6 +35,7 @@ per-file table: `docs/HANDOVER.md` §11. (Supersedes the previously reported 1,3
 | Admin Panel | ✅ Implemented & Committed | Council-scoped queue |
 | Referral Engine (registration attribution + bonus) | ✅ Implemented & Committed | A separate, unfinished board-level referrer-code system has no redemption path or tests — do not conflate the two; see `docs/dpg_evidence/13_referral_engine_evidence.md` |
 | Copyright/religious-text notice pages | ✅ Implemented & Committed | `/copyright/gita-press`, `/copyright/religious-texts` |
+| Global Account (registration outside the 10 Public Account countries) | 🟡 **Implemented & tested, uncommitted** | See **Global Account** section below |
 
 ---
 
@@ -80,6 +81,106 @@ dropped); both public rights-notice pages (`/copyright/gita-press`,
 erasing the underlying rights research; `docs/marquee_religious_text_sources.md` and
 `docs/marquee_rights_roadmap.md` as the historical audit trail. Full detail:
 `docs/HANDOVER.md` §9.1.
+
+---
+
+## Global Account
+
+**🟡 Implemented, security-hardened & tested, uncommitted — 2026-11-08** — a user whose Present
+Location's country is outside the 10 Public Account Activation countries
+(`SUBCONTINENT_COUNTRY_IDS`, now in its own `account_core.py` module: India, Nepal, Bhutan,
+Bangladesh, Myanmar, Sri Lanka, Pakistan, Balochistan, Afghanistan, Maldives — Mauritius and every
+other country, e.g. Japan/Kenya, are Global) registers with a location that stops at Continent +
+Country, gets the Global/Personal/Private Dashboard tabs (no Public tab), is denied the local
+Public timeline and Q-Punch's Village Council election — and **can** vote on posts that reached
+Country/Continent/Earth level, scoped to whoever shares that same geography (Earth level is the
+only universal tier). Full detail: `docs/HANDOVER.md` §9.3.
+
+**Hardening pass (2026-11-08)**: a real security gap was found and closed — the self-service
+profile-change-request pathway accepted a `present_location` edit with no validation at all, the
+realistic route by which an internally inconsistent location (Global country + a Subcontinent
+village id) could reach a real row and satisfy the old, ungated village-residency check.
+`election_core._present_village_id()` now independently re-checks `account_access_type()`; the
+profile-change-request pathway is now validated at both submission and approval, and a
+Global↔Public account-boundary crossing is refused in either direction (no transition workflow
+exists in this product yet — building one was out of scope here). Also fixed: a 4px mobile
+Dashboard header overflow (`static/css/dashboard.css`), unrelated to Global Accounts but found
+during this feature's browser verification.
+
+**Independent adversarial review (same date)**: confirmed the hardening above, then found and
+closed one further real gap — the profile-change-request validator checked state-belongs-to-
+country but not the rest of the ancestry chain, so a Public Account could submit a real but
+mismatched Village id (e.g. claiming a village from a different Tehsil/District) and still pass.
+Closed using existing data only (`subcontinent_states.json`/`subcontinent_districts.json` for
+Zone/District/Tehsil, `india_villages.tehsil_id` for Village — no new hierarchy, no migration).
+Also verified the admin-only `auto_nominate()`/`auto_vote()` simulation endpoints cannot bypass
+the same eligibility gate (they re-check it internally even though their own candidate/voter pool
+query doesn't). One pre-existing, unrelated finding noted but not touched per instruction:
+`perception_core.py` carries its own independent copy of the 10-country list (currently in sync,
+but with no shared source with `account_core.py`).
+
+**Phase 1 (2026-11-08)**: an owner-approval audit found one further confirmed bypass — the
+Tehsil-belongs-to-District check only ran when a District was *also* submitted, so omitting
+District entirely skipped it. Fixed: District is now mandatory whenever a real Tehsil is
+submitted, enforced identically at **both** registration and the profile-change path (registration
+had never validated ancestry beyond state-belongs-to-country before this). The Village-level
+`india_villages` check also tightened from soft-fail-on-not-found to hard-reject — "unverifiable"
+is no longer treated as "confirmed valid." A separate robustness fix closes an unhandled-crash
+path for malformed (wrong-type) location fields. See `docs/HANDOVER.md` §9.3 for full detail.
+
+**Also fixed in Phase 1 (unrelated to Global Account, but found via the same mobile-migration
+work)**: a real Q-Punch winner-tally bug — `election_core._ensure_tallied()` tallied a cycle's
+winners once ever per village/sign/year, permanently freezing a null tally if the cycle was first
+seen as closed before all its votes existed. Confirmed live against a copy of the real database
+(`qumanity_prototype.db` itself had exactly this stale state for Libra 2026 / Rohini Sector 24).
+Fixed by always recomputing from current votes; new test file `tests/test_election_winner_tally.py`
+(25 checks).
+
+**Corrective follow-up (2026-11-08)**: registration's own Village check had been left weaker than
+profile-change's — it never queried `india_villages` at all, so a non-provisional, fabricated
+Village id was silently accepted. Closed by reusing the existing
+`provisional_location_core.verified_village_exists()` helper inside registration's own
+provisional-check loop; no new lookup mechanism, no change to the provisional-location system's
+own activation rules. Confirmed, by direct test, that a genuine database-query failure during
+verification raises rather than silently returning a valid result. Closing this at registration
+meant 19 existing test files (each registering through the real route with a real Village) needed a
+short `india_villages` seed added — none of their own test logic was touched. The two newly added
+files `tests/test_global_account.py` and `tests/test_election_winner_tally.py` independently
+include the same seed setup, bringing the total number of test files containing this seed setup
+to 21.
+
+**Independent adversarial pre-merge audit (2026-11-08), C1 fix (same date)**: the audit found that
+every check above was wired into `app.py`'s profile-change-request flow only ("Path B"). A second,
+entirely separate route to the same `users.present_location_json` write —
+`social_core.request_new_account()`/`decide_account_request()` ("Path A", the dedicated "request a
+new Account ID" flow, `POST /api/people/account-ids/request` and
+`POST /api/admin/account-ids/<id>/decide`) — called none of it, so a Global Account could submit a
+fabricated India village location through it and, once approved, cross the Global/Public boundary
+and acquire the real pilot village's Q-Punch residency. Fixed by moving
+`_validate_present_location_change()` and its helpers into `account_core.py` (so `social_core.py`
+can call it without a circular import) and calling it at both submission and approval in Path A,
+exactly mirroring Path B. New test file `tests/test_account_id_request_security.py` (31 checks),
+including the exact exploit reproduced and rejected through the real HTTP routes. See
+`docs/HANDOVER.md` §9.3 for full detail.
+
+**Mobile UI exploitation surface (found during the independent post-fix audit, same date)**: the
+mobile app's own "Account IDs → request a new one" screen
+(`Qumanity_App/mobile/src/app/account-ids.tsx`) calls these exact two routes, and its entry point
+in `private.tsx` is not gated on account type — so a Global Account could reach this normal,
+un-fabricated screen and, before this fix, queue a request that an admin's approval could turn
+into an illegitimate Global-to-Public crossing. The mobile screen itself was never the security
+boundary and no mobile code change was made or is needed: the backend now validates the proposed
+present-location at submission and independently revalidates it against the user's current
+account state at approval, and the screen's existing generic error handling already surfaces a
+rejection correctly. Backend authorization and validation remain the sole, authoritative gate.
+
+**Not yet committed** — `tests/test_global_account.py`: **136 checks**, all pass; plus
+`tests/test_election_winner_tally.py` (25 checks) and the new `tests/test_account_id_request_security.py`
+(31 checks); full regression is 33 files / **1,370 checks** / 0 failures (supersedes the
+previously reported 32 files / 1,339 checks). The mobile app's own cross-repo checker
+(`Qumanity_App/tools/website-check/check_app_api.py`) now shows only one remaining, pre-existing,
+unrelated failure ("board shows the post, score and vote state" — tracked separately, not a
+Global Account or election issue). Awaiting the owner's review before `git commit`/`push`.
 
 ---
 

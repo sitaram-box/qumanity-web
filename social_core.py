@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime as dt
 import secrets
 
+import account_core
 import cycle_middleware
 import notify_core
 
@@ -905,10 +906,19 @@ def request_new_account(conn, user_id, present_location):
     """A user who has moved asks for a new Account ID at their new present location. Manual council
     review for now (the founder's spec also wants this triggered automatically by a local shop's
     payment approval -- that needs a commerce/shop module that doesn't exist yet, so it's deferred;
-    see docs/personal_timeline_and_social.md)."""
+    see docs/personal_timeline_and_social.md).
+
+    2026-11-08 (C1 fix): validated through account_core.validate_present_location_change(), the
+    exact same gate app.py's profile-change-request flow uses -- full location shape/ancestry/
+    village-existence checks, and the Global<->Public account-boundary lock. Before this fix the
+    only check here was a bare truthiness test (`village` or `state` present), which an independent
+    adversarial review showed let a Global Account queue a fabricated Public/India village
+    present_location and, once approved, cross the account-boundary and acquire Q-Punch village
+    residency -- see account_core.py's module docstring."""
     ensure_account_request_table(conn)
-    if not (present_location.get("village") or present_location.get("state")):
-        raise ValueError("Choose at least a state for your new present location")
+    ok, reason = account_core.validate_present_location_change(conn, user_id, present_location)
+    if not ok:
+        raise ValueError(reason)
     if conn.execute("SELECT 1 FROM account_id_requests WHERE user_id=? AND status='pending'", (user_id,)).fetchone():
         raise ValueError("You already have a request waiting for the council")
     conn.execute("INSERT INTO account_id_requests (user_id, present_location_json, created_at, cycle_id) VALUES (?,?,?,?)",
@@ -931,14 +941,26 @@ def list_account_requests(conn):
 
 
 def decide_account_request(conn, admin_id, request_id, approve):
+    """2026-11-08 (C1 fix): an approval now re-validates the request's present_location against
+    the user's CURRENT state (not the state at submission time -- it may have changed while the
+    request sat pending) via account_core.validate_present_location_change(), the exact same gate
+    request_new_account() already applies at submission. Re-validating here, not just trusting
+    submission-time validation, is the point: an admin's approval must never be able to apply a
+    location that is no longer valid. Validation runs strictly before any mutation
+    (regenerate_account_id() and the status UPDATE both come after) -- on rejection, this function
+    raises and the request is left exactly as it was (still 'pending'), with no account_id,
+    present_location_json, or classification change and no partial update."""
     import json as _json
     ensure_account_request_table(conn)
     row = conn.execute("SELECT * FROM account_id_requests WHERE id=? AND status='pending'", (request_id,)).fetchone()
     if not row:
         raise LookupError("Request not found")
-    conn.execute("UPDATE account_id_requests SET status=?, decided_by=?, decided_at=? WHERE id=?",
-                 ("approved" if approve else "rejected", admin_id, _now(), request_id))
     if approve:
         present = _json.loads(row["present_location_json"])
+        ok, reason = account_core.validate_present_location_change(conn, row["user_id"], present)
+        if not ok:
+            raise ValueError(f"This request is no longer valid and cannot be approved: {reason}")
         regenerate_account_id(conn, row["user_id"], present)
+    conn.execute("UPDATE account_id_requests SET status=?, decided_by=?, decided_at=? WHERE id=?",
+                 ("approved" if approve else "rejected", admin_id, _now(), request_id))
     conn.commit()

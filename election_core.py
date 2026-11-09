@@ -17,6 +17,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 
+import account_core
 import cycle_middleware
 import id_generator
 import karma_core
@@ -177,13 +178,30 @@ def current_cycle_for_village(conn, village_id: str, today: dt.date | None = Non
 
 
 def _ensure_tallied(conn, cycle: dict) -> None:
+    """Computes the winner tally for a closed cycle from the CURRENT election_votes data, and
+    writes it into village_council + election_cycles.
+
+    2026-11-08 FIX (Task 1B): this used to tally ONCE EVER per (village_id, zodiac_sign, year) --
+    skipping entirely, forever, if a village_council row already existed, regardless of whether
+    the votes underlying that row had changed since the row was first written. That meant a cycle
+    whose status was first observed as "closed" before all of its votes existed permanently froze
+    a null/incomplete tally, even after real votes were later cast for that exact cycle.
+    Confirmed as the actual root cause, not assumed: tools/website-check/check_app_api.py's "week
+    4: winners have the most votes" check failed with real votes on record (male=15, female=11)
+    but winners/vote-counts reported as None/0 -- and the real qumanity_prototype.db's own
+    village_council row for Libra 2026 / Rohini Sector 24 shows exactly this: tallied
+    2026-10-17 with ZERO election_votes rows for that cycle on record at the time. Candidate
+    creation, vote casting/persistence, and cycle-status derivation were all independently
+    verified correct (a direct repro reproduced the right winners when _ensure_tallied was not
+    short-circuited by a stale existing row) -- the bug is isolated entirely to this one
+    skip-if-exists guard, so this is the smallest responsible fix: tallying is a cheap,
+    deterministic read of election_votes with no side effect that must only ever run once -- no
+    reward or Qoin payout is tied to becoming a winner anywhere in this codebase (confirmed by
+    grep; the only Q-Punch-adjacent reward, wallet_core.unlock_user_share, fires on a VOTER's
+    first-ever vote, never on tallying) -- so recomputing it every time a cycle is seen as closed,
+    and overwriting the existing village_council/election_cycles winner columns with the fresh
+    result, is safe and correct, not a new election mechanism or a policy change."""
     ensure_council_columns(conn)
-    existing = conn.execute(
-        "SELECT 1 FROM village_council WHERE village_id = ? AND zodiac_sign = ? AND year = ?",
-        (cycle["village_id"], cycle["zodiac_sign"], cycle["year"]),
-    ).fetchone()
-    if existing:
-        return
 
     winners = {}
     for gender in ("male", "female"):
@@ -202,14 +220,28 @@ def _ensure_tallied(conn, cycle: dict) -> None:
     # no training dates and a leadership window as either "leadership" or "completed".
     leadership_start, leadership_end = _winner_term(cycle)
 
-    conn.execute(
-        """INSERT INTO village_council
-           (village_id, zodiac_sign, year, male_head_user_id, female_head_user_id, election_cycle_id,
-            leadership_start, leadership_end)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        (cycle["village_id"], cycle["zodiac_sign"], cycle["year"], winners["male"], winners["female"], cycle["id"],
-         leadership_start, leadership_end),
-    )
+    existing = conn.execute(
+        "SELECT 1 FROM village_council WHERE village_id = ? AND zodiac_sign = ? AND year = ?",
+        (cycle["village_id"], cycle["zodiac_sign"], cycle["year"]),
+    ).fetchone()
+    if existing:
+        conn.execute(
+            """UPDATE village_council SET male_head_user_id = ?, female_head_user_id = ?,
+               election_cycle_id = ?, leadership_start = ?, leadership_end = ?,
+               updated_at = CURRENT_TIMESTAMP
+               WHERE village_id = ? AND zodiac_sign = ? AND year = ?""",
+            (winners["male"], winners["female"], cycle["id"], leadership_start, leadership_end,
+             cycle["village_id"], cycle["zodiac_sign"], cycle["year"]),
+        )
+    else:
+        conn.execute(
+            """INSERT INTO village_council
+               (village_id, zodiac_sign, year, male_head_user_id, female_head_user_id, election_cycle_id,
+                leadership_start, leadership_end)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (cycle["village_id"], cycle["zodiac_sign"], cycle["year"], winners["male"], winners["female"], cycle["id"],
+             leadership_start, leadership_end),
+        )
     conn.execute(
         "UPDATE election_cycles SET male_winner_user_id = ?, female_winner_user_id = ? WHERE id = ?",
         (winners["male"], winners["female"], cycle["id"]),
@@ -218,7 +250,18 @@ def _ensure_tallied(conn, cycle: dict) -> None:
 
 
 def _present_village_id(user_row) -> str | None:
+    """The user's present village id -- but ONLY when account_core.account_access_type()
+    independently agrees their account is 'public' (2026-11-08 Q-Punch hardening). Every Q-Punch
+    eligibility check (nomination_eligible, voting_eligible, member_guide) goes through this one
+    function, so this is the single place that needed to change: a Global Account is never
+    Q-Punch eligible merely because a village id happens to sit in its present_location_json --
+    e.g. from a stale or malformed profile-change-request record, or a future bug elsewhere --
+    since account_access_type() recomputes the classification independently from the SAME
+    present_location_json, using the country id, not the presence of a village key. A row whose
+    country is outside SUBCONTINENT_COUNTRY_IDS always gets None here, full stop."""
     loc = json.loads(user_row["present_location_json"])
+    if account_core.account_access_type(loc) != "public":
+        return None
     village = loc.get("village")
     return village["id"] if village else None
 

@@ -31,6 +31,18 @@ os.environ["QM_DISABLE_SCHEDULER"] = "1"
 import app as appmod  # noqa: E402
 import db as dbmod  # noqa: E402
 
+# 2026-11-08 (Phase 1 corrective task): registration now verifies a real (non-provisional)
+# Village against india_villages, the same way profile-change already does -- every throwaway
+# test DB starts with that table empty, so any test registering a real village through the real
+# /api/auth/register route must seed its row here first (same pattern as
+# tests/test_global_account.py's section 16/18).
+_seed_conn = dbmod.get_db()
+_seed_conn.execute("INSERT OR REPLACE INTO india_villages (id, tehsil_id, name) VALUES ('CS.DL.3.4.1A', 'CS.DL.3.4', 'Rohini Sector 24')")
+_seed_conn.execute("INSERT OR REPLACE INTO india_villages (id, tehsil_id, name) VALUES ('CS.DL.3.4.1B', 'CS.DL.3.4', 'Rohini Sector 25')")
+_seed_conn.commit()
+_seed_conn.close()
+
+
 FAILS = []
 
 

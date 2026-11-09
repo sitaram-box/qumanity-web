@@ -28,6 +28,7 @@ from flask import Flask, Response, jsonify, redirect, render_template, request, 
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import account_core
 import cycle_middleware
 import election_core
 import election_test_scheduler
@@ -3150,6 +3151,12 @@ def _profile_for(user_id):
         "present_location": _location_display(json.loads(user["present_location_json"])),
         "birth_location_struct": json.loads(user["birth_location_json"]),
         "present_location_struct": json.loads(user["present_location_json"]),
+        # Global Account (2026-11-08): derived live from present_location_json via
+        # account_access_type() -- see that function's docstring for why this is never a
+        # separate persisted column. Drives the Dashboard's Public-tab visibility and nothing
+        # else here; every backend permission check (board_core, election_core) already
+        # enforces its own rule independently of this flag.
+        "is_global_account": account_access_type(json.loads(user["present_location_json"])) == "global",
         "birth_time_known": bool(user["birth_time_known"]),
         "religion_belief": user["religion_belief"],
         "has_profile_picture": bool(user["profile_picture"]),
@@ -3256,6 +3263,15 @@ def api_dashboard_edit_request():
     if not fields:
         conn.close()
         return jsonify({"error": "Nothing to change"}), 400
+
+    if "present_location" in fields:
+        # 2026-11-08 Q-Punch hardening: reject a malformed/inconsistent present_location at
+        # submission time, before any council/Admin ever sees the ticket -- see
+        # _validate_present_location_change()'s docstring for why this check didn't exist before.
+        ok, reason = _validate_present_location_change(conn, session["user_id"], fields["present_location"])
+        if not ok:
+            conn.close()
+            return jsonify({"error": reason}), 400
 
     _ensure_profile_change_table(conn)
     conn.execute("INSERT INTO profile_change_requests (user_id, fields_json, reason, cycle_id) VALUES (?, ?, ?, ?)",
@@ -3466,6 +3482,20 @@ def api_admin_profile_decide(request_id):
     ):
         conn.close()
         return jsonify({"error": "Request not found"}), 404
+
+    if approve:
+        # 2026-11-08 Q-Punch hardening: re-validate present_location at the moment of approval,
+        # before marking the ticket decided or writing anything -- a second, independent check
+        # on top of api_dashboard_edit_request()'s submission-time one (defense in depth; a
+        # ticket could in principle have been queued before this check existed). An invalid
+        # ticket is left pending, not silently approved or auto-rejected, so Admin can see why.
+        pending_fields = json.loads(row["fields_json"])
+        if "present_location" in pending_fields:
+            ok, reason = _validate_present_location_change(conn, row["user_id"], pending_fields["present_location"])
+            if not ok:
+                conn.close()
+                return jsonify({"error": reason}), 400
+
     conn.execute("UPDATE profile_change_requests SET status = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP WHERE id = ?",
                  ("approved" if approve else "rejected", session["user_id"], request_id))
     if approve:
@@ -3619,22 +3649,31 @@ def api_india_districts():
 
 SUBCONTINENT_STATES_FILE = BASE_DIR / "static" / "data" / "subcontinent_states.json"
 SUBCONTINENT_DISTRICTS_FILE = BASE_DIR / "static" / "data" / "subcontinent_districts.json"
-# The 10 countries of the Indian Sub-continent (Balochistan is its own country
-# in the location master, not a Pakistan province). Every user's PRESENT
-# location must be one of these; birth location can be anywhere on Earth.
-SUBCONTINENT_COUNTRY_IDS = (
-    "O_AS_IND", "O_AS_NPL", "O_AS_BTN", "O_AS_BGD", "O_AS_MMR",
-    "O_AS_LKA", "O_AS_PAK", "O_AS_BLC", "O_AS_AFG", "O_AS_MDV",
-)
+# SUBCONTINENT_COUNTRY_IDS and account_access_type() moved to account_core.py (2026-11-08
+# Q-Punch security hardening) -- re-exported here under their original names so every existing
+# call site in this file (and `appmod.account_access_type` / `appmod.SUBCONTINENT_COUNTRY_IDS`
+# in tests) keeps working unchanged. election_core.py imports account_core directly (not this
+# module, to avoid a circular import -- app.py already imports election_core) so its own Q-Punch
+# eligibility gate uses this exact same classification; see account_core.py's docstring and
+# election_core._present_village_id().
+SUBCONTINENT_COUNTRY_IDS = account_core.SUBCONTINENT_COUNTRY_IDS
+account_access_type = account_core.account_access_type
 
 
-def _public_state_ids(country_id):
-    """Valid state-level ids of one Public-timeline country."""
-    data = _load_json(SUBCONTINENT_STATES_FILE)
-    for country in data["countries"]:
-        if country["id"] == country_id:
-            return {st["id"] for zone in country["zones"] for st in zone["states"]}
-    return set()
+# 2026-11-08 (C1 fix): the full validation chain below (_public_state_ids / _is_valid_global_country
+# / _location_subfields_well_formed / _validate_zone_district_tehsil_ancestry /
+# _validate_present_location_change) now LIVES in account_core.py, not here -- so social_core.py's
+# account-ID-request flow ("Path A") can call the identical validation this file's own
+# profile-change-request flow ("Path B") always has, without a circular import (social_core.py
+# cannot import app.py, which already imports social_core.py). These names stay as plain aliases
+# so every existing call site in this file (api_auth_register, api_dashboard_edit_request,
+# api_admin_profile_decide) keeps working unchanged. See account_core.py's own docstring for why
+# this function exists and which paths call it.
+_public_state_ids = account_core.public_state_ids
+_is_valid_global_country = account_core.is_valid_global_country
+_location_subfields_well_formed = account_core.location_subfields_well_formed
+_validate_zone_district_tehsil_ancestry = account_core.validate_zone_district_tehsil_ancestry
+_validate_present_location_change = account_core.validate_present_location_change
 
 
 @app.route("/api/subcontinent")
@@ -4301,15 +4340,53 @@ def api_auth_register():
 
     birth_location = data["birth_location"]
     present_location = data["present_location"]
+    if not isinstance(birth_location, dict) or not _location_subfields_well_formed(birth_location):
+        return jsonify({"error": "Birth location fields must each be an object with an id"}), 400
+    if not isinstance(present_location, dict) or not _location_subfields_well_formed(present_location):
+        return jsonify({"error": "Present location fields must each be an object with an id"}), 400
 
     if not (birth_location.get("country") or {}).get("id"):
         return jsonify({"error": "Birth location needs a country"}), 400
     present_country_id = (present_location.get("country") or {}).get("id")
-    if present_country_id not in SUBCONTINENT_COUNTRY_IDS:
-        return jsonify({"error": "Present location must be in the Indian Sub-continent"}), 400
-    present_state_id = (present_location.get("state") or {}).get("id")
-    if present_state_id not in _public_state_ids(present_country_id):
-        return jsonify({"error": "Present location needs a valid state/province for its country"}), 400
+    present_continent_id = (present_location.get("continent") or {}).get("id")
+    is_global_account = present_country_id not in SUBCONTINENT_COUNTRY_IDS
+    if is_global_account:
+        # Global Account (2026-11-08): the present country is outside the 10 Public Account
+        # Activation countries. Present Location stops at Country -- every subordinate field
+        # (state/zone/district/tehsil/village) is REJECTED outright if the client sent one,
+        # never silently dropped, so a Global Account can never end up carrying a fabricated
+        # local-location id that board_core.py's/election_core.py's own residency checks
+        # (chain_of()/_present_village_id(), which read present_location_json back from the
+        # DB, not from any request) might otherwise be fooled by later.
+        if not present_continent_id:
+            return jsonify({"error": "Present location needs a continent"}), 400
+        if any((present_location.get(lvl) or {}).get("id") for lvl in
+               ("state", "zone", "district", "tehsil", "village")):
+            return jsonify({"error": "A Global Account's present location can only be Continent and Country"}), 400
+        if not _is_valid_global_country(present_continent_id, present_country_id):
+            return jsonify({"error": "Unknown continent/country"}), 400
+        present_state_id = None  # a Global Account never has one; keeps the name defined for the
+        # provisional-tehsil/village loop below, which never actually runs for a Global Account
+        # (present_tehsil_id/present_village_id are always None here -- rejected above if sent).
+    else:
+        present_state_id = (present_location.get("state") or {}).get("id")
+        if present_state_id not in _public_state_ids(present_country_id):
+            return jsonify({"error": "Present location needs a valid state/province for its country"}), 400
+        # 2026-11-08 Q-Punch hardening (Task 1A): the same Zone/District/Tehsil ancestry check
+        # _validate_present_location_change() enforces for a profile-change request -- applied
+        # here too so registration and profile-change agree on what a consistent location chain
+        # looks like, rather than registration staying the weaker of the two entry points that
+        # can write present_location_json.
+        ok, reason = _validate_zone_district_tehsil_ancestry(present_country_id, present_state_id, present_location)
+        if not ok:
+            return jsonify({"error": reason}), 400
+        # A Village needs SOME immediate parent stated -- same requirement
+        # _validate_present_location_change() enforces (2026-11-08, Task 1A). This is a cheap,
+        # always-available presence check (not the india_villages DB lookup, which stays scoped
+        # to the profile-change path only -- see that function's own docstring for why).
+        if (present_location.get("village") or {}).get("id") and not any(
+                (present_location.get(lvl) or {}).get("id") for lvl in ("tehsil", "district")):
+            return jsonify({"error": "A Village requires its Tehsil or District to also be submitted"}), 400
 
     # Crowdsourced Location System MVP (2026-11): present_location.tehsil.id / .village.id may be
     # a "PROV-<n>" string (created earlier, before this final submit, via POST
@@ -4321,11 +4398,24 @@ def api_auth_register():
     # registration sees it, /api/locations/provisional has already done all the real validation.
     present_tehsil_id = (present_location.get("tehsil") or {}).get("id")
     present_village_id = (present_location.get("village") or {}).get("id")
+    present_district_id = (present_location.get("district") or {}).get("id")
     provisional_conn = get_db()
     provisional_location_core.ensure_tables(provisional_conn)
     for label, loc_id in (("tehsil", present_tehsil_id), ("village", present_village_id)):
         prov_id = provisional_location_core.from_present_location_id(loc_id) if loc_id else None
         if prov_id is None:
+            # 2026-11-08 (Phase 1 corrective task): a non-provisional Village id must be a REAL,
+            # existing village -- an arbitrary/fabricated id is no longer silently trusted just
+            # because it fails to match the "PROV-<n>" pattern. Mirrors
+            # _validate_present_location_change()'s own Village policy (Task 1A), closing
+            # registration's own, separate instance of the same gap. Tehsil's own real-ancestry
+            # (belongs to the submitted District) is already checked above by
+            # _validate_zone_district_tehsil_ancestry() -- this is the Village-specific check
+            # that only registration was still missing.
+            if label == "village" and loc_id and not provisional_location_core.verified_village_exists(
+                    provisional_conn, present_tehsil_id or present_district_id, loc_id):
+                provisional_conn.close()
+                return jsonify({"error": "That village could not be found in the location records"}), 400
             continue
         prov = provisional_location_core.get_provisional(provisional_conn, prov_id)
         if not prov or prov["status"] in ("rejected", "merged"):
@@ -4407,14 +4497,24 @@ def api_auth_register():
     conn.close()
 
     try:
-        folder_connector.register_user_folder(birth_location, present_location, tropical["element"], {
-            "user_id": user_id, "name": data["name"], "gender": data["gender"],
-            "dob": data["dob"], "tob": data["tob"],
-            "private_id": private_id, "account_id": account_id,
-            "birth_location_path": id_generator.location_path_for(birth_location),
-            "present_location_path": id_generator.location_path_for(present_location),
-            "sun_sign": tropical["sign"], "sun_element": tropical["element"],
-        })
+        # A Global Account's present_location has no on-disk folder of its own to resolve to
+        # below the Continent (the 0_Earth tree only has Country/Zone/State/.../Village folders
+        # built out for the 10 Public Account countries) -- passing it through anyway would make
+        # resolve_location_dir() fall back to that shared Continent folder (e.g. "Asia", also
+        # used by every Public Account country under it) and create a stray LIVING_HERE folder
+        # there for every Global Account registrant, which is exactly the kind of unrequested
+        # folder-tree change the project's standing rule forbids. BORN_HERE (birth_location) is
+        # unaffected -- it was never restricted to the 10 countries and already soft-fails the
+        # same way for any birth country with no built folder.
+        folder_connector.register_user_folder(
+            birth_location, None if is_global_account else present_location, tropical["element"], {
+                "user_id": user_id, "name": data["name"], "gender": data["gender"],
+                "dob": data["dob"], "tob": data["tob"],
+                "private_id": private_id, "account_id": account_id,
+                "birth_location_path": id_generator.location_path_for(birth_location),
+                "present_location_path": id_generator.location_path_for(present_location),
+                "sun_sign": tropical["sign"], "sun_element": tropical["element"],
+            })
     except OSError as e:
         print(f"[folder_connector] could not write user folder for {private_id}: {e}")
 

@@ -122,7 +122,10 @@ Poems/                     Marquee religious-text content files (see §9)
 
 Eight nested levels, in order: **Village → Tehsil → District → State → Zone → Country → Continent
 → Earth.** Every member, post, council seat, and governance mechanism in the project is scoped to
-one of these levels.
+one of these levels — **except** a Global Account (§9.3), whose Present Location deliberately
+stops at Country; this is intentional, not a data gap, and every reader of
+`present_location_json` in this codebase already handles a missing Village/Tehsil/District/
+State/Zone gracefully (`.get(level) or {}` throughout).
 
 - **Canonical source**: `Qumanity_Master.json`, a non-git-tracked file on the owner's own machine
   (outside this repository, under `~/Desktop/0_Earth/`). It is the authoritative geography source
@@ -180,6 +183,7 @@ older summary.
 | Provisional Locations (crowdsourced location MVP) | ✅ Implemented | See §6 |
 | OSM Proximity (backend) | ✅ Implemented | See §6 |
 | Q-Map (public map UI) | ✅ Implemented & committed, `6b8e5b5` | See §7 |
+| Global Account (worldwide registration outside the 10 Public Account countries) | ✅ Implemented & tested; ⚠️ **uncommitted** | See §9.3 |
 | Perception Calculator | ✅ Implemented | 10 countries + an India zone, no State-level |
 | Notifications | ✅ Implemented, read-time aggregation only | `notify_core.py` synthesizes notifications by querying existing unread-message/reply state — there is no durable, independently-written notification log |
 | Report / Block member | ❌ Not built | Named gap; see §13 |
@@ -479,6 +483,376 @@ one.
 A council message is never delivered into a member's personal Qmail inbox — it goes into a
 separate, shared, location-keyed queue (`qpunch_queue_messages`), read only through the Admin
 Panel's council-scoped view.
+
+---
+
+### 9.3 Global Account (2026-11-08) — ⚠️ implemented, uncommitted, pending owner review
+
+A user whose **Present Location's** country is outside Qumanity's 10 Public Account Activation
+countries (`SUBCONTINENT_COUNTRY_IDS` in `app.py`: India, Nepal, Bhutan, Bangladesh, Myanmar, Sri
+Lanka, Pakistan, **Balochistan** — a separate country-level record in the location master, not a
+Pakistan province — Afghanistan, Maldives) registers as a **Global Account** instead of a Public
+Account. Mauritius (`O_AF_MUS`) is a real country in the canonical world database
+(`static/data/global_countries.json`) but is **not** one of the 10 and is therefore Global, same
+as every other country outside the list (Japan, Kenya, etc.).
+
+**Classification is derived, never persisted**: `account_access_type(present_location)` returns
+`"public"`/`"global"` by reading `present_location.country.id` fresh every time, never a stored
+column — see that function's own docstring for why (it can never drift out of sync with a later
+council-approved location correction). Nothing in the client — an `is_global_account` flag, an
+`account_type` field, anything — is trusted; the server always re-derives this from the validated
+location. As of the 2026-11-08 hardening pass (below), this function and
+`SUBCONTINENT_COUNTRY_IDS` live in their own module, **`account_core.py`** — not `app.py` — so
+`election_core.py` can import the classification directly without a circular import (`app.py`
+already imports `election_core`); `app.py` re-exports both names unchanged for every existing call
+site. There is now exactly one copy of this logic in the codebase.
+
+**Registration** (`api_auth_register` in `app.py`): the existing present-location validation
+branches on `present_country_id in SUBCONTINENT_COUNTRY_IDS`. For a Global country, the location
+must stop at Continent + Country — any submitted `state`/`zone`/`district`/`tehsil`/`village` is
+**rejected outright** (never silently dropped), and the continent/country pair is checked against
+the real 7-continent/229-country world database (`_is_valid_global_country()`) rather than trusted
+as two independent client-supplied facts. Birth Location was never restricted to the 10 countries
+and is unaffected. `templates/register.html` / `static/js/register.js`: the Present Location
+continent/country dropdowns now offer every country on Earth (previously Asia + the 10 only); a
+non-Subcontinent selection shows a plain informational note ("🌍 Global Account — …"), never a
+blocking modal, and the wizard's own existing step-skip logic
+(`goToStep(updatePublicAccountEligibility() ? "public" : "review")`) already sends a Global
+registrant straight to Review, needing no new branching logic of its own.
+
+**Dashboard**: `profile.is_global_account` (from `account_access_type()`) wraps both the Public
+tab button and its entire panel (`#qm-dash-public`, including the Village Council Election card
+nested inside it) in `templates/dashboard.html` — not a CSS hide, the markup simply isn't rendered.
+Every JS consumer (`dashboard.js`, `board.js`) already null-guards on that element's absence.
+
+**Backend enforcement is not new code** — this is the central finding of this feature's
+implementation. `board_core.py`'s `chain_of(present_location)` only produces chain entries for
+geography levels actually present in a user's own location, plus a universal `{"level": "earth",
+"id": "EARTH"}` for everyone; `board_view()`/`create_post()`/`cast_vote()` all resolve against the
+*caller's own* present_location (read from their DB row, via `_board_user()` — never a
+client-supplied location), never an arbitrary target. A Global Account's location has no
+village/tehsil/district/state/zone entries, so:
+- `GET /api/board/village` (or any level below Country) → `board_view()` returns `None` → 404,
+  "no group at this level" — the same response path an India resident with no Tehsil set would
+  already get. No Global-specific branch was added.
+- `POST /api/board/post` at Village (free) or any paid tier (Tehsil–Zone) → `create_post()`
+  already raises `ValueError` for a caller with no matching chain entry at that level.
+- `election_core.nomination_eligible()`/`voting_eligible()` already gate on
+  `_present_village_id(user_row) == cycle["village_id"]`, reading the DB row directly — `None` for
+  a Global Account's normal, unmodified row, so Q-Punch's Village Council election
+  (`election_core.py`, see §9.2's own terminology note below) was already closed to them through
+  this path alone. **One real gap was found and closed in the 2026-11-08 hardening pass** — see
+  below; `_present_village_id()` itself now also re-checks `account_access_type()`, not just the
+  presence of a village key.
+- `family_core.activate_timeline()` has no location dependency at all — Family Tree, Personal and
+  Private features work identically for both account types.
+
+**Global voting on posts that reached Country/Continent/Earth level is real, but scoped by shared
+geography, not a worldwide free-for-all** — verified by `tests/test_global_account.py` with
+synthetic rows standing in for ones `settle()`'s own elevation would have produced (the real
+thresholds at these levels are 1M/10M/100M votes, infeasible to simulate by casting that many real
+votes):
+- **Country-level** posts are visible/voteable only to residents of that *one* country (a Japan
+  account cannot vote on an India country-level post — different `country.id`).
+- **Continent-level** posts are shared by everyone whose own location has that same continent —
+  e.g. Japan (`O_AS`) can vote alongside India/Nepal/etc. (also `O_AS`); Kenya (`O_AF`) cannot,
+  since no Public Account country is currently in Africa.
+- **Earth-level** is the only tier that is genuinely universal, for every account type.
+- Casting a second vote on the same post **replaces** the first (score moves by the delta) — this
+  is the existing `cast_vote()` contract for every account type, not a duplicate-vote rejection.
+
+**Paid/monetized collective-board posting does not exist at Country/Continent/Earth level at all**
+— for any account type. `board_core.PAID_LEVELS = ("tehsil", "district", "state", "zone")`; the
+module's own comment calls Country/Continent/Earth "broadcast + voting only." A Global Account is
+therefore automatically excluded from the existing paid-posting tiers the same way it's excluded
+from free Village posting (no matching chain entry), with no new financial code written or needed.
+
+**2026-11-08 Q-Punch security hardening** — a real, API-reachable gap (not just a direct-SQL
+thought experiment) was found and closed:
+
+- **The gap.** `api_dashboard_edit_request()` (the self-service "request a profile change"
+  ticket) accepted a `present_location` field with **zero validation** — not even the
+  state-belongs-to-country check registration has always had — and queued it verbatim.
+  `api_admin_profile_decide()` then applied whatever a council/Admin approved straight into
+  `users.present_location_json` via `social_core.regenerate_account_id()`, also with no
+  re-check. This was the realistic route (unlike a direct SQL edit, which no self-service flow
+  can reach) by which an internally inconsistent location — e.g. a Global country paired with a
+  Subcontinent village id — could have landed on a real row, and from there, by itself, satisfied
+  the old, ungated `_present_village_id()`.
+- **The fix, two layers.** (1) `election_core._present_village_id()` (the single function
+  `nomination_eligible()`/`voting_eligible()`/`member_guide()` all go through) now refuses to
+  return a village id at all unless `account_core.account_access_type()` independently
+  recomputes `"public"` from that same `present_location_json` — a village key can no longer, by
+  itself, grant Q-Punch eligibility, regardless of how it got into the row. (2) A new shared
+  validator, `app._validate_present_location_change()`, is now called both when a profile-change
+  ticket is **submitted** and again when it is **approved** (defense in depth) — it enforces the
+  same Global/Public shape rules registration already has (Global: Continent+Country only, valid
+  pair; Public: state must belong to country, and any provisional Tehsil/Village must belong to
+  that state), and additionally **refuses any change that would cross the Global/Public account
+  boundary** in either direction.
+- **The Global↔Public transition is a documented gap, not a bug.** No approved workflow for
+  converting a Global Account to Public (or vice versa) exists anywhere in this product today.
+  Building one was out of scope for this hardening pass, so `_validate_present_location_change()`
+  simply refuses any ticket that would cross that boundary, with an explicit error message
+  pointing the member to Admin. A genuine relocation across that line needs its own, separately
+  authorized feature.
+- **Verified by test** (`tests/test_global_account.py`, section 10 rewritten + new section 14):
+  the exact fabricated-village-id-plus-Japan-country scenario from the original report, re-run
+  against the fixed code, now correctly rejected at every Q-Punch endpoint (`/api/election/status`,
+  `/nominate`, `/vote`), with zero `election_candidates`/`election_votes` rows created and the
+  locked free-registration Qoin share confirmed never unlocked; a malformed edit-request is
+  rejected at submission; a Global↔Public boundary crossing is rejected in both directions at
+  submission; a ticket inserted directly (standing in for one queued before this fix existed) is
+  rejected at approval time too, left `pending`, with the user's row provably untouched; and a
+  legitimate, same-classification present_location edit (section 15, new) still succeeds
+  end-to-end through the real submit→approve flow, proving the new validation doesn't block real
+  edits.
+- **Reward issuance** (`wallet_core.unlock_user_share()`, the locked free-registration Qoin share
+  that unlocks on a member's first-ever election vote) needed no separate fix: its only call site
+  is inside `election_core.cast_vote()`, after `voting_eligible()` — already covered by the single
+  `_present_village_id()` fix above. No other Q-Punch reward or claim endpoint exists.
+- **Independent-review follow-up (same date): ancestry-chain validation was incomplete.** A
+  second, independent adversarial review found that the first validator above only checked
+  state-belongs-to-country for a Public-country change — not that a submitted
+  Zone/District/Tehsil/Village chain actually nests the way the real geography data says it
+  must. A Public Account staying Public (so the account-boundary check never fires) could have
+  submitted a real, *existing* village id belonging to a completely different Tehsil/District,
+  letting a member falsely claim residency of — and become Q-Punch-eligible for — a village they
+  never actually selected through real geography. Closed with exactly the existing data, no new
+  hierarchy level or migration: Zone→State and District→Tehsil ancestry checked against
+  `subcontinent_states.json`/`subcontinent_districts.json` (always-populated static data, hard
+  reject on mismatch); Village→Tehsil ancestry checked against `india_villages.tehsil_id` (the
+  same table `GET /api/india-villages/<tehsil_id>` already serves from). **Superseded by the Task
+  1A fix below** — the "soft-fail on not found" village policy described here was itself found to
+  be an incomplete fix and has since been replaced with a hard rejection.
+- **Independent-review follow-up: the admin-only simulation endpoints were checked for a
+  bypass, and found safe.** `election_core.auto_nominate()`/`auto_vote()` (triggered only by
+  `/api/admin/election/auto-nominate`/`auto-vote`, admin-only) build their own candidate/voter
+  pool with a raw SQL query on `present_location_json`'s village key, independent of
+  `_present_village_id()`. Verified directly (bypassing the admin HTTP routes' real-world-date
+  dependency with an explicit `today=` override, the same technique `election_test_scheduler.py`
+  itself uses): the fabricated-village-id row does match that raw pool query, but
+  `auto_nominate()` still excludes it (its own `nomination_eligible()` re-check, which calls
+  `_present_village_id()`, filters it before picking anyone) and `auto_vote()` still never casts
+  a vote for it (routes every vote through the same `cast_vote()`/`voting_eligible()` gate,
+  catching the resulting `ValueError` as a no-op "skipped", never a crash and never a vote row).
+- **Pre-existing, unrelated duplication noted, not touched.** `perception_core.py` (a separate,
+  pre-existing feature — the Perception Calculator) carries its own independent copy of the same
+  10-country tuple, currently byte-identical to `account_core.py`'s but with no shared source —
+  a future change to one could silently drift from the other. Flagged for awareness; consolidating
+  it was explicitly out of scope ("do not consolidate unrelated code merely for cleanliness").
+- **Mobile dashboard overflow** (noted but not yet fixed in the original report): reproduced —
+  `#logout-btn`'s own `margin-left: 4px` (desktop-only breathing room) was exactly the 4px that
+  overflowed the 375px viewport once `.qm-header-actions`' mobile gap left no spare room. Fixed
+  narrowly inside the existing `@media (max-width: 720px)` block in `static/css/dashboard.css`
+  (`.qm-logout-btn { margin-left: 0; }`, mobile-only) — desktop spacing, the button's label, and
+  logout behavior are all untouched. Verified at 375px and 390px for both a Global and a Public
+  Account Dashboard: no horizontal overflow, logout button fully visible and unchanged otherwise.
+
+**Phase 1 (2026-11-08) — Task 1A: the district-omission ancestry gap, closed at the root.** A
+third-round owner-approval audit found that the Task-1A-era `_validate_present_location_change()`
+still had a real, confirmed bypass: `_validate_zone_district_tehsil_ancestry()`'s predecessor only
+ran the Tehsil-belongs-to-District check when a District had *also* been submitted
+(`if tehsil_id and district_entry:`) — so simply never submitting District skipped it entirely,
+letting a genuinely-real Tehsil+Village pair belonging to a completely different State pass. Fixed
+by making District mandatory whenever a REAL (non-provisional) Tehsil is submitted — the omission
+itself is now rejected (`"A Tehsil requires its District to also be submitted"`), not merely the
+case where a wrong District happens to be present. This rule is now enforced identically at BOTH
+entry points that can ever write `present_location_json` — `api_auth_register()`'s Public-account
+branch now runs the exact same `_validate_zone_district_tehsil_ancestry()` helper
+`_validate_present_location_change()` uses, closing registration's own, separate, pre-existing gap
+(it had never validated anything beyond state-belongs-to-country). A parallel, symmetric rule now
+also applies to Village: a Village id requires an immediate parent (Tehsil, or District for a
+`direct_villages` district) to be submitted alongside it, at both entry points.
+
+**Village-level policy, tightened**: the earlier "soft-fail on not found in `india_villages`"
+policy (described above) was itself found to conflate "unverifiable" with "confirmed valid" —
+exactly the distinction an audit said must never be collapsed. `_validate_present_location_change()`
+now hard-rejects a Village id that cannot be found in `india_villages` at all, not just a
+confirmed mismatch — that table is this product's complete authoritative village registry for all
+9 Public Account countries (confirmed by real row counts under every one of the 9 countries' own
+id prefixes, not an India-only dataset), and the live default database (`qumanity_prototype.db`,
+`db.py`'s own `DB_PATH` default) already holds all 721,237 of them.
+
+**Corrective follow-up (same date): registration's own Village check was still weaker than
+profile-change's.** An owner-approval review correctly flagged that the stricter policy above had
+been deliberately *not* extended to `api_auth_register()`'s own Public-account branch, leaving
+registration able to accept an arbitrary, fabricated Village id as long as it didn't look
+provisional. Closed by reusing the **existing** `provisional_location_core.verified_village_exists()`
+helper (no new lookup mechanism) inside registration's own provisional-check loop: a
+non-provisional Village id is now required to be a real row whose `tehsil_id` matches the
+submitted Tehsil (or District, for a `direct_villages` district) — the exact same relationship
+`_validate_present_location_change()` already enforces. A PROV-shaped id with no matching row, or
+a string that merely starts with `"PROV-"` without matching the real pattern, both still fail
+correctly (the existing `from_present_location_id()`/`get_provisional()` checks, unmodified).
+A genuine database-query failure during verification was confirmed, by direct test, to raise
+rather than silently return a valid result — Python's own exception propagation already satisfies
+"never silently accept as valid" here; no new error-suppression code was added or was needed.
+This closes registration's side of the gap without touching the provisional-location system's own
+activation thresholds, promotion rules, or data model in any way.
+
+**Test-infrastructure consequence**: closing this at registration meant every throwaway test DB
+(which starts with `india_villages` empty) now needs its real village rows seeded before
+registering through the real route with a real Village — 19 existing test files across the suite
+were updated with a short, consistent seed block; two newly added test files
+(`tests/test_global_account.py` and `tests/test_election_winner_tally.py`) independently include
+the same seed setup as part of their own content, bringing the total number of test files
+containing this seed setup to 21 (the same `INSERT OR REPLACE INTO india_villages`
+pattern already used for the profile-change tests above), none of them touching unrelated test
+logic.
+
+**Robustness fix, found during the same pass**: every location-field check in this file reads a
+level with `(location.get(lvl) or {}).get("id")`, which crashed with an unhandled
+`AttributeError` — not a clean 400 — on a malformed payload such as `"district": "CS.DL.3"` (a
+plain string instead of `{"id": "CS.DL.3"}`). A new `_location_subfields_well_formed()` guard,
+called at the top of both `_validate_present_location_change()` and `api_auth_register()`'s
+location handling, now turns this into a clean 400 for both birth and present location.
+
+**Phase 1 — Task 1B: the Q-Punch winner-tally bug, root-caused and fixed.** Confirmed, by directly
+running `tools/website-check/check_app_api.py` against a disposable copy of the real database (not
+assumed from an earlier report), that a full simulated Libra 2026 election cycle — 3 candidates
+per gender, real votes cast (15 male, 11 female) — closed with `election_summary()` reporting
+`winners: {male: None, female: None, male_votes: 0, female_votes: 0}`. Traced the entire lifecycle
+(candidate creation, vote persistence, cycle-status derivation, tally query, winner determination,
+summary serialization) and isolated the defect to exactly one place:
+`election_core._ensure_tallied()` tallied a cycle's winners **once ever** per
+`(village_id, zodiac_sign, year)` — skipping recomputation forever once a `village_council` row
+existed for that key, regardless of whether `election_votes` had changed since. The real
+`qumanity_prototype.db` confirms this exactly: its `village_council` row for Libra 2026 / Rohini
+Sector 24 was tallied on 2026-10-17 with **zero** `election_votes` rows on record at the time (the
+real-world clock crossed `voting_end` before the demo-seed script's votes were in place) —
+permanently freezing a null tally that no later vote could ever correct. The fix: `_ensure_tallied()`
+now always recomputes winners from the *current* `election_votes` and UPSERTs the result into
+`village_council`/`election_cycles`, instead of skipping when a row already exists. This is safe
+because tallying has no side effect that must only run once — no reward or Qoin payout is tied to
+*becoming* a winner anywhere in this codebase (confirmed by grep; the only Q-Punch-adjacent reward,
+`wallet_core.unlock_user_share()`, fires on a *voter's* first-ever vote, inside `cast_vote()`,
+entirely independent of tallying). Candidate eligibility, voter eligibility, voting windows,
+tie-handling (`ORDER BY votes DESC, MIN(id) ASC` — earliest vote wins a tie, unchanged), the
+pilot-village configuration, and `QPUNCH_REACHABLE_LEVELS` were all read, not modified, and are
+confirmed byte-identical in the diff.
+
+**New test file**: `tests/test_election_winner_tally.py` (25 checks) — multiple candidates/votes,
+persistence, closure, correct per-candidate vote counts, correct winner identification, a genuine
+zero-vote election, a genuine tie resolved by the existing tie-break rule, two independent
+election cycles with no cross-cycle leakage, ineligible voters (wrong sign, wrong gender-for-seat)
+never affecting totals, and — the actual regression — a cycle tallied once with zero votes that
+self-corrects once real votes exist, reproducing the exact real-database failure before proving it
+fixed. (Election-lifecycle testing here required real pilot-village residents throughout, voting
+under different zodiac-sign cycles rather than fabricated villages — `cast_vote()`/`nominate()`
+are hardcoded to `PILOT_VILLAGE_ID`, not parameterized by village, confirmed while writing this
+suite.) `tests/test_global_account.py` grew to **127 checks** (108 + 19 new, section 18) proving
+the Task 1A fix at both registration and profile-change, including registration's own new
+district-required and village-needs-a-parent rules, the type-guard fix, and the 14-point
+adversarial matrix the owner's audit required (some checks cover both a registration-path and a
+profile-change-path variant of the same relationship, hence more than 14 individual assertions),
+then to **136 checks** (127 + 11 new, section 19) proving the corrective follow-up above: real
+official-Village ancestry checks isolated specifically at registration (wrong Tehsil, wrong
+District+State), fabricated and malformed-PROV-shaped ids, the genuine database-failure behavior,
+the malformed-Village-field case, and confirmation that none of the rejected attempts left behind
+a partial user record.
+
+**Terminology note**: the product brief for this feature used "Q-Punch" to mean the Village
+Council *election* system (`election_core.py`, §9.2 above describes the actual, distinct
+qmail-council-*addressing* feature this codebase itself calls Q-Punch). Both are now correctly
+scoped to Global Accounts being excluded — this note exists only so a future reader isn't confused
+by the two different things sharing a name in conversation versus in code.
+
+**Test file**: `tests/test_global_account.py` — **136 checks** (75 original + 21 from the
+2026-11-08 hardening pass + 12 from a same-day independent adversarial review + 19 from the
+Phase 1/Task 1A pass + 11 from the registration-Village corrective follow-up) — registration
+(Japan, Kenya, client-flag-spoofing, fabricated-village rejection), India/Public regression,
+Dashboard tab assertions against actual rendered HTML, direct backend rejection of Public routes,
+the Country/Continent/Earth voting-scope behavior above, Q-Punch/election rejection (including the
+fabricated-village-id scenario re-verified post-fix against the real endpoints, not just the pure
+function), the profile-change-request hardening (sections 14–15), the full ancestry-chain
+validation and admin-simulation bypass checks found by the independent review (sections 16–17),
+the Task 1A district-required-at-registration matrix (section 18), the registration-Village
+corrective follow-up (section 19), Family Tree activation, and the paid-posting code-level audit.
+
+**C1 (2026-11-08): the account-ID-request flow ("Path A") was a second, unvalidated route to the
+exact same present_location state the hardening above protects — found by an independent
+adversarial pre-merge audit, fixed the same day.** Every check described above
+(`_validate_present_location_change()`'s shape/ancestry/village-existence checks and the
+Global/Public account-boundary lock) was wired into `app.py`'s profile-change-request flow only
+("Path B": `api_dashboard_edit_request` / `api_admin_profile_decide`). `social_core.py`'s
+dedicated "request a new Account ID" flow ("Path A": `request_new_account()` / `POST
+/api/people/account-ids/request`, and `decide_account_request()` / `POST
+/api/admin/account-ids/<id>/decide`) called none of it — its only check was a bare truthiness
+test (`present_location.get("village") or present_location.get("state")`). The audit reproduced
+this live: a Global Account (Japan) submitted a fabricated India/Rohini Sector 24
+`present_location` through this flow, and approving it flipped the account's classification from
+`global` to `public` and resolved to the real pilot village under
+`election_core._present_village_id()` — the Global↔Public boundary and every ancestry/existence
+check were bypassed entirely.
+
+**The fix moves the validation itself, not just its call sites, into the shared layer.**
+`_validate_present_location_change()` and the five helper functions it depends on
+(`_location_subfields_well_formed`, `_public_state_ids`, `_is_valid_global_country`,
+`_validate_zone_district_tehsil_ancestry`) now live in **`account_core.py`** — the same
+dependency-light module `SUBCONTINENT_COUNTRY_IDS`/`account_access_type()` already live in — as
+`account_core.validate_present_location_change()` and its own-named helpers; `app.py` keeps the
+original underscored names as plain aliases (`_validate_present_location_change =
+account_core.validate_present_location_change`, etc.), so every existing call site
+(`api_auth_register`, `api_dashboard_edit_request`, `api_admin_profile_decide`) is unchanged. This
+was necessary, not just convenient: `social_core.py` cannot import `app.py` (circular —
+`app.py` already imports `social_core`), so the validation had to move to a module both can reach
+without a cycle, exactly the reason `account_core.py` was split out of `app.py` in the first
+place. `social_core.request_new_account()` now calls
+`account_core.validate_present_location_change()` before queuing a request; `decide_account_request()`
+calls it again before `regenerate_account_id()` — re-reading the user's CURRENT
+`present_location_json` at approval time, not trusting whatever passed at submission, which is
+what makes it safe for a request that sat pending while the user's own account state changed in
+the meantime. A rejected approval raises before any mutation — no `account_id` regeneration, no
+`present_location_json` change, no status update — leaving the request exactly `pending`.
+
+**Both Path A and Path B now enforce the identical present-location validation and Global/Public
+boundary protection**, from one shared implementation, with no duplicated logic.
+
+**Verified by test** (`tests/test_account_id_request_security.py`, new, 31 checks): the exact
+original exploit reproduced through the real HTTP routes (`POST
+/api/people/account-ids/request` then `POST /api/admin/account-ids/<id>/decide`) and confirmed
+rejected at both steps; a forged/directly-inserted pending request (standing in for one that
+reached `pending` before this fix, or through any future submission-route bug) rejected at
+approval too, by the same re-validation, independent of submission; a request valid at submission
+whose user's account state changes before approval, correctly re-validated and rejected at
+decision time; a legitimate same-classification move accepted and applied end-to-end at both
+submission and approval; and `_present_village_id()` confirmed `None` throughout every exploit
+attempt — checked independently of the account's age/zodiac/voting-cycle state, so the earlier
+report's incidental zodiac mismatch is not what is protecting this path. Full regression:
+**33 test files, 1,370 checks, 0 failures** (re-run fresh this session, superseding the
+previously reported 1,380/30 figure above, which predates both the Phase 0–3 work and this fix).
+
+**Mobile UI exploitation surface (found during the independent post-fix audit, 2026-11-08):** the
+mobile app's own "Account IDs → request a new one" screen
+(`Qumanity_App/mobile/src/app/account-ids.tsx`) calls these exact two routes
+(`requestNewAccount()` / `POST /api/people/account-ids/request` at submission,
+`decideAccountRequest()` / `POST /api/admin/account-ids/<id>/decide` at approval), and its entry
+row in `(tabs)/private.tsx` is not gated on `is_global_account` the way the Public tab is — so a
+Global Account holder could reach this completely normal, un-fabricated screen and, before this
+fix, queue a request through its own `onlySubcontinent` location picker that an admin's approval
+could turn into an illegitimate Global-to-Public crossing, with no crafted payload needed at all.
+**The mobile screen was never the security boundary, and no mobile code change was made or is
+needed to close this** — the fix is the backend validation described above: the server now
+validates the proposed present_location at submission and independently revalidates it against
+the user's CURRENT account state at approval, which closes this path regardless of which client
+(web, the account-ids.tsx screen, or a raw API call) reaches it. The screen's existing generic
+`try`/`catch` error handling already displays the backend's rejection message correctly, with no
+mobile-side change required. Backend authorization and validation remain the sole, authoritative
+gate — hiding or restyling the mobile screen would not, by itself, have been a fix.
+
+**Status as of this writing: implemented and tested, not yet committed.** `git status` shows the
+changes in `app.py`, `election_core.py`, `social_core.py`, the new `account_core.py`,
+`templates/dashboard.html`, `templates/register.html`, `static/js/register.js`,
+`static/js/tutorial.js` (a pre-existing onboarding-tour step's body text named all four tabs
+unconditionally; now computed live so it only names tabs the viewer actually has),
+`static/css/dashboard.css` (the mobile logout-button overflow fix), the updated
+`tests/test_global_account.py`, the new `tests/test_election_winner_tally.py`, the new
+`tests/test_account_id_request_security.py`, and 19 existing `tests/*.py` files that each gained a
+short `india_villages` seed block; the two newly added files `tests/test_global_account.py` and
+`tests/test_election_winner_tally.py` independently include the same seed setup (see the
+"Test-infrastructure consequence" note above) — no unrelated test logic in any of them was
+touched — awaiting the owner's review and explicit authorization to commit/push.
 
 ---
 
