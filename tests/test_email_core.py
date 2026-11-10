@@ -1,12 +1,13 @@
 """Verifies email_core.py's diagnostic logging (2026-11-01, see docs/production/
-email_qmail_diagnostic_audit.md): every scenario in the audit's test table -- missing config,
-HTTP success, 401/403/400/429/5xx, a network failure, and an unexpected exception -- produces the
-right print() line AND preserves the function's original return/raise contract (nothing here
-changed caller-facing behavior, only what gets logged on the way). Also confirms Resend's actual
-JSON error body reaches the log (the one thing the old `except Exception as e: print(... {e} ...)`
-could never show), and that a recipient address is only ever logged masked.
+email_qmail_diagnostic_audit.md; updated 2026-11-10 when the send path moved from Resend's HTTPS
+API to its SMTP relay -- see email_core.py's module docstring for why): every scenario in the
+audit's test table -- missing config, SMTP success, several SMTP error responses, a network
+failure, and an unexpected exception -- produces the right print() line AND preserves the
+function's original return/raise contract (nothing here changed caller-facing behavior, only what
+gets logged on the way, and now how the email is actually transported). Also confirms Resend's own
+SMTP rejection reason reaches the log, and that a recipient address is only ever logged masked.
 
-Mocks urllib.request.urlopen -- this never makes a real HTTP request and never sends a real email.
+Mocks smtplib.SMTP -- this never makes a real network connection and never sends a real email.
 
 Standalone script, no test framework (none installed in this project): PASS/FAIL printing,
 exit 1 on failure, matching tests/test_qmail.py's own conventions.
@@ -16,11 +17,10 @@ Run with: python3 tests/test_email_core.py
 from __future__ import annotations
 
 import io
-import json
 import os
+import smtplib
 import sys
-import urllib.error
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -53,27 +53,26 @@ def run_capturing_stdout(fn, *a, **kw):
     return result, exc, buf.getvalue().splitlines()
 
 
-class FakeResponse:
-    """Stands in for the context-manager urlopen() returns on success."""
-    def __init__(self, status: int, body: dict):
-        self.status = status
-        self._body = json.dumps(body).encode("utf-8")
-
-    def read(self):
-        return self._body
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *a):
-        return False
-
-
-def http_error(status: int, body: dict) -> urllib.error.HTTPError:
-    return urllib.error.HTTPError(
-        url=email_core.RESEND_URL, code=status, msg="error",
-        hdrs=None, fp=io.BytesIO(json.dumps(body).encode("utf-8")),
-    )
+def make_smtp_mock(connect_error=None, login_error=None, send_error=None):
+    """Stands in for smtplib.SMTP(host, port, timeout=...), used as `with smtplib.SMTP(...) as
+    server:`. `connect_error` is raised by the SMTP(...) call itself (a connection-level failure,
+    before any command is sent); `login_error`/`send_error` are raised by server.login()/
+    server.send_message() respectively, same as a real smtplib would for an SMTP-level rejection."""
+    smtp_mock = MagicMock(name="smtplib.SMTP")
+    if connect_error is not None:
+        smtp_mock.side_effect = connect_error
+        return smtp_mock
+    server = smtp_mock.return_value.__enter__.return_value
+    server.starttls.return_value = None
+    if login_error is not None:
+        server.login.side_effect = login_error
+    else:
+        server.login.return_value = None
+    if send_error is not None:
+        server.send_message.side_effect = send_error
+    else:
+        server.send_message.return_value = {}
+    return smtp_mock
 
 
 def set_env(api_key="re_test_key", from_email="Qumanity <founder@qumanity.in>", admin_email="admin@example.com"):
@@ -114,43 +113,52 @@ check("send_ticket_reply logs EMAIL_SEND_SKIPPED reason=guest_contact_not_email_
 
 print()
 print("=" * 70)
-print("Section 2: success -- EMAIL_SEND_ATTEMPT + EMAIL_SEND_SUCCESS, masked recipient")
+print("Section 2: success -- EMAIL_SEND_ATTEMPT + EMAIL_SEND_SUCCESS, masked recipient, real SMTP shape")
 print("=" * 70)
 
 set_env()
-with patch("email_core.urllib.request.urlopen", return_value=FakeResponse(200, {"id": "re_abc123"})):
+smtp_mock = make_smtp_mock()
+with patch("email_core.smtplib.SMTP", smtp_mock):
     result, exc, lines = run_capturing_stdout(
         email_core.send_registration_notification, "Test User", "Rohini Sector 24", "123456789"
     )
-check("configured + HTTP 200: send_registration_notification returns True", result is True and exc is None)
+check("configured + SMTP success: send_registration_notification returns True", result is True and exc is None)
 check("logs EMAIL_SEND_ATTEMPT operation=registration", any("EMAIL_SEND_ATTEMPT operation=registration" in l for l in lines))
-check("logs EMAIL_SEND_SUCCESS with the Resend id", any("EMAIL_SEND_SUCCESS operation=registration status=200 resend_id=re_abc123" in l for l in lines))
+check("logs EMAIL_SEND_SUCCESS operation=registration", any("EMAIL_SEND_SUCCESS operation=registration" in l for l in lines))
 check("the admin's real recipient address is never printed in full", not any("admin@example.com" in l for l in lines))
 check("the recipient is logged masked instead", any("a***@example.com" in l for l in lines))
+check("connects to smtp.resend.com:587", smtp_mock.call_args[0][:2] == (email_core.SMTP_HOST, email_core.SMTP_PORT))
+server = smtp_mock.return_value.__enter__.return_value
+check("calls starttls() before authenticating", server.starttls.called)
+check("logs in with username 'resend' and RESEND_API_KEY as the password", server.login.call_args[0] == (email_core.SMTP_USERNAME, "re_test_key"))
+check("sends the message via send_message()", server.send_message.called)
+sent_msg = server.send_message.call_args[0][0]
+check("the From header comes from RESEND_FROM_EMAIL", sent_msg["From"] == "Qumanity <founder@qumanity.in>")
+check("the To header is the admin's address", sent_msg["To"] == "admin@example.com")
 
 print()
 print("=" * 70)
-print("Section 3: Resend HTTP error responses -- exact JSON body reaches the log")
+print("Section 3: Resend SMTP error responses -- the exact rejection reason reaches the log")
 print("=" * 70)
 
-HTTP_SCENARIOS = [
-    (401, {"statusCode": 401, "message": "API key is invalid", "name": "validation_error"}),
-    (403, {"statusCode": 403, "message": "Domain is not verified", "name": "validation_error"}),
-    (400, {"statusCode": 400, "message": "Missing `from` field", "name": "validation_error"}),
-    (429, {"statusCode": 429, "message": "Too many requests", "name": "rate_limit_exceeded"}),
-    (500, {"statusCode": 500, "message": "Internal server error", "name": "application_error"}),
+SMTP_SCENARIOS = [
+    (535, b"Invalid API Key"),
+    (550, b"Domain is not verified"),
+    (501, b"Missing 'from' field"),
+    (421, b"Too many requests"),
+    (451, b"Internal server error"),
 ]
-for status, body in HTTP_SCENARIOS:
+for code, err in SMTP_SCENARIOS:
     set_env()
-    with patch("email_core.urllib.request.urlopen", side_effect=http_error(status, body)):
+    smtp_mock = make_smtp_mock(login_error=smtplib.SMTPResponseException(code, err))
+    with patch("email_core.smtplib.SMTP", smtp_mock):
         result, exc, lines = run_capturing_stdout(
             email_core.send_registration_notification, "Test User", "Rohini Sector 24", "123456789"
         )
-    check(f"HTTP {status}: the original HTTPError is re-raised (not swallowed)", isinstance(exc, urllib.error.HTTPError) and exc.code == status)
-    log_line = next((l for l in lines if "EMAIL_SEND_HTTP_ERROR" in l), "")
-    check(f"HTTP {status}: logs EMAIL_SEND_HTTP_ERROR with status={status}", f"status={status}" in log_line)
-    for key, val in body.items():
-        check(f"HTTP {status}: logged response body includes {key!r}: {val!r}", f'"{key}": {json.dumps(val)}' in log_line.replace(" ", "") or f'"{key}":{json.dumps(val).replace(" ", "")}' in log_line.replace(" ", ""))
+    check(f"SMTP {code}: the original SMTPResponseException is re-raised (not swallowed)", isinstance(exc, smtplib.SMTPResponseException) and exc.smtp_code == code)
+    log_line = next((l for l in lines if "EMAIL_SEND_SMTP_ERROR" in l), "")
+    check(f"SMTP {code}: logs EMAIL_SEND_SMTP_ERROR with status={code}", f"status={code}" in log_line)
+    check(f"SMTP {code}: logged response includes the rejection reason {err!r}", repr(err.decode())[1:-1] in log_line or err.decode() in log_line)
 
 print()
 print("=" * 70)
@@ -158,15 +166,17 @@ print("Section 4: network and unexpected errors")
 print("=" * 70)
 
 set_env()
-with patch("email_core.urllib.request.urlopen", side_effect=urllib.error.URLError("timed out")):
+smtp_mock = make_smtp_mock(connect_error=OSError("Connection refused"))
+with patch("email_core.smtplib.SMTP", smtp_mock):
     result, exc, lines = run_capturing_stdout(
         email_core.send_registration_notification, "Test User", "Rohini Sector 24", "123456789"
     )
-check("network failure: URLError is re-raised", isinstance(exc, urllib.error.URLError))
-check("network failure: logs EMAIL_SEND_NETWORK_ERROR", any("EMAIL_SEND_NETWORK_ERROR operation=registration" in l for l in lines))
+check("connection failure: OSError is re-raised", isinstance(exc, OSError))
+check("connection failure: logs EMAIL_SEND_NETWORK_ERROR", any("EMAIL_SEND_NETWORK_ERROR operation=registration" in l for l in lines))
 
 set_env()
-with patch("email_core.urllib.request.urlopen", side_effect=RuntimeError("something unrelated broke")):
+smtp_mock = make_smtp_mock(send_error=RuntimeError("something unrelated broke"))
+with patch("email_core.smtplib.SMTP", smtp_mock):
     result, exc, lines = run_capturing_stdout(
         email_core.send_registration_notification, "Test User", "Rohini Sector 24", "123456789"
     )
@@ -179,16 +189,18 @@ print("Section 5: send_ticket_reply uses the same _send() path (operation=ticket
 print("=" * 70)
 
 set_env()
-with patch("email_core.urllib.request.urlopen", return_value=FakeResponse(200, {"id": "re_ticket1"})):
+smtp_mock = make_smtp_mock()
+with patch("email_core.smtplib.SMTP", smtp_mock):
     result, exc, lines = run_capturing_stdout(email_core.send_ticket_reply, "visitor@example.com", 42, "Hi", "reply body")
 check("send_ticket_reply with valid config + email-shaped contact returns True", result is True and exc is None)
 check("logs EMAIL_SEND_SUCCESS operation=ticket_reply", any("EMAIL_SEND_SUCCESS operation=ticket_reply" in l for l in lines))
 
 set_env()
-with patch("email_core.urllib.request.urlopen", side_effect=http_error(401, {"statusCode": 401, "message": "API key is invalid"})):
+smtp_mock = make_smtp_mock(login_error=smtplib.SMTPResponseException(535, b"Invalid API Key"))
+with patch("email_core.smtplib.SMTP", smtp_mock):
     result, exc, lines = run_capturing_stdout(email_core.send_ticket_reply, "visitor@example.com", 42, "Hi", "reply body")
-check("send_ticket_reply HTTP 401 re-raised, not swallowed into a False return", isinstance(exc, urllib.error.HTTPError))
-check("send_ticket_reply HTTP 401 logs the Resend body with operation=ticket_reply", any("EMAIL_SEND_HTTP_ERROR operation=ticket_reply status=401" in l for l in lines))
+check("send_ticket_reply SMTP 535 re-raised, not swallowed into a False return", isinstance(exc, smtplib.SMTPResponseException))
+check("send_ticket_reply SMTP 535 logs the rejection with operation=ticket_reply", any("EMAIL_SEND_SMTP_ERROR operation=ticket_reply status=535" in l for l in lines))
 
 print()
 print("=" * 70)

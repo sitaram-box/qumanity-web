@@ -17,24 +17,29 @@ email to whatever address a visitor typed, not to the one address this deploy's 
 configured), so it gets its own function with its own `to_addr` parameter rather than widening the
 existing one's contract.
 
-No new dependency: sent via Resend's HTTP API (https://api.resend.com/emails) using the standard
-library's urllib.request, not smtplib -- Railway's outbound SMTP is unreliable/blocked on some
-plans, Resend's API is plain HTTPS. If Resend isn't configured (no RESEND_API_KEY or no
-QM_ADMIN_EMAIL), send_registration_notification() is a silent no-op -- registration must never
-depend on email being set up. If it IS configured but the send fails (bad key, Resend outage,
-timeout), this function raises normally; app.py's api_auth_register is responsible for catching
-that and logging it without failing the registration request itself.
+No new dependency: sent via Resend's SMTP relay (smtp.resend.com:587, STARTTLS) using the
+standard library's smtplib. 2026-11-10: this module originally used Resend's HTTP API
+(https://api.resend.com/emails) via urllib.request, on the assumption that Railway's outbound SMTP
+was the less reliable path. In production, the opposite turned out to be true: Resend's HTTPS API
+rejected every request from Railway's egress IP with a 403 (an IP-level restriction on the
+Resend side), while the exact same credentials worked immediately over SMTP. Switched to SMTP for
+that reason; still the standard library only, no new dependency. If Resend isn't configured (no
+RESEND_API_KEY or no QM_ADMIN_EMAIL), send_registration_notification() is a silent no-op --
+registration must never depend on email being set up. If it IS configured but the send fails (bad
+key, Resend outage, timeout), this function raises normally; app.py's api_auth_register is
+responsible for catching that and logging it without failing the registration request itself.
 """
 from __future__ import annotations
 
 import html
-import json
 import os
-import urllib.error
-import urllib.request
+import smtplib
+from email.message import EmailMessage
 
 REQUEST_TIMEOUT_SECONDS = 10
-RESEND_URL = "https://api.resend.com/emails"
+SMTP_HOST = "smtp.resend.com"
+SMTP_PORT = 587
+SMTP_USERNAME = "resend"
 LOGIN_URL = "https://qumanity.in/login"
 
 
@@ -72,64 +77,48 @@ def _mask_addr(addr: str) -> str:
     return addr[0] + "***" + addr[at:]
 
 
-def _log_resend_response(operation: str, resp) -> None:
-    """2026-11-01: success path. Resend returns {"id": "..."} on success -- logged so a caller can
-    confirm the request was actually ACCEPTED (not proof of inbox delivery; see the module
-    docstring's distinction)."""
-    try:
-        body = json.loads(resp.read().decode("utf-8", "replace") or "{}")
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        body = {}
-    print(f"[email_core] EMAIL_SEND_SUCCESS operation={operation} status={resp.status} resend_id={body.get('id')}")
-
-
-def _log_resend_http_error(operation: str, e: "urllib.error.HTTPError") -> None:
-    """2026-11-01: the one change this whole diagnostic pass is really for -- makes Resend's own
-    JSON error body (e.g. {"statusCode":401,"message":"API key is invalid","name":"validation_error"})
-    visible in Railway logs. Before this, the caller's `except Exception as e: print(... {e} ...)`
-    only ever saw HTTPError's generic str(), e.g. "HTTP Error 401: Unauthorized" -- the single most
-    useful diagnostic fact (WHY Resend rejected the request) was being discarded. Body is capped
-    and never includes the Authorization header or API key."""
-    try:
-        raw = e.read().decode("utf-8", "replace")
-    except Exception:
-        raw = ""
-    raw = raw[:2000]
-    try:
-        body = json.loads(raw)
-        print(f"[email_core] EMAIL_SEND_HTTP_ERROR operation={operation} status={e.code} response={json.dumps(body)}")
-    except json.JSONDecodeError:
-        print(f"[email_core] EMAIL_SEND_HTTP_ERROR operation={operation} status={e.code} response_text={raw!r}")
+def _log_smtp_error(operation: str, e: "smtplib.SMTPResponseException") -> None:
+    """2026-11-10: makes Resend's own SMTP rejection reason (e.g. 535 "Invalid API Key") visible in
+    Railway logs, the same purpose the old HTTP-error logger served for the HTTPS API -- the single
+    most useful diagnostic fact (WHY Resend rejected the request) must not be discarded. Message is
+    capped and never includes the password (the API key) used to authenticate."""
+    detail = (getattr(e, "smtp_error", b"") or b"")
+    if isinstance(detail, bytes):
+        detail = detail.decode("utf-8", "replace")
+    print(f"[email_core] EMAIL_SEND_SMTP_ERROR operation={operation} status={getattr(e, 'smtp_code', '?')} response={detail[:2000]!r}")
 
 
 def _send(to_addr: str, subject: str, html_body: str, operation: str = "unspecified") -> None:
-    """The actual Resend HTTP call, shared by send_registration_notification() (to_addr always
-    QM_ADMIN_EMAIL) and send_ticket_reply() (to_addr is whatever a visitor typed as their
+    """The actual Resend SMTP relay call, shared by send_registration_notification() (to_addr
+    always QM_ADMIN_EMAIL) and send_ticket_reply() (to_addr is whatever a visitor typed as their
     guest_contact). Raises on a genuine send failure -- every caller is responsible for deciding
     whether that should break its own request or just get logged, same as
     send_registration_notification() already documents for itself.
 
-    2026-11-01 (diagnostic hardening): `operation` is a short tag (e.g. "registration",
-    "ticket_reply") threaded through every log line so Railway logs can tell which call site
-    failed. This function's return contract and exception behavior are UNCHANGED -- it still
-    raises exactly when it used to; the HTTPError/URLError are re-raised after logging, not
-    swallowed, so every existing caller's try/except keeps working as before."""
+    2026-11-10: switched from Resend's HTTPS API to its SMTP relay (see module docstring for why).
+    `operation` is still threaded through every log line so Railway logs can tell which call site
+    failed. Return contract and exception behavior are UNCHANGED from the HTTP-API version -- it
+    still raises exactly when it used to, after logging, so every existing caller's try/except
+    keeps working as before."""
     api_key = os.environ.get("RESEND_API_KEY", "").strip()
     from_addr = os.environ.get("RESEND_FROM_EMAIL", "Qumanity <founder@qumanity.in>").strip()
-    payload = json.dumps({"from": from_addr, "to": [to_addr], "subject": subject, "html": html_body}).encode("utf-8")
-    req = urllib.request.Request(
-        RESEND_URL, data=payload, method="POST",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-    )
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_addr
+    msg.set_content(html_body, subtype="html")
     print(f"[email_core] EMAIL_SEND_ATTEMPT operation={operation} to={_mask_addr(to_addr)}")
     try:
-        with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT_SECONDS) as resp:
-            _log_resend_response(operation, resp)
-    except urllib.error.HTTPError as e:
-        _log_resend_http_error(operation, e)
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=REQUEST_TIMEOUT_SECONDS) as server:
+            server.starttls()
+            server.login(SMTP_USERNAME, api_key)
+            server.send_message(msg)
+        print(f"[email_core] EMAIL_SEND_SUCCESS operation={operation} to={_mask_addr(to_addr)}")
+    except smtplib.SMTPResponseException as e:
+        _log_smtp_error(operation, e)
         raise
-    except urllib.error.URLError as e:
-        print(f"[email_core] EMAIL_SEND_NETWORK_ERROR operation={operation} error={e.reason!r}")
+    except (smtplib.SMTPException, OSError) as e:
+        print(f"[email_core] EMAIL_SEND_NETWORK_ERROR operation={operation} error_class={type(e).__name__} error={e}")
         raise
     except Exception as e:
         print(f"[email_core] EMAIL_SEND_UNEXPECTED_ERROR operation={operation} error_class={type(e).__name__} error={e}")
