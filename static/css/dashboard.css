@@ -1125,17 +1125,26 @@
 /* ---- Persistent cross-tab dock (2026-10-28): sits outside every dashboard tab panel, visible
    on all of Global/Public/Personal/Private, independent of the Explorer modal's own open/closed
    state. ---- */
-.qm-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 140; background: var(--qm-panel-bg); border-top: 1px solid var(--qm-input-border); box-shadow: 0 -4px 16px rgba(10, 25, 41, 0.12); }
+.qm-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 140; }
 .qm-dock[hidden] { display: none; }
-.qm-dock-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; overflow-x: auto; }
-.qm-dock-toggle { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--qm-input-border); background: var(--qm-input-bg); color: var(--qm-text); cursor: pointer; }
-.qm-dock-tabs { display: flex; gap: 6px; overflow-x: auto; }
+.qm-dock-bar { position: relative; z-index: 2; display: flex; align-items: center; gap: 6px; padding: 8px 12px; overflow-x: auto; background: var(--qm-panel-bg); border-top: 1px solid var(--qm-input-border); box-shadow: 0 -4px 16px rgba(10, 25, 41, 0.12); }
+.qm-dock-tabs { display: flex; gap: 6px; overflow-x: auto; flex: 1 1 auto; }
 .qm-dock-tab { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--qm-input-border); background: var(--qm-input-bg); color: var(--qm-text); font: 600 0.8rem "Inter", system-ui, sans-serif; cursor: pointer; white-space: nowrap; flex: 0 0 auto; }
 .qm-dock-tab.is-active { border-color: #B8860B; background: rgba(255, 210, 74, 0.18); color: var(--qm-gold-text); }
 .qm-dock-tab-close { opacity: 0.55; font-size: 0.75rem; } .qm-dock-tab-close:hover { opacity: 1; }
-.qm-dock-panel { height: 48vh; min-height: 320px; border-top: 1px solid var(--qm-input-border); display: flex; }
+/* 2026-11-12 (Multi-View full-screen redesign): a location board now REPLACES <main> entirely
+   instead of sharing the screen with it in a half-height drawer -- fixed to the viewport, spanning
+   from the header's own measured height down to the tab bar's own measured height (both set as CSS
+   vars by multiview.js's measureDockOffsets(), so this works at any header/bar size, any viewport,
+   without hardcoding a pixel value that would drift the moment either one's content changes). The
+   two defaults below only matter for the first paint before JS has measured anything. */
+.qm-dock-panel {
+  position: fixed; left: 0; right: 0; z-index: 1;
+  top: var(--qm-header-h, 72px); bottom: var(--qm-dock-bar-h, 54px);
+  background: var(--qm-bg); overflow-y: auto; display: flex;
+}
 .qm-dock-panel[hidden] { display: none; }
-.qm-dock-panel .bd { height: 100%; width: 100%; }
+.qm-dock-panel .bd { height: 100%; width: 100%; max-height: none; border-radius: 0; }
 /* .bd's own base rule (display: flex) beats the bare [hidden] UA style on specificity -- every
    other use of `hidden` in this codebase toggles a whole .qm-dash-panel (which DOES have its own
    [hidden] override, far above), never an individual .bd directly; this dock is the one place

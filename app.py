@@ -5081,6 +5081,219 @@ def api_admin_board(level):
     return jsonify(view)
 
 
+# ---- LBE: Location Board Explorer ID search (2026-11-12) ----
+# Replaces the Explorer's old continent-by-continent drill-down with a direct Location ID / Account
+# ID lookup. Reuses exactly the same canonical data the drill-down already read (the /api/subcontinent,
+# /api/subcontinent/districts and /api/india-villages/<id> endpoints' own JSON files, plus the
+# account_ids table social_core.find_person() already queries by Account ID) -- no new location data,
+# no new ids, nothing generated. The one thing that didn't exist before is the REVERSE direction: given
+# a bare id, which level is it, and what are its ancestors' ids and names. _resolve_location_id() below
+# builds that once per call from the same static files the forward drill-down fetches; this module
+# does no geography migration of any kind.
+
+def _resolve_location_id(raw_id: str) -> dict | None:
+    """raw_id -> {"level": ..., "chain": {continent, country, zone, state, district, tehsil?, village?}}
+    or None if it matches no state/district/tehsil/village/country id anywhere. Checked deepest-first
+    (village, via the india_villages DB table -- the only tier not in a static file) down to country
+    (global_countries.json, so a Founder can still open any country's board by id, same as the old
+    drill-down could)."""
+    states_data = _load_json(SUBCONTINENT_STATES_FILE)
+    districts_data = _load_json(SUBCONTINENT_DISTRICTS_FILE)
+
+    state_info: dict[str, dict] = {}
+    for country in states_data.get("countries", []):
+        for zone in country.get("zones", []):
+            for state in zone.get("states", []):
+                state_info[state["id"]] = {
+                    "name": state["name"],
+                    "zone_id": state.get("zone_id", zone["id"]), "zone_name": state.get("zone_name", zone["name"]),
+                    "country_id": country["id"], "country_name": country["name"],
+                }
+
+    district_info: dict[str, dict] = {}
+    tehsil_info: dict[str, dict] = {}
+    for state_id, state_entry in districts_data.get("states", {}).items():
+        for district in state_entry.get("districts", []):
+            district_info[district["id"]] = {"name": district["name"], "state_id": state_id}
+            for tehsil in district.get("tehsils") or []:
+                tehsil_info[tehsil["id"]] = {"name": tehsil["name"], "district_id": district["id"]}
+
+    def chain_from_state(state_id):
+        info = state_info.get(state_id)
+        if not info:
+            return None
+        return {
+            "continent": {"id": "O_AS", "name": "Asia"},
+            "country": {"id": info["country_id"], "name": info["country_name"]},
+            "zone": {"id": info["zone_id"], "name": info["zone_name"]},
+            "state": {"id": state_id, "name": info["name"]},
+        }
+
+    # Village (and a village under a district with no Tehsil tier -- india_villages.tehsil_id
+    # holds the district id directly for those, same dual meaning /api/india-villages/<id> relies on)
+    conn = get_db()
+    village_row = conn.execute("SELECT id, name, tehsil_id FROM india_villages WHERE id = ?", (raw_id,)).fetchone()
+    conn.close()
+    if village_row:
+        parent_id = village_row["tehsil_id"]
+        tehsil = tehsil_info.get(parent_id)
+        if tehsil:
+            district = district_info.get(tehsil["district_id"])
+            district_id, tehsil_entry = tehsil["district_id"], {"id": parent_id, "name": tehsil["name"]}
+        else:
+            district = district_info.get(parent_id)
+            district_id, tehsil_entry = parent_id, None
+        if district:
+            chain = chain_from_state(district["state_id"])
+            if chain:
+                chain["district"] = {"id": district_id, "name": district["name"]}
+                if tehsil_entry:
+                    chain["tehsil"] = tehsil_entry
+                chain["village"] = {"id": village_row["id"], "name": village_row["name"]}
+                return {"level": "village", "chain": chain}
+
+    if raw_id in tehsil_info:
+        t = tehsil_info[raw_id]
+        district = district_info.get(t["district_id"])
+        if district:
+            chain = chain_from_state(district["state_id"])
+            if chain:
+                chain["district"] = {"id": t["district_id"], "name": district["name"]}
+                chain["tehsil"] = {"id": raw_id, "name": t["name"]}
+                return {"level": "tehsil", "chain": chain}
+
+    if raw_id in district_info:
+        d = district_info[raw_id]
+        chain = chain_from_state(d["state_id"])
+        if chain:
+            chain["district"] = {"id": raw_id, "name": d["name"]}
+            return {"level": "district", "chain": chain}
+
+    chain = chain_from_state(raw_id)
+    if chain:
+        return {"level": "state", "chain": chain}
+
+    world = _load_json(WORLD_DATA_FILE)
+    for continent in world.get("continents", []):
+        for c in continent.get("countries", []):
+            if c["id"] == raw_id:
+                return {"level": "country", "chain": {
+                    "continent": {"id": continent["id"], "name": continent["name"]},
+                    "country": {"id": c["id"], "name": c["name"]},
+                }}
+    return None
+
+
+def _resolve_account_id(raw_id: str) -> dict | None:
+    """raw_id -> {"level": ..., "chain": present_location} for the member whose CURRENT Account ID
+    this is, read fresh from account_ids/users -- never the location baked into the Account ID
+    string's own cosmetic suffix (a present location can be corrected without regenerating that
+    display string, per social_core.regenerate_account_id()). None for no match, a retired account,
+    or a match with no resolvable location at all (shouldn't happen for a real account, but this
+    function never assumes it)."""
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT user_id FROM account_ids WHERE account_id = ? AND is_current = 1",
+            (raw_id.strip().upper(),),
+        ).fetchone()
+        if not row:
+            return None
+        user = conn.execute(
+            "SELECT present_location_json, is_removed FROM users WHERE id = ?", (row["user_id"],)
+        ).fetchone()
+    finally:
+        conn.close()
+    if not user or user["is_removed"]:
+        return None
+    present = json.loads(user["present_location_json"] or "{}")
+    for lvl in ("village", "tehsil", "district", "state", "zone", "country"):
+        if (present.get(lvl) or {}).get("id"):
+            return {"level": lvl, "chain": present}
+    return None
+
+
+@app.route("/api/admin/lbe/resolve", methods=["POST"])
+@login_required
+def api_admin_lbe_resolve():
+    """The LBE search box's only backend call: resolve a typed Location ID or Account ID to a
+    board-openable chain, enforcing the exact same scope _viewable_locations_scope()/_within_scope_root()
+    already enforce for the drill-down's "Open board" button -- a council head cannot reach outside
+    their own Tehsil this way either, and the result is never trusted by the frontend without this
+    check, same as /api/admin/board/<level> already does for the drill-down."""
+    scope = _viewable_locations_scope()
+    if scope["scope"] == "none":
+        reason = scope.get("reason")
+        return jsonify({"error": "Explorer access is not open for you right now"
+                         if reason == "training" else "The Explorer is for Admins and serving council heads"}), 403
+    raw = (request.get_json(silent=True) or {}).get("query", "")
+    raw = raw.strip()
+    if not raw:
+        return jsonify({"error": "Enter a Location ID or Account ID"}), 400
+    result = _resolve_location_id(raw) or _resolve_account_id(raw)
+    if not result:
+        return jsonify({"error": "No location or account found for \"" + raw + "\""}), 404
+    if scope["scope"] == "limited" and not _within_scope_root(result["chain"], result["level"], scope["root"]):
+        return jsonify({"error": "That location is outside your " + scope["root"]["level"].capitalize()}), 403
+    return jsonify(result)
+
+
+def _ensure_location_views_table(conn):
+    conn.execute("""CREATE TABLE IF NOT EXISTS admin_location_views (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, event TEXT NOT NULL,
+        location_level TEXT NOT NULL, location_id TEXT NOT NULL, location_name TEXT, source TEXT,
+        viewed_at TEXT NOT NULL)""")
+    conn.commit()
+
+
+_LBE_EVENTS = ("BOARD_OPENED", "BOARD_CLOSED")
+_LBE_SOURCES = ("lbe_location_id", "lbe_account_id", "drilldown")
+
+
+@app.route("/api/admin/lbe/log-event", methods=["POST"])
+@login_required
+def api_admin_lbe_log_event():
+    """Audit trail for Part 6: one row per real board open/close in the Explorer dock. The caller
+    (multiview.js) only ever POSTs here right after a tab is actually created or actually removed --
+    never on a reactivated-existing-tab click, so re-opening an already-open board is never logged
+    as a second BOARD_OPENED (see openDockTab()'s own duplicate check). user_id always comes from
+    the server-side session, never the request body; viewed_at is always generated here, server-side,
+    in UTC -- the client's own timestamp, if it sent one, would be ignored even if present.
+
+    BOARD_OPENED re-checks scope the same way /api/admin/lbe/resolve and /api/admin/board/<level>
+    do, so a hand-crafted request can't log (or imply) access to a location outside the caller's own
+    scope either. BOARD_CLOSED only requires being signed in -- closing a tab you already had open
+    grants nothing new, so there is nothing further to authorize."""
+    data = request.get_json(silent=True) or {}
+    event = data.get("event")
+    level = (data.get("location_level") or "").strip()
+    location_id = (data.get("location_id") or "").strip()
+    if event not in _LBE_EVENTS or not level or not location_id:
+        return jsonify({"error": "event, location_level and location_id are required"}), 400
+    source = data.get("source") if data.get("source") in _LBE_SOURCES else None
+    location_name = (data.get("location_name") or "").strip() or None
+
+    if event == "BOARD_OPENED":
+        scope = _viewable_locations_scope()
+        if scope["scope"] == "none":
+            return jsonify({"error": "The Explorer is for Admins and serving council heads"}), 403
+        if scope["scope"] == "limited":
+            probe = {level: {"id": location_id}}
+            if not _within_scope_root(probe, level, scope["root"]):
+                return jsonify({"error": "That location is outside your " + scope["root"]["level"].capitalize()}), 403
+
+    conn = get_db()
+    _ensure_location_views_table(conn)
+    conn.execute(
+        "INSERT INTO admin_location_views (user_id, event, location_level, location_id, location_name, source, viewed_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (session["user_id"], event, level, location_id, location_name, source, dt.datetime.now(dt.timezone.utc).isoformat()),
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
 # ---- Admin member export (2026-10-18) ----
 # Every successful call -- JSON preview or CSV download -- is logged to admin_export_log (who,
 # when, filters, row count): a bulk export of every real member's Private ID is at least as

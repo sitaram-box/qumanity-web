@@ -1,29 +1,26 @@
 /**
- * multiview.js — the Hierarchical Explorer (2026-10-28 redesign) + the persistent cross-tab dock
- * of open location boards.
+ * multiview.js — LBE (Location Board Explorer, 2026-11-12 redesign of the 2026-10-28 Hierarchical
+ * Explorer) + the persistent cross-tab dock of open location boards.
  *
  * Only ever loaded for is_admin_panel_user (dashboard.html's own gate) -- a Founder (scope
- * "global") can drill from Earth all the way to Village anywhere real data reaches (India/Sub-
- * continent only -- elsewhere stops at Country, the same data ceiling as before); a currently-
- * serving village council head (scope "limited") starts already inside their own Tehsil and can
- * only drill into sibling villages there, during their own birth sign's month (GET /api/admin/
- * viewable-locations' own access_window, re-checked fresh every time the explorer opens).
+ * "global") can open any location's board anywhere real data reaches; a currently-serving village
+ * council head (scope "limited") can only open sibling villages inside their own Tehsil, during
+ * their own birth sign's month (GET /api/admin/viewable-locations' own access_window, re-checked
+ * fresh every time the explorer opens).
  *
- * Replaces the old per-panel Multi-View tab and map-based location wizard: one floating action
- * button opens a modal with a generic level-by-level list (no Leaflet/india_map.js/
- * searchable_select.js/location_select.js needed any more -- this reuses the exact same location
- * data endpoints those relied on, just rendered as a plain drill-down list instead of a map, which
- * also means "Open board" is now offered at EVERY level reached, not just Earth/Continent/Country).
+ * 2026-11-12: the old continent-by-continent drill-down (Earth -> Continent -> ... -> Village,
+ * one click per level) is gone. LBE is now a direct Location ID / Account ID search box: type an
+ * id, POST /api/admin/lbe/resolve, and the one existing openDockTab() function opens the result --
+ * nothing about the dock itself changed. The Admin Queue sub-tab is untouched by this redesign.
  *
- * The Admin Queue (citizen reports / ID recovery / queries / council queue) moved from its own
- * top-level tab into this same modal's second sub-tab -- static/js/dashboard.js's own admin-panel
- * code is unchanged, just triggered by this sub-tab opening (window.QMLoadAdminPanel) instead of
- * a tab click.
- *
- * Opened location boards live in a dock OUTSIDE this modal entirely -- a fixed bar at the bottom
- * of the whole page, visible on every dashboard tab (Global/Public/Personal/Private), not just
- * while this modal is open. Each tab holds its own window.QMBoard(root, {pinnedLocation})
+ * Opened location boards still live in a dock OUTSIDE this modal entirely -- a fixed bar at the
+ * bottom of the whole page, visible on every dashboard tab (Global/Public/Personal/Private), not
+ * just while this modal is open. Each tab holds its own window.QMBoard(root, {pinnedLocation})
  * instance (board.js) -- always read-only, enforced server-side by POST /api/admin/board.
+ *
+ * Every real board open/close now also POSTs to /api/admin/lbe/log-event (Part 6 audit logging) --
+ * once per actual open (never on reactivating an already-open tab) and once per explicit close
+ * (never fabricated if the tab/page just goes away).
  */
 (function () {
   "use strict";
@@ -41,29 +38,32 @@
   var subtabBtns = Array.prototype.slice.call(document.querySelectorAll(".qm-explorer-subtab"));
   var paneLocations = document.getElementById("qm-explorer-pane-locations");
   var paneQueue = document.getElementById("qm-explorer-pane-queue");
-  var breadcrumbEl = document.getElementById("qm-explorer-breadcrumb");
-  var bodyEl = document.getElementById("qm-explorer-body");
+  var lbeInstructions = document.getElementById("lbe-instructions");
+  var lbeInput = document.getElementById("lbe-search-input");
+  var lbeBtn = document.getElementById("lbe-search-btn");
+  var lbeStatus = document.getElementById("lbe-search-status");
 
   var dock = document.getElementById("qm-dock");
   var dockBar = document.getElementById("qm-dock-bar");
-  var dockToggle = document.getElementById("qm-dock-toggle");
   var dockTabsEl = document.getElementById("qm-dock-tabs");
   var dockPanel = document.getElementById("qm-dock-panel");
   var boardTemplate = document.getElementById("qm-dock-board-template");
+  var mainEl = document.querySelector(".qm-dashboard-main");
 
   // 2026-10-28 (hardening, prior reported blank-tab bug): `fab` existing doesn't guarantee every
   // other id resolved -- a stale cached copy of this file running against a newer/older
   // dashboard.html is exactly the "missing DOM element" failure mode to guard against. Fail loud
   // to the console rather than throwing out of this IIFE and silently wiring nothing below.
-  var required = { modal: modal, paneLocations: paneLocations, paneQueue: paneQueue, breadcrumbEl: breadcrumbEl, bodyEl: bodyEl,
-    dock: dock, dockBar: dockBar, dockToggle: dockToggle, dockTabsEl: dockTabsEl, dockPanel: dockPanel, boardTemplate: boardTemplate };
+  var required = { modal: modal, paneLocations: paneLocations, paneQueue: paneQueue,
+    lbeInstructions: lbeInstructions, lbeInput: lbeInput, lbeBtn: lbeBtn, lbeStatus: lbeStatus,
+    dock: dock, dockBar: dockBar, dockTabsEl: dockTabsEl, dockPanel: dockPanel, boardTemplate: boardTemplate, mainEl: mainEl };
   var missing = Object.keys(required).filter(function (k) { return !required[k]; });
   if (missing.length || !subtabBtns.length) {
-    console.error("[explorer] expected element(s) missing -- stale cached JS/HTML? Missing:", missing, "subtabs found:", subtabBtns.length);
+    console.error("[lbe] expected element(s) missing -- stale cached JS/HTML? Missing:", missing, "subtabs found:", subtabBtns.length);
     return;
   }
   if (!window.QMBoard) {
-    console.error("[explorer] window.QMBoard is missing -- board.js didn't load, or loaded before its own window.QMBoard export was added (stale cache).");
+    console.error("[lbe] window.QMBoard is missing -- board.js didn't load, or loaded before its own window.QMBoard export was added (stale cache).");
     return;
   }
 
@@ -90,157 +90,113 @@
     });
   });
 
-  // ==================== Scope + drill-down ====================
+  // ==================== Scope (still the same access gate the old drill-down used) ====================
   var scope = null;
-  var crumbs = []; // [{level, id, name}], crumbs[0] is always scope.root
-  var worldData = null, subcontinentData = null, districtsData = null; // fetched once, cached
 
   function loadScope() {
-    breadcrumbEl.innerHTML = "";
-    bodyEl.innerHTML = "";
-    bodyEl.appendChild(el("p", "qm-dash-empty", "Loading…"));
+    setStatus("Loading…", false);
+    lbeInput.disabled = true; lbeBtn.disabled = true;
     api("/api/admin/viewable-locations").then(function (s) {
       scope = s;
       if (scope.scope === "none") { renderLocked(); return; }
-      crumbs = [scope.root];
-      renderBreadcrumb();
-      renderLevel(scope.root);
+      lbeInput.disabled = false; lbeBtn.disabled = false;
+      lbeInstructions.textContent = scope.scope === "limited"
+        ? "Enter a Location ID or Account ID within your own Tehsil to open its board directly."
+        : "Enter a Location ID or Account ID to open its board directly.";
+      setStatus("", false);
     }).catch(function (e) {
-      bodyEl.innerHTML = "";
-      bodyEl.appendChild(el("p", "qm-dash-empty", e.message));
+      setStatus(e.message, true);
     });
   }
 
   function renderLocked() {
-    bodyEl.innerHTML = "";
+    lbeInput.disabled = true; lbeBtn.disabled = true;
     if (scope.reason === "training") {
-      bodyEl.appendChild(el("p", "qm-dash-empty",
-        "The Explorer opens during your own zodiac month (" + scope.access_window.sign + ", " +
-        scope.access_window.opens + " → " + scope.access_window.closes + "). You're training the rest of the year."));
+      lbeInstructions.textContent = "";
+      setStatus("The Explorer opens during your own zodiac month (" + scope.access_window.sign + ", " +
+        scope.access_window.opens + " → " + scope.access_window.closes + "). You're training the rest of the year.", true);
     } else {
-      bodyEl.appendChild(el("p", "qm-dash-empty", "The Location Explorer is for Admins and currently-serving council heads."));
+      lbeInstructions.textContent = "";
+      setStatus("The Location Explorer is for Admins and currently-serving council heads.", true);
     }
   }
 
-  function renderBreadcrumb() {
-    breadcrumbEl.innerHTML = "";
-    crumbs.forEach(function (c, i) {
-      if (i > 0) breadcrumbEl.appendChild(el("span", "qm-explorer-crumb-sep", "›"));
-      var btn = el("button", "qm-explorer-crumb" + (i === crumbs.length - 1 ? " is-current" : ""), c.name || c.level);
-      btn.type = "button";
-      btn.disabled = i === crumbs.length - 1;
-      btn.addEventListener("click", function () { crumbs = crumbs.slice(0, i + 1); renderBreadcrumb(); renderLevel(c); });
-      breadcrumbEl.appendChild(btn);
-    });
+  function setStatus(message, isError) {
+    // isError is accepted for callers' own clarity but not yet given a distinct visual treatment --
+    // every existing error/empty message in this dashboard (apLoadFeed, apOpenReport, etc.) already
+    // reuses the plain .qm-dash-empty look, so this one does too rather than inventing a new class.
+    lbeStatus.hidden = !message;
+    lbeStatus.textContent = message || "";
   }
 
-  // chainFor(): a present_location-shaped dict built from the CURRENT crumbs trail -- POST
-  // /api/admin/board/<level> re-validates this server-side against a freshly recomputed scope, it
-  // is never trusted blind just because the explorer itself only lets you reach places scope.root
-  // allows browsing.
-  function chainFor() {
-    var chain = {};
-    crumbs.forEach(function (c) { if (c.level !== "earth") chain[c.level] = { id: c.id, name: c.name }; });
-    return chain;
-  }
-
-  function openBoardBtn(node) {
-    var btn = el("button", "qm-btn qm-btn-primary qm-explorer-openbtn", "Open board →");
-    btn.type = "button";
-    btn.addEventListener("click", function () {
-      openDockTab(node.level, chainFor(), node.name || node.level);
+  // ==================== Search -> resolve -> open ====================
+  function doSearch() {
+    var query = lbeInput.value.trim();
+    if (!query) { setStatus("Enter a Location ID or Account ID.", true); return; }
+    setStatus("Searching…", false);
+    lbeBtn.disabled = true;
+    api("/api/admin/lbe/resolve", { query: query }).then(function (result) {
+      lbeBtn.disabled = false;
+      setStatus("", false);
+      // An Account ID string doesn't itself say which kind of id was actually typed/matched --
+      // resolve() tries Location ID first, Account ID second, so "contains a letter the location
+      // scheme wouldn't produce at this level" is a reasonable-effort guess for the audit log's
+      // own `source` field, not a security-relevant distinction (the server already re-validated
+      // scope above; this only affects how the log entry reads).
+      var looksLikeLocationId = /^[A-Z0-9._/]+$/i.test(query) && query.indexOf("-") === -1;
+      var source = looksLikeLocationId ? "lbe_location_id" : "lbe_account_id";
+      var label = deepestName(result.chain) || query;
+      openDockTab(result.level, result.chain, label, source);
       modal.hidden = true;
-    });
-    return btn;
-  }
-
-  function renderLevel(node) {
-    bodyEl.innerHTML = "";
-    bodyEl.appendChild(el("p", "qm-dash-empty", "Loading…"));
-    fetchChildren(node).then(function (children) {
-      bodyEl.innerHTML = "";
-      bodyEl.appendChild(openBoardBtn(node));
-      if (children === null) return; // village: a leaf, nothing deeper to drill
-      if (!children.length) { bodyEl.appendChild(el("p", "qm-dash-empty", "Nothing here yet.")); return; }
-      var list = el("div", "qm-explorer-list");
-      children.forEach(function (child) {
-        var row = el("button", "qm-explorer-row", child.name);
-        row.type = "button";
-        row.addEventListener("click", function () { crumbs.push(child); renderBreadcrumb(); renderLevel(child); });
-        list.appendChild(row);
-      });
-      bodyEl.appendChild(list);
+      lbeInput.value = "";
     }).catch(function (e) {
-      bodyEl.innerHTML = "";
-      bodyEl.appendChild(el("p", "qm-dash-empty", e.message));
+      lbeBtn.disabled = false;
+      setStatus(e.message, true);
     });
   }
+  lbeBtn.addEventListener("click", doSearch);
+  lbeInput.addEventListener("keydown", function (e) { if (e.key === "Enter") doSearch(); });
 
-  // 2026-10-28: every level's children come from the SAME endpoints the old map-based Founder
-  // picker already called -- no new backend tree endpoint, just reorganized into one generic
-  // step instead of two separate hardcoded picker flows (Founder-full vs council-flat-list).
-  function fetchChildren(node) {
-    if (node.level === "village") return Promise.resolve(null);
-    if (node.level === "earth" || node.level === "continent") {
-      return ensureWorld().then(function (d) {
-        if (node.level === "earth") return (d.continents || []).map(function (c) { return { level: "continent", id: c.id, name: c.name }; });
-        var cont = (d.continents || []).filter(function (c) { return c.id === node.id; })[0];
-        return (cont ? cont.countries : []).map(function (co) { return { level: "country", id: co.id, name: co.name }; });
-      });
+  function deepestName(chain) {
+    var levels = ["village", "tehsil", "district", "state", "zone", "country", "continent"];
+    for (var i = 0; i < levels.length; i++) {
+      if (chain[levels[i]] && chain[levels[i]].name) return chain[levels[i]].name;
     }
-    if (node.level === "country") {
-      return ensureSubcontinent().then(function (d) {
-        var country = (d.countries || []).filter(function (c) { return c.id === node.id; })[0];
-        // Not one of the 9 Sub-continent countries -- no Zone/State/District/Tehsil/Village data
-        // exists for it at all (the data ceiling from the original research); a leaf at Country.
-        return country ? (country.zones || []).map(function (z) { return { level: "zone", id: z.id, name: z.name }; }) : [];
-      });
-    }
-    if (node.level === "zone") {
-      return ensureSubcontinent().then(function (d) {
-        var zone = null;
-        (d.countries || []).forEach(function (c) { (c.zones || []).forEach(function (z) { if (z.id === node.id) zone = z; }); });
-        return zone ? zone.states.map(function (s) { return { level: "state", id: s.id, name: s.name }; }) : [];
-      });
-    }
-    if (node.level === "state") {
-      return ensureDistricts().then(function (d) {
-        var entry = d.states[node.id];
-        return entry ? entry.districts.map(function (ds) { return { level: "district", id: ds.id, name: ds.name }; }) : [];
-      });
-    }
-    if (node.level === "district") {
-      return ensureDistricts().then(function (d) {
-        var found = null;
-        Object.keys(d.states).forEach(function (sid) { (d.states[sid].districts || []).forEach(function (ds) { if (ds.id === node.id) found = ds; }); });
-        return found ? (found.tehsils || []).map(function (t) { return { level: "tehsil", id: t.id, name: t.name }; }) : [];
-      });
-    }
-    if (node.level === "tehsil") {
-      return fetch("/api/india-villages/" + encodeURIComponent(node.id)).then(function (r) { return r.json(); })
-        .then(function (d) { return (d.villages || []).map(function (v) { return { level: "village", id: v.id, name: v.name }; }); });
-    }
-    return Promise.resolve([]);
+    return null;
   }
-  function ensureWorld() { if (worldData) return Promise.resolve(worldData); return fetch("/api/world-data").then(function (r) { return r.json(); }).then(function (d) { worldData = d; return d; }); }
-  function ensureSubcontinent() { if (subcontinentData) return Promise.resolve(subcontinentData); return fetch("/api/subcontinent").then(function (r) { return r.json(); }).then(function (d) { subcontinentData = d; return d; }); }
-  function ensureDistricts() { if (districtsData) return Promise.resolve(districtsData); return fetch("/api/subcontinent/districts").then(function (r) { return r.json(); }).then(function (d) { districtsData = d; return d; }); }
 
-  // ==================== Persistent cross-tab dock ====================
-  // 2026-10-28: lives outside the Explorer modal and outside every dashboard tab panel -- open
-  // boards survive switching to Global/Public/Personal/Private and back, and survive closing this
-  // modal. Only the dock BAR is always visible once >=1 tab is open; the board content itself
-  // only renders while the dock is expanded (collapsing it doesn't close any tab).
-  var dockTabs = []; // [{id, level, label, chain, root, board, loaded}]
-  var dockActiveId = null;
-  var dockExpanded = false;
+  // ==================== Persistent cross-tab dock (2026-11-12 full-screen redesign) ====================
+  // 2026-10-28, redesigned 2026-11-12: lives outside the Explorer modal and outside <main> entirely
+  // -- open boards survive switching dashboard tabs and surviving closing the search modal. The
+  // dock bar is always visible once >=1 location tab is open; exactly one of <main> (the normal
+  // dashboard) or one open board's full-screen panel is ever shown at a time -- "My Dashboard" is
+  // always the first, permanent, non-closable tab, selected by dockActiveId === null.
+  var dockTabs = []; // [{id, level, label, chain, source, root, board, loaded}] -- location tabs only; "My Dashboard" isn't stored here
+  var dockActiveId = null; // null = "My Dashboard"; otherwise a dockTabs[].id
   var dockCounter = 0;
 
   function capFor() { return scope && scope.scope === "global" ? Infinity : 5; }
 
+  // Sets --qm-header-h/--qm-dock-bar-h from the two elements' OWN rendered heights, so the
+  // full-screen board panel (position: fixed, inset between them -- see dashboard.css) lines up
+  // under the real header and above the real tab bar at any viewport width, without hardcoding a
+  // pixel value that would drift the moment either one's content or the responsive breakpoint changes.
+  function measureDockOffsets() {
+    var header = document.querySelector(".qm-header");
+    if (header) document.documentElement.style.setProperty("--qm-header-h", header.offsetHeight + "px");
+    document.documentElement.style.setProperty("--qm-dock-bar-h", dockBar.offsetHeight + "px");
+  }
+  window.addEventListener("resize", measureDockOffsets);
+  measureDockOffsets();
+
   function renderDockBar() {
     dock.hidden = dockTabs.length === 0;
     dockTabsEl.innerHTML = "";
+    var homeBtn = el("button", "qm-dock-tab" + (dockActiveId === null ? " is-active" : ""));
+    homeBtn.type = "button";
+    homeBtn.appendChild(el("span", "", "🏠 My Dashboard"));
+    homeBtn.addEventListener("click", function () { activateDockTab(null); });
+    dockTabsEl.appendChild(homeBtn);
     dockTabs.forEach(function (t) {
       var btn = el("button", "qm-dock-tab" + (t.id === dockActiveId ? " is-active" : ""));
       btn.type = "button";
@@ -248,25 +204,37 @@
       var close = el("span", "qm-dock-tab-close", "✕");
       close.addEventListener("click", function (e) { e.stopPropagation(); closeDockTab(t.id); });
       btn.appendChild(close);
-      btn.addEventListener("click", function () { activateDockTab(t.id); setDockExpanded(true); });
+      btn.addEventListener("click", function () { activateDockTab(t.id); });
       dockTabsEl.appendChild(btn);
     });
   }
 
-  function setDockExpanded(open) {
-    dockExpanded = open && dockTabs.length > 0;
-    dockPanel.hidden = !dockExpanded;
-    dockToggle.textContent = dockExpanded ? "▾" : "▴";
-    dockTabs.forEach(function (t) { t.root.hidden = !dockExpanded || t.id !== dockActiveId; });
-  }
-  dockToggle.addEventListener("click", function () { setDockExpanded(!dockExpanded); });
-
+  // id === null -> "My Dashboard": show <main>, hide the full-screen panel. Otherwise: hide <main>,
+  // show the matching board full-screen, hide every other open board. Switching tabs never reloads
+  // <main> or re-fetches an already-loaded board -- board.js's own `loaded` flag below is the same
+  // lazy-load-once guard the pre-redesign dock already used.
   function activateDockTab(id) {
     dockActiveId = id;
-    dockTabs.forEach(function (t) { t.root.hidden = !dockExpanded || t.id !== id; });
+    if (mainEl) mainEl.hidden = id !== null;
+    dockPanel.hidden = id === null;
+    dockTabs.forEach(function (t) { t.root.hidden = t.id !== id; });
+    // renderDockBar() first -- it's what clears dock.hidden the very first time a tab opens, and
+    // dockBar.offsetHeight (what measureDockOffsets() below reads) is 0 for a display:none ancestor.
+    // Measuring before the bar is actually visible would bake in a wrong (zero) --qm-dock-bar-h.
     renderDockBar();
+    measureDockOffsets();
     var t = dockTabs.filter(function (x) { return x.id === id; })[0];
     if (t && !t.loaded) { t.loaded = true; t.board.load(); }
+  }
+
+  // Part 6 audit log: fire-and-forget, never blocks the UI action it's reporting on. A failed
+  // POST here (network hiccup, session race) is logged to the console, not surfaced to the admin
+  // -- the board itself already opened/closed either way; this is bookkeeping, not the action.
+  function logEvent(event, t) {
+    api("/api/admin/lbe/log-event", {
+      event: event, location_level: t.level, location_id: (t.chain[t.level] || {}).id,
+      location_name: t.label, source: t.source || null,
+    }).catch(function (e) { console.error("[lbe] audit log failed:", e.message); });
   }
 
   function closeDockTab(id) {
@@ -274,14 +242,18 @@
     if (!t) return;
     t.root.remove();
     dockTabs = dockTabs.filter(function (x) { return x.id !== id; });
-    if (dockActiveId === id) dockActiveId = dockTabs.length ? dockTabs[dockTabs.length - 1].id : null;
-    renderDockBar();
-    if (dockActiveId) activateDockTab(dockActiveId); else setDockExpanded(false);
+    // Closing the active tab: switch to the next remaining board, or "My Dashboard" if none are
+    // left. Closing a BACKGROUND tab (not the active one) leaves the current view untouched.
+    activateDockTab(dockActiveId === id ? (dockTabs.length ? dockTabs[dockTabs.length - 1].id : null) : dockActiveId);
+    logEvent("BOARD_CLOSED", t);
   }
 
-  function openDockTab(level, chain, label) {
+  // `source` ("lbe_location_id" | "lbe_account_id" | "drilldown") is informational only, for the
+  // audit log's own context field -- never checked for authorization (the server already did that
+  // in /api/admin/lbe/resolve or /api/admin/board/<level> before this was ever called).
+  function openDockTab(level, chain, label, source) {
     var existing = dockTabs.filter(function (t) { return t.level === level && (t.chain[level] || {}).id === (chain[level] || {}).id; })[0];
-    if (existing) { activateDockTab(existing.id); setDockExpanded(true); return; }
+    if (existing) { activateDockTab(existing.id); return; } // reactivating -- not a new open, not logged
     if (dockTabs.length >= capFor()) { alert("You can have at most " + capFor() + " locations open at once — close one first."); return; }
 
     dockCounter += 1;
@@ -294,9 +266,9 @@
     dockPanel.appendChild(root);
 
     var board = window.QMBoard(root, { pinnedLocation: chain });
-    dockTabs.push({ id: id, level: level, label: label, chain: chain, root: root, board: board, loaded: false });
-    renderDockBar();
+    var t = { id: id, level: level, label: label, chain: chain, source: source, root: root, board: board, loaded: false };
+    dockTabs.push(t);
     activateDockTab(id);
-    setDockExpanded(true);
+    logEvent("BOARD_OPENED", t);
   }
 })();

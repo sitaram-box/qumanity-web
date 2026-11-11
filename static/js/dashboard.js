@@ -1200,7 +1200,7 @@
     var apItemsCache = [];
 
     function apSourceLabel(source) {
-      return { report: "Citizen Report", id_recovery: "ID Recovery", query: "Query", council: "Council Queue" }[source] || source;
+      return { report: "Citizen Report", id_recovery: "ID Recovery", query: "Query", council: "Council Queue", identity: "Identity Request" }[source] || source;
     }
 
     function apRenderList() {

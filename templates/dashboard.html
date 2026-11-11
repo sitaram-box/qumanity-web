@@ -940,15 +940,24 @@
     <div class="dq-modal-box dq-modal-wide">
       <button type="button" class="dq-modal-back" data-close aria-label="Close" title="Close">← Close</button>
       <div class="qm-explorer-subtabs">
-        <button type="button" class="qm-explorer-subtab is-active" data-sub="locations">📍 Locations</button>
+        <button type="button" class="qm-explorer-subtab is-active" data-sub="locations" title="Location Board Explorer" aria-label="LBE — Location Board Explorer">📍 LBE</button>
         <button type="button" class="qm-explorer-subtab" data-sub="queue">🛡️ Admin Queue</button>
       </div>
 
+      <!-- 2026-11-12 (Multi-View fixes): replaces the old continent-by-continent drill-down with a
+           direct Location ID / Account ID search -- multiview.js's new lbeSearch() calls
+           POST /api/admin/lbe/resolve and, on success, opens the result in the existing dock
+           (openDockTab()), unchanged. #lbe-locked is shown instead of the search box when
+           GET /api/admin/viewable-locations reports scope "none" (not eligible, or a council head
+           outside their own zodiac-month training window) -- same gate the old drill-down used. -->
       <div class="qm-explorer-pane" id="qm-explorer-pane-locations">
-        <div class="qm-explorer-breadcrumb" id="qm-explorer-breadcrumb"></div>
-        <div class="qm-explorer-body" id="qm-explorer-body">
-          <p class="qm-dash-empty">Loading…</p>
+        <h3>Location Board Explorer</h3>
+        <p class="qm-dash-empty" id="lbe-instructions">Enter a Location ID or Account ID to open its board directly.</p>
+        <div class="pt-search-row">
+          <input type="text" class="qm-explorer-search" id="lbe-search-input" placeholder="Enter Location ID or Account ID (e.g. CS.DL.3.4.1A)" />
+          <button type="button" class="qm-btn qm-btn-primary" id="lbe-search-btn">Search</button>
         </div>
+        <p class="qm-dash-empty" id="lbe-search-status" hidden></p>
       </div>
 
       <!-- The exact Admin Queue markup that used to be its own top-level tab (#qm-dash-admin) --
@@ -964,6 +973,7 @@
             <button type="button" class="ap-filter" data-filter="id_recovery">ID Recovery</button>
             <button type="button" class="ap-filter" data-filter="query">Queries</button>
             <button type="button" class="ap-filter" data-filter="council">Council Queue</button>
+            <button type="button" class="ap-filter" data-filter="identity">Identity</button>
             <button type="button" class="qm-btn qm-btn-ghost ap-refresh-btn" title="Refresh">🔄</button>
           </div>
           <div class="ap-body">
@@ -977,16 +987,18 @@
     </div>
   </div>
 
-  <!-- Persistent cross-tab dock (2026-10-28): lives outside <main> entirely, so it is visible on
-       every dashboard tab (Global/Public/Personal/Private) -- a Founder monitoring several
-       villages can switch to Global to check the Earth board, then back to these open tabs
-       without losing them. Hidden by multiview.js until at least one location is open. -->
+  <!-- Persistent cross-tab dock (2026-10-28, full-screen redesign 2026-11-12): lives outside
+       <main> entirely, so it is visible regardless of which dashboard tab (Global/Public/Personal/
+       Private) was showing underneath. Hidden by multiview.js until at least one location is open.
+       Opening a location board now hides <main> entirely and shows #qm-dock-panel full-screen in
+       its place (not a half-height drawer); #qm-dock-bar (the tab strip, always "My Dashboard"
+       first, then one tab per open board) stays fixed to the very bottom regardless of which tab
+       is active -- see multiview.js's activateDockTab(). -->
   <div class="qm-dock" id="qm-dock" hidden>
+    <div class="qm-dock-panel" id="qm-dock-panel" hidden></div>
     <div class="qm-dock-bar" id="qm-dock-bar">
-      <button type="button" class="qm-dock-toggle" id="qm-dock-toggle" title="Expand or collapse">▴</button>
       <div class="qm-dock-tabs" id="qm-dock-tabs"></div>
     </div>
-    <div class="qm-dock-panel" id="qm-dock-panel" hidden></div>
   </div>
   {% endif %}
 
