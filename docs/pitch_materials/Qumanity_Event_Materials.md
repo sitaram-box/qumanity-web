@@ -13,7 +13,7 @@ Status legend used in the deck: **LIVE** = working today · **PILOT** = working 
 - Quantum + Humanity: a transparent, karma-based civic platform for India's villages
 - Open-source · Free for members · Built for the Digital Public Goods Standard
 - Live at qumanity.in
-- Founder: [Your name] · founder@qumanity.in
+- Founder: Rohit Mudgal · founder@qumanity.in
 
 **Visual:** Quantum-orbit logo over a dawn photograph of an Indian village. Nothing else on the slide.
 
