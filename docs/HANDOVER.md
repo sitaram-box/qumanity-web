@@ -101,15 +101,14 @@ account-ID requests outside the Sub-continent, Qmail reply counts on notificatio
 voting checks — and its own commit message records its cross-repo checker result (166 passed, 0
 failed, against a local database copy; production not independently verified by that commit) and
 one known, explicitly flagged issue it did **not** fix: a retired account's existing app token
-remains valid against production today. *Correction, 2026-11-09: the website-side fix this
-mobile-side finding refers to is no longer uncommitted — it is committed (`e045cf1`) and deployed
-to production. What is **not** yet confirmed is the retirement scenario itself end-to-end on
-production (retiring a real account and confirming its old token is then rejected live): no safe,
-generic way to retire a test account on production exists today, so that specific confirmation is
-still open. See `## Retired-Account Authentication Security — November 2026` below for the full,
-honest account of what is and isn't verified.* **Do not assume any app commit hash from an
-earlier conversation is still current** — the Phone App Chat may have continued past this point;
-re-check `git log` there before planning new work.
+remains valid against production today. *Correction, 2026-11-11: this is now fully resolved. The
+website-side fix is committed (`e045cf1`), deployed, and — as of 2026-11-11 — directly verified
+against a real retired production account: a retired account's old bearer token now returns HTTP
+401, and its old browser session is now treated as anonymous. See
+`## Retired-Account Authentication Security — November 2026` below for the full verification
+record.* **Do not assume any app commit hash from an earlier conversation is still current** — the
+Phone App Chat may have continued past this point; re-check `git log` there before planning new
+work.
 
 **I. Development and release safeguards.** §12 (privacy/security/consent) and §14 (git rules) are
 the canonical sources. Headline rules: no `git add -A`/`git add .`; stage named files only; never
@@ -121,12 +120,11 @@ authorizes it.
 
 **J. Next steps for the Phone App Chat.** Given §H above, the most useful next step is likely to
 continue from `40b854d` in `Qumanity_App` directly (re-verify its own test/checker status fresh,
-don't assume it's still accurate), with two carry-over items from the website side to keep in
-mind: (1) the retired-account token-invalidation gap that commit flagged is now fixed and deployed
-on the website (`e045cf1`), with the retirement scenario itself still pending a live production
-confirmation — see `## Retired-Account Authentication Security — November 2026` below before
-treating this as fully closed; (2) the deferred Tri Nagar naming issue (§D) needs no app-side
-handling, it's a data-display nuance only. No other website blocker is currently known.
+don't assume it's still accurate), with one carry-over item from the website side to keep in mind:
+the deferred Tri Nagar naming issue (§D) needs no app-side handling, it's a data-display nuance
+only. The retired-account token-invalidation gap that commit flagged is now fully fixed, deployed,
+and production-verified (`## Retired-Account Authentication Security — November 2026` below) — no
+further action needed on it from the Phone App side. No website blocker is currently known.
 
 ---
 
@@ -1547,56 +1545,108 @@ change, as expected, since neither touches token or session authentication.
 ### Production verification
 
 Pushed to `origin/main` and deployed via Railway's auto-deploy. Confirmed against
-`https://web-production-126c3f.up.railway.app`:
+`https://web-production-126c3f.up.railway.app`, in two passes — the first incomplete, the second
+conclusive.
 
-- **Active-account bearer-token auth**: verified working post-deploy — a freshly registered
-  Global Account's token correctly authenticates `GET /api/me` (HTTP 200, correct profile data).
-- **Active-account browser-session auth**: verified working post-deploy — `/login` with a fresh
-  account's Private ID + PIN returns HTTP 200 and the resulting session cookie correctly
-  authenticates `GET /api/me` (HTTP 200, correct profile data).
-- **Registration**: confirmed still operational on production (three successful registrations
-  during this verification, see below).
-- **Retired-account rejection, the release's actual critical requirement, could NOT be verified
-  live on production.** Retiring a test account requires writing `is_removed = 1` for it. The only
-  code in this repository that ever does this, `scripts/retire_stray_demo_accounts.py`, is
-  deliberately hardcoded to two specific historical ids (25, 26) only and refuses to run against
-  any other account — there is no general-purpose application route or script to retire an
-  arbitrary account. An assistant session has no direct production database access and no
-  authenticated Railway CLI session (`railway whoami` reports "Unauthorized"; re-authenticating via
-  `railway login` was explicitly not authorized). Per the release task's own fallback instruction —
-  *"If a safe production test account or supported test method is unavailable, do not modify a real
-  account or perform an unsafe database operation. Stop and report exactly what is needed"* — no
-  unsafe database write was attempted. **What would close this gap**: the owner retiring one of the
-  disposable test accounts below directly against the production database (e.g. via Railway's
-  dashboard/console running `UPDATE users SET is_removed = 1 WHERE id = ?`), after which the old
-  token/session for that id can be replayed and confirmed rejected; or a future, separately
-  authorized task adding a real admin-facing retirement route that this kind of check could then
-  exercise safely and repeatably.
-- **Residual test data**: three disposable Global Account test registrations were created on
-  production during this verification attempt, each using Japan as both birth and present
-  location specifically to avoid touching any real India/Q-Punch data: user id 94 and user id 95
-  (name "QA Verify 20261109", bearer-token path), and user id 96 (name "QA Verify Session",
-  browser-session path). None was retired or modified further; no real member account was touched.
+**First pass (initial deploy):** active-account bearer-token and browser-session auth both
+verified working post-deploy. Retired-account rejection could not be verified yet: retiring a test
+account requires writing `is_removed = 1` for it, and the only code in this repository that ever
+does this, `scripts/retire_stray_demo_accounts.py`, is deliberately hardcoded to two specific
+historical ids (25, 26) and refuses any other account — there is no general-purpose retirement
+route or script. An assistant session has no direct production database access and no
+authenticated Railway CLI session, so no unsafe database write was attempted; the owner was asked
+to perform the retirement directly.
+
+**Second pass (owner-performed retirement, same day):** the owner created one further disposable
+Global Account test registration — `user_id 97`, name "QA Verify Retired", Japan — and, after an
+assistant session persisted its bearer token in the browser tab's `localStorage` (so it could
+still be replayed after the account was retired) and confirmed both the token and a parallel
+browser session authenticated normally (`GET /api/me` → HTTP 200 for both), the owner ran
+`UPDATE users SET is_removed = 1 WHERE id = 97` directly against the production database via
+Railway's SQL console.
+
+The first attempt at this surfaced a separate, important finding before it reached a real result:
+the deployment active at that moment was still `f02fe6e3`, a build that predates this security fix
+entirely (`e045cf1`/`278f54a` had been pushed but not actually redeployed) — replaying the token
+against stale code understandably still returned 200. **This is the reason this section states
+explicitly, for any future release, that deployment must be confirmed by commit hash on the
+Railway dashboard, not inferred from a successful `git push` or a bounded time-based wait** (the
+technique used earlier in this release, which this incident shows is not sufficient on its own for
+a change with no visible static-asset fingerprint). Once the owner redeployed from `main` and
+re-ran the retirement SQL, the real test was performed:
+
+- **Bearer-token rejection — CONFIRMED.** Replaying user 97's original pre-retirement token
+  against `GET /api/me` returned **HTTP 401**, body `{"error": "Please sign in again"}` — no
+  profile data, no hint the account exists or was retired.
+- **Browser-session rejection — CONFIRMED, by its actual (not literal) contract.** Replaying user
+  97's original pre-retirement session cookie against `GET /api/me` did not return a literal `401`
+  JSON body; `/api/me` is decorated `@login_required` (session-based), and `_retired_session_guard()`
+  drops `session["user_id"]`, which makes the request anonymous to `login_required` — so the
+  server issued an HTTP redirect to `/login` (confirmed with `fetch(..., {redirect: "manual"})`,
+  which reported `type: "opaqueredirect"`, i.e. a real redirect occurred). This is exactly the
+  documented, intended design (§ Implementation above), identical to what any signed-out visitor
+  gets, with no account data and no retirement hint disclosed either way.
+- **Registration**: confirmed still operational throughout (ten disposable test registrations
+  across this whole verification effort, see below).
+
+**Residual test data**: ten disposable Global Account test registrations were created on
+production across this verification effort, every one using Japan as both birth and present
+location specifically to avoid touching any real India/Q-Punch data: user ids 94–103. Of these,
+only **user id 97** ("QA Verify Retired") was actually retired (`is_removed = 1`), by the owner, as
+test evidence for this section — its retired status is left intact deliberately, not reversed. The
+other nine (94, 95, 96, 98–103) remain ordinary, unretired Global Accounts with no further
+significance; none was modified beyond its own registration, and no real member account was
+touched at any point.
+
+### Email delivery — an incidental finding, not part of this fix
+
+While registering disposable test accounts for the check above, `send_registration_notification()`
+(unrelated to authentication — see [email_core.py](../email_core.py)) was found to be completely
+silent in production: `RESEND_API_KEY` was missing from Railway's environment, so every
+registration's admin-notification email was a silent no-op. Fixing this took three attempts, each
+diagnosing a real, independent cause rather than guessing twice at the same one:
+
+1. Resend's HTTPS API (the module's original transport) — once the missing key was added, every
+   request was rejected by **Resend itself** with a 403 from Railway's egress IP (an IP-level
+   restriction on Resend's side).
+2. Resend's SMTP relay (`smtp.resend.com:587`, STARTTLS) — switched to on the reasoning that an
+   HTTPS-specific restriction wouldn't apply to SMTP; instead, this failed differently, with a
+   `TimeoutError` connecting to port 587, because **Railway's own network firewall blocks outbound
+   SMTP entirely**, independent of which provider is on the other end.
+3. **SendGrid's HTTPS API** (port 443, the same port every other outbound call this app makes
+   already uses) — committed as `147f833` (SMTP attempt, superseded) and `3a6ecd3` (SendGrid,
+   final). Verified live: a test registration (`user_id 103`) produced, in Railway's logs,
+   `EMAIL_SEND_ATTEMPT operation=registration to=f***@qumanity.in` followed by
+   `EMAIL_SEND_SUCCESS operation=registration status=202 message_id=je7-PGkAQ0CdWKuJ46haVA`, and
+   the notification email was confirmed received by the owner in `founder@qumanity.in`.
+
+`tests/test_email_core.py` was rewritten alongside each transport change (now mocking
+`urllib.request.urlopen` against SendGrid's endpoint/payload shape) and currently covers 38 checks,
+0 failures. This whole thread was never part of the retired-account security fix's own acceptance
+criteria — it surfaced only because disposable test registrations for the security check happened
+to trigger it — and is recorded here for completeness, not as a reason this release was blocked.
 
 ### Phone App implications
 
 The website backend remains the sole source of truth for authentication and account-retirement
-state; the Phone App must not invent its own token-expiry or account-status logic. Once the
-production retirement scenario above is confirmed (by whichever path the owner chooses), the Phone
-App Chat can treat a locally cached token exactly as it already does for any other 401 — no
-app-side change is anticipated either way, since the app only ever consumes `/api/me` and the
-existing 401 contract, both unchanged by this fix.
+state; the Phone App must not invent its own token-expiry or account-status logic. The Phone App
+Chat can treat a locally cached token exactly as it already does for any other 401 — no app-side
+change is required, since the app only ever consumes `/api/me` and the existing 401 contract, both
+confirmed unchanged (for an active account) and now confirmed correctly enforced (for a retired
+one) by this release. The email-delivery fix above has no Phone App implication at all — it is a
+website-side admin notification the app never calls or depends on.
 
 ### Final website status
 
-**Not fully closed.** The code fix is committed, deployed, and exhaustively regression-tested
-(97 dedicated checks plus the full 1,467-check suite, 0 failures). Active-account authentication
-is confirmed working on production post-deploy. The one piece that remains unconfirmed is the
-release's own actual purpose: that a retired account's previously-issued token is rejected live on
-production — this requires either an owner-performed production database write on one of the
-disposable test accounts above, or a future admin-facing retirement route. Per this release's own
-explicit instruction, the website phase should not be declared fully closed until that specific
-confirmation lands.
+**Qumanity Website Development Phase: COMPLETE.** The retired-account authentication fix is
+committed (`e045cf1`), regression-tested (97 dedicated checks plus the full 1,467-check suite, 0
+failures), deployed, and — per this release's own explicit closing condition — directly verified
+against a real retired production account (`user_id 97`): its original bearer token now returns
+HTTP 401, and its original browser session is now treated as anonymous, both with no data or
+retirement hint disclosed. Active-account authentication, registration, and (incidentally) admin
+email notifications are all confirmed working on the same production deployment. No further
+retired-account work is anticipated; the email-transport history above is recorded for context,
+not as an open item.
 
 ---
 
