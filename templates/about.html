@@ -428,13 +428,16 @@
                   <h3 class="ab-h3">Dual-key security</h3>
                   <div class="ab-table-wrap">
                     <table class="ab-table">
-                      <thead><tr><th>Key</th><th>Purpose</th><th>Access</th></tr></thead>
+                      <thead><tr><th>Key</th><th>Purpose</th><th>Access today</th><th>Planned</th></tr></thead>
                       <tbody>
-                        <tr><td>Private key</td><td>Authentication and access to private data</td><td>Biometric verification — never stored raw on central servers</td></tr>
-                        <tr><td>Public key</td><td>Civic participation, voting, service access</td><td>QR code / encoded reference on the Q-Card</td></tr>
+                        <tr><td>Private key</td><td>Authentication and access to private data</td><td>Your Private ID + a 5-character PIN, stored as a salted hash — never in plain text</td><td>Biometric verification, so no PIN has to be typed</td></tr>
+                        <tr><td>Public key</td><td>Civic participation, voting, service access</td><td>Your Account-ID, tied to your present location</td><td>A QR code / encoded reference on a physical Q-Card</td></tr>
                       </tbody>
                     </table>
                   </div>
+                  <p class="ab-note">Biometric sign-in and the physical Q-Card are part of the planned kiosk
+                    access layer (see <a href="#today">Where we are today</a>) — not yet built. Today, both keys
+                    are accessed the same way: by signing in with your Private ID or Account-ID and PIN.</p>
                   <p>
                     On a village kiosk, registration becomes a small ceremony: hand on the bio-pad, a personal declaration and a
                     vow of truth and service, cosmic alignment, QID generation — and a printed <strong>Q-Card</strong>, your
@@ -635,7 +638,7 @@
                   <ul class="ab-list ab-list-2">
                     <li>Fake claims → multi-layer verification (witnesses + sensors + AI)</li>
                     <li>Duplicate claims → the ledger prevents the same action being claimed twice</li>
-                    <li>Coercive transfers → biometric confirmation required</li>
+                    <li>Coercive transfers → biometric confirmation required (planned, as part of the Q-Pay kiosk system — see <a href="#today">Where we are today</a>)</li>
                     <li>Counterfeits → every Qoin has a unique, verifiable ID</li>
                     <li>Speculation → Qoins are non-tradable and non-lendable at interest</li>
                     <li>Misclassified donations → transaction type is tagged at creation</li>
@@ -650,22 +653,28 @@
                     Governance is only useful if it touches daily life. The manuscripts describe an integrated set of services, all
                     sitting on the same nested ledger so that nothing has to be re-verified and nothing can quietly vanish.
                   </p>
+                  <p class="ab-note ab-note-planned">
+                    <strong>Planned, not yet built.</strong> Every card below describes a future module from the
+                    manuscripts — none of them exists in the prototype today. What you can use right now is
+                    identity, location, timelines, the Qoin wallet and the pilot election (see
+                    <a href="#today">Where we are today</a>).
+                  </p>
                   <div class="ab-grid ab-grid-3 ab-services">
-                    <article class="ab-card"><span class="ab-ico">🗣️</span><h3>Public Policy Forum</h3><p>A nested forum network where ideas become policy: a policy lifecycle dashboard and a national legislative console show every proposal’s journey — from noise to collective wisdom.</p></article>
-                    <article class="ab-card"><span class="ab-ico">⚖️</span><h3>Quantum Justice</h3><p>A justice chain from village to nation with a full case lifecycle, sensor-triggered environmental enforcement, animal-welfare protection, a fairness and precedent engine, restorative outcomes and clear appeal paths.</p></article>
-                    <article class="ab-card"><span class="ab-ico">🎓</span><h3>Education &amp; Knowledge</h3><p>A Digital Gurukul network with learning that follows a child through migration, adult skill certification and a Traditional Knowledge Registry that protects ancestral wisdom.</p></article>
-                    <article class="ab-card"><span class="ab-ico">🩺</span><h3>Health &amp; Wellbeing</h3><p>An integrated health ecosystem for people, animals (structured gaushala governance) and the environment, with emergency and disaster coordination.</p></article>
-                    <article class="ab-card"><span class="ab-ico">🔍</span><h3>Transparency &amp; Anti-corruption</h3><p>Direct producer-to-consumer trade, a startup generator, job matching through smart contracts that end wage theft, village fund dashboards, a citizen audit portal and whistle-blower protection.</p></article>
-                    <article class="ab-card"><span class="ab-ico">🎭</span><h3>Cultural Exchange</h3><p>Culture woven into the ledger: songs, crafts, festivals and dialects are permanent, rewarded contributions to a living archive of memory.</p></article>
-                    <article class="ab-card"><span class="ab-ico">🌾</span><h3>Sovereign Agriculture</h3><p>An integrated agricultural framework with a farmer dashboard — full price for farmers, traceable produce for buyers, food sovereignty for villages.</p></article>
-                    <article class="ab-card"><span class="ab-ico">🌍</span><h3>Earth Balance Protocol</h3><p>An environmental ledger and climate-intelligence layer that gives rivers, forests and soil a visible, accountable presence in every decision.</p></article>
-                    <article class="ab-card"><span class="ab-ico">🚌</span><h3>Integrated Mobility Grid</h3><p>Village transport governed transparently — from shared rides to ride-contract logic and district infrastructure planning.</p></article>
-                    <article class="ab-card"><span class="ab-ico">🛡️</span><h3>Resilience &amp; Protection</h3><p>A multi-source signal system and layered response hierarchy for emergencies, transparent relief funds and a predictive-peace approach.</p></article>
-                    <article class="ab-card"><span class="ab-ico">👧</span><h3>Nurture &amp; Equity</h3><p>Women’s and children’s empowerment: representation in governance, an integrated safety network, child-development architecture and economic autonomy.</p></article>
-                    <article class="ab-card"><span class="ab-ico">📰</span><h3>Media &amp; Truth Network</h3><p>Media as a public service: a global truth network where claims carry provenance, and clarity — not virality — is rewarded.</p></article>
-                    <article class="ab-card"><span class="ab-ico">📜</span><h3>Living Legal Architecture</h3><p>From written law to living code: smart-law protocols, mediation, living charters and a constitutional-evolution mechanism.</p></article>
-                    <article class="ab-card"><span class="ab-ico">🌐</span><h3>Global Identity &amp; Forum</h3><p>Sovereign digital identity, international bridges, a Quantum Council of Nations and a Global Quantum Forum for cross-border coordination.</p></article>
-                    <article class="ab-card"><span class="ab-ico">🧭</span><h3>Ethical Intelligence</h3><p>A three-tier ethical safeguard, AI custodianship and public ethical metrics — an “ethical immune system” for the whole architecture.</p></article>
+                    <article class="ab-card"><span class="ab-planned-badge">Planned</span><span class="ab-ico">🗣️</span><h3>Public Policy Forum</h3><p>A nested forum network where ideas become policy: a policy lifecycle dashboard and a national legislative console show every proposal’s journey — from noise to collective wisdom.</p></article>
+                    <article class="ab-card"><span class="ab-planned-badge">Planned</span><span class="ab-ico">⚖️</span><h3>Quantum Justice</h3><p>A justice chain from village to nation with a full case lifecycle, sensor-triggered environmental enforcement, animal-welfare protection, a fairness and precedent engine, restorative outcomes and clear appeal paths.</p></article>
+                    <article class="ab-card"><span class="ab-planned-badge">Planned</span><span class="ab-ico">🎓</span><h3>Education &amp; Knowledge</h3><p>A Digital Gurukul network with learning that follows a child through migration, adult skill certification and a Traditional Knowledge Registry that protects ancestral wisdom.</p></article>
+                    <article class="ab-card"><span class="ab-planned-badge">Planned</span><span class="ab-ico">🩺</span><h3>Health &amp; Wellbeing</h3><p>An integrated health ecosystem for people, animals (structured gaushala governance) and the environment, with emergency and disaster coordination.</p></article>
+                    <article class="ab-card"><span class="ab-planned-badge">Planned</span><span class="ab-ico">🔍</span><h3>Transparency &amp; Anti-corruption</h3><p>Direct producer-to-consumer trade, a startup generator, job matching through smart contracts that end wage theft, village fund dashboards, a citizen audit portal and whistle-blower protection.</p></article>
+                    <article class="ab-card"><span class="ab-planned-badge">Planned</span><span class="ab-ico">🎭</span><h3>Cultural Exchange</h3><p>Culture woven into the ledger: songs, crafts, festivals and dialects are permanent, rewarded contributions to a living archive of memory.</p></article>
+                    <article class="ab-card"><span class="ab-planned-badge">Planned</span><span class="ab-ico">🌾</span><h3>Sovereign Agriculture</h3><p>An integrated agricultural framework with a farmer dashboard — full price for farmers, traceable produce for buyers, food sovereignty for villages.</p></article>
+                    <article class="ab-card"><span class="ab-planned-badge">Planned</span><span class="ab-ico">🌍</span><h3>Earth Balance Protocol</h3><p>An environmental ledger and climate-intelligence layer that gives rivers, forests and soil a visible, accountable presence in every decision.</p></article>
+                    <article class="ab-card"><span class="ab-planned-badge">Planned</span><span class="ab-ico">🚌</span><h3>Integrated Mobility Grid</h3><p>Village transport governed transparently — from shared rides to ride-contract logic and district infrastructure planning.</p></article>
+                    <article class="ab-card"><span class="ab-planned-badge">Planned</span><span class="ab-ico">🛡️</span><h3>Resilience &amp; Protection</h3><p>A multi-source signal system and layered response hierarchy for emergencies, transparent relief funds and a predictive-peace approach.</p></article>
+                    <article class="ab-card"><span class="ab-planned-badge">Planned</span><span class="ab-ico">👧</span><h3>Nurture &amp; Equity</h3><p>Women’s and children’s empowerment: representation in governance, an integrated safety network, child-development architecture and economic autonomy.</p></article>
+                    <article class="ab-card"><span class="ab-planned-badge">Planned</span><span class="ab-ico">📰</span><h3>Media &amp; Truth Network</h3><p>Media as a public service: a global truth network where claims carry provenance, and clarity — not virality — is rewarded.</p></article>
+                    <article class="ab-card"><span class="ab-planned-badge">Planned</span><span class="ab-ico">📜</span><h3>Living Legal Architecture</h3><p>From written law to living code: smart-law protocols, mediation, living charters and a constitutional-evolution mechanism.</p></article>
+                    <article class="ab-card"><span class="ab-planned-badge">Planned</span><span class="ab-ico">🌐</span><h3>Global Identity &amp; Forum</h3><p>Sovereign digital identity, international bridges, a Quantum Council of Nations and a Global Quantum Forum for cross-border coordination.</p></article>
+                    <article class="ab-card"><span class="ab-planned-badge">Planned</span><span class="ab-ico">🧭</span><h3>Ethical Intelligence</h3><p>A three-tier ethical safeguard, AI custodianship and public ethical metrics — an “ethical immune system” for the whole architecture.</p></article>
                   </div>
                   <p class="ab-note">These modules are described in full in the manuscripts (see <a href="#books">The manuscripts</a>);
                     the prototype you can use today implements the identity, location, timelines, wallet and election foundations

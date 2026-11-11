@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Terms of Service — Qumanity</title>
+  <meta name="description" content="The rules for using Qumanity, in plain language." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/founders_message.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body class="fm-body">
+  <header class="qm-header">
+    <a href="{{ url_for('index') }}" style="display:contents">
+      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+    </a>
+    <div class="qm-header-text">
+      <h1>Qumanity</h1>
+      <p>Quantum + Humanity</p>
+    </div>
+    <nav class="qm-header-actions">
+      <a class="qm-btn qm-btn-ghost" href="{{ url_for('index') }}">← Home</a>
+    </nav>
+  </header>
+
+  <main class="fm-main">
+    <article class="fm-article">
+      <h2 class="fm-title">Terms of Service</h2>
+      <p class="fm-para" style="text-align:center; opacity:0.75;">Last updated: {{ updated }}</p>
+
+      <h3 class="fm-heading">What Qumanity is</h3>
+      <p class="fm-para">Qumanity is a free, working prototype — not a finished product. It is
+        stewarded by its founder, with no shareholders and no data sold for profit. See the About
+        page's <a href="{{ url_for('about') }}#today">"Where we are today"</a> section for what is
+        actually built and working right now.</p>
+
+      <h3 class="fm-heading">Your account</h3>
+      <p class="fm-para">You're responsible for keeping your Private ID and PIN to yourself. One
+        person, one account.</p>
+
+      <h3 class="fm-heading">What you post</h3>
+      <p class="fm-para">You're responsible for what you post, message, or upload. Don't post
+        anything illegal, harassing, or that isn't yours to share. Qumanity's councils and
+        administrator can remove content, and may close an account that breaks these rules.</p>
+
+      <h3 class="fm-heading">Qoins aren't money</h3>
+      <p class="fm-para">Qoins can't be bought, sold, traded, or exchanged for real currency. They
+        are a record of contribution inside Qumanity only.</p>
+
+      <h3 class="fm-heading">No guarantees</h3>
+      <p class="fm-para">This is a working prototype. Features can change, and some described
+        elsewhere on this site are still being built — see the About page's "Where we are today"
+        section for what's actually live right now.</p>
+
+      <h3 class="fm-heading">Ending your use</h3>
+      <p class="fm-para">You can stop using Qumanity at any time. If your account is closed for
+        breaking these terms, you'll lose access, but your public civic record (like board posts)
+        stays part of the historical record, consistent with how the platform works for everyone.</p>
+
+      <h3 class="fm-heading">Questions</h3>
+      <p class="fm-para">Write to <strong>founder@qumanity.in</strong>.</p>
+
+      <p class="fm-para fm-closing">Qumanity — stewarded by its founder. A working prototype.</p>
+    </article>
+  </main>
+</body>
+</html>

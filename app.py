@@ -310,6 +310,23 @@ def founders_message():
     return render_template("founders_message.html", message=message)
 
 
+@app.route("/privacy")
+def privacy_policy():
+    """Public Privacy Policy page (2026-11-11, DPG Phase 0 Product Truth Audit, finding C33):
+    register.html's consent line linked here from a placeholder `href="#"` with no page behind it.
+    Static content, same pattern as the copyright notices below -- updated by hand when the
+    policy's substance changes, not computed from any other module. `updated` is today's date at
+    render time rather than hardcoded, so it never silently goes stale."""
+    return render_template("privacy.html", updated=dt.date.today().isoformat())
+
+
+@app.route("/terms")
+def terms_of_service():
+    """Public Terms of Service page (2026-11-11, same fix as /privacy above). Same pattern:
+    static content, hand-maintained, `updated` set to today's date at render time."""
+    return render_template("terms.html", updated=dt.date.today().isoformat())
+
+
 @app.route("/copyright/gita-press")
 def copyright_gita_press():
     """Public transparency notice: the status of the Gita Press Hindi Vinaya Patrika translation

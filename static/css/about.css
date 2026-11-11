@@ -178,6 +178,16 @@ html { scroll-behavior: smooth; scroll-padding-top: 20px; }
 }
 .ab-badge-alt { background: var(--qm-gold); color: var(--qm-navy); }
 
+/* 2026-11-11 (Product Truth Audit, finding C27): a muted sibling of .ab-badge above -- same pill
+   shape and corner placement, but deliberately low-contrast (border-tone, not saffron/gold) since
+   this marks a card as NOT YET BUILT rather than highlighting something live. */
+.ab-planned-badge {
+  position: absolute; top: 12px; right: 14px;
+  padding: 3px 10px; border-radius: 999px;
+  background: var(--qm-border); color: var(--qm-text-dim);
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+}
+
 .ab-list { margin: 12px 0; padding-left: 20px; color: var(--qm-text); line-height: 1.7; font-size: 0.97rem; }
 .ab-list li { margin-bottom: 6px; }
 .ab-list-2 { columns: 2; column-gap: 32px; }

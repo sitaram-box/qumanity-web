@@ -184,7 +184,7 @@
         {% endif %}
 
         <p class="qm-summary-error" id="private-form-error" hidden></p>
-        <p class="qm-consent-line">By continuing, you agree to Qumanity's <a href="#">Privacy Policy</a> and <a href="#">Terms of Service</a>.</p>
+        <p class="qm-consent-line">By continuing, you agree to Qumanity's <a href="{{ url_for('privacy_policy') }}" target="_blank" rel="noopener">Privacy Policy</a> and <a href="{{ url_for('terms_of_service') }}" target="_blank" rel="noopener">Terms of Service</a>.</p>
         <button type="submit" class="qm-btn qm-btn-primary qm-btn-lg qm-form-submit">Next →</button>
       </form>
     </section>

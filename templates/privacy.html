@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacy Policy — Qumanity</title>
+  <meta name="description" content="How Qumanity collects, stores, and protects member data, in plain language." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/founders_message.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body class="fm-body">
+  <header class="qm-header">
+    <a href="{{ url_for('index') }}" style="display:contents">
+      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+    </a>
+    <div class="qm-header-text">
+      <h1>Qumanity</h1>
+      <p>Quantum + Humanity</p>
+    </div>
+    <nav class="qm-header-actions">
+      <a class="qm-btn qm-btn-ghost" href="{{ url_for('index') }}">← Home</a>
+    </nav>
+  </header>
+
+  <main class="fm-main">
+    <article class="fm-article">
+      <h2 class="fm-title">Privacy Policy</h2>
+      <p class="fm-para" style="text-align:center; opacity:0.75;">Last updated: {{ updated }}</p>
+
+      <p class="fm-para">Qumanity is stewarded by its founder, Rohit Mudgal. Questions about your
+        data can be sent any time to <strong>founder@qumanity.in</strong>.</p>
+
+      <h3 class="fm-heading">What we collect</h3>
+      <ul class="fm-para">
+        <li>Your name, gender, date/time/place of birth, and your current location — used to
+          create your account and calculate your personal kundali (Sun sign, Moon sign, element).</li>
+        <li>A PIN, which we never store as typed — it is run through a one-way scrambling process
+          (a "hash") before it ever touches our database, so even we can't see your actual PIN.</li>
+        <li>Anything you choose to post, message, or upload — board posts, Qmail messages, family
+          tree entries, profile pictures.</li>
+        <li>Optionally, an email address or phone number, if you choose to give one.</li>
+      </ul>
+
+      <h3 class="fm-heading">Why we collect it</h3>
+      <ul class="fm-para">
+        <li>To verify who you are and let you sign in.</li>
+        <li>To work out which village, tehsil, district, or country your account belongs to, so
+          your civic features (voting, your village's board) go to the right place.</li>
+        <li>To calculate your kundali and elemental details, which some of Qumanity's features use.</li>
+        <li>To let you message, post, and connect with other members.</li>
+      </ul>
+
+      <h3 class="fm-heading">Who can see it</h3>
+      <ul class="fm-para">
+        <li>Your private information (kundali, personal notes, your birth details) is visible only
+          to you.</li>
+        <li>What you post to your village's board is visible to other members of that location, as
+          a matter of public record — that's the point of a public village board.</li>
+        <li>A public member directory shows only your name, gender, and an age band — never your
+          exact birthdate, your address, or your contact details.</li>
+        <li>Qumanity's own administrator can see full account records when needed to help you,
+          investigate abuse, or respond to a legal request. Every time that happens, it is logged.</li>
+      </ul>
+
+      <h3 class="fm-heading">What we don't do</h3>
+      <ul class="fm-para">
+        <li>We don't show ads, and we don't track you across other websites.</li>
+        <li>We don't sell your data to anyone, ever.</li>
+        <li>We don't process real money. "Qoins" are an internal record of contribution, not
+          currency — there is no bank account or payment processor behind them.</li>
+      </ul>
+
+      <h3 class="fm-heading">Your choices</h3>
+      <p class="fm-para">You can ask what data we hold about you, or ask us to correct it, by
+        writing to founder@qumanity.in.</p>
+      <p class="fm-para">If you'd like your data deleted, write to founder@qumanity.in and the
+        founder will handle your request by hand. There is no automated "delete my account" button
+        today — closing an account otherwise marks it inactive rather than erasing its history, to
+        keep the public record honest for everyone else. A deletion request is handled as its own,
+        individually reviewed case.</p>
+
+      <h3 class="fm-heading">Children</h3>
+      <p class="fm-para">Qumanity does not currently check anyone's age at registration. There is
+        no minimum age enforced today.</p>
+
+      <h3 class="fm-heading">Changes to this policy</h3>
+      <p class="fm-para">If this policy changes in a way that matters, we'll say so clearly on
+        this page, with the date above updated.</p>
+
+      <p class="fm-para fm-closing">Qumanity — stewarded by its founder. A working prototype.</p>
+    </article>
+  </main>
+</body>
+</html>
