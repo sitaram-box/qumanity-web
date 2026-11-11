@@ -37,6 +37,7 @@ NOMINATION_DAYS = 8
 VOTING_DAYS = 14
 TERM_DAYS = 365
 CANDIDATES_PER_GENDER = 3
+MIN_CANDIDATE_KARMA = 200  # 2026-11-11: the public candidate table always claimed this; nomination_eligible() now actually enforces it
 
 _SIGN_ORDER = [z["sign"] for z in ZODIAC_RANGES]
 _SIGN_BY_NAME = {z["sign"]: z for z in ZODIAC_RANGES}
@@ -277,6 +278,16 @@ def nomination_eligible(conn, user_row, cycle: dict) -> tuple[bool, str]:
     age = _age_years(user_row["dob"], dt.date.today())
     if age < 25 or age > 60:
         return False, "Candidates must be Yuvak or Vridh, aged 25 to 60."
+    # 2026-11-11 (Product Truth Audit, finding C29): karma was always shown next to a candidate's
+    # name (candidates_for_cycle()/current_cycle_for_village() below) but never actually gated
+    # candidacy -- the public candidate-requirement table claimed a 200 threshold that nothing
+    # enforced. Peer-nomination-count and dispute-record checks, also claimed on that table, are
+    # deliberately NOT added here: neither a peer-endorsement feature nor a per-user dispute record
+    # exists anywhere in this codebase, and gating on a count nothing can ever produce would make
+    # candidacy permanently impossible, silently disabling the only live election pilot.
+    karma = karma_core.individual_karma_score(conn, user_row["id"])["total"]
+    if karma < MIN_CANDIDATE_KARMA:
+        return False, f"Candidates need at least {MIN_CANDIDATE_KARMA} karma on the public ledger (you have {karma})."
     zodiac = conn.execute("SELECT sun_sign FROM user_zodiac WHERE user_id = ?", (user_row["id"],)).fetchone()
     if not zodiac or zodiac["sun_sign"] != cycle["zodiac_sign"]:
         return False, f"Only members born under {cycle['zodiac_sign']} can stand in this cycle."

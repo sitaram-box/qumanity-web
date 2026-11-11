@@ -30,6 +30,7 @@ os.environ["QM_DB_PATH"] = _DB_PATH  # must happen before any import below -- se
 
 import election_core
 import election_test_scheduler
+import karma_core
 
 FAILS = []
 
@@ -121,6 +122,11 @@ candidate_ids = {"male": [], "female": []}
 for i in range(3):
     candidate_ids["male"].append(make_user(conn, f"Aries Candidate M{i}", "male", 30, "Aries"))
     candidate_ids["female"].append(make_user(conn, f"Aries Candidate F{i}", "female", 30, "Aries"))
+# 2026-11-11: nomination_eligible() now also requires MIN_CANDIDATE_KARMA (200) -- give every
+# candidate fixture exactly enough so this test keeps proving auto_nominate()'s own picking logic,
+# not accidentally testing the new karma gate instead.
+for uid in candidate_ids["male"] + candidate_ids["female"]:
+    karma_core.add_individual_karma(conn, uid, "noncommercial", election_core.MIN_CANDIDATE_KARMA, "test fixture: candidacy karma threshold")
 
 # Pool 1: the 50-account board-test naming convention (scripts/seed_demo_voters.py). Ages kept
 # OUTSIDE the 25-60 candidacy window (nomination_eligible()) so these voters can never be picked

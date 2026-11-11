@@ -43,6 +43,7 @@ os.environ["QM_DISABLE_SCHEDULER"] = "1"
 import app as appmod  # noqa: E402
 import db as dbmod  # noqa: E402
 import election_core as E  # noqa: E402
+import karma_core  # noqa: E402
 
 # 2026-11-08 (Phase 1 corrective task): registration now verifies a real (non-provisional)
 # Village against india_villages, the same way profile-change already does -- every throwaway
@@ -86,7 +87,14 @@ def register_resident(gender, dob="1990-10-01"):
     res = client.post("/api/auth/register", json=payload)
     if res.status_code != 201:
         sys.exit(f"REGISTER FAILED: {res.status_code} {res.get_data(as_text=True)[:500]}")
-    return res.get_json()["user_id"]
+    user_id = res.get_json()["user_id"]
+    # 2026-11-11: nomination_eligible() now also requires MIN_CANDIDATE_KARMA (200) -- this file is
+    # about tally/winner correctness, not candidacy eligibility, so every resident gets enough
+    # karma to remain auto_nominate()-eligible exactly as before this rule existed.
+    conn = dbmod.get_db()
+    karma_core.add_individual_karma(conn, user_id, "noncommercial", E.MIN_CANDIDATE_KARMA, "test fixture: candidacy karma threshold")
+    conn.close()
+    return user_id
 
 
 # Three dates inside ONE Libra 2026 cycle: nomination (week 1), voting (weeks 2-3), closed (week 4).
