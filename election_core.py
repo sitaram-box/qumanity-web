@@ -1,7 +1,7 @@
 """Village Council elections — piloted on ONE village (see
 `Qbox-Notes.txt`, "Please write cursor prompt to build a voting system in
 Public Account - Village id..."). Each zodiac sign runs its own ~1-month
-cycle: a 7-day nomination window, then a 14-day voting window, electing one
+cycle: an 8-day nomination window, then a 14-day voting window, electing one
 Male "Nayak" and one Female "Nayika" for that sign's council seat (24 seats
 across a full year, repeating annually).
 
