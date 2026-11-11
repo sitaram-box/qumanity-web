@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qumanity Pitch Deck</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg2: #151b25;
+    --ink: #f5f2ea;
+    --mute: #b7bfcc;
+    --accent: #f2a33a;
+    --live: #3ddc97;
+    --pilot: #f2a33a;
+    --plan: #8aa4ff;
+    --line: #2b3444;
+    --u: min(1vw, 1.7778vh);            /* scales everything to the 16:9 box that fits the window */
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-snap-type: y mandatory; scroll-behavior: smooth; background: var(--bg); }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: var(--ink); background: var(--bg);
+    font-size: max(24px, calc(var(--u) * 2.5));
+    line-height: 1.3;
+  }
+  .slide {
+    position: relative; height: 100vh; width: 100%;
+    scroll-snap-align: start; scroll-snap-stop: always;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: calc(var(--u) * 5) calc(var(--u) * 7);
+    overflow: hidden;
+    background: radial-gradient(120% 90% at 85% 0%, #1a2233 0%, var(--bg) 60%);
+  }
+  .slide::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--u) * 0.7);
+    background: var(--accent);
+  }
+  h1, h2 { font-family: Georgia, "Times New Roman", serif; letter-spacing: -0.01em; }
+  h2 {
+    font-size: max(36px, calc(var(--u) * 4.7)); line-height: 1.12; font-weight: 700;
+    margin-bottom: calc(var(--u) * 3); max-width: 92%;
+  }
+  h2 em { font-style: normal; color: var(--accent); }
+  ul { list-style: none; max-width: 100%; }
+  li {
+    position: relative; padding-left: calc(var(--u) * 3); margin-bottom: calc(var(--u) * 1.6);
+    font-size: max(24px, calc(var(--u) * 2.9));
+  }
+  li::before {
+    content: ""; position: absolute; left: 0; top: 0.52em; width: calc(var(--u) * 1.1); height: calc(var(--u) * 1.1);
+    background: var(--accent); border-radius: 50%;
+  }
+  .tag {
+    display: inline-block; font-size: max(24px, calc(var(--u) * 2.0)); font-weight: 700; letter-spacing: 0.04em;
+    padding: 0 calc(var(--u) * 1) ; border-radius: 999px; margin-right: calc(var(--u) * 0.8); vertical-align: 0.08em;
+    border: 2px solid currentColor;
+  }
+  .live { color: var(--live); } .pilot { color: var(--pilot); } .plan { color: var(--plan); }
+  .footer {
+    position: absolute; left: calc(var(--u) * 7); right: calc(var(--u) * 7); bottom: calc(var(--u) * 2.4);
+    font-size: max(18px, calc(var(--u) * 1.5)); color: var(--mute);
+  }
+  .row { display: flex; gap: calc(var(--u) * 5); align-items: center; }
+  .row > .grow { flex: 1 1 0; min-width: 0; }
+
+  .dense h2 { font-size: max(32px, calc(var(--u) * 4.1)); margin-bottom: calc(var(--u) * 1.8); }
+  .dense li { font-size: max(24px, calc(var(--u) * 2.6)); margin-bottom: calc(var(--u) * 1.1); }
+  .tight li { font-size: max(24px, calc(var(--u) * 2.55)); }
+  .nw { white-space: nowrap; }
+
+  /* Slide 1 */
+  .s1 { text-align: left; }
+  .s1 h1 { font-size: max(72px, calc(var(--u) * 12.5)); line-height: 1; color: var(--ink); }
+  .s1 h1 span { color: var(--accent); }
+  .s1 .sub { font-size: max(32px, calc(var(--u) * 4.2)); color: var(--ink); margin-top: calc(var(--u) * 3); max-width: 60%; font-family: Georgia, serif; }
+  .orbit { position: absolute; right: calc(var(--u) * 7); top: 50%; width: calc(var(--u) * 21); height: calc(var(--u) * 21); transform: translateY(-50%); }
+  .orbit svg { width: 100%; height: 100%; }
+
+  /* Slide 2 */
+  .broken { display: flex; align-items: center; gap: calc(var(--u) * 1.6); margin-top: calc(var(--u) * 1.5); }
+  .screen {
+    width: calc(var(--u) * 21); height: calc(var(--u) * 10); border: 3px solid var(--mute); border-radius: calc(var(--u) * 1);
+    display: flex; align-items: center; justify-content: center; text-align: center; font-size: max(24px, calc(var(--u) * 2.4));
+    color: var(--mute); background: var(--bg2);
+  }
+  .screen.blank { border-style: dashed; color: var(--accent); border-color: var(--accent); font-weight: 700; font-size: max(24px, calc(var(--u) * 3.1)); }
+  .snap { color: #ff6b6b; font-size: max(32px, calc(var(--u) * 5)); font-weight: 700; }
+
+  /* Slide 3 rings */
+  .rings { position: relative; width: calc(var(--u) * 30); height: calc(var(--u) * 30); flex: none; }
+  .ring { position: absolute; border-radius: 50%; border: 3px solid var(--accent); display: flex; align-items: flex-start; justify-content: center; }
+  .ring b { font-size: max(24px, calc(var(--u) * 1.9)); color: var(--ink); margin-top: calc(var(--u) * 0.15); font-weight: 700; }
+  .legend { list-style: none; columns: 2; padding-left: 0; column-gap: calc(var(--u) * 3); font-size: max(24px, calc(var(--u) * 2.4)); color: var(--mute); margin-top: calc(var(--u) * 1); }
+  .legend li { font-size: inherit; margin: 0 0 calc(var(--u) * 0.5); padding-left: 0; }
+  .legend li::before { display: none; }
+  .legend b { color: var(--accent); margin-right: 0.4em; }
+
+  /* Slide 4 */
+  .qrbox { flex: none; width: calc(var(--u) * 30); text-align: center; }
+  .qr { width: 100%; height: auto; border-radius: calc(var(--u) * 1); display: block; }
+  .qrbox p { font-size: max(24px, calc(var(--u) * 3)); margin-top: calc(var(--u) * 1.2); font-weight: 700; color: var(--accent); }
+
+  /* Slide 5 flow */
+  .flow { display: flex; align-items: center; gap: calc(var(--u) * 1.4); margin-top: calc(var(--u) * 1.2); }
+  .step { flex: 1 1 0; text-align: center; border: 3px solid var(--line); background: var(--bg2); border-radius: calc(var(--u) * 1.2);
+          padding: calc(var(--u) * 1.4) calc(var(--u) * 1); font-weight: 700; font-size: max(24px, calc(var(--u) * 2.9)); }
+  .step .tag { display: block; margin: calc(var(--u) * 0.5) auto 0; width: fit-content; font-size: max(24px, calc(var(--u) * 1.9)); }
+  .arrow { color: var(--accent); font-size: max(32px, calc(var(--u) * 4)); font-weight: 700; }
+
+  /* Slide 6 */
+  .pills { display: flex; gap: calc(var(--u) * 2); margin-top: calc(var(--u) * 2); flex-wrap: wrap; }
+  .pill { border: 3px solid var(--accent); border-radius: calc(var(--u) * 1.2); padding: calc(var(--u) * 1) calc(var(--u) * 2.4); font-weight: 700; font-size: max(24px, calc(var(--u) * 3)); }
+  .pill small { display: block; font-size: max(24px, calc(var(--u) * 1.9)); color: var(--mute); font-weight: 400; }
+
+  /* Slide 7 dots */
+  .field { flex: none; width: calc(var(--u) * 36); }
+  .field svg { width: 100%; height: auto; display: block; }
+  .big { font-family: Georgia, serif; font-size: max(48px, calc(var(--u) * 8)); font-weight: 700; color: var(--accent); line-height: 1; }
+
+  /* Slide 8 */
+  .stat { flex: none; text-align: center; width: calc(var(--u) * 32); }
+  .stat .num { font-family: Georgia, serif; font-size: max(96px, calc(var(--u) * 22)); line-height: 0.95; color: var(--accent); font-weight: 700; }
+  .stat .cap { font-size: max(24px, calc(var(--u) * 2.5)); color: var(--ink); margin-top: calc(var(--u) * 1); }
+
+  /* Slide 9 */
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--u) * 4); }
+  .card { background: var(--bg2); border: 3px solid var(--line); border-radius: calc(var(--u) * 1.4); padding: calc(var(--u) * 2.4) calc(var(--u) * 3); }
+  .card h3 { font-size: max(28px, calc(var(--u) * 3.4)); color: var(--accent); margin-bottom: calc(var(--u) * 1.6); font-family: Georgia, serif; }
+  .card li { font-size: max(24px, calc(var(--u) * 2.8)); }
+  .card .when { color: var(--mute); display: block; font-size: max(24px, calc(var(--u) * 2.2)); margin-top: calc(var(--u) * 0.2); }
+
+  /* Slide 10 */
+  .chips { display: flex; flex-wrap: nowrap; gap: calc(var(--u) * 1); margin-top: calc(var(--u) * 1); }
+  .chip { border: 3px solid var(--live); color: var(--live); border-radius: 999px; padding: calc(var(--u) * 0.4) calc(var(--u) * 1.4); font-size: max(24px, calc(var(--u) * 1.95)); font-weight: 700; white-space: nowrap; }
+  .mlabel { color: var(--mute); font-size: max(24px, calc(var(--u) * 2.2)); margin-top: calc(var(--u) * 1.4); }
+
+  /* chrome */
+  #bar { position: fixed; top: 0; left: 0; height: 6px; background: var(--accent); width: 0; z-index: 10; transition: width .25s; }
+  #count { position: fixed; right: calc(var(--u) * 2); bottom: calc(var(--u) * 1.4); font-size: max(18px, calc(var(--u) * 1.4)); color: var(--mute); z-index: 10; }
+  #notes {
+    position: fixed; left: 0; right: 0; bottom: 0; max-height: 46vh; overflow: auto; z-index: 20; display: none;
+    background: #fffbe9; color: #1d1d1d; padding: 18px 28px 22px; font-size: 20px; line-height: 1.45; border-top: 6px solid var(--accent);
+  }
+  #notes.on { display: block; }
+  #notes h4 { font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; color: #7a3b00; margin-bottom: 8px; }
+  #help {
+    position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.82);
+    font-size: 26px; line-height: 1.7;
+  }
+  #help.on { display: flex; }
+  #help div { background: var(--bg2); border: 3px solid var(--accent); border-radius: 16px; padding: 28px 40px; max-width: 760px; }
+  #help kbd { background: #263044; border-radius: 6px; padding: 1px 10px; font-family: inherit; border: 1px solid var(--line); }
+  .notes-src { display: none; }
+
+  @media print {
+    html { scroll-snap-type: none; }
+    @page { size: 297mm 167mm; margin: 0; }
+    .slide { page-break-after: always; break-after: page; height: 167mm; }
+    #bar, #count, #notes, #help { display: none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="bar"></div><div id="count"></div>
+<div id="notes" aria-live="polite"></div>
+<div id="help"><div>
+  <b>Keys</b><br>
+  <kbd>→</kbd> <kbd>Space</kbd> <kbd>PgDn</kbd> next &nbsp;·&nbsp; <kbd>←</kbd> <kbd>PgUp</kbd> back<br>
+  <kbd>F</kbd> full screen &nbsp;·&nbsp; <kbd>N</kbd> speaker notes &nbsp;·&nbsp; <kbd>?</kbd> this help<br>
+  <kbd>Home</kbd> first &nbsp;·&nbsp; <kbd>End</kbd> last
+</div></div>
+
+<!-- 1 -->
+<section class="slide s1" id="s1" data-title="Title">
+  <div class="orbit" aria-hidden="true">
+    <svg viewBox="0 0 200 200" fill="none" stroke="#f2a33a" stroke-width="2.4">
+      <circle cx="100" cy="100" r="14" fill="#f2a33a" stroke="none"/>
+      <ellipse cx="100" cy="100" rx="88" ry="34" transform="rotate(0 100 100)"/>
+      <ellipse cx="100" cy="100" rx="88" ry="34" transform="rotate(60 100 100)"/>
+      <ellipse cx="100" cy="100" rx="88" ry="34" transform="rotate(120 100 100)"/>
+      <circle cx="188" cy="100" r="6" fill="#f5f2ea" stroke="none"/>
+      <circle cx="56" cy="176" r="6" fill="#f5f2ea" stroke="none"/>
+      <circle cx="56" cy="24" r="6" fill="#f5f2ea" stroke="none"/>
+    </svg>
+  </div>
+  <h1>Qum<span>anity</span></h1>
+  <p class="sub">Governance that starts where people actually live.</p>
+  <div class="footer">Rohit Mudgal · founder@qumanity.in · qumanity.in</div>
+  <template class="notes-src">
+    <p><b>Open (10 sec).</b> Hook: "A villager in India files a complaint and never learns where it went. That is not a people problem. It is a plumbing problem." Then: "Qumanity gives every person one permanent identity and every village a public board where good ideas rise, with a visible trail."</p>
+    <p>Qumanity = Quantum + Humanity. It is a philosophy of connectedness, not quantum technology. Do not claim quantum computing.</p>
+  </template>
+</section>
+
+<!-- 2 -->
+<section class="slide" id="s2" data-title="Problem">
+  <h2>640,000 villages. <em>No shared record.</em></h2>
+  <ul>
+    <li>Citizens cannot see where their complaint went.</li>
+    <li>Identity and participation are scattered across disconnected portals.</li>
+    <li>Civic effort earns no lasting recognition.</li>
+  </ul>
+  <div class="broken" aria-hidden="true">
+    <div class="screen">Complaint filed</div><span class="snap">✕</span>
+    <div class="screen">Portal ?</div><span class="snap">✕</span>
+    <div class="screen blank">Status unknown</div>
+  </div>
+  <template class="notes-src">
+    <p>India has roughly 640,000 villages (Census 2011 figure; say "roughly").</p>
+    <p>A citizen raises an issue and cannot see where it went, who received it, or what happened next. Identity, records and participation sit in separate portals that do not talk to each other. Trust fails because nothing leaves a trail. And civic effort, like settling a dispute or cleaning a pond, earns no lasting, visible recognition.</p>
+  </template>
+</section>
+
+<!-- 3 -->
+<section class="slide dense" id="s3" data-title="Solution">
+  <h2>One identity. One public record. <em>Eight levels.</em></h2>
+  <div class="row">
+    <div class="grow">
+      <ul>
+        <li>Permanent Private ID (no email required).</li>
+        <li>Boards at every level, Village to Earth.</li>
+        <li>Posts rise through member votes; the path stays visible.</li>
+      </ul>
+      <ol class="legend" style="list-style:none">
+        <li><b>1</b>Village</li><li><b>2</b>Tehsil</li><li><b>3</b>District</li><li><b>4</b>State</li>
+        <li><b>5</b>Zone</li><li><b>6</b>Country</li><li><b>7</b>Continent</li><li><b>8</b>Earth</li>
+      </ol>
+    </div>
+    <div class="rings" aria-hidden="true" id="rings"></div>
+  </div>
+  <template class="notes-src">
+    <p>Every member gets one permanent ID: a 9-digit Private ID and a PIN. No email needed. Every village, tehsil, district, state, zone, country, continent and Earth has its own public board.</p>
+    <p>Posts rise level by level through member votes, and the path they took stays visible. Reputation (Karma) comes from civic action. It cannot be bought and is never convertible to Qoins.</p>
+  </template>
+</section>
+
+<!-- 4 -->
+<section class="slide" id="s4" data-title="Live demo">
+  <h2>It's live. <em>Watch it work.</em></h2>
+  <div class="row">
+    <div class="grow">
+      <ul>
+        <li>Register with birth + present location.</li>
+        <li>Post to your village board; watch votes move it up.</li>
+        <li>Family Tree, Qmail, live stats, <span class="nw">Q-Map</span>.</li>
+      </ul>
+    </div>
+    <div class="qrbox"><svg class="qr" viewBox="0 0 37 37" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="QR code linking to qumanity.in" shape-rendering="crispEdges"><rect width="37" height="37" fill="#ffffff"/><g fill="#000000"><rect x="4" y="4" width="7" height="1"/><rect x="14" y="4" width="1" height="1"/><rect x="16" y="4" width="1" height="1"/><rect x="19" y="4" width="2" height="1"/><rect x="22" y="4" width="1" height="1"/><rect x="24" y="4" width="1" height="1"/><rect x="26" y="4" width="7" height="1"/><rect x="4" y="5" width="1" height="1"/><rect x="10" y="5" width="1" height="1"/><rect x="13" y="5" width="1" height="1"/><rect x="16" y="5" width="1" height="1"/><rect x="22" y="5" width="2" height="1"/><rect x="26" y="5" width="1" height="1"/><rect x="32" y="5" width="1" height="1"/><rect x="4" y="6" width="1" height="1"/><rect x="6" y="6" width="3" height="1"/><rect x="10" y="6" width="1" height="1"/><rect x="12" y="6" width="1" height="1"/><rect x="18" y="6" width="1" height="1"/><rect x="20" y="6" width="1" height="1"/><rect x="23" y="6" width="2" height="1"/><rect x="26" y="6" width="1" height="1"/><rect x="28" y="6" width="3" height="1"/><rect x="32" y="6" width="1" height="1"/><rect x="4" y="7" width="1" height="1"/><rect x="6" y="7" width="3" height="1"/><rect x="10" y="7" width="1" height="1"/><rect x="12" y="7" width="2" height="1"/><rect x="15" y="7" width="2" height="1"/><rect x="20" y="7" width="1" height="1"/><rect x="22" y="7" width="3" height="1"/><rect x="26" y="7" width="1" height="1"/><rect x="28" y="7" width="3" height="1"/><rect x="32" y="7" width="1" height="1"/><rect x="4" y="8" width="1" height="1"/><rect x="6" y="8" width="3" height="1"/><rect x="10" y="8" width="1" height="1"/><rect x="12" y="8" width="3" height="1"/><rect x="16" y="8" width="4" height="1"/><rect x="21" y="8" width="1" height="1"/><rect x="26" y="8" width="1" height="1"/><rect x="28" y="8" width="3" height="1"/><rect x="32" y="8" width="1" height="1"/><rect x="4" y="9" width="1" height="1"/><rect x="10" y="9" width="1" height="1"/><rect x="12" y="9" width="1" height="1"/><rect x="15" y="9" width="1" height="1"/><rect x="17" y="9" width="5" height="1"/><rect x="24" y="9" width="1" height="1"/><rect x="26" y="9" width="1" height="1"/><rect x="32" y="9" width="1" height="1"/><rect x="4" y="10" width="7" height="1"/><rect x="12" y="10" width="1" height="1"/><rect x="14" y="10" width="1" height="1"/><rect x="16" y="10" width="1" height="1"/><rect x="18" y="10" width="1" height="1"/><rect x="20" y="10" width="1" height="1"/><rect x="22" y="10" width="1" height="1"/><rect x="24" y="10" width="1" height="1"/><rect x="26" y="10" width="7" height="1"/><rect x="12" y="11" width="2" height="1"/><rect x="15" y="11" width="1" height="1"/><rect x="17" y="11" width="1" height="1"/><rect x="19" y="11" width="1" height="1"/><rect x="21" y="11" width="2" height="1"/><rect x="4" y="12" width="1" height="1"/><rect x="6" y="12" width="5" height="1"/><rect x="14" y="12" width="2" height="1"/><rect x="18" y="12" width="2" height="1"/><rect x="26" y="12" width="5" height="1"/><rect x="4" y="13" width="2" height="1"/><rect x="7" y="13" width="1" height="1"/><rect x="9" y="13" width="1" height="1"/><rect x="11" y="13" width="1" height="1"/><rect x="13" y="13" width="1" height="1"/><rect x="15" y="13" width="1" height="1"/><rect x="19" y="13" width="2" height="1"/><rect x="22" y="13" width="1" height="1"/><rect x="24" y="13" width="5" height="1"/><rect x="32" y="13" width="1" height="1"/><rect x="6" y="14" width="1" height="1"/><rect x="9" y="14" width="2" height="1"/><rect x="12" y="14" width="1" height="1"/><rect x="22" y="14" width="2" height="1"/><rect x="26" y="14" width="3" height="1"/><rect x="4" y="15" width="1" height="1"/><rect x="8" y="15" width="2" height="1"/><rect x="14" y="15" width="2" height="1"/><rect x="18" y="15" width="1" height="1"/><rect x="20" y="15" width="1" height="1"/><rect x="23" y="15" width="4" height="1"/><rect x="28" y="15" width="2" height="1"/><rect x="31" y="15" width="1" height="1"/><rect x="5" y="16" width="3" height="1"/><rect x="9" y="16" width="3" height="1"/><rect x="13" y="16" width="2" height="1"/><rect x="20" y="16" width="1" height="1"/><rect x="22" y="16" width="2" height="1"/><rect x="29" y="16" width="2" height="1"/><rect x="7" y="17" width="1" height="1"/><rect x="13" y="17" width="1" height="1"/><rect x="15" y="17" width="1" height="1"/><rect x="17" y="17" width="3" height="1"/><rect x="21" y="17" width="1" height="1"/><rect x="25" y="17" width="4" height="1"/><rect x="32" y="17" width="1" height="1"/><rect x="5" y="18" width="3" height="1"/><rect x="10" y="18" width="1" height="1"/><rect x="13" y="18" width="3" height="1"/><rect x="17" y="18" width="5" height="1"/><rect x="25" y="18" width="6" height="1"/><rect x="4" y="19" width="2" height="1"/><rect x="8" y="19" width="2" height="1"/><rect x="11" y="19" width="2" height="1"/><rect x="15" y="19" width="1" height="1"/><rect x="17" y="19" width="1" height="1"/><rect x="19" y="19" width="1" height="1"/><rect x="21" y="19" width="4" height="1"/><rect x="27" y="19" width="1" height="1"/><rect x="31" y="19" width="1" height="1"/><rect x="4" y="20" width="3" height="1"/><rect x="8" y="20" width="5" height="1"/><rect x="14" y="20" width="1" height="1"/><rect x="18" y="20" width="2" height="1"/><rect x="23" y="20" width="1" height="1"/><rect x="29" y="20" width="2" height="1"/><rect x="4" y="21" width="2" height="1"/><rect x="9" y="21" width="1" height="1"/><rect x="12" y="21" width="3" height="1"/><rect x="19" y="21" width="2" height="1"/><rect x="22" y="21" width="3" height="1"/><rect x="26" y="21" width="3" height="1"/><rect x="30" y="21" width="1" height="1"/><rect x="32" y="21" width="1" height="1"/><rect x="4" y="22" width="1" height="1"/><rect x="6" y="22" width="2" height="1"/><rect x="10" y="22" width="2" height="1"/><rect x="13" y="22" width="4" height="1"/><rect x="22" y="22" width="1" height="1"/><rect x="24" y="22" width="1" height="1"/><rect x="27" y="22" width="2" height="1"/><rect x="30" y="22" width="1" height="1"/><rect x="4" y="23" width="1" height="1"/><rect x="8" y="23" width="1" height="1"/><rect x="13" y="23" width="2" height="1"/><rect x="18" y="23" width="1" height="1"/><rect x="20" y="23" width="1" height="1"/><rect x="25" y="23" width="1" height="1"/><rect x="27" y="23" width="2" height="1"/><rect x="31" y="23" width="1" height="1"/><rect x="4" y="24" width="1" height="1"/><rect x="6" y="24" width="5" height="1"/><rect x="15" y="24" width="2" height="1"/><rect x="20" y="24" width="1" height="1"/><rect x="22" y="24" width="7" height="1"/><rect x="30" y="24" width="3" height="1"/><rect x="12" y="25" width="3" height="1"/><rect x="17" y="25" width="3" height="1"/><rect x="21" y="25" width="1" height="1"/><rect x="24" y="25" width="1" height="1"/><rect x="28" y="25" width="5" height="1"/><rect x="4" y="26" width="7" height="1"/><rect x="17" y="26" width="5" height="1"/><rect x="23" y="26" width="2" height="1"/><rect x="26" y="26" width="1" height="1"/><rect x="28" y="26" width="3" height="1"/><rect x="4" y="27" width="1" height="1"/><rect x="10" y="27" width="1" height="1"/><rect x="12" y="27" width="1" height="1"/><rect x="14" y="27" width="1" height="1"/><rect x="17" y="27" width="1" height="1"/><rect x="19" y="27" width="1" height="1"/><rect x="21" y="27" width="4" height="1"/><rect x="28" y="27" width="1" height="1"/><rect x="32" y="27" width="1" height="1"/><rect x="4" y="28" width="1" height="1"/><rect x="6" y="28" width="3" height="1"/><rect x="10" y="28" width="1" height="1"/><rect x="12" y="28" width="2" height="1"/><rect x="18" y="28" width="2" height="1"/><rect x="24" y="28" width="5" height="1"/><rect x="30" y="28" width="2" height="1"/><rect x="4" y="29" width="1" height="1"/><rect x="6" y="29" width="3" height="1"/><rect x="10" y="29" width="1" height="1"/><rect x="12" y="29" width="2" height="1"/><rect x="15" y="29" width="1" height="1"/><rect x="19" y="29" width="2" height="1"/><rect x="22" y="29" width="1" height="1"/><rect x="24" y="29" width="1" height="1"/><rect x="27" y="29" width="1" height="1"/><rect x="29" y="29" width="2" height="1"/><rect x="4" y="30" width="1" height="1"/><rect x="6" y="30" width="3" height="1"/><rect x="10" y="30" width="1" height="1"/><rect x="12" y="30" width="1" height="1"/><rect x="14" y="30" width="2" height="1"/><rect x="17" y="30" width="2" height="1"/><rect x="22" y="30" width="3" height="1"/><rect x="26" y="30" width="6" height="1"/><rect x="4" y="31" width="1" height="1"/><rect x="10" y="31" width="1" height="1"/><rect x="13" y="31" width="3" height="1"/><rect x="17" y="31" width="1" height="1"/><rect x="20" y="31" width="1" height="1"/><rect x="24" y="31" width="6" height="1"/><rect x="31" y="31" width="1" height="1"/><rect x="4" y="32" width="7" height="1"/><rect x="12" y="32" width="1" height="1"/><rect x="14" y="32" width="2" height="1"/><rect x="18" y="32" width="1" height="1"/><rect x="20" y="32" width="1" height="1"/><rect x="22" y="32" width="1" height="1"/><rect x="28" y="32" width="3" height="1"/></g></svg><p>qumanity.in</p></div>
+  </div>
+  <template class="notes-src">
+    <p><b>Run the demo live on your own device.</b> Register in minutes, post to a village board, show votes. Open the Family Tree, Qmail, the live member statistics and the Q-Map (North West Delhi pilot dataset, not all of India).</p>
+    <p>Invite the audience to scan the QR code and try it on their phones. Have a recorded backup of the demo in case the venue Wi-Fi fails.</p>
+  </template>
+</section>
+
+<!-- 5 -->
+<section class="slide tight" id="s5" data-title="How it works">
+  <h2>Trust is built into <em>the structure.</em></h2>
+  <ul>
+    <li><span class="tag live">LIVE</span>Nested governance: 8 linked levels.</li>
+    <li><span class="tag live">LIVE</span>Collective Boards: post, vote, archive.</li>
+    <li><span class="tag live">LIVE</span>Karma: civic score, separate from money.</li>
+    <li><span class="tag pilot">PILOT</span>Zodiac-cycle elections: one village, one man, one woman.</li>
+  </ul>
+  <div class="flow" aria-hidden="true">
+    <div class="step">Post</div><span class="arrow">→</span>
+    <div class="step">Vote</div><span class="arrow">→</span>
+    <div class="step">Escalate</div><span class="arrow">→</span>
+    <div class="step">Council<span class="tag pilot">PILOT</span></div>
+  </div>
+  <template class="notes-src">
+    <p>Nested governance and Collective Boards are live: posts that earn support escalate level by level; posts that do not are archived. Karma is a civic-contribution score. It is never money and never converted to Qoins.</p>
+    <p><b>Be exact about the elections:</b> the council election is a pilot in one village, Rohini Sector 24, Delhi. One council seated. The pilot uses simulated demo voters to test the election mechanics. Councils above the village, and the other roles (Mentor, Manager, Agent), are design goals, not built.</p>
+  </template>
+</section>
+
+<!-- 6 -->
+<section class="slide" id="s6" data-title="Open by design">
+  <h2>A public good, <em>not a product.</em></h2>
+  <ul>
+    <li>Open-source (AGPL-3.0).</li>
+    <li>Submitted to the Digital Public Goods Registry.</li>
+    <li>No ads. No member charges. No data selling.</li>
+  </ul>
+  <div class="pills" aria-hidden="true">
+    <div class="pill">GitHub<small>AGPL-3.0 source</small></div>
+    <div class="pill">SSRN<small>White paper</small></div>
+    <div class="pill">DPG Standard<small>Built for the standard</small></div>
+  </div>
+  <template class="notes-src">
+    <p>Open-source under the GNU Affero GPL v3. A white paper is on SSRN; an updated version is in review. Submitted to the Digital Public Goods Registry.</p>
+    <p><b>Do not say "certified" or "a Digital Public Good".</b> The correct wording is "built for the Digital Public Goods Standard". The project has not received Registry acceptance.</p>
+    <p>Money: members are never charged, no ads, no data sales, and Qoins are earned, not sold. Revenue model on slide 9.</p>
+  </template>
+</section>
+
+<!-- 7 -->
+<section class="slide" id="s7" data-title="Market and impact">
+  <h2>The map is built. <em>The foundation is running.</em></h2>
+  <div class="row">
+    <div class="grow">
+      <ul>
+        <li><span class="big" style="font-size:inherit"><b style="color:var(--accent)">635,693</b></span> villages mapped across India.</li>
+        <li>10 countries of the Indian <span class="nw">sub-continent</span>.</li>
+        <li>~2.5 lakh gram panchayats: natural partners.</li>
+      </ul>
+    </div>
+    <div class="field" aria-hidden="true" id="field"></div>
+  </div>
+  <template class="notes-src">
+    <p>635,693 villages are in the location database across India, with zone, state, district, tehsil and village structure. It extends to 10 countries of the Indian sub-continent using each country's real administrative tiers.</p>
+    <p>Gram panchayats are the natural institutional partners; the figure of about 2.5 lakh is approximate, so say "roughly". Verify against the Ministry of Panchayati Raj before quoting a precise number. Anyone can adopt Qumanity at no licence cost.</p>
+    <p>The dot field on the right is decorative, not a map.</p>
+  </template>
+</section>
+
+<!-- 8 -->
+<section class="slide" id="s8" data-title="Traction">
+  <h2>Early, honest <em>and real.</em></h2>
+  <div class="row">
+    <div class="stat"><div class="num">27</div><div class="cap">real registered members<br>(demo accounts excluded)</div></div>
+    <div class="grow">
+      <ul>
+        <li>Website live.</li>
+        <li>Mobile app in development.</li>
+        <li>Council pilot in Rohini Sector 24, Delhi.</li>
+        <li>White paper published; DPG submission filed.</li>
+      </ul>
+    </div>
+  </div>
+  <template class="notes-src">
+    <p><b>27 real registered members.</b> Real people, no padding. Do not round up. Verify the live number on the production Admin Panel the morning of the event.</p>
+    <p>"Only 27?" Answer: "Yes. We have not chased numbers before the core is solid. This round is about three villages with real councils and a way to include people without smartphones."</p>
+    <p><b>Pilot honesty:</b> the Delhi pilot uses simulated demo voters to test the election mechanics. Real-resident elections are what the two new pilot villages are for.</p>
+    <p>White paper: say "an updated version is in review." If asked, send the corrected PDF directly.</p>
+  </template>
+</section>
+
+<!-- 9 -->
+<section class="slide" id="s9" data-title="Roadmap and model">
+  <h2>From one village <em>to many.</em></h2>
+  <div class="cols">
+    <div class="card">
+      <h3>Next 6 months</h3>
+      <ul>
+        <li>Mobile app released</li>
+        <li>Kiosk prototype</li>
+        <li>2 new pilot villages</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Revenue</h3>
+      <ul>
+        <li>Grants and CSR<span class="when">Today</span></li>
+        <li>Paid deployment<span class="when">Year 2–3</span></li>
+        <li>Training<span class="when">Year 3+</span></li>
+      </ul>
+    </div>
+  </div>
+  <template class="notes-src">
+    <p><b>Roadmap.</b> Finish the mobile app, build a shared village kiosk prototype (so one terminal serves a whole community), and launch two new pilot villages with local coordinators. Kiosks, offline mode and biometrics are the roadmap, <b>not built yet</b>.</p>
+    <p><b>Revenue, three layers.</b> 1) Grants and CSR funding today. 2) Paid deployment and support for governments and panchayats, Year 2–3. 3) Training and certification for elected councils, Year 3+. The code stays free. Members are never charged, we do not sell data, and we do not sell Qoins.</p>
+  </template>
+</section>
+
+<!-- 10 -->
+<section class="slide dense" id="s10" data-title="The ask">
+  <h2>₹15 lakhs over 6 months to take <em>one village to three.</em></h2>
+  <ul>
+    <li><b style="color:var(--accent)">₹8 lakhs</b> — engineer for mobile app + kiosk</li>
+    <li><b style="color:var(--accent)">₹4 lakhs</b> — two pilot villages</li>
+    <li><b style="color:var(--accent)">₹2 lakhs</b> — LLP, copyright, trademark</li>
+    <li><b style="color:var(--accent)">₹1 lakh</b> — buffer</li>
+  </ul>
+  <div class="mlabel">Milestones at six months</div>
+  <div class="chips">
+    <span class="chip">Mobile app released</span><span class="chip">Kiosk demo</span>
+    <span class="chip">3 villages piloting</span><span class="chip">Legal entity formed</span>
+  </div>
+  <div class="footer">Rohit Mudgal · founder@qumanity.in · qumanity.in</div>
+  <template class="notes-src">
+    <p>The ask: ₹15 lakhs over 6 months. ₹8 lakhs funds a part-time engineer to finish the mobile app and build the kiosk prototype. ₹4 lakhs covers two new pilot villages: travel, local coordinators, training. ₹2 lakhs is the legal foundation: LLP registration, copyright assignment and trademark. ₹1 lakh is buffer.</p>
+    <p>Also: "The first step of this round is to stop being solo." Open-source means others can contribute. Close by inviting partners, pilot villages and engineers to talk after the session. Leave the one-pager.</p>
+  </template>
+</section>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var bar = document.getElementById('bar'), count = document.getElementById('count');
+  var notes = document.getElementById('notes'), help = document.getElementById('help');
+  var cur = 0, notesOn = false;
+
+  // Concentric rings (8 levels, Village innermost)
+  var rings = document.getElementById('rings');
+  if (rings) {
+    for (var i = 8; i >= 1; i--) {
+      var d = document.createElement('div');
+      d.className = 'ring';
+      var size = (i / 8) * 100;
+      d.style.width = size + '%'; d.style.height = size + '%';
+      d.style.left = ((100 - size) / 2) + '%'; d.style.top = ((100 - size) / 2) + '%';
+      d.style.background = 'rgba(242,163,58,' + (0.05 + (9 - i) * 0.025) + ')';
+      var b = document.createElement('b'); b.textContent = i;
+      d.appendChild(b); rings.appendChild(d);
+    }
+  }
+
+  // Dot field (decorative; not a map)
+  var field = document.getElementById('field');
+  if (field) {
+    var seed = 7, rnd = function () { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    var cols = 40, rows = 26, s = '<svg viewBox="0 0 ' + cols * 10 + ' ' + rows * 10 + '">';
+    for (var r = 0; r < rows; r++) for (var c = 0; c < cols; c++) {
+      var lit = rnd() < 0.22;
+      s += '<circle cx="' + (c * 10 + 5) + '" cy="' + (r * 10 + 5) + '" r="' + (lit ? 3.2 : 1.6) + '" fill="' + (lit ? '#f2a33a' : '#3a4558') + '"/>';
+    }
+    field.innerHTML = s + '</svg>';
+  }
+
+  function show(i) {
+    cur = Math.max(0, Math.min(slides.length - 1, i));
+    slides[cur].scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function update() {
+    var y = window.scrollY + window.innerHeight / 2, idx = 0;
+    for (var i = 0; i < slides.length; i++) if (slides[i].offsetTop <= y) idx = i;
+    cur = idx;
+    bar.style.width = ((cur + 1) / slides.length * 100) + '%';
+    count.textContent = (cur + 1) + ' / ' + slides.length;
+    var t = slides[cur].querySelector('template.notes-src');
+    notes.innerHTML = '<h4>Speaker notes — slide ' + (cur + 1) + ': ' + slides[cur].dataset.title + '</h4>' + (t ? t.innerHTML : '');
+  }
+  function toggleFull() {
+    if (!document.fullscreenElement) { (document.documentElement.requestFullscreen || function () {}).call(document.documentElement); }
+    else { document.exitFullscreen(); }
+  }
+  window.addEventListener('scroll', update, { passive: true });
+  window.addEventListener('resize', function () { slides[cur].scrollIntoView({ block: 'start' }); update(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var k = e.key;
+    if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'].indexOf(k) > -1) { e.preventDefault(); show(cur + 1); }
+    else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].indexOf(k) > -1) { e.preventDefault(); show(cur - 1); }
+    else if (k === 'Home') { e.preventDefault(); show(0); }
+    else if (k === 'End') { e.preventDefault(); show(slides.length - 1); }
+    else if (k === 'f' || k === 'F') { toggleFull(); }
+    else if (k === 'n' || k === 'N') { notesOn = !notesOn; notes.classList.toggle('on', notesOn); }
+    else if (k === '?' || k === 'h' || k === 'H') { help.classList.toggle('on'); }
+    else if (k === 'Escape') { help.classList.remove('on'); }
+  });
+  update();
+})();
+</script>
+</body>
+</html>
