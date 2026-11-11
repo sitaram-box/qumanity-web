@@ -17,44 +17,44 @@ email to whatever address a visitor typed, not to the one address this deploy's 
 configured), so it gets its own function with its own `to_addr` parameter rather than widening the
 existing one's contract.
 
-No new dependency: sent via Resend's SMTP relay (smtp.resend.com:587, STARTTLS) using the
-standard library's smtplib. 2026-11-10: this module originally used Resend's HTTP API
-(https://api.resend.com/emails) via urllib.request, on the assumption that Railway's outbound SMTP
-was the less reliable path. In production, the opposite turned out to be true: Resend's HTTPS API
-rejected every request from Railway's egress IP with a 403 (an IP-level restriction on the
-Resend side), while the exact same credentials worked immediately over SMTP. Switched to SMTP for
-that reason; still the standard library only, no new dependency. If Resend isn't configured (no
-RESEND_API_KEY or no QM_ADMIN_EMAIL), send_registration_notification() is a silent no-op --
+Sent via SendGrid's HTTPS API (https://api.sendgrid.com/v3/mail/send) using the standard
+library's urllib.request -- no new dependency. 2026-11-11: this is the third transport this
+module has used. It started on Resend's HTTPS API, which Resend itself rejected from Railway's
+egress IP with a 403 (an IP-level restriction on Resend's side). It then moved to Resend's SMTP
+relay, which failed differently: a TimeoutError connecting to port 587, because Railway's own
+network firewall blocks outbound SMTP entirely, regardless of provider. Both failures are real and
+independent, which is why SendGrid's HTTPS API (port 443, the same port every other outbound call
+this app makes already uses) was chosen over a third SMTP attempt. If SendGrid isn't configured
+(no SENDGRID_API_KEY or no QM_ADMIN_EMAIL), send_registration_notification() is a silent no-op --
 registration must never depend on email being set up. If it IS configured but the send fails (bad
-key, Resend outage, timeout), this function raises normally; app.py's api_auth_register is
+key, SendGrid outage, timeout), this function raises normally; app.py's api_auth_register is
 responsible for catching that and logging it without failing the registration request itself.
 """
 from __future__ import annotations
 
 import html
+import json
 import os
-import smtplib
-from email.message import EmailMessage
+import urllib.error
+import urllib.request
 
 REQUEST_TIMEOUT_SECONDS = 10
-SMTP_HOST = "smtp.resend.com"
-SMTP_PORT = 587
-SMTP_USERNAME = "resend"
+SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send"
 LOGIN_URL = "https://qumanity.in/login"
 
 
-def _resend_config() -> dict | None:
-    """None if Resend isn't configured (no RESEND_API_KEY or no QM_ADMIN_EMAIL) -- the caller
+def _email_config() -> dict | None:
+    """None if SendGrid isn't configured (no SENDGRID_API_KEY or no QM_ADMIN_EMAIL) -- the caller
     should treat that as "notifications are off", not an error. QM_ADMIN_EMAIL is the existing env
     var (already in .env.example) for the destination address; reused here rather than inventing
-    a new one.
+    a new one -- it names who receives the notification, independent of which provider sends it.
 
     2026-11-01 (diagnostic hardening): logs WHICH variable is missing (name only, never a value)
-    whenever this returns None, so a silent no-op is distinguishable in Railway logs from "Resend
+    whenever this returns None, so a silent no-op is distinguishable in Railway logs from "sending
     was actually attempted and failed" -- see email_qmail_diagnostic_audit.md."""
-    api_key = os.environ.get("RESEND_API_KEY", "").strip()
+    api_key = os.environ.get("SENDGRID_API_KEY", "").strip()
     if not api_key:
-        print("[email_core] EMAIL_CONFIG_MISSING var=RESEND_API_KEY")
+        print("[email_core] EMAIL_CONFIG_MISSING var=SENDGRID_API_KEY")
         return None
     to_addr = os.environ.get("QM_ADMIN_EMAIL", "").strip()
     if not to_addr:
@@ -62,7 +62,7 @@ def _resend_config() -> dict | None:
         return None
     return {
         "api_key": api_key,
-        "from_addr": os.environ.get("RESEND_FROM_EMAIL", "Qumanity <founder@qumanity.in>").strip(),
+        "from_addr": os.environ.get("SENDGRID_FROM_EMAIL", "founder@qumanity.in").strip(),
         "to_addr": to_addr,
     }
 
@@ -77,48 +77,56 @@ def _mask_addr(addr: str) -> str:
     return addr[0] + "***" + addr[at:]
 
 
-def _log_smtp_error(operation: str, e: "smtplib.SMTPResponseException") -> None:
-    """2026-11-10: makes Resend's own SMTP rejection reason (e.g. 535 "Invalid API Key") visible in
-    Railway logs, the same purpose the old HTTP-error logger served for the HTTPS API -- the single
-    most useful diagnostic fact (WHY Resend rejected the request) must not be discarded. Message is
-    capped and never includes the password (the API key) used to authenticate."""
-    detail = (getattr(e, "smtp_error", b"") or b"")
-    if isinstance(detail, bytes):
-        detail = detail.decode("utf-8", "replace")
-    print(f"[email_core] EMAIL_SEND_SMTP_ERROR operation={operation} status={getattr(e, 'smtp_code', '?')} response={detail[:2000]!r}")
+def _log_sendgrid_http_error(operation: str, e: "urllib.error.HTTPError") -> None:
+    """Makes SendGrid's own JSON error body (e.g. {"errors":[{"message":"The provided
+    authorization grant is invalid"}]}) visible in Railway logs -- the single most useful
+    diagnostic fact (WHY SendGrid rejected the request) must not be discarded. Body is capped and
+    never includes the Authorization header or API key."""
+    try:
+        raw = e.read().decode("utf-8", "replace")
+    except Exception:
+        raw = ""
+    raw = raw[:2000]
+    try:
+        body = json.loads(raw)
+        print(f"[email_core] EMAIL_SEND_HTTP_ERROR operation={operation} status={e.code} response={json.dumps(body)}")
+    except json.JSONDecodeError:
+        print(f"[email_core] EMAIL_SEND_HTTP_ERROR operation={operation} status={e.code} response_text={raw!r}")
 
 
 def _send(to_addr: str, subject: str, html_body: str, operation: str = "unspecified") -> None:
-    """The actual Resend SMTP relay call, shared by send_registration_notification() (to_addr
-    always QM_ADMIN_EMAIL) and send_ticket_reply() (to_addr is whatever a visitor typed as their
+    """The actual SendGrid HTTP call, shared by send_registration_notification() (to_addr always
+    QM_ADMIN_EMAIL) and send_ticket_reply() (to_addr is whatever a visitor typed as their
     guest_contact). Raises on a genuine send failure -- every caller is responsible for deciding
     whether that should break its own request or just get logged, same as
     send_registration_notification() already documents for itself.
 
-    2026-11-10: switched from Resend's HTTPS API to its SMTP relay (see module docstring for why).
-    `operation` is still threaded through every log line so Railway logs can tell which call site
-    failed. Return contract and exception behavior are UNCHANGED from the HTTP-API version -- it
-    still raises exactly when it used to, after logging, so every existing caller's try/except
-    keeps working as before."""
-    api_key = os.environ.get("RESEND_API_KEY", "").strip()
-    from_addr = os.environ.get("RESEND_FROM_EMAIL", "Qumanity <founder@qumanity.in>").strip()
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = from_addr
-    msg["To"] = to_addr
-    msg.set_content(html_body, subtype="html")
+    2026-11-11: switched to SendGrid's HTTPS API (see module docstring for why). `operation` is
+    still threaded through every log line so Railway logs can tell which call site failed. Return
+    contract and exception behavior are UNCHANGED from the earlier transports -- it still raises
+    exactly when it used to, after logging, so every existing caller's try/except keeps working as
+    before."""
+    api_key = os.environ.get("SENDGRID_API_KEY", "").strip()
+    from_addr = os.environ.get("SENDGRID_FROM_EMAIL", "founder@qumanity.in").strip()
+    payload = json.dumps({
+        "personalizations": [{"to": [{"email": to_addr}]}],
+        "from": {"email": from_addr},
+        "subject": subject,
+        "content": [{"type": "text/html", "value": html_body}],
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        SENDGRID_URL, data=payload, method="POST",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+    )
     print(f"[email_core] EMAIL_SEND_ATTEMPT operation={operation} to={_mask_addr(to_addr)}")
     try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=REQUEST_TIMEOUT_SECONDS) as server:
-            server.starttls()
-            server.login(SMTP_USERNAME, api_key)
-            server.send_message(msg)
-        print(f"[email_core] EMAIL_SEND_SUCCESS operation={operation} to={_mask_addr(to_addr)}")
-    except smtplib.SMTPResponseException as e:
-        _log_smtp_error(operation, e)
+        with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT_SECONDS) as resp:
+            print(f"[email_core] EMAIL_SEND_SUCCESS operation={operation} status={resp.status} message_id={resp.headers.get('X-Message-Id')}")
+    except urllib.error.HTTPError as e:
+        _log_sendgrid_http_error(operation, e)
         raise
-    except (smtplib.SMTPException, OSError) as e:
-        print(f"[email_core] EMAIL_SEND_NETWORK_ERROR operation={operation} error_class={type(e).__name__} error={e}")
+    except urllib.error.URLError as e:
+        print(f"[email_core] EMAIL_SEND_NETWORK_ERROR operation={operation} error={e.reason!r}")
         raise
     except Exception as e:
         print(f"[email_core] EMAIL_SEND_UNEXPECTED_ERROR operation={operation} error_class={type(e).__name__} error={e}")
@@ -128,7 +136,7 @@ def _send(to_addr: str, subject: str, html_body: str, operation: str = "unspecif
 def is_email_like(value: str) -> bool:
     """A deliberately loose check -- just enough to decide whether a guest_contact string is
     "shaped like an email" (so a reply attempts to send one) versus a Private ID or anything else
-    (so it doesn't try and silently fail against Resend instead). Never used to validate input at
+    (so it doesn't try and silently fail against SendGrid instead). Never used to validate input at
     submission time -- admin_queries_core.create() stores guest_contact exactly as typed,
     unvalidated, same as every other free-text field in that table."""
     value = (value or "").strip()
@@ -137,12 +145,12 @@ def is_email_like(value: str) -> bool:
 
 def send_ticket_reply(to_addr: str, ticket_id: int, subject: str, reply_message: str) -> bool:
     """Sends an AI Support ticket's guest_contact the Admin's reply. Returns False (does nothing)
-    if Resend isn't configured (RESEND_API_KEY unset) OR to_addr isn't email-shaped (a Private ID
+    if SendGrid isn't configured (SENDGRID_API_KEY unset) OR to_addr isn't email-shaped (a Private ID
     or blank guest_contact has nowhere to send to -- the visitor only ever sees that reply if they
     come back to the ticket lookup, which is the real "channel" for those, not email). Raises on a
     genuine send failure, same contract as send_registration_notification()."""
-    if not os.environ.get("RESEND_API_KEY", "").strip():
-        print("[email_core] EMAIL_SEND_SKIPPED operation=ticket_reply reason=RESEND_API_KEY_missing")
+    if not os.environ.get("SENDGRID_API_KEY", "").strip():
+        print("[email_core] EMAIL_SEND_SKIPPED operation=ticket_reply reason=SENDGRID_API_KEY_missing")
         return False
     if not is_email_like(to_addr):
         print(f"[email_core] EMAIL_SEND_SKIPPED operation=ticket_reply reason=guest_contact_not_email_shaped ticket_id={ticket_id}")
@@ -170,9 +178,9 @@ def mask_private_id(private_id_9digit: str) -> str:
 def send_registration_notification(name: str, location_chain: str, private_id_9digit: str) -> bool:
     """Sends the Admin a notification that `name` registered, with their present-location chain
     (e.g. "Rohini Sector 24, Bawana, Delhi") and a masked Private ID -- never the real one. Returns
-    False (does nothing) if Resend isn't configured. Raises on a genuine send failure; app.py's
+    False (does nothing) if SendGrid isn't configured. Raises on a genuine send failure; app.py's
     registration route catches that so a mail outage can never break registration itself."""
-    config = _resend_config()
+    config = _email_config()
     if config is None:
         return False
 
