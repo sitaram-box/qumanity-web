@@ -310,6 +310,15 @@ def founders_message():
     return render_template("founders_message.html", message=message)
 
 
+@app.route("/app")
+def download_app():
+    """Android APK download link (2026-11-12) -- /app redirects straight to the static file rather
+    than serving it directly, so the usual static-file conventions (caching headers, range requests
+    for a resumed download) apply with no extra code here. Public, no login needed, same as every
+    other download/landing link on the site."""
+    return redirect(url_for("static", filename="downloads/qumanity.apk"))
+
+
 @app.route("/privacy")
 def privacy_policy():
     """Public Privacy Policy page (2026-11-11, DPG Phase 0 Product Truth Audit, finding C33):
