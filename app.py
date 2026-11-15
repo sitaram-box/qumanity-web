@@ -324,6 +324,20 @@ def download_app():
     return redirect(url_for("static", filename="downloads/qumanity.apk"))
 
 
+# Bump this by hand whenever a new APK is released -- there is no build pipeline wiring it to the
+# actual APK file, so it is only ever as current as whoever last edited this line (2026-11-16).
+LATEST_APP_VERSION = "1.0.1"
+
+
+@app.route("/api/app-version")
+def api_app_version():
+    """The Phone App's own update-check call: compares its installed version against
+    LATEST_APP_VERSION and, if it's behind, sends the member to download_url (the same /app route
+    above) to get the current APK. Public, no login needed -- a signed-out user on a stale app
+    install still needs to know an update exists before they can even log in."""
+    return jsonify({"latest_version": LATEST_APP_VERSION, "download_url": "https://qumanity.in/app"})
+
+
 @app.route("/privacy")
 def privacy_policy():
     """Public Privacy Policy page (2026-11-11, DPG Phase 0 Product Truth Audit, finding C33):
