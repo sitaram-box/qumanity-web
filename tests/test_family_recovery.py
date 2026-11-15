@@ -229,6 +229,19 @@ except ValueError as e:
     check("grandpa, a genuine grandparent confirmed by the graph, is correctly REFUSED under Rule 5's nuclear-only tightening (parent/child/sibling/spouse only)",
           str(e) == frc._GENERIC_VERIFICATION_ERROR)
 
+# The inverse direction (2026-11-16, the follow-up `21d4016` itself flagged): a genuine grandCHILD
+# claim must be refused too, not just grandparent -- "grandson"/"granddaughter"/"grandchild" all
+# normalize to the same "grandchild" category (family_recovery_core.py's own relationship-category
+# table), which NUCLEAR_RELATIONSHIPS does not include. Kid1 IS grandpa's real grandchild in this
+# fixture's graph (two hops down through Dad) -- _graph_relation() would genuinely confirm it;
+# Rule 5 refuses it anyway, same as the grandparent direction just above.
+try:
+    frc.verify_relationship(conn, KID1_PRIVATE, KID1_NAME, GRANDPA_NAME, "grandson", requester_private_id=GRANDPA_PRIVATE)
+    check("kid1, a genuine grandchild confirmed by the graph, is correctly REFUSED under Rule 5's nuclear-only tightening (parent/child/sibling/spouse only)", False)
+except ValueError as e:
+    check("kid1, a genuine grandchild confirmed by the graph, is correctly REFUSED under Rule 5's nuclear-only tightening (parent/child/sibling/spouse only)",
+          str(e) == frc._GENERIC_VERIFICATION_ERROR)
+
 result = frc.verify_relationship(conn, DAD_PRIVATE, DAD_NAME, KID2_NAME, "father", requester_private_id=user_row(kid2["user_id"])["private_id_9digit"])
 check("dad verified as kid2's father too (second child, same parent)", result["verified_relationship"] == "parent")
 
