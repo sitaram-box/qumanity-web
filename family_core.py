@@ -988,12 +988,16 @@ def _unclaimed_member_row(conn, node_id: int) -> dict:
     social_core.member_display_row() so the frontend renders both uniformly, just with no
     account behind the name: no user_id, no profile/location (there's no account to carry them),
     always role='member' (an empty node holds no admin rights for anyone to have), you=False
-    (a placeholder can never be the viewer)."""
-    node = conn.execute("SELECT gender FROM family_nodes WHERE id = ?", (node_id,)).fetchone()
+    (a placeholder can never be the viewer). is_deceased (2026-11-16) comes straight off
+    family_nodes -- the same source _person_summary()/_founder_is_deceased() already read for the
+    Family Tree card's own (correctly working) marker; a claimed row never needed this fix since
+    member_display_row() never renders a placeholder at all (see group_members_for())."""
+    node = conn.execute("SELECT gender, is_deceased FROM family_nodes WHERE id = ?", (node_id,)).fetchone()
     return {
         "user_id": None, "node_id": node_id, "name": _node_display_name(conn, node_id),
         "gender": node["gender"] if node else None, "age_group": None, "present_location": None,
         "profile_picture_url": None, "is_admin": False, "role": "member", "you": False, "claimed": False,
+        "is_deceased": bool(node["is_deceased"]) if node else False,
     }
 
 
