@@ -1723,20 +1723,26 @@ def _sync_family_membership(conn, user_id: int) -> None:
       1. FOUNDER units (any unit where this person is husband_node_id/wife_node_id) -> admin
          member. Re-confirms _grant_founder_admin_if_applicable()'s own grant; harmless to repeat.
       2. BIRTH unit (_find_parents_group_for_node() -- the unit where this person is a plain
-         child-member) -> plain member, UNLESS rule 1 found at least one founder unit (they've
-         founded their own marital unit, i.e. they're married), in which case this membership
-         moves to 'left' instead. Marriage_status of a past/dissolved marriage isn't distinguished
-         here -- once you've founded any unit, your birth-unit chat has moved, full stop; reverting
-         that on a later divorce isn't handled and would need a separate pass.
+         child-member) -> plain member, UNLESS this person is a WIFE founder of at least one
+         marital unit (the Daughter Rule, Family Tree cascade rewrite 2026-11-15: she's founded
+         her own marital unit, i.e. she's married OUT), in which case this membership moves to
+         'left' instead. A HUSBAND founder (a married son) is explicitly NOT moved to 'left' here
+         any more -- the Cascade Rule (same rewrite): his entire household is automatically part
+         of his father's unit by default, never opt-in, so his own birth-unit membership stays
+         'approved'. Marriage_status of a past/dissolved marriage isn't distinguished here for
+         either rule -- once a WIFE founder has founded any unit, her birth-unit chat has moved,
+         full stop; reverting that on a later divorce isn't handled and would need a separate pass.
       3. GRANDPARENT units -- the birth unit's OWN husband_parent_group_id/wife_parent_group_id,
-         one generation further up -- same member-or-left rule as #2, for the same reason (a
-         married person has moved out of their whole birth lineage's active chats, not just their
-         parents' own unit).
+         one generation further up -- same member-or-left rule as #2 (including the same
+         wife-founder-only trigger), for the same reason (a married-out daughter has moved out of
+         her whole birth lineage's active chats, not just her parents' own unit; a married son's
+         grandparent-unit membership stays active for the same cascade reason as #2).
       4. IN-LAWS, patrilocal only (2026-10-26 ruling -- matches this schema's existing
          husband/wife-shaped columns and this project's real-world context; not configurable): if
          this person is the WIFE founder of an ACTIVE marital unit, that unit's
          husband_parent_group_id (her father-in-law's unit) -> plain member. Nothing extra for a
-         husband founder -- he's already a member of that same unit from his own birth/activation.
+         husband founder -- he's already a member of that same unit from his own birth/activation,
+         and now (rule 2's fix) continues to be.
     """
     self_node = conn.execute("SELECT id FROM family_nodes WHERE claimed_user_id = ?", (user_id,)).fetchone()
     if not self_node:
@@ -1779,17 +1785,22 @@ def _sync_family_membership(conn, user_id: int) -> None:
                ON CONFLICT(group_id, user_id) DO UPDATE SET status = 'approved', is_admin = 1""",
             (g["id"], user_id, _now()),
         )
-    is_married = bool(founder_groups)
+    # Family Tree cascade rewrite (2026-11-15): the "leaves the birth lineage on marriage" trigger
+    # is now keyed on being a WIFE founder specifically (the Daughter Rule), not merely "founded
+    # any unit" -- a married SON (a husband founder) no longer leaves; he cascades (the Cascade
+    # Rule). Deliberately still marriage_status-agnostic, same as the prior behavior this
+    # replaces -- see the docstring above.
+    is_married_out = any(g["wife_node_id"] == node_id for g in founder_groups)
 
     # Rules 2 & 3: birth unit, then its own two parent (grandparent) units.
     birth_unit_id = _find_parents_group_for_node(conn, node_id)
-    (_ensure_left if is_married else _ensure_member)(birth_unit_id)
+    (_ensure_left if is_married_out else _ensure_member)(birth_unit_id)
     if birth_unit_id:
         birth_unit = conn.execute(
             "SELECT husband_parent_group_id, wife_parent_group_id FROM family_groups WHERE id = ?", (birth_unit_id,)
         ).fetchone()
         for grandparent_group_id in (birth_unit["husband_parent_group_id"], birth_unit["wife_parent_group_id"]):
-            (_ensure_left if is_married else _ensure_member)(grandparent_group_id)
+            (_ensure_left if is_married_out else _ensure_member)(grandparent_group_id)
 
     # Rule 4: patrilocal in-laws -- wife founder of an active unit joins her husband's parents' unit.
     for g in founder_groups:
@@ -2291,6 +2302,80 @@ def _member_count(conn, group_id: int) -> int:
     ).fetchone()[0]
 
 
+def recursive_member_count(conn, group_id: int, _visited: set | None = None) -> int:
+    """Family Tree cascade rewrite (2026-11-15), Rule 4: the TOTAL size of this unit's entire
+    male-line household -- founders + every son's own household, recursively + every unmarried
+    child -- NOT the flat chat-roster count _member_count() above returns (that function, and
+    every existing caller of it, is untouched by this; this is a new, additive, separate concept).
+
+    Deliberately reads only family_groups/family_group_nodes -- never family_group_members (the
+    chat roster) -- so this total can never drift out of sync with who's actually in which chat,
+    and vice versa; the two are unrelated by construction.
+
+    Verified by hand against the founder's own worked example: Pardeep+Neelam (2) + Rohit&Sakshi's
+    own household recursively (Rohit+Sakshi=2, their unmarried daughter Shivanya=1, their
+    unmarried son Shivank=1, total 4) + Mohit&Radha's own household (2) = 8.
+
+    Counts a founder slot regardless of alive/deceased status (Rule 3: "membership does not
+    shrink" when the root dies) -- same precedent as _generate_unit_name()'s own naming, which
+    already combines both founders' codes "regardless of alive/deceased status."
+
+    The recursion is deliberately UNBOUNDED (no generation cap) -- unlike
+    _backfill_parent_group_links()'s own deliberate 2-generation cap (a different function, for a
+    different purpose: discovering missing *_parent_group_id links, not counting people), Rule 1
+    itself is written as "his son's households... recursively," with no stated depth limit. Only a
+    _visited cycle guard bounds this, same pattern as _backfill_parent_group_links()'s own."""
+    _visited = _visited if _visited is not None else set()
+    if group_id in _visited:
+        return 0
+    _visited.add(group_id)
+
+    group = conn.execute("SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (group_id,)).fetchone()
+    if not group:
+        return 0
+
+    count = (1 if group["husband_node_id"] else 0) + (1 if group["wife_node_id"] else 0)
+
+    founder_ids = {group["husband_node_id"], group["wife_node_id"]}
+    child_group_rows = conn.execute(
+        "SELECT id, husband_node_id, wife_node_id, husband_parent_group_id FROM family_groups "
+        "WHERE husband_parent_group_id = ? OR wife_parent_group_id = ?",
+        (group_id, group_id),
+    ).fetchall()
+    # Same married-child exclusion as neighborhood_for_group()'s own unmarried_children filter --
+    # a married child is a founder of their OWN unit now, never double-counted as a plain,
+    # unmarried family_group_nodes entry of THIS unit too.
+    married_child_ids = {r["husband_node_id"] for r in child_group_rows} | {r["wife_node_id"] for r in child_group_rows}
+    for r in conn.execute("SELECT node_id FROM family_group_nodes WHERE group_id = ?", (group_id,)):
+        if r["node_id"] not in founder_ids and r["node_id"] not in married_child_ids:
+            count += 1
+
+    # The entire Daughter Rule (Rule 2/4: "a daughter's married household is NOT counted in her
+    # father's unit") falls out of this one asymmetry: recurse via husband_parent_group_id (a SON's
+    # own unit, raised here) only -- NEVER via wife_parent_group_id (a DAUGHTER's own married unit,
+    # raised here but married OUT). No separate daughter-exclusion check is needed anywhere else.
+    for r in child_group_rows:
+        if r["husband_parent_group_id"] == group_id:
+            count += recursive_member_count(conn, r["id"], _visited)
+
+    return count
+
+
+def _founder_is_deceased(conn, group_id) -> dict:
+    """{"husband": bool, "wife": bool} -- per-founder, live, same _node_is_deceased() source of
+    truth _group_is_dormant() already reads, exposed as its own additive field (Rule 3's "visible
+    indicator" requirement) rather than folded into is_dormant, whose own trigger condition is
+    explicitly unchanged by this rewrite (Phase 1 decision: kept gender-symmetric, both founders
+    dead -- see _group_is_dormant()'s own docstring, untouched)."""
+    row = conn.execute("SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (group_id,)).fetchone()
+    if not row:
+        return {"husband": False, "wife": False}
+    return {
+        "husband": _node_is_deceased(conn, row["husband_node_id"]) if row["husband_node_id"] else False,
+        "wife": _node_is_deceased(conn, row["wife_node_id"]) if row["wife_node_id"] else False,
+    }
+
+
 def _group_brief(conn, group_id, viewer_user_id):
     if not group_id:
         return None
@@ -2303,6 +2388,8 @@ def _group_brief(conn, group_id, viewer_user_id):
         "wife": _person_summary(conn, g["wife_node_id"], viewer_user_id),
         "is_dormant": _group_is_dormant(conn, group_id),
         "members": _member_count(conn, group_id),
+        "recursive_member_count": recursive_member_count(conn, group_id),
+        "founder_is_deceased": _founder_is_deceased(conn, group_id),
     }
 
 
@@ -2355,6 +2442,8 @@ def neighborhood_for_group(conn, viewer_user_id: int, group_id: int):
         "is_dormant": _group_is_dormant(conn, group_id),
         "is_admin": _is_admin_of_group(conn, viewer_user_id, group_id),
         "members": _member_count(conn, group_id),
+        "recursive_member_count": recursive_member_count(conn, group_id),
+        "founder_is_deceased": _founder_is_deceased(conn, group_id),
         "unmarried_children": unmarried_children,
         "parent_groups": parent_groups,
         "child_groups": child_groups,
