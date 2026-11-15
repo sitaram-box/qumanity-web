@@ -1258,6 +1258,13 @@ re-confirmed against the code this session where practical:
   release; re-authentication is an owner action). Never guess or use real member/admin credentials,
   even locally.
 
+**Update (2026-11-16) — superseded by this note, not re-verified above:** local `HEAD` =
+`origin/main` = **`7699cc6f336537cba1141020a20d96146ed31295`** (`7699cc6`), confirmed by
+`git rev-parse HEAD` / `git rev-parse origin/main` matching immediately after the push. Everything
+in this section above is the `a157d7a` release's own record and is left as-is; see §17 below for
+what landed between `a157d7a` and `7699cc6` (Family Tree Cascade, Account Recovery, LBE, the
+synthetic demo route, Q-Cards, and the family-invite/member-list fixes).
+
 ---
 
 ## 15. Next-phase handover instructions for the phone application
@@ -1647,6 +1654,125 @@ retirement hint disclosed. Active-account authentication, registration, and (inc
 email notifications are all confirmed working on the same production deployment. No further
 retired-account work is anticipated; the email-transport history above is recorded for context,
 not as an open item.
+
+---
+
+## 17. Family Tree Cascade, Account Recovery, LBE, the Synthetic Demo, Q-Cards, and Family-Invite/
+    Member-List Fixes — November 2026
+
+Backend work continued on `Qumanity_DPG` after §16's "Website Development Phase: COMPLETE"
+declaration above — not a reopening of that phase, but ongoing Phone App backend support plus
+independent Family Tree correctness work. Nine commits, `a157d7a..7699cc6`, summarized here;
+§14's own git-state record above is left as the `a157d7a` release's own point-in-time snapshot,
+not rewritten.
+
+### Family Tree Cascade (`21d4016` — *family tree cascade, recursive count, and nuclear-only
+recovery*)
+- `family_core.recursive_member_count(conn, group_id)`: the actual "how many people does this
+  unit's cascade reach" figure — founders, sons' households recursively (via
+  `husband_parent_group_id`, the Daughter Rule), and unmarried daughters. This is what the Family
+  Tree screen's unit card shows, and (per §17's own later fixes below) is now also what the
+  Members modal's list length matches.
+- **The gender-blind sync fix**: `_sync_family_membership()` used to auto-leave every married
+  child out of their birth unit regardless of gender. Corrected to the real-world rule — a married
+  **son** stays an active member of his birth unit (patrilocal); a married **daughter** still
+  leaves hers (she joins her husband's).
+- `founder_is_deceased` (`{"husband": bool, "wife": bool}`) added to the unit brief
+  (`_group_brief()`), read live off `family_nodes.is_deceased` per founder — the Family Tree card's
+  own 🕊️ marker source. Dormancy itself (both founders deceased) is unchanged — still
+  gender-symmetric.
+- `family_recovery_core.py` (new, 639 lines) + migration `037_family_recovery.py`: Rule 5 of the
+  account-recovery-by-relationship flow, amended to accept a claimed relationship of parent, child,
+  sibling, or spouse only — **grandparent and grandchild are refused**. Only the grandparent case
+  had a dedicated test in this commit (the commit message says so explicitly); grandchild coverage
+  landed later, as its own task (§17's Task 4 cross-reference: `tests/test_family_recovery.py`).
+
+### LBE (`99106ce` — *add LBE with location search, full-screen boards, bottom dock, and audit
+logging*)
+Location-Based Exploration for the Admin Panel dashboard: a location search box, full-screen board
+views, a bottom dock for switching between open boards, and audit logging of what an admin
+viewed. `app.py` (+213), `static/js/multiview.js` (rewritten, 298 lines touched),
+`static/css/dashboard.css`, `templates/dashboard.html`, plus migration `036_admin_location_views.py`
+(the audit log table). The pre-existing Admin Panel itself (`e4750e4`, council-scoped queue — see
+the module table in §5) predates this handover's own `a157d7a` baseline and was already documented
+there; LBE is additive to it, not a replacement.
+
+### Phase C Account Recovery (`4fef612` — *add account recovery intake and admin panel recovery
+workflow*)
+A member-facing recovery intake flow plus the Admin Panel's own recovery-request workflow to act
+on it: `admin_queries_core.py` extended, `app.py` (+487), migration
+`038_account_recovery_fallback.py`, and `docs/phone_app_api.md` gained its own recovery section
+(the Phone App's contract for this flow). `tests/test_account_recovery_fallback.py` (505 lines, new).
+
+### The Synthetic Demo Route (`cee7356` — *add public synthetic demo at /demo/rohini-sector-24*)
+A public, unauthenticated demo page at `/demo/rohini-sector-24` built entirely from synthetic data
+(`demo_data.py`, new, 213 lines) — no real member data is reachable through it. New template
+(`templates/demo_rohini_sector_24.html`), stylesheet (`static/css/demo.css`), and its own test file
+(`tests/test_demo_rohini_sector_24.py`, 270 lines). Intended for pitch/demo purposes, not a feature
+real members use.
+
+### Q-Card Backend (`15bccc8`, `fbb5546`)
+A physical card carrying a QR-encoded, unguessable token that lets a member sign in without typing
+their 9-digit Private ID — full design reasoning in `docs/qcard_phase1_2026_11_15.md`.
+- **`15bccc8` — scan-to-login, token-hash at rest, enumeration-safe resolve.** Migration
+  `039_q_cards.py` (the `q_cards` table: `token_hash`, `status` ∈ {`pending_payment`, `active`,
+  `revoked`, `replaced`}, payment fields, `delivered_at`, `free_reason`). `q_card_core.resolve_token()`
+  is a single indexed query with an identical code path for a valid and an invalid token — timing
+  safety by construction, not by table size. `GET /api/card/<token>` returns a first name only for
+  a valid active card, an identical generic refusal otherwise. `POST /api/card-login` takes the
+  token plus the member's existing PIN, reusing `verify_user_pin_and_login()` — no second PIN
+  scheme introduced. A replaced card's old token is refused outright (never forwarded to the
+  replacement), so a found lost card can't be used to keep logging in.
+- **`fbb5546` — admin actions, free-eligibility derivation, status-transition enforcement.** Six
+  admin routes under `/api/admin/q-cards/` (mark paid, mark free, mark delivered, revoke, replace,
+  list pending), gated by the global `_is_admin()` Founder/Admin check, not the broader
+  council-scoped panel gate — money and free-grants stay with the Founder. Free eligibility is
+  derived, never admin-supplied, across three categories: the Admin themself, the Admin's own
+  family (reusing the Family Tree cascade above — `family_core.recursive_member_node_ids()`, a new
+  sibling of `recursive_member_count()` returning the actual node-id set instead of a count, so a
+  specific person's membership can be tested), and the pilot village council
+  (`announcements_core.is_council_member()`). Status transitions are enforced at one Python
+  `_set_status()` choke point — there is deliberately no SQL `CHECK` constraint, so this is the
+  only enforcement, present in every writer (no un-revoke, no un-replace, no paid → unpaid).
+
+### Family-Invite and Member-List Fixes (`3cfc20b`, `fd241f9`, `7699cc6`)
+Three related fixes, found during Phone App integration testing against the Family Tree API:
+- **`3cfc20b` — structured, consent-gated `family_relation_invite`.** When the Family Tree wizard
+  matches a name to an existing Qumanity account, `family_core.notify_to_activate()` no longer
+  sends a plain chat message that silently links the match with no approval step. It now queues a
+  structured `people_requests` row (`kind='family_relation_invite'`) carrying `from_user_id`, the
+  matched unit's `group_id`, a `target_node_id` pointing at a **fresh placeholder** (never the
+  matched person's real node), and the slot's relationship label. Nothing claims or links the real
+  node until the matched person explicitly accepts via the existing
+  `/api/people/inbox/<id>/decide` route; declining leaves the placeholder untouched. `social_core`
+  gained `inbox_history()` (`GET /api/people/inbox?include=history`) so an answered request no
+  longer just disappears from the recipient's view.
+- **`fd241f9` — the cascade members list and the 'admin'/'member' role fix.**
+  `family_core.group_members_for()` now walks `recursive_member_node_ids()` instead of the flat
+  `family_group_members` chat roster, so the Members modal's list length always matches
+  `recursive_member_count()` on the same unit (previously a card could read "8 members" while its
+  own Members sheet showed 3). Unclaimed tree placeholders are now included in the list, returned
+  with `claimed: false` and `user_id: null`. The old three-way `'founder'/'admin'/'member'` role
+  label is retired — `role` is now strictly `'admin'` or `'member'`, from
+  `family_core._is_admin_of_group()` for that specific unit, never the raw `is_admin` column or
+  founder-node membership alone. **Confirmed, deliberate trade-off**: a chat member added via the
+  generic "Add Member by Public ID" invite who was never placed in the tree graph (no self-node) no
+  longer appears in this cascade-based list — the Family Tree is the source of truth; they must be
+  linked in the tree to be counted. **Confirmed, deliberate interaction**: a user who created their
+  own parents' unit (common — whoever activates first founds it and gets `create_group()`'s
+  creator-admin grant) correctly shows `role: 'admin'` there too, even though they are not a
+  founder of that unit — `_is_admin_of_group()` is unchanged and is the intended single source of
+  truth for this field.
+- **`7699cc6` — `is_deceased` for unclaimed placeholders.** The one gap the above surfaced:
+  `_unclaimed_member_row()` now also selects and returns `is_deceased` from `family_nodes`, so the
+  Phone App's 🕊️ marker renders for a deceased founder even before anyone has claimed their node —
+  matching what the Family Tree card already showed via `founder_is_deceased` above.
+
+### Regression and release
+Full suite re-run clean after every commit above (most recently 40 test files, 0 failures, after
+`7699cc6`). All nine commits pushed to `origin/main`; see the §14 update note above for the
+confirmed `HEAD`/`origin/main` match (`7699cc6`). Not yet reflected in `docs/MASTER_STATUS.md`,
+which still records the `a157d7a` release as current — due for its own refresh pass.
 
 ---
 
