@@ -757,6 +757,15 @@
       tree.hidden = village;
       Array.prototype.forEach.call(panel.querySelectorAll(".qm-explorer-note"), function (n) { n.hidden = village; });
       if (sgBox && cfg[0] === "bd-public") sgBox.hidden = !village;
+      // "Groups" reads oddly once you're below the village (societies/RWAs are the only real
+      // "groups" below that level) -- Village keeps "Local Areas" (places within the village);
+      // Tehsil and up (Tehsil/District/State/Zone/Country/Continent/Earth) reads "Sub-Groups"
+      // (the places one level down, nested inside this one). Same button/drawer, label only.
+      var groupsLabel = village ? "Local Areas" : "Sub-Groups";
+      var groupsBtnLabel = root.querySelector(".bd-groups-label");
+      if (groupsBtnLabel) groupsBtnLabel.textContent = groupsLabel;
+      var drGroupsLabel = panel.querySelector(".dr-groups-label");
+      if (drGroupsLabel) drGroupsLabel.textContent = groupsLabel;
     }
     applyLevel(root.getAttribute("data-level"));
     if (tabs) tabs.addEventListener("click", function (e) {

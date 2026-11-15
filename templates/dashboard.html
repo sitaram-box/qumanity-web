@@ -397,7 +397,7 @@
     {% macro board(prefix, level) %}
     <section class="bd" id="{{ prefix }}-board" data-level="{{ level }}">
       <header class="bd-head">
-        <button type="button" class="bd-groups" title="Village groups and places"><span aria-hidden="true">☰</span> <span>Groups</span></button>
+        <button type="button" class="bd-groups" title="Village groups and places"><span aria-hidden="true">☰</span> <span class="bd-groups-label">Groups</span></button>
         <div class="bd-headtext"><b class="bd-title">Loading…</b><small class="bd-sub"></small></div>
         <button type="button" class="bd-stats" title="Statistics for this place">📊 <span>Stats</span></button>
         <button type="button" class="bd-qp" title="Quantum Punch council of this group">⚖️ <span>Q-Punch</span></button>
@@ -440,7 +440,7 @@
       </div>
       <div class="dr-backdrop" hidden></div>
       <div class="qm-explorer-col dr">
-        <div class="dr-head"><b>Groups</b><button type="button" class="dr-close" aria-label="Close">×</button></div>
+        <div class="dr-head"><b class="dr-groups-label">Groups</b><button type="button" class="dr-close" aria-label="Close">×</button></div>
         <h4 class="dr-h4" id="global-places-h">Continents</h4>
         <ul class="qm-explorer-tree" id="global-explorer-tree"></ul>
       </div>
@@ -479,7 +479,7 @@
       </div>
       <div class="dr-backdrop" hidden></div>
       <div class="qm-explorer-col dr">
-        <div class="dr-head"><b>Groups</b><button type="button" class="dr-close" aria-label="Close">×</button></div>
+        <div class="dr-head"><b class="dr-groups-label">Groups</b><button type="button" class="dr-close" aria-label="Close">×</button></div>
         <section class="dr-section" id="subgroups-box" hidden>
           <h4>🏘️ Village groups <small>societies · RWAs</small></h4>
           <ul class="sg-list" id="subgroups-list"></ul>
