@@ -51,6 +51,7 @@ import lunar_core
 import logout_review_core
 import announcements_core
 import admin_queries_core
+import q_card_core
 import reports_core
 import board_core
 import karma_core
@@ -435,6 +436,48 @@ PIN_FORMAT_ERROR = (
 )
 
 
+def verify_user_pin_and_login(conn, user, pin: str):
+    """The shared PIN-check/lockout/sign-in core, extracted unchanged from /login's own inline
+    logic (2026-11-15, Q-Card Stage 1) -- so the upcoming card-login route can reuse it instead
+    of a second PIN-check implementation. Every line below is moved verbatim from /login, not
+    rewritten; only the private_id_9digit lookup and the request-format validation that used to
+    precede it stay in /login itself, since the card-login route resolves its own user row a
+    different way (by a card's token_hash, not by private_id_9digit) -- this function starts
+    from an ALREADY-RESOLVED `user` row (id/pin_hash/pin_fails/pin_locked_until columns,
+    is_removed=0 already filtered by the caller) and never looks a user up itself.
+
+    Returns (True, None) on success: pin_fails/pin_locked_until reset, Qmail auto-activated,
+    session["user_id"] set -- exactly what /login always did, in the same order. Returns
+    (False, (body, status_code)) on failure, where `body` is the same plain dict /login's own
+    inline code always built (the caller wraps it in jsonify() itself, same as before) and
+    `status_code` is the same 429 or 401 /login always returned for that case. Does not call
+    conn.commit()/conn.close() any differently than /login's own inline code already did at each
+    point -- commits happen here (unchanged positions), conn.close() stays each caller's own
+    responsibility, exactly as before this extraction."""
+    generic = {"error": "Invalid Private ID or PIN"}, 401
+    now = dt.datetime.now(dt.timezone.utc)
+    if user and user["pin_locked_until"] and dt.datetime.fromisoformat(user["pin_locked_until"]) > now:
+        return False, ({"error": "Too many wrong PINs. Try again in a few minutes."}, 429)
+    if not user or not user["pin_hash"] or not check_password_hash(user["pin_hash"], pin):
+        if user:
+            fails = (user["pin_fails"] or 0) + 1
+            lock = (now + dt.timedelta(minutes=PIN_LOCK_MINUTES)).isoformat() if fails >= PIN_MAX_TRIES else None
+            conn.execute("UPDATE users SET pin_fails = ?, pin_locked_until = ? WHERE id = ?", (0 if lock else fails, lock, user["id"]))
+            conn.commit()
+        return False, generic
+    conn.execute("UPDATE users SET pin_fails = 0, pin_locked_until = NULL WHERE id = ?", (user["id"],))
+    conn.commit()
+    # Hybrid Qmail addressing: a no-op for anyone already activated (manually or automatically);
+    # for an existing member who somehow still has none, this is the other of the two entry
+    # points Part 4 requires (registration being the first) -- never fails the login itself.
+    try:
+        qmail_core.auto_activate(conn, user["id"])
+    except Exception as e:
+        print(f"[qmail] auto-activation on login failed for user_id={user['id']}: {e}")
+    session["user_id"] = user["id"]
+    return True, None
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """Sign in with the 9-digit Private ID and a 5-digit PIN. Five wrong PINs lock that ID for 15 minutes."""
@@ -456,29 +499,69 @@ def login():
         "SELECT id, pin_hash, pin_fails, pin_locked_until FROM users WHERE private_id_9digit = ? AND is_removed = 0",
         (code,),
     ).fetchone()
-    now = dt.datetime.now(dt.timezone.utc)
-    if user and user["pin_locked_until"] and dt.datetime.fromisoformat(user["pin_locked_until"]) > now:
+    ok, error = verify_user_pin_and_login(conn, user, pin)
+    if not ok:
         conn.close()
-        return jsonify({"error": "Too many wrong PINs. Try again in a few minutes."}), 429
-    if not user or not user["pin_hash"] or not check_password_hash(user["pin_hash"], pin):
-        if user:
-            fails = (user["pin_fails"] or 0) + 1
-            lock = (now + dt.timedelta(minutes=PIN_LOCK_MINUTES)).isoformat() if fails >= PIN_MAX_TRIES else None
-            conn.execute("UPDATE users SET pin_fails = ?, pin_locked_until = ? WHERE id = ?", (0 if lock else fails, lock, user["id"]))
-            conn.commit()
-        conn.close()
-        return generic
-    conn.execute("UPDATE users SET pin_fails = 0, pin_locked_until = NULL WHERE id = ?", (user["id"],))
-    conn.commit()
-    # Hybrid Qmail addressing: a no-op for anyone already activated (manually or automatically);
-    # for an existing member who somehow still has none, this is the other of the two entry
-    # points Part 4 requires (registration being the first) -- never fails the login itself.
-    try:
-        qmail_core.auto_activate(conn, user["id"])
-    except Exception as e:
-        print(f"[qmail] auto-activation on login failed for user_id={user['id']}: {e}")
+        body, status_code = error
+        return jsonify(body), status_code
     conn.close()
-    session["user_id"] = user["id"]
+    body = {"status": "success", "redirect": url_for("dashboard")}
+    if data.get("client") == "app":
+        body["token"] = _issue_app_token(user["id"], user["pin_hash"])
+    return jsonify(body)
+
+
+# ---- Q-Cards (2026-11-15, Stage 2): scan a card's token, confirm whose card it is, sign in with
+# the PIN. Public, no session, enumeration-safe -- every non-active token (unknown, malformed,
+# revoked, replaced, still pending_payment) produces the IDENTICAL response, never a hint which
+# case it is. See q_card_core.resolve_token()'s own docstring for why a replaced token is refused
+# outright rather than forwarded to its replacement. ----
+
+_QCARD_GENERIC = {"ok": False}, 200
+
+
+@app.route("/api/card/<token>")
+def api_card_resolve(token):
+    """Scan step 1: resolve the token, confirm whose card this is, before asking for a PIN.
+    Deliberately returns only the first name -- enough for the person holding the card to
+    recognize it as theirs, nothing else (not the full name, not any account identifier) -- same
+    200 status and same {"ok": false} body for every failure case, so neither the HTTP status nor
+    the body shape is itself a signal."""
+    conn = get_db()
+    try:
+        card = q_card_core.resolve_token(conn, token)
+    finally:
+        conn.close()
+    if not card:
+        return jsonify(_QCARD_GENERIC[0]), _QCARD_GENERIC[1]
+    first_name = (card["name"] or "").split()[0] if (card["name"] or "").split() else ""
+    return jsonify({"ok": True, "first_name": first_name})
+
+
+@app.route("/api/card-login", methods=["POST"])
+def api_card_login():
+    """Scan step 2: token + PIN together, in one call -- the resolved user_id is never sent to
+    the client in between (see api_card_resolve() above). Reuses verify_user_pin_and_login()
+    unchanged (Stage 1) for the actual PIN check, lockout, and sign-in -- this route's own code
+    is only the token->user resolution; no second PIN check exists anywhere in it."""
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
+    pin = (data.get("pin") or "").strip()
+    conn = get_db()
+    card = q_card_core.resolve_token(conn, token)
+    if not card:
+        conn.close()
+        return jsonify(_QCARD_GENERIC[0]), _QCARD_GENERIC[1]
+    user = conn.execute(
+        "SELECT id, pin_hash, pin_fails, pin_locked_until FROM users WHERE id = ? AND is_removed = 0",
+        (card["user_id"],),
+    ).fetchone()
+    ok, error = verify_user_pin_and_login(conn, user, pin)
+    if not ok:
+        conn.close()
+        body, status_code = error
+        return jsonify(body), status_code
+    conn.close()
     body = {"status": "success", "redirect": url_for("dashboard")}
     if data.get("client") == "app":
         body["token"] = _issue_app_token(user["id"], user["pin_hash"])
