@@ -69,6 +69,8 @@ import timebox_core
 import visibility_core
 import wallet_core
 import zodiac_core
+import demo_data  # /demo/rohini-sector-24 only -- see demo_data.py's own docstring for its one
+                   # approved live-module exception; nothing else in this file touches it.
 from db import get_db
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -360,6 +362,16 @@ def copyright_religious_texts():
     needed, same pattern as /founders-message and /copyright/gita-press. See
     docs/marquee_religious_text_sources.md for the full research trail behind every claim here."""
     return render_template("copyright_religious_texts.html")
+
+
+@app.route("/demo/rohini-sector-24")
+def demo_rohini_sector_24():
+    """Public, read-only, fully synthetic product demo for the Hacker-News "Show HN" launch
+    (2026-11-15 Phase 1/2 brief). No login, no session read, no database access anywhere in this
+    function, and no import here from board_core/family_core/election_core or any other
+    database-touching module -- demo_data.py is the only source of everything this page renders.
+    Same public-route pattern as /copyright/gita-press and /copyright/religious-texts above."""
+    return render_template("demo_rohini_sector_24.html", demo=demo_data.get_demo_context())
 
 
 @app.route("/api/founder-message")

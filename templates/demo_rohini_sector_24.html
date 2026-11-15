@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qumanity — Product Demo</title>
+  <meta name="description" content="A public, read-only, fully synthetic walkthrough of Qumanity's four timelines — Personal, Private, Public and Global — using Rohini Sector 24 as an example location. No real member data." />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/demo.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body class="qmd">
+
+  <!-- Mandatory banner -- verbatim text, visible above every tab. -->
+  <div class="qmd-banner" role="note">{{ demo.banner_text }}</div>
+  <div class="qmd-grouping-note">{{ demo.grouping_note }}</div>
+
+  <header class="qmd-header">
+    <h1>Qumanity — Product Demo</h1>
+    <p>A guided tour of the four timelines, using <strong>{{ demo.village_label }}</strong> as an example.</p>
+  </header>
+
+  <nav class="qmd-tabs" role="tablist" aria-label="Demo timelines">
+    <button type="button" class="qmd-tab is-active" data-tab="personal" role="tab" aria-selected="true">Personal</button>
+    <button type="button" class="qmd-tab" data-tab="private" role="tab" aria-selected="false">Private</button>
+    <button type="button" class="qmd-tab" data-tab="public" role="tab" aria-selected="false">Public</button>
+    <button type="button" class="qmd-tab" data-tab="global" role="tab" aria-selected="false">Global</button>
+  </nav>
+
+  <main class="qmd-main">
+
+    <!-- ============ PERSONAL ============ -->
+    <section class="qmd-panel is-active" id="qmd-panel-personal" role="tabpanel">
+      <h2>Personal Timeline</h2>
+      <p class="qmd-sub">A demo member's profile, family tree, Karma and Qoins.</p>
+
+      <div class="qmd-card">
+        <h3>{{ demo.user.name }}</h3>
+        <div class="qmd-chips">
+          <span class="qmd-chip">{{ demo.user.gender }}</span>
+          <span class="qmd-chip">{{ demo.user.age_years }} · {{ demo.user.age_category }}</span>
+          <span class="qmd-chip">✨ {{ demo.user.sun_sign }} · {{ demo.user.sun_element }}</span>
+          <span class="qmd-chip">🗣️ {{ demo.user.mother_tongue }}</span>
+        </div>
+        <p class="qmd-fine">{{ demo.user.account_id_label }}</p>
+      </div>
+
+      <h3 class="qmd-section-title">Demo Family Tree</h3>
+      <p class="qmd-sub">A small fictional household — three generations, grandparents to children.</p>
+      <div class="qmd-family-tree">
+        <div class="qmd-family-row">
+          {% for m in demo.family_members if m.relationship_to_viewer in ["Grandfather", "Grandmother"] %}
+          <div class="qmd-family-node">{{ m.name }}<small>{{ m.relationship_to_viewer }} · {{ m.age_years }}</small></div>
+          {% endfor %}
+        </div>
+        <div class="qmd-family-row">
+          {% for m in demo.family_members if m.relationship_to_viewer in ["Father", "Mother"] %}
+          <div class="qmd-family-node">{{ m.name }}<small>{{ m.relationship_to_viewer }} · {{ m.age_years }}</small></div>
+          {% endfor %}
+        </div>
+        <div class="qmd-family-row">
+          {% for m in demo.family_members if m.relationship_to_viewer == "You (demo user)" %}
+          <div class="qmd-family-node qmd-family-node--self">{{ m.name }}<small>{{ m.relationship_to_viewer }}</small></div>
+          {% endfor %}
+        </div>
+        <div class="qmd-family-row">
+          {% for m in demo.family_members if m.relationship_to_viewer in ["Son", "Daughter"] %}
+          <div class="qmd-family-node">{{ m.name }}<small>{{ m.relationship_to_viewer }} · {{ m.age_years }}</small></div>
+          {% endfor %}
+        </div>
+      </div>
+      <p class="qmd-fine">A visual demonstration only — fabricated members and relationships. No real Family Tree record is created, read, or modified.</p>
+
+      <div class="qmd-grid2">
+        <div class="qmd-card">
+          <h3>🪷 Karma — {{ demo.karma.total }}</h3>
+          <p class="qmd-fine">Commercial: {{ demo.karma.commercial }} · Non-commercial: {{ demo.karma.noncommercial }}</p>
+          <p>{{ demo.karma.explainer }}</p>
+        </div>
+        <div class="qmd-card">
+          <h3>💰 Qoins — {{ demo.qoins.balance }}</h3>
+          <p class="qmd-fine">≈ ₹{{ demo.qoins.inr_equivalent }}</p>
+          <p>{{ demo.qoins.explainer }}</p>
+          <ul class="qmd-history">
+            {% for wk in demo.qoins.weekly_history %}
+            <li><strong>{{ wk.week }}:</strong> {{ wk.change }} Qoins — {{ wk.reason }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PRIVATE ============ -->
+    <section class="qmd-panel" id="qmd-panel-private" role="tabpanel" hidden>
+      <h2>Private Timeline</h2>
+      <p class="qmd-sub">{{ demo.kundali.note }}</p>
+
+      <div class="qmd-card">
+        <p class="qmd-fine">Birth date: {{ demo.kundali.dob_label }} · Time: {{ demo.kundali.tob_label }} · Place: {{ demo.kundali.location_label }}</p>
+        <div class="qmd-kundali-chart">{{ demo.kundali.chart_svg | safe }}</div>
+        <p class="qmd-fine">{{ demo.kundali.ascendant_note }}</p>
+      </div>
+
+      <h3 class="qmd-section-title">Planetary Positions</h3>
+      <div class="qmd-table-wrap">
+        <table class="qmd-table">
+          <thead><tr><th>Point</th><th>Sign</th><th>Element</th><th>Nakshatra</th><th>House</th></tr></thead>
+          <tbody>
+            {% for row in demo.kundali.table %}
+            <tr><td>{{ row.point }}</td><td>{{ row.sign }}</td><td>{{ row.element }}</td><td>{{ row.nakshatra }}</td><td>{{ row.house }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="qmd-section-title">Elemental Balance</h3>
+      <p>Dominant element: <strong>{{ demo.kundali.elemental_balance.dominant }}</strong></p>
+      <div class="qmd-chips">
+        {% for element, count in demo.kundali.elemental_balance.counts.items() %}
+        <span class="qmd-chip">{{ element }}: {{ count }}</span>
+        {% endfor %}
+      </div>
+
+      <p class="qmd-fine">The Private timeline holds a member's own birth-derived identity — their zodiac sign, element and Vedic chart — separate from what the village or the world can see about them.</p>
+    </section>
+
+    <!-- ============ PUBLIC ============ -->
+    <section class="qmd-panel" id="qmd-panel-public" role="tabpanel" hidden>
+      <h2>Public Timeline</h2>
+      <p class="qmd-sub">The village Collective Board and Q-Punch council election, at {{ demo.village_label }}.</p>
+
+      <div class="qmd-chips">
+        <span class="qmd-chip">👥 {{ demo.board_stats.total_members }} demo members</span>
+        <span class="qmd-chip">📝 {{ demo.board_stats.total_posts }} demo posts</span>
+        <span class="qmd-chip">🗳️ {{ demo.board_stats.total_votes }} demo votes</span>
+      </div>
+
+      <h3 class="qmd-section-title">Village Collective Board</h3>
+      <div class="qmd-board">
+        {% for post in demo.board_posts %}
+        <div class="qmd-card qmd-post">
+          <h4>{{ post.title }}</h4>
+          <p class="qmd-fine">by {{ post.author_name }} · {{ post.created_at_label }} · {{ post.status_label }}</p>
+          <p>{{ post.content }}</p>
+          <p class="qmd-fine">👍 {{ post.score }} votes · 💬 {{ post.comment_count }} comments (demo figures — read-only)</p>
+        </div>
+        {% endfor %}
+      </div>
+
+      <h3 class="qmd-section-title">Q-Punch — Village Council Election</h3>
+      <div class="qmd-card">
+        <p><strong>{{ demo.qpunch.cycle_label }}</strong></p>
+        <p class="qmd-fine">{{ demo.qpunch.status_label }}</p>
+        <div class="qmd-grid2">
+          <div>
+            <h4>Male candidates</h4>
+            <ul>{% for c in demo.qpunch.candidates_male %}<li><strong>{{ c.name }}</strong> — {{ c.reason }}</li>{% endfor %}</ul>
+          </div>
+          <div>
+            <h4>Female candidates</h4>
+            <ul>{% for c in demo.qpunch.candidates_female %}<li><strong>{{ c.name }}</strong> — {{ c.reason }}</li>{% endfor %}</ul>
+          </div>
+        </div>
+        <p class="qmd-fine">{{ demo.qpunch.turnout_label }}</p>
+        <p>{{ demo.qpunch.explainer }}</p>
+      </div>
+    </section>
+
+    <!-- ============ GLOBAL ============ -->
+    <section class="qmd-panel" id="qmd-panel-global" role="tabpanel" hidden>
+      <h2>Global Timeline</h2>
+      <p class="qmd-sub">How a local Public account connects to the wider world.</p>
+
+      <h3 class="qmd-section-title">Geographic Hierarchy</h3>
+      <div class="qmd-hierarchy">
+        {% for level in demo.geographic_hierarchy %}
+        <span class="qmd-hierarchy-level">{{ level }}</span>{% if not loop.last %}<span class="qmd-hierarchy-arrow">→</span>{% endif %}
+        {% endfor %}
+      </div>
+
+      <h3 class="qmd-section-title">Demo Figures by Country</h3>
+      <div class="qmd-table-wrap">
+        <table class="qmd-table">
+          <thead><tr><th>Country</th><th>Members</th></tr></thead>
+          <tbody>
+            {% for row in demo.global_stats %}
+            <tr><td>{{ row.label }}</td><td>{{ row.members }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="qmd-fine">All figures on this page are demonstration numbers, not live Qumanity statistics.</p>
+
+      <p>{{ demo.global_explainer }}</p>
+    </section>
+
+  </main>
+
+  <footer class="qmd-footer">
+    <p>This is a demonstration of Qumanity's product design — not a live village page. <a href="{{ url_for('index') }}">Visit qumanity.in →</a></p>
+  </footer>
+
+  <script>
+    (function () {
+      "use strict";
+      var tabs = Array.prototype.slice.call(document.querySelectorAll(".qmd-tab"));
+      var panels = {
+        personal: document.getElementById("qmd-panel-personal"),
+        private: document.getElementById("qmd-panel-private"),
+        public: document.getElementById("qmd-panel-public"),
+        global: document.getElementById("qmd-panel-global"),
+      };
+      tabs.forEach(function (tab) {
+        tab.addEventListener("click", function () {
+          var name = tab.getAttribute("data-tab");
+          tabs.forEach(function (t) {
+            var active = t === tab;
+            t.classList.toggle("is-active", active);
+            t.setAttribute("aria-selected", active ? "true" : "false");
+          });
+          Object.keys(panels).forEach(function (key) {
+            var panel = panels[key];
+            if (!panel) return;
+            var active = key === name;
+            panel.hidden = !active;
+            panel.classList.toggle("is-active", active);
+          });
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
