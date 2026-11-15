@@ -634,27 +634,51 @@ def send_group_invite(conn, owner_user_id, group_id, to_user_id):
     conn.commit()
 
 
-def inbox(conn, user_id):
-    # r.group_id is overloaded: a personal_groups.id for kind='group', a private_chats.id for
-    # kind='rejoin' (see request_rejoin()) -- each JOIN is gated by kind so the two id spaces (both
-    # autoincrement from 1) can never cross-match into the wrong row.
-    rows = conn.execute(
-        """SELECT r.id, r.kind, r.first_message, r.created_at, r.status, r.from_user_id, u.name AS from_name,
+_INBOX_COLUMNS = """r.id, r.kind, r.group_id, r.first_message, r.created_at, r.status, r.decided_at,
+                  r.from_user_id, u.name AS from_name,
                   pg.name AS group_name, pg.category AS group_category, pc.name AS chat_name,
-                  fg.name AS family_group_name
-           FROM people_requests r JOIN users u ON u.id = r.from_user_id
+                  fg.name AS family_group_name"""
+# r.group_id is overloaded: a personal_groups.id for kind='group', a private_chats.id for
+# kind='rejoin' (see request_rejoin()) -- each JOIN is gated by kind so the two id spaces (both
+# autoincrement from 1) can never cross-match into the wrong row.
+_INBOX_JOINS = """FROM people_requests r JOIN users u ON u.id = r.from_user_id
            LEFT JOIN personal_groups pg ON pg.id = r.group_id AND r.kind = 'group'
            LEFT JOIN private_chats pc ON pc.id = r.group_id AND r.kind = 'rejoin'
-           LEFT JOIN family_groups fg ON fg.id = r.group_id AND r.kind IN ('family_group_join', 'family_group_invite')
+           LEFT JOIN family_groups fg ON fg.id = r.group_id
+             AND r.kind IN ('family_group_join', 'family_group_invite', 'family_relation_invite')"""
+
+
+def _inbox_row_to_item(conn, r, viewer_user_id) -> dict:
+    item = dict(r)
+    if _is_hidden(conn, r["from_user_id"]) and not is_family_member(conn, r["from_user_id"], viewer_user_id):
+        identity = display_identity(conn, r["from_user_id"], viewer_user_id)
+        item["from_name"] = identity["name"]
+    # first_message is overloaded for kind='family_relation_invite' to carry the relationship the
+    # sender recorded for this slot (e.g. 'father', 'spouse') -- see family_core.notify_to_
+    # activate()'s own docstring. Surfaced under its own, unambiguous key rather than making every
+    # inbox consumer know about that reuse; first_message itself is left untouched for 'message'.
+    item["relationship"] = r["first_message"] if r["kind"] == "family_relation_invite" else None
+    return item
+
+
+def inbox(conn, user_id):
+    rows = conn.execute(
+        f"""SELECT {_INBOX_COLUMNS} {_INBOX_JOINS}
            WHERE r.to_user_id = ? AND r.status IN ('pending', 'waiting') ORDER BY r.id DESC""", (user_id,)).fetchall()
-    out = []
-    for r in rows:
-        item = dict(r)
-        if _is_hidden(conn, r["from_user_id"]) and not is_family_member(conn, r["from_user_id"], user_id):
-            identity = display_identity(conn, r["from_user_id"], user_id)
-            item["from_name"] = identity["name"]
-        out.append(item)
-    return out
+    return [_inbox_row_to_item(conn, r, user_id) for r in rows]
+
+
+def inbox_history(conn, user_id, limit: int = 100):
+    """Past requests (accepted/declined) sent TO user_id, newest-decided first -- the phone app's
+    Notifications screen's own 'Earlier' section (2026-11-16), so an answered request doesn't just
+    disappear the way inbox() above (pending/waiting only) always made it. Same row shape as
+    inbox(), plus decided_at; capped at `limit` since this can only grow over an account's
+    lifetime and nothing here needs more than a recent scrollback."""
+    rows = conn.execute(
+        f"""SELECT {_INBOX_COLUMNS} {_INBOX_JOINS}
+           WHERE r.to_user_id = ? AND r.status IN ('accepted', 'declined')
+           ORDER BY r.decided_at DESC LIMIT ?""", (user_id, limit)).fetchall()
+    return [_inbox_row_to_item(conn, r, user_id) for r in rows]
 
 
 def existing_chat(conn, a, b):
@@ -759,6 +783,15 @@ def decide_request(conn, user_id, request_id, decision):
             # claiming a specific empty tree node -- see family_core.invite_to_group()).
             import family_core
             family_core.add_member(conn, r["group_id"], user_id, invited_by=r["from_user_id"])
+        elif r["kind"] == "family_relation_invite":
+            # A relative's Family Tree wizard matched user_id (== to_user_id) by name to a FRESH
+            # placeholder node (r["target_node_id"]) it created for this slot -- see family_core.
+            # notify_to_activate(). Accepting is the only thing that ever repoints that placeholder
+            # onto user_id's own real node; see family_core.accept_relation_invite() for why this
+            # needs no permission check (user_id is consenting to being linked, not an admin
+            # linking someone else).
+            import family_core
+            family_core.accept_relation_invite(conn, r["target_node_id"], user_id)
     conn.commit()
     return {"status": status}
 

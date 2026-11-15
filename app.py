@@ -2074,8 +2074,11 @@ def api_people_open_chat():
 def api_people_inbox():
     conn = _social(get_db())
     items = social_core.inbox(conn, session["user_id"])
+    result = {"requests": items}
+    if request.args.get("include") == "history":
+        result["history"] = social_core.inbox_history(conn, session["user_id"])
     conn.close()
-    return jsonify({"requests": items})
+    return jsonify(result)
 
 
 @app.route("/api/people/inbox/<int:request_id>/decide", methods=["POST"])

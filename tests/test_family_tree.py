@@ -359,12 +359,13 @@ check("erin (a child, not a founder) is NOT admin after joining the unit", res.g
 
 print()
 print("=" * 70)
-print("7. Exact-Public-ID spouse notify links to the REAL self-node, never a duplicate placeholder")
+print("7. Exact-Public-ID spouse notify now queues a structured, consent-gated family_relation_invite")
 print("=" * 70)
-# A real bug caught by live browser testing (2026-10-20): the 'notify' action used to always
-# create a brand-new empty placeholder node, even when the caller supplied an EXACT, already-
-# verified user_id (via social_core.find_person()) whose own self-node already exists -- leaving
-# the parent/child edge pointing at a disconnected, same-named duplicate instead of the real person.
+# 2026-11-16 product fix: an exact, already-verified user_id match used to link straight to that
+# person's real self-node with no approval step at all (the 2026-10-20 fix this section used to
+# cover) -- but that meant anyone could be declared someone's spouse/parent/child with no say in
+# it, only a plain chat ping. Now EVERY 'notify' match, exact or not, gets a fresh placeholder and
+# a structured, acceptable/declinable request; nothing repoints onto the real node until THEY accept.
 
 logout()
 finn = register("Finn Noble")
@@ -380,17 +381,70 @@ client.post("/api/family/activate", json={"father": {"name": "Grace Father", "ac
 res = client.post("/api/family/marry", json={"spouse": {"name": "Finn Noble", "action": "notify", "user_id": finn["user_id"]}})
 check("grace's marry (notify, exact id) succeeds", res.status_code == 201)
 grace_marry_body = res.get_json()
-check("no NEW node was created for the exact-id spouse (linked_existing)",
-      any(n.get("linked_existing") and n["node_id"] == finn_self_node_id for n in grace_marry_body["created_node_ids"]))
+spouse_entry = next(n for n in grace_marry_body["created_node_ids"] if n["label"] == "spouse")
+check("a FRESH placeholder was created for finn's slot, not his real self-node (no linking without his consent)",
+      spouse_entry["node_id"] != finn_self_node_id and not spouse_entry.get("linked_existing"))
+placeholder_node_id = spouse_entry["node_id"]
 
 grace_group_row = raw(
     "SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (grace_marry_body["marital_group_id"],)
 )
-check("the new unit's founder pair points at finn's REAL claimed self-node, not a duplicate (family_spouse_links is "
+check("the new unit's founder pair points at the PLACEHOLDER, not finn's real node, until he accepts",
+      placeholder_node_id in (grace_group_row["husband_node_id"], grace_group_row["wife_node_id"])
+      and finn_self_node_id not in (grace_group_row["husband_node_id"], grace_group_row["wife_node_id"]))
+
+login(finn["private_code"])
+res = client.get("/api/people/inbox")
+finn_invite = next(r for r in res.get_json()["requests"] if r["kind"] == "family_relation_invite")
+check("finn's inbox carries the structured invite, not a plain message", finn_invite["relationship"] == "spouse")
+check("the invite names the right family unit", finn_invite["family_group_name"] == grace_marry_body["marital_group_name"])
+check("the invite names grace as the sender", finn_invite["from_user_id"] == grace["user_id"])
+
+res = client.post(f"/api/people/inbox/{finn_invite['id']}/decide", json={"decision": "accept"})
+check("finn accepts the family link", res.status_code == 200)
+
+grace_group_row = raw(
+    "SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (grace_marry_body["marital_group_id"],)
+)
+check("ONLY after accepting does the founder pair repoint onto finn's REAL claimed self-node (family_spouse_links is "
       "deprecated -- the marriage itself IS the unit's husband/wife_node_id pair now)",
-      finn_self_node_id in (grace_group_row["husband_node_id"], grace_group_row["wife_node_id"]))
-duplicate_count = raw("SELECT COUNT(*) AS n FROM family_nodes WHERE display_name LIKE 'Finn Noble%'")
-check("exactly one 'Finn Noble*' node exists in the whole DB (no duplicate placeholder)", duplicate_count["n"] == 1)
+      finn_self_node_id in (grace_group_row["husband_node_id"], grace_group_row["wife_node_id"])
+      and placeholder_node_id not in (grace_group_row["husband_node_id"], grace_group_row["wife_node_id"]))
+finn_tree = client.get(f"/api/family-groups/{grace_marry_body['marital_group_id']}/tree").get_json()
+check("finn is now admin of the unit (the founder-admin grant that follows a real claim)", finn_tree["is_admin"] is True)
+
+print()
+print("=" * 70)
+print("7b. Declining a family_relation_invite leaves the placeholder untouched")
+print("=" * 70)
+
+logout()
+hank = register("Hank Oates")
+set_married(hank["private_code"])
+login(hank["private_code"])
+client.post("/api/family/activate", json={"father": {"name": "Hank Father", "action": "create"}, "mother": {"name": "Hank Mother", "action": "create"}})
+logout()
+iris = register("Iris Oates")
+login(hank["private_code"])
+res = client.post("/api/family/marry", json={"spouse": {"name": "Iris Oates", "action": "notify", "user_id": iris["user_id"]}})
+check("hank's marry (notify, iris not yet activated) succeeds", res.status_code == 201)
+hank_marry_body = res.get_json()
+iris_placeholder_node_id = next(n for n in hank_marry_body["created_node_ids"] if n["label"] == "spouse")["node_id"]
+
+login(iris["private_code"])
+res = client.get("/api/people/inbox")
+iris_invite = next(r for r in res.get_json()["requests"] if r["kind"] == "family_relation_invite")
+res = client.post(f"/api/people/inbox/{iris_invite['id']}/decide", json={"decision": "decline"})
+check("iris declines the family link", res.status_code == 200)
+
+placeholder_row = raw("SELECT claimed_user_id FROM family_nodes WHERE id = ?", (iris_placeholder_node_id,))
+check("declining leaves the placeholder unclaimed -- no link happened", placeholder_row["claimed_user_id"] is None)
+
+res = client.get("/api/people/inbox")
+check("the declined invite no longer shows up as pending", all(r["id"] != iris_invite["id"] for r in res.get_json()["requests"]))
+res = client.get("/api/people/inbox", query_string={"include": "history"})
+history_entry = next(r for r in res.get_json()["history"] if r["id"] == iris_invite["id"])
+check("the declined invite shows up in history instead, with the right outcome", history_entry["status"] == "declined")
 
 print()
 print("=" * 70)

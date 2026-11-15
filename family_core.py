@@ -517,6 +517,43 @@ def _claim_founder_slot(conn, target_node_id: int, user_id: int) -> None:
     _grant_founder_admin_if_applicable(conn, self_node["id"], user_id)
 
 
+def _relink_placeholder_to_user(conn, placeholder_node_id: int, target_user_id: int, acted_by_user_id: int) -> dict:
+    """The repoint-then-cascade mechanics shared by link_node_to_user() (admin-initiated, never
+    consent-gated) and accept_relation_invite() (consent-initiated -- see notify_to_activate()):
+    placeholder_node_id is still empty -> claim it directly as target_user_id's own self-node;
+    target_user_id already has a self-node elsewhere -> re-point every reference onto THAT node
+    instead, since family_nodes.claimed_user_id staying globally unique means the placeholder can
+    never be claimed a second time (see _swap_node_references()'s own docstring). Either way,
+    grants founder-admin if placeholder_node_id was a unit's founder slot, then cascades
+    target_user_id's own pre-existing family into active membership
+    (_cascade_relatives_after_link()). Caller's responsibility: confirm placeholder_node_id is
+    still unclaimed before calling -- both current callers already do, in their own way. Extracted
+    2026-11-16 from link_node_to_user()'s own body, unchanged, so accept_relation_invite() doesn't
+    need a second implementation of this same delicate swap."""
+    existing_self_node = conn.execute(
+        "SELECT id FROM family_nodes WHERE claimed_user_id = ?", (target_user_id,)
+    ).fetchone()
+    if existing_self_node:
+        real_node_id = existing_self_node["id"]
+        founder_groups = conn.execute(
+            "SELECT id FROM family_groups WHERE husband_node_id = ? OR wife_node_id = ?",
+            (placeholder_node_id, placeholder_node_id),
+        ).fetchall()
+        for g in founder_groups:
+            _repoint_founder_slot(conn, g["id"], placeholder_node_id, real_node_id)
+        _swap_node_references(conn, placeholder_node_id, real_node_id, acted_by_user_id)
+        if founder_groups:
+            _grant_founder_admin_if_applicable(conn, real_node_id, target_user_id)
+        return _cascade_relatives_after_link(conn, target_user_id)
+
+    conn.execute(
+        "UPDATE family_nodes SET claimed_user_id = ?, status = 'claimed', claimed_at = ? WHERE id = ?",
+        (target_user_id, _now(), placeholder_node_id),
+    )
+    _grant_founder_admin_if_applicable(conn, placeholder_node_id, target_user_id)
+    return _cascade_relatives_after_link(conn, target_user_id)
+
+
 def link_node_to_user(conn, user_id: int, node_id: int, target) -> dict:
     """Links an EMPTY node to a real user -- an admin unilaterally identifying who this person
     really is. If that node is a unit's founder slot, the newly-linked person becomes that unit's
@@ -556,30 +593,14 @@ def link_node_to_user(conn, user_id: int, node_id: int, target) -> dict:
         raise PermissionError("Only an admin of a group this person belongs to can change this")
     target_user_id = _resolve_target_user_id(conn, target)
 
-    existing_self_node = conn.execute(
-        "SELECT id FROM family_nodes WHERE claimed_user_id = ?", (target_user_id,)
-    ).fetchone()
-    if existing_self_node:
-        real_node_id = existing_self_node["id"]
-        founder_groups = conn.execute(
-            "SELECT id FROM family_groups WHERE husband_node_id = ? OR wife_node_id = ?", (node_id, node_id)
-        ).fetchall()
-        for g in founder_groups:
-            _repoint_founder_slot(conn, g["id"], node_id, real_node_id)
-        _swap_node_references(conn, node_id, real_node_id, user_id)
-        if founder_groups:
-            _grant_founder_admin_if_applicable(conn, real_node_id, target_user_id)
-        notify_to_activate(conn, user_id, target_user_id)
-        cascade_result = _cascade_relatives_after_link(conn, target_user_id)
-        conn.commit()
-        return cascade_result
-
-    conn.execute(
-        "UPDATE family_nodes SET claimed_user_id = ?, status = 'claimed', claimed_at = ? WHERE id = ?",
-        (target_user_id, _now(), node_id),
-    )
-    _grant_founder_admin_if_applicable(conn, node_id, target_user_id)
-    cascade_result = _cascade_relatives_after_link(conn, target_user_id)
+    # Checked up front, purely to decide whether to send the courtesy ping below -- the actual
+    # repoint-or-claim logic re-derives this itself inside _relink_placeholder_to_user().
+    had_existing_self_node = bool(conn.execute(
+        "SELECT 1 FROM family_nodes WHERE claimed_user_id = ?", (target_user_id,)
+    ).fetchone())
+    cascade_result = _relink_placeholder_to_user(conn, node_id, target_user_id, user_id)
+    if had_existing_self_node:
+        _notify_linked(conn, user_id, target_user_id)
     conn.commit()
     return cascade_result
 
@@ -1140,16 +1161,88 @@ def post_family_message(conn, user_id: int, group_id: int, text: str) -> int:
     return cur.lastrowid
 
 
-def notify_to_activate(conn, from_user_id: int, to_user_id: int) -> None:
-    """A courtesy nudge, not a claim -- reuses social_core's own plain message-request, same as any
-    other first contact. Never links anything on its own; the recipient still has to show up and
-    activate for real, same as every other identity match in this project being confirm-only."""
+def notify_to_activate(conn, from_user_id: int, to_user_id: int, placeholder_node_id: int,
+                        group_id: int, relationship_label: str | None = None) -> None:
+    """2026-11-16 rewrite: a STRUCTURED family request, not a plain chat message -- the product gap
+    this closes is that the old version (social_core.send_message_request(), a one-time-message
+    request accepted by just opening a chat) gave the recipient no way to formally approve or
+    refuse the family LINK itself, only the chat. Queues a people_requests row, kind=
+    'family_relation_invite': to_user_id is a real Qumanity account the sender's Family Tree
+    wizard matched by name to placeholder_node_id (a FRESH, still-unclaimed node _resolve_slot()'s
+    'notify' action creates for this slot regardless of the match -- see that function's own
+    docstring for why the real node is never touched here). group_id is the unit placeholder_
+    node_id just became part of (its founder slot, or a plain family_group_nodes membership).
+
+    Accepting (social_core.decide_request(), kind='family_relation_invite' -> this module's own
+    accept_relation_invite()) is the ONLY thing that ever repoints placeholder_node_id onto
+    to_user_id's own real node. Declining just marks the request declined -- placeholder_node_id
+    stays exactly as it was, an ordinary unclaimed node in the sender's tree, same as if the name
+    had never matched anyone at all. It claims or links nothing by itself, either way.
+
+    first_message is overloaded to carry relationship_label (e.g. 'Father', 'Spouse', 'Child') for
+    the recipient's inbox card -- the same column-reuse convention this table's kind='group'/
+    'rejoin' rows already use for group_id (see social_core.inbox()'s own JOIN comment).
+
+    Never raises; a pending invite already queued from this sender to this recipient for this same
+    group_id is silently skipped rather than duplicated -- the same idempotent-on-retry style
+    request_join_group() uses elsewhere in this module."""
+    if conn.execute(
+        "SELECT 1 FROM people_requests WHERE from_user_id = ? AND to_user_id = ? AND group_id = ? "
+        "AND kind = 'family_relation_invite' AND status = 'pending'",
+        (from_user_id, to_user_id, group_id),
+    ).fetchone():
+        return
+    conn.execute(
+        "INSERT INTO people_requests (from_user_id, to_user_id, kind, group_id, target_node_id, "
+        "first_message, created_at, cycle_id) VALUES (?, ?, 'family_relation_invite', ?, ?, ?, ?, ?)",
+        (from_user_id, to_user_id, group_id, placeholder_node_id, relationship_label, _now(),
+         cycle_middleware.get_active_cycle_id(conn)),
+    )
+
+
+def _flush_pending_notifies(conn, results: dict, from_user_id: int, group_id: int) -> None:
+    """Sends the structured family_relation_invite for every slot _resolve_slot()'s 'notify' action
+    queued (into results['_pending_notifies']) during this call, now that group_id -- the unit
+    those placeholders just became part of -- is finally known. Can't happen inline inside
+    _resolve_slot() itself: that function runs before the caller has created/found the group these
+    placeholders belong to (see notify_to_activate()'s own group_id requirement). Pops the queue,
+    so it never leaks into the JSON results every caller here eventually returns. A no-op when
+    nothing was queued."""
+    for entry in results.pop("_pending_notifies", []):
+        notify_to_activate(conn, from_user_id, entry["user_id"], entry["node_id"], group_id, entry["label"])
+        results["notified"].append({"label": entry["label"], "name": entry["name"], "user_id": entry["user_id"]})
+
+
+def _notify_linked(conn, admin_user_id: int, target_user_id: int) -> None:
+    """Tells target_user_id an admin just linked them into a Family Group -- informational only,
+    same as _notify_marriage() below. link_node_to_user()'s own admin-initiated link is never
+    consent-gated (see that function's docstring) -- the link already happened by the time this is
+    sent, so unlike notify_to_activate()'s structured invite there is nothing left here to accept
+    or decline, just a courtesy ping via the same plain message-request every other first contact
+    in this project uses."""
     import social_core
-    text = "Hi! I think we might be related, and I'm building our Family Tree on Qumanity. Want to connect?"
+    name = conn.execute("SELECT name FROM users WHERE id = ?", (admin_user_id,)).fetchone()["name"]
+    text = f"{name} added you to a Family Group on Qumanity."
     try:
-        social_core.send_message_request(conn, from_user_id, to_user_id, text)
+        social_core.send_message_request(conn, admin_user_id, target_user_id, text)
     except ValueError:
-        pass  # already connected, or a request is already pending -- the ping isn't the point, the node still gets created
+        pass  # already connected, or a request is already pending -- the link already happened regardless
+
+
+def accept_relation_invite(conn, placeholder_node_id: int, target_user_id: int) -> dict:
+    """social_core.decide_request()'s accept-side handler for kind='family_relation_invite' (see
+    notify_to_activate()). Shares its repoint-then-cascade mechanics with link_node_to_user() via
+    _relink_placeholder_to_user() -- the only difference is WHO authorized this: here, the person
+    being linked, by accepting; there, an admin, unilaterally. If placeholder_node_id was already
+    claimed by the time this runs (e.g. an admin's own link_node_to_user() got there first, or a
+    different pending request for the same slot was accepted first), this is silently a no-op --
+    the request itself still gets marked accepted either way (social_core.decide_request() does
+    that regardless of this return value), matching request_join_group()'s own already-pending/
+    already-member idempotent-on-retry style rather than raising for a state a retry can't fix."""
+    node = conn.execute("SELECT claimed_user_id FROM family_nodes WHERE id = ?", (placeholder_node_id,)).fetchone()
+    if not node or node["claimed_user_id"]:
+        return {}
+    return _relink_placeholder_to_user(conn, placeholder_node_id, target_user_id, target_user_id)
 
 
 def _notify_marriage(conn, new_spouse_user_id: int, other_founder_user_id: int) -> None:
@@ -1338,8 +1431,12 @@ def _resolve_gender(entry: dict, default_gender):
 def _resolve_slot(conn, user_id: int, entry: dict, fresh_node_ids: list, results: dict, label: str, default_gender=None):
     """One relation entry -- {"name", "action": "create"|"join"|"notify", "is_deceased"?, "gender"?,
     ...}. Returns the family_nodes.id this entry ends up representing (always non-None once a name
-    was given -- 'notify' still creates a normal empty node; the ping is a side effect, not a
-    different structural outcome, so parent/child linking works uniformly either way)."""
+    was given -- 'notify' still creates a normal empty node; the structural outcome for THIS slot
+    is always the same fresh placeholder, never the real matched user's own node, whether or not
+    they already have one (2026-11-16: see notify_to_activate()'s own docstring for why -- in
+    short, nothing may be claimed on a name match alone, only on that person's own later accept).
+    The caller must still flush the queued invite once it knows which group this placeholder ended
+    up in -- see _flush_pending_notifies()."""
     if not entry or not (entry.get("name") or "").strip():
         return None
     action = entry.get("action", "create")
@@ -1372,18 +1469,17 @@ def _resolve_slot(conn, user_id: int, entry: dict, fresh_node_ids: list, results
 
     if action == "notify":
         target_user_id = entry.get("user_id")
-        if target_user_id:
-            notify_to_activate(conn, user_id, target_user_id)
-            results["notified"].append({"label": label, "name": name, "user_id": target_user_id})
-            existing_self_node = conn.execute(
-                "SELECT id FROM family_nodes WHERE claimed_user_id = ?", (target_user_id,)
-            ).fetchone()
-            if existing_self_node:
-                results["created_node_ids"].append({"label": label, "node_id": existing_self_node["id"], "name": name, "linked_existing": True})
-                return existing_self_node["id"]
         node_id = create_node(conn, user_id, name, gender=gender)
         fresh_node_ids.append(node_id)
         results["created_node_ids"].append({"label": label, "node_id": node_id, "name": name})
+        if target_user_id:
+            # Queued, not sent -- notify_to_activate() needs this slot's own group_id, which isn't
+            # known yet here (the caller hasn't created/found the group this placeholder belongs
+            # to). See _flush_pending_notifies(), which every caller of this function runs once
+            # that group_id exists, before its own final conn.commit().
+            results.setdefault("_pending_notifies", []).append(
+                {"label": label, "name": name, "user_id": target_user_id, "node_id": node_id}
+            )
         return node_id
 
     node_id = create_node(conn, user_id, name, gender=gender, is_deceased=bool(entry.get("is_deceased")))
@@ -1428,6 +1524,7 @@ def _link_known_parents_group(conn, user_id: int, child_node_id: int, group_id: 
     known_group_id, _ = _find_or_create_couple_group(
         conn, user_id, husband_node_id=father_id, wife_node_id=mother_id, member_node_ids=[child_node_id],
     )
+    _flush_pending_notifies(conn, results, user_id, known_group_id)
     current = conn.execute(f"SELECT {side_column} FROM family_groups WHERE id = ?", (group_id,)).fetchone()
     if current and not current[side_column]:
         conn.execute(f"UPDATE family_groups SET {side_column} = ? WHERE id = ?", (known_group_id, group_id))
@@ -1886,6 +1983,7 @@ def activate_timeline(conn, user_id: int, payload: dict) -> dict:
     )
     results["parents_group_id"] = parents_group_id
     results["parents_group_name"] = conn.execute("SELECT name FROM family_groups WHERE id = ?", (parents_group_id,)).fetchone()["name"]
+    _flush_pending_notifies(conn, results, user_id, parents_group_id)
     if existing_self:
         # A reused node may already be a founder of a couple unit someone else created (e.g. the
         # spouse's); hang that unit under these newly known parents so the tree stays connected.
@@ -1940,6 +2038,7 @@ def _attach_children_to_group(conn, user_id: int, group_id: int, husband_node_id
             "INSERT OR IGNORE INTO family_group_nodes (group_id, node_id, added_by_user_id, added_at) VALUES (?, ?, ?, ?)",
             (group_id, child_node_id, user_id, _now()),
         )
+    _flush_pending_notifies(conn, results, user_id, group_id)
     return child_node_ids
 
 
@@ -2075,6 +2174,7 @@ def marry_timeline(conn, user_id: int, payload: dict) -> dict:
     )
     results["marital_group_id"] = group_id
     results["marital_group_name"] = conn.execute("SELECT name FROM family_groups WHERE id = ?", (group_id,)).fetchone()["name"]
+    _flush_pending_notifies(conn, results, user_id, group_id)
 
     spouse_parent_side = "wife_parent_group_id" if spouse_node_id == wife_node_id else "husband_parent_group_id"
     _link_known_parents_group(conn, user_id, spouse_node_id, group_id, spouse_parent_side,
