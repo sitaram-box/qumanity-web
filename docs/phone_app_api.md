@@ -195,3 +195,87 @@ Every month belongs to one sun sign. The election for that sign runs in 4 weeks:
 - `POST /api/family-groups/<id>/join-request` (the inbox kind is `family_group_join`) and `POST /api/family-groups/<id>/leave`.
 
 Checks for all of the above are in `tools/website-check/check_app_api.py` (138 pass as of 2026-10-26).
+
+## Android APK distribution — 2026-11-12
+
+The Android app is hosted by the website itself; there is no store listing yet.
+
+- **File:** `static/downloads/qumanity.apk` (91,708,421 bytes), committed in `d75b661`.
+- **Link:** `GET /app` (`app.py`, `download_app()`) answers `302` to `/static/downloads/qumanity.apk`, so the file is served as a normal static download. Public, no login. It is an **APK, not a landing page**: it installs on Android only, and the phone asks the user to allow installs from the browser.
+- **QR code:** `docs/pitch_materials/qumanity_app_qr.png`. It was generated outside the repo with a dynamic-QR service and encodes the short link `https://qrco.de/bh6DAQ`, which currently redirects to `https://qumanity.in/app`. The chain is therefore QR → `qrco.de` → `/app` → the APK. If that service's redirect is ever switched off, the QR stops working; a static QR that encodes `https://qumanity.in/app` directly does not depend on it.
+- **Updating the APK:** replace the file at the same path and redeploy. The QR and the `/app` link do not change.
+
+## Account recovery fallback: "I don't have a Family Tree" — 2026-11-14
+
+Backend and Admin Panel only in this pass -- **the Phone App sign-in UI itself has not been
+built**. This is the fourth option the sign-in screen's recovery menu should eventually offer,
+alongside Forgot PIN (OTP), Forgot Private ID (Admin-ticket), and Family Tree recovery -- for a
+member who can use neither of the other two self-service paths and has no usable Family Tree.
+The app never needs to know this reuses `admin_queries` internally; it only ever calls the one
+public route below.
+
+**`POST /api/recovery/admin-ticket`** — public, no session, no `Authorization` header needed.
+
+Request body (all four fields required):
+```json
+{
+  "name": "Full Name",
+  "date_of_birth": "1990-05-15",
+  "present_location": {
+    "continent": {"id": "O_AS", "name": "Asia"},
+    "country": {"id": "O_AS_IND", "name": "India"},
+    "state": {"id": "CS.DL", "name": "Delhi"},
+    "zone": {"id": "IND/CS", "name": "Central State"},
+    "district": {"id": "CS.DL.3", "name": "North West Delhi"},
+    "tehsil": {"id": "CS.DL.3.4", "name": "Bawana"},
+    "village": {"id": "CS.DL.3.4.1A", "name": "Rohini Sector 24"}
+  },
+  "contact_method": "phone",
+  "contact_value": "+911234567890"
+}
+```
+- `present_location` is the **exact same canonical location object** every other route in this
+  app already uses (continent/country, or the full state→village chain for a Subcontinent
+  country) -- the same shape `/api/auth/register` accepts for `present_location`. For a Global
+  (non-Subcontinent) country, only `continent`/`country` are sent; every other level is rejected
+  if present, not silently dropped.
+- `contact_method` is exactly one of `"phone"`, `"email"`, `"member_private_id"`.
+- `contact_value` holds the value for whichever method was chosen:
+  - `phone`: digits, spaces, hyphens, optional leading `+`, 7-20 characters.
+  - `email`: a normal email address.
+  - `member_private_id`: **another Qumanity member's** 9-digit Private ID (digits only, any
+    formatting is stripped server-side) -- someone who might help the Admin reach or verify the
+    requester. This is never the requester's own Private ID (the form must not collect that --
+    the whole point of this path is that they don't have it), and it does not need to be a
+    relative or Family Tree connection.
+
+Success — `201`:
+```json
+{
+  "status": "received",
+  "message": "Your request has been sent to the Admin. They will contact you using the details you provided.",
+  "reference": "REC-000123"
+}
+```
+`reference` is a safe, non-enumerable string (`REC-` + a zero-padded number) -- never the raw
+internal ticket id. There is deliberately **no status-check route** for this reference (unlike
+the Family-Tree recovery flow's tracking code) -- the Admin contacts the person directly using
+the details they submitted; show the confirmation message above and nothing else.
+
+Errors:
+- `400 {"error": "<validation message>"}` — missing/malformed field, invalid date of birth
+  (not a real past date), unsupported `contact_method`, malformed `contact_value` for the chosen
+  method, or a location that fails the same structural/ancestry checks registration itself
+  applies to a fresh `present_location`.
+- `429 {"error": "Too many requests. Please try again later."}` — rate-limited, 5 requests per
+  hour per caller IP.
+
+**Enumeration behavior:** when `contact_method` is `"member_private_id"`, this route **never**
+looks that id up against real accounts, format-validates only (exactly 9 digits after stripping
+non-digit characters) -- its success/failure and timing never depend on whether that id is real.
+Resolving it happens later, Admin-side, only after the Admin has independently verified the
+requester's identity.
+
+No raw PIN, revealed Private ID, or any other sensitive value is ever returned by this route, and
+nothing it returns requires the Phone App to know anything about `admin_queries`, ticket
+categories, or the Admin Panel.

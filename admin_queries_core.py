@@ -10,10 +10,20 @@ POST /api/queries (logged-in, unchanged, user_id always set) and the new POST /a
 (2026-10-28, the public AI Support ticket route -- no login required, user_id is NULL,
 guest_name/guest_contact carry who to reply to). See migrations/031_admin_queries_guest.py for
 why user_id had to become nullable via a table rebuild rather than a plain ADD COLUMN.
+
+2026-11-14: a THIRD anonymous entry point, POST /api/recovery/admin-ticket (app.py), for a member
+with no usable Family Tree and no working OTP channel -- the 'account_recovery' category, using
+the same user_id=NULL/guest_name/guest_contact shape the AI Support ticket already established,
+plus five new nullable columns (migrations/038_account_recovery_fallback.py) this category alone
+populates: date_of_birth/present_location_json/contact_method (the claim itself, structured) and
+verification_status/verification_notes (the Admin's own identity-verification workflow state --
+deliberately a different axis from `status`, which only ever means "has an Admin responded to/
+closed this ticket," never "is this person who they say they are").
 """
 from __future__ import annotations
 
 import datetime as dt
+import json
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS admin_queries (
@@ -44,15 +54,24 @@ CREATE INDEX IF NOT EXISTS idx_admin_query_replies_query ON admin_query_replies(
 # account/karma/wallet/other: a logged-in member's own query about their account (the original
 # 2026-10-18 scope). query/complaint/proposal (2026-10-28): the public AI Support widget's own
 # categories -- a different, broader classification for an anonymous visitor's ticket, not a
-# replacement for the first four. Both sets coexist in the same column; the Admin Panel's own
-# filter buttons key off `source` (report/id_recovery/query/council), never off `category`, so
-# adding these doesn't touch any existing filter.
-CATEGORIES = ("account", "karma", "wallet", "query", "complaint", "proposal", "other")
+# replacement for the first four. account_recovery (2026-11-14): the new no-Family-Tree recovery
+# fallback's own category -- see api_recovery_admin_ticket() in app.py, the only place that ever
+# assigns it (never read from client input). Every one of these coexists in the same column; the
+# Admin Panel's own filter buttons key off `source` (report/id_recovery/query/council/
+# account_recovery), never off `category` directly, so adding these doesn't touch any existing
+# filter.
+CATEGORIES = ("account", "karma", "wallet", "query", "complaint", "proposal", "account_recovery", "other")
 STATUSES = ("open", "answered", "closed")
+VERIFICATION_STATUSES = ("pending", "verified", "rejected")
+CONTACT_METHODS = ("phone", "email", "member_private_id")
 
 
 def ensure_tables(conn) -> None:
     conn.executescript(SCHEMA)
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(admin_queries)")}
+    for col in ("date_of_birth", "present_location_json", "contact_method", "verification_status", "verification_notes"):
+        if col not in cols:
+            conn.execute(f"ALTER TABLE admin_queries ADD COLUMN {col} TEXT")
     conn.commit()
 
 
@@ -61,13 +80,22 @@ def _now() -> str:
 
 
 def create(conn, user_id: int | None, category: str, subject: str, body: str,
-           guest_name: str | None = None, guest_contact: str | None = None) -> int:
-    """user_id is None for an anonymous AI Support ticket (POST /api/support/ticket) -- guest_name
-    is then required (something to show the Admin instead of a real account's name) and
-    guest_contact is optional (an email reply_core can send the Admin's reply to, or a Private ID
-    the visitor already has; either way it's never validated as a real account here, only stored
-    and shown as-is -- see api_support_ticket() in app.py for the one place that distinguishes an
-    email-shaped guest_contact from anything else)."""
+           guest_name: str | None = None, guest_contact: str | None = None,
+           date_of_birth: str | None = None, present_location: dict | None = None,
+           contact_method: str | None = None) -> int:
+    """user_id is None for an anonymous AI Support ticket (POST /api/support/ticket) or an
+    account_recovery ticket (POST /api/recovery/admin-ticket) -- guest_name is then required
+    (something to show the Admin instead of a real account's name) and guest_contact is optional
+    for a plain query (an email reply_core can send the Admin's reply to, or a Private ID the
+    visitor already has) but REQUIRED for account_recovery, where it holds the exact value named
+    by contact_method. Either way guest_contact is never validated as a real account here, only
+    stored and shown as-is -- see api_support_ticket()/api_recovery_admin_ticket() in app.py for
+    the callers that distinguish what shape it actually is.
+
+    date_of_birth/present_location/contact_method are account_recovery-only (None for every other
+    category's call site, unchanged) -- present_location is stored as JSON, the same
+    present_location_json convention users.present_location_json already uses, so every existing
+    location-formatting helper in this codebase reads it back unchanged."""
     ensure_tables(conn)
     category = category if category in CATEGORIES else "other"
     subject = (subject or "").strip()
@@ -78,13 +106,55 @@ def create(conn, user_id: int | None, category: str, subject: str, body: str,
         raise ValueError("Subject and message are required")
     if user_id is None and not guest_name:
         raise ValueError("Your name is required")
+    present_location_json = json.dumps(present_location) if present_location is not None else None
+    verification_status = "pending" if category == "account_recovery" else None
     cur = conn.execute(
-        """INSERT INTO admin_queries (user_id, guest_name, guest_contact, category, subject, body, status, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, 'open', ?)""",
-        (user_id, guest_name, guest_contact, category, subject, body, _now()),
+        """INSERT INTO admin_queries
+           (user_id, guest_name, guest_contact, category, subject, body, status,
+            date_of_birth, present_location_json, contact_method, verification_status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)""",
+        (user_id, guest_name, guest_contact, category, subject, body,
+         date_of_birth, present_location_json, contact_method, verification_status, _now()),
     )
     conn.commit()
     return cur.lastrowid
+
+
+def set_verification(conn, query_id: int, status: str, notes: str | None, admin_user_id: int) -> None:
+    """Records the Admin's identity-verification decision for an account_recovery ticket --
+    DELIBERATELY separate from reply()/close() below, which only ever touch the ticket's own
+    `status` (has an Admin responded/closed this), never this column (is this person who they
+    claim to be). `notes` is Admin-internal only; api_account_recovery_detail() in app.py is the
+    only reader, and only for a global-admin caller -- never returned to the requester's own,
+    unauthenticated status/reference lookup, because there isn't one (account_recovery tickets
+    have no public status-check route at all, unlike the Family-Tree recovery flow's tracking
+    code -- see this feature's own API contract in docs/phone_app_api.md for why)."""
+    query = get(conn, query_id)
+    if not query or query["category"] != "account_recovery":
+        raise LookupError("Account recovery ticket not found")
+    if status not in VERIFICATION_STATUSES:
+        raise ValueError("Unknown verification status")
+    conn.execute(
+        "UPDATE admin_queries SET verification_status = ?, verification_notes = ? WHERE id = ?",
+        (status, (notes or "").strip() or None, query_id),
+    )
+    conn.commit()
+
+
+def append_verification_note(conn, query_id: int, line: str) -> None:
+    """Appends one timestamped, append-only line to verification_notes -- how a completed
+    recovery action (a Private ID reveal, a temporary PIN generation) is recorded against this
+    ticket, WITHOUT a dedicated column duplicating what id_recovery_reveals (for a reveal) or the
+    PIN change itself already records elsewhere, and WITHOUT ever writing the revealed Private ID
+    or the generated PIN into this text -- callers of this function must never pass either."""
+    query = get(conn, query_id)
+    if not query or query["category"] != "account_recovery":
+        raise LookupError("Account recovery ticket not found")
+    existing = query["verification_notes"] or ""
+    stamped = f"{_now()}: {line.strip()}"
+    combined = (existing + "\n" + stamped) if existing else stamped
+    conn.execute("UPDATE admin_queries SET verification_notes = ? WHERE id = ?", (combined, query_id))
+    conn.commit()
 
 
 def get(conn, query_id: int) -> dict | None:

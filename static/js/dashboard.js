@@ -724,23 +724,18 @@
     fetch("/api/wallet/balance")
       .then(function (r) { return r.json(); })
       .then(function (data) {
+        // 2026-11-08: the always-visible card shows ONLY the Qoin count + locked-share note now
+        // (Phase 1 workstream 1.5) -- the per-transaction list moved into #qm-wallet-history-modal
+        // (dash_extras.js's openWalletHistoryModal()), which fetches its own history separately
+        // (GET /api/wallet/history) only when actually opened, so a visitor who never opens it
+        // never pays for that second request. The modal's own balance/locked-note line is mirrored
+        // from this SAME response (no second /api/wallet/balance call needed when it opens).
         walletBalanceEl.textContent = data.balance_qoins;
         document.getElementById("qm-wallet-locked-note").hidden = !data.has_locked_share;
-        var list = document.getElementById("qm-wallet-tx-list");
-        var empty = document.getElementById("qm-wallet-tx-empty");
-        list.innerHTML = "";
-        empty.hidden = data.transactions.length !== 0;
-        var REASON_LABELS = {
-          donation_self: "Your donation share", donation_referrer: "Referral reward",
-          donation_location: "Location donation share", admin_adjustment: "Admin adjustment",
-        };
-        data.transactions.forEach(function (tx) {
-          var li = document.createElement("li");
-          var sign = tx.amount_qoins >= 0 ? "+" : "";
-          li.textContent = sign + tx.amount_qoins + " Qoins — " + (REASON_LABELS[tx.reason] || tx.reason) +
-            (tx.locked ? " (locked)" : "");
-          list.appendChild(li);
-        });
+        var modalBalanceEl = document.getElementById("qm-wallet-modal-balance");
+        var modalLockedEl = document.getElementById("qm-wallet-modal-locked-note");
+        if (modalBalanceEl) modalBalanceEl.textContent = data.balance_qoins;
+        if (modalLockedEl) modalLockedEl.hidden = !data.has_locked_share;
       })
       .catch(function (err) { console.error("Failed to load wallet", err); });
   }
@@ -1200,7 +1195,7 @@
     var apItemsCache = [];
 
     function apSourceLabel(source) {
-      return { report: "Citizen Report", id_recovery: "ID Recovery", query: "Query", council: "Council Queue", identity: "Identity Request" }[source] || source;
+      return { report: "Citizen Report", id_recovery: "ID Recovery", query: "Query", council: "Council Queue", identity: "Identity Request", account_recovery: "Account Recovery" }[source] || source;
     }
 
     function apRenderList() {
@@ -1218,8 +1213,14 @@
         row.type = "button";
         row.appendChild(apEl("span", "ap-badge ap-badge-" + it.status, it.status));
         row.appendChild(apEl("div", "ap-row-title", it.title || "(no subject)"));
-        row.appendChild(apEl("div", "ap-row-meta",
-          apSourceLabel(it.source) + " · " + (it.author || "Unknown") + (it.location ? " · " + it.location : "") + " · " + apAgo(it.created_at)));
+        var metaText = apSourceLabel(it.source) + " · " + (it.author || "Unknown") + (it.location ? " · " + it.location : "") + " · " + apAgo(it.created_at);
+        if (it.source === "account_recovery") {
+          // Part 4.1 asks the ticket LIST, not only the detail view, to show DOB and contact
+          // method -- appended here rather than widening every other source's own meta line.
+          var contactLabel = { phone: "Phone", email: "Email", member_private_id: "Member Private ID" }[it.contact_method] || it.contact_method;
+          metaText += " · DOB " + (it.date_of_birth || "—") + " · " + contactLabel + " · " + (it.verification_status || "pending");
+        }
+        row.appendChild(apEl("div", "ap-row-meta", metaText));
         row.addEventListener("click", function () { apOpenDetail(it); });
         apList.appendChild(row);
       });
@@ -1248,6 +1249,7 @@
       else if (item.source === "id_recovery") apOpenIdRecovery(item.id);
       else if (item.source === "query") apOpenQuery(item.id);
       else if (item.source === "council") apOpenCouncil(item.id);
+      else if (item.source === "account_recovery") apOpenAccountRecovery(item.id);
     }
 
     function apOpenReport(id) {
@@ -1359,6 +1361,113 @@
         });
         actions.appendChild(closeBtn);
         apDetail.appendChild(actions);
+      }).catch(function (e) { apDetail.innerHTML = ""; apDetail.appendChild(apEl("p", "qm-dash-empty", e.message)); });
+    }
+
+    function apOpenAccountRecovery(id) {
+      // Detail fetch, reply and close all reuse the EXISTING /api/admin/queries/* routes
+      // unchanged -- they already operate generically on any admin_queries row (its own
+      // admin_queries_core.get() is a plain SELECT *, so the account_recovery-only columns come
+      // back for free) and are already gated the equivalent way. Only the three account-recovery-
+      // specific actions below (verify/reveal/generate-pin) call new routes.
+      fetch("/api/admin/queries/" + id).then(function (r) { return r.json(); }).then(function (q) {
+        apDetail.innerHTML = "";
+        var loc = {};
+        try { loc = q.present_location_json ? JSON.parse(q.present_location_json) : {}; } catch (e) { loc = {}; }
+        var locLabel = ["village", "tehsil", "district", "state", "country", "continent"]
+          .map(function (lvl) { return loc[lvl] && loc[lvl].name; }).filter(Boolean).join(", ") || "—";
+        var contactLabel = { phone: "Phone", email: "Email", member_private_id: "Member Private ID" }[q.contact_method] || (q.contact_method || "—");
+
+        apDetail.appendChild(apEl("h3", "ap-detail-title", "Account Recovery — " + (q.guest_name || "Unknown")));
+        apDetail.appendChild(apEl("p", "ap-detail-meta", "DOB " + (q.date_of_birth || "—") + " · status: " + q.status + " · verification: " + (q.verification_status || "pending")));
+        apDetail.appendChild(apEl("p", "ap-detail-meta", "Present location: " + locLabel));
+        apDetail.appendChild(apEl("p", "ap-detail-meta", "Contact method: " + contactLabel + " · value: " + (q.guest_contact || "—")));
+        if (q.verification_notes) {
+          var notesBox = apEl("div", "ap-detail-body");
+          notesBox.appendChild(apEl("b", "", "Internal verification notes (never shown to the requester):"));
+          q.verification_notes.split("\n").forEach(function (line) { notesBox.appendChild(apEl("div", "", line)); });
+          apDetail.appendChild(notesBox);
+        }
+
+        var repliesBox = apEl("div", "ap-updates");
+        (q.replies || []).forEach(function (r) {
+          var row = apEl("div", "ap-update-row");
+          row.appendChild(apEl("b", "", r.author_name + " "));
+          row.appendChild(apEl("span", "", r.message + " · " + apAgo(r.created_at)));
+          repliesBox.appendChild(row);
+        });
+        apDetail.appendChild(repliesBox);
+
+        var actions = apEl("div", "ap-actions");
+
+        // Step 1: verification (Part 5.1) -- required before either recovery action is allowed.
+        var notesInput = document.createElement("input");
+        notesInput.type = "text"; notesInput.placeholder = "Internal verification notes (not shown to requester)…"; notesInput.className = "ap-reply-input";
+        actions.appendChild(notesInput);
+        var verifyBtn = apEl("button", "qm-btn qm-btn-primary", "Mark Verified"); verifyBtn.type = "button";
+        verifyBtn.addEventListener("click", function () {
+          apApi("/api/admin/account-recovery/" + id + "/verify", { status: "verified", notes: notesInput.value })
+            .then(function () { apLoadFeed(); apOpenAccountRecovery(id); }).catch(function (e) { alert(e.message); });
+        });
+        actions.appendChild(verifyBtn);
+        var rejectVerifyBtn = apEl("button", "qm-btn qm-btn-ghost", "Mark Rejected"); rejectVerifyBtn.type = "button";
+        rejectVerifyBtn.addEventListener("click", function () {
+          apApi("/api/admin/account-recovery/" + id + "/verify", { status: "rejected", notes: notesInput.value })
+            .then(function () { apLoadFeed(); apOpenAccountRecovery(id); }).catch(function (e) { alert(e.message); });
+        });
+        actions.appendChild(rejectVerifyBtn);
+        apDetail.appendChild(actions);
+
+        // Step 2: the two recovery actions -- only ever shown once verification_status is
+        // 'verified'; the backend enforces this too (Part 6: never rely on hiding a button alone).
+        if (q.verification_status === "verified" && q.status !== "closed") {
+          var resolveBox = apEl("div", "ap-actions");
+          var candidateInput = document.createElement("input");
+          candidateInput.type = "text"; candidateInput.placeholder = "Verified account's 9-digit Private ID…"; candidateInput.className = "ap-reply-input";
+          resolveBox.appendChild(candidateInput);
+
+          var revealBtn = apEl("button", "qm-btn qm-btn-primary", "Reveal Private ID"); revealBtn.type = "button";
+          revealBtn.addEventListener("click", function () {
+            if (!window.confirm("Reveal this member's real Private ID? This is logged.")) return;
+            apApi("/api/admin/account-recovery/" + id + "/reveal-private-id", { candidate_private_id: candidateInput.value })
+              .then(function (res) {
+                alert("Private ID: " + res.private_code + "\n\nTell the verified person now. It will not be shown again here.");
+                apLoadFeed(); apOpenAccountRecovery(id);
+              }).catch(function (e) { alert(e.message); });
+          });
+          resolveBox.appendChild(revealBtn);
+
+          var pinBtn = apEl("button", "qm-btn qm-btn-primary", "Generate Temporary PIN"); pinBtn.type = "button";
+          pinBtn.addEventListener("click", function () {
+            if (!window.confirm("Generate a new temporary PIN for this account? This replaces their current PIN immediately and is logged.")) return;
+            apApi("/api/admin/account-recovery/" + id + "/generate-pin", { candidate_private_id: candidateInput.value })
+              .then(function (res) {
+                alert("Temporary PIN: " + res.temporary_pin + "\n\nTell the verified person now. It will not be shown again here.");
+                apLoadFeed(); apOpenAccountRecovery(id);
+              }).catch(function (e) { alert(e.message); });
+          });
+          resolveBox.appendChild(pinBtn);
+          apDetail.appendChild(resolveBox);
+        }
+
+        // Reply/close reuse the EXISTING query reply/close routes unchanged.
+        var replyActions = apEl("div", "ap-actions");
+        var replyInput = document.createElement("input");
+        replyInput.type = "text"; replyInput.placeholder = "Write a reply…"; replyInput.className = "ap-reply-input";
+        replyActions.appendChild(replyInput);
+        var replyBtn = apEl("button", "qm-btn qm-btn-ghost", "Reply"); replyBtn.type = "button";
+        replyBtn.addEventListener("click", function () {
+          if (!replyInput.value.trim()) return;
+          apApi("/api/admin/queries/" + id + "/reply", { message: replyInput.value })
+            .then(function () { apLoadFeed(); apOpenAccountRecovery(id); }).catch(function (e) { alert(e.message); });
+        });
+        replyActions.appendChild(replyBtn);
+        var closeBtn = apEl("button", "qm-btn qm-btn-ghost", "Close ticket"); closeBtn.type = "button";
+        closeBtn.addEventListener("click", function () {
+          apApi("/api/admin/queries/" + id + "/close", {}).then(function () { apLoadFeed(); apDetail.innerHTML = ""; }).catch(function (e) { alert(e.message); });
+        });
+        replyActions.appendChild(closeBtn);
+        apDetail.appendChild(replyActions);
       }).catch(function (e) { apDetail.innerHTML = ""; apDetail.appendChild(apEl("p", "qm-dash-empty", e.message)); });
     }
 

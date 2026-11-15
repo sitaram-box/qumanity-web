@@ -20,6 +20,7 @@ import io
 import json
 import os
 import re
+import secrets
 import sys
 import time
 from pathlib import Path
@@ -34,6 +35,7 @@ import election_core
 import election_test_scheduler
 import email_core
 import family_core
+import family_recovery_core
 import pipeline_core
 import pipeline_scheduler
 import profile_picture_core
@@ -456,6 +458,13 @@ def login():
         return generic
     conn.execute("UPDATE users SET pin_fails = 0, pin_locked_until = NULL WHERE id = ?", (user["id"],))
     conn.commit()
+    # Hybrid Qmail addressing: a no-op for anyone already activated (manually or automatically);
+    # for an existing member who somehow still has none, this is the other of the two entry
+    # points Part 4 requires (registration being the first) -- never fails the login itself.
+    try:
+        qmail_core.auto_activate(conn, user["id"])
+    except Exception as e:
+        print(f"[qmail] auto-activation on login failed for user_id={user['id']}: {e}")
     conn.close()
     session["user_id"] = user["id"]
     body = {"status": "success", "redirect": url_for("dashboard")}
@@ -1337,8 +1346,8 @@ def api_qmail_inbox():
     conn = get_db()
     try:
         rows = conn.execute(
-            """SELECT m.id, m.subject, m.body, m.created_at, m.read_at, u.name AS from_name,
-                      u.id AS from_user_id, u.gender AS from_gender,
+            """SELECT m.id, m.subject, m.body, m.created_at, m.read_at, m.message_type, m.recovery_request_id,
+                      u.name AS from_name, u.id AS from_user_id, u.gender AS from_gender,
                       u.profile_picture IS NOT NULL AS from_has_picture, qa.full_address AS from_address
                FROM qmail_messages m
                JOIN users u ON u.id = m.from_user_id
@@ -1351,6 +1360,18 @@ def api_qmail_inbox():
             d = dict(r)
             d["attachments"] = qmail_core.attachments_for(conn, "member", d["id"])
             d["from_profile_picture_url"] = f"/api/users/{d['from_user_id']}/profile-picture" if d.pop("from_has_picture") else None
+            if d["message_type"] != "member":
+                # 2026-11-14 security correction: family_recovery_core._send_recovery_message()
+                # has to set from_user_id = the viewer's OWN id (qmail_messages.from_user_id is
+                # NOT NULL and this query's own INNER JOIN needs a real row -- see that function's
+                # docstring). Left uncorrected here, the recipient would see THEMSELVES as the
+                # sender of their own inbox message. Override the displayed identity for any
+                # non-'member' message type instead of changing the stored row.
+                d["from_name"] = "Qumanity System"
+                d["from_user_id"] = None
+                d["from_gender"] = None
+                d["from_address"] = None
+                d["from_profile_picture_url"] = None
             messages.append(d)
     finally:
         conn.close()
@@ -1503,9 +1524,13 @@ def api_qmail_sent():
                FROM qmail_messages m
                JOIN users u ON u.id = m.to_user_id
                LEFT JOIN qmail_addresses qa ON qa.user_id = m.to_user_id AND qa.is_current = 1
-               WHERE m.from_user_id = ?""",
+               WHERE m.from_user_id = ? AND m.message_type = 'member'""",
             (session["user_id"],),
         ).fetchall()
+        # message_type = 'member' excludes a system-generated family_recovery_request row: that
+        # row's from_user_id is set to the viewer's OWN id (see family_recovery_core.
+        # _send_recovery_message()'s docstring), which would otherwise make it look like the
+        # member sent a message to themselves (2026-11-14 security correction).
         # The member's own outgoing copy of a council message, and nothing else -- never the
         # council's reply or qpunch_queue_actions log, which live only in the Admin Panel. Same
         # sender_id scoping as a regular sent message, just against the other table.
@@ -2437,6 +2462,151 @@ def api_recover_id_submit():
     return jsonify({"status": "received", "reference": f"REQ-{request_id:06d}"}), 201
 
 
+# ---- Family Tree-based recovery (2026-11-13) -- additive to the two routes above, never a
+# replacement for either. Every route here is public (no session): the requester is, by
+# definition, someone who can't sign in right now. Authorization instead comes from the Family
+# Tree graph verification inside family_recovery_core.py, plus the single-use tracking code /
+# PIN-reset authorization minted once that verification succeeds. ----
+
+@app.route("/api/recovery/methods")
+def api_recovery_methods():
+    """Part 5.1's "which recovery screen to show" check. 2026-11-14 security correction: the
+    response is now a FIXED value, independent of the supplied Private ID -- see
+    family_recovery_core.available_methods_for_private_id()'s own docstring for why the previous
+    account-dependent version was an enumeration oracle. Rate-limited anyway (defense in depth,
+    and because the function could change again later): same by-IP pattern as every other public
+    route in this section, generous enough for real use, Part 8.3-style (every call counts,
+    not just ones that "find" something, since there is no longer anything to find)."""
+    if _rate_limited("recovery_methods", _client_ip(), max_calls=20, window_seconds=600):
+        return jsonify({"error": "Too many requests. Please try again later."}), 429
+    conn = get_db()
+    try:
+        methods = family_recovery_core.available_methods_for_private_id(conn, request.args.get("private_id", ""))
+    finally:
+        conn.close()
+    return jsonify(methods)
+
+
+@app.route("/api/recovery/family/request", methods=["POST"])
+def api_family_recovery_request():
+    """Submits a Family Tree recovery request. Rate-limited two ways, both counting EVERY attempt
+    (success or failure) toward the cap, per Part 8.3's explicit requirement that a failed
+    verification still consumes the limit: by caller IP (general abuse) and by the targeted
+    family member's Private ID (so an attacker can't rotate IPs to keep probing the same relative).
+    There is no per-requester limit here, deliberately -- before verification succeeds, there is no
+    requester identity to key a limit on yet; family_recovery_core.create_request() itself
+    supersedes any earlier pending request once a requester IS identified (Part 8.2)."""
+    data = request.get_json(silent=True) or {}
+    target_id = re.sub(r"\D", "", data.get("family_member_private_id") or "")
+    if _rate_limited("family_recovery_ip", _client_ip(), max_calls=3, window_seconds=86400) or \
+       (target_id and _rate_limited("family_recovery_target", target_id, max_calls=3, window_seconds=86400)):
+        return jsonify({"error": "Too many recovery attempts. Please try again later, or use the standard account recovery process."}), 429
+    conn = get_db()
+    try:
+        result = family_recovery_core.create_request(
+            conn, data.get("family_member_private_id", ""), data.get("family_member_name", ""),
+            data.get("requester_name", ""), data.get("relationship", ""), data.get("action", ""),
+            data.get("requester_private_id") or None,
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify(result), 201
+
+
+@app.route("/api/recovery/family/status")
+def api_family_recovery_status():
+    conn = get_db()
+    try:
+        status = family_recovery_core.status_by_tracking_code(conn, request.args.get("tracking_code", ""))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    finally:
+        conn.close()
+    return jsonify(status)
+
+
+@app.route("/api/recovery/family/reveal-private-id", methods=["POST"])
+def api_family_recovery_reveal_private_id():
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        private_id = family_recovery_core.reveal_private_id_by_tracking_code(conn, data.get("tracking_code", ""))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    finally:
+        conn.close()
+    return jsonify({"private_id": private_id})
+
+
+@app.route("/api/recovery/family/complete-pin-reset", methods=["POST"])
+def api_family_recovery_complete_pin_reset():
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        family_recovery_core.complete_pin_reset(conn, data.get("tracking_code", ""), data.get("new_pin", ""))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+# ---- The family member's own side: reviewing and deciding a request from their Qmail inbox ----
+
+@app.route("/api/qmail/family-recovery/<int:request_id>")
+@login_required
+def api_qmail_family_recovery_detail(request_id):
+    conn = get_db()
+    try:
+        detail = family_recovery_core.inbox_detail(conn, session["user_id"], request_id)
+    finally:
+        conn.close()
+    if not detail:
+        return jsonify({"error": "Request not found"}), 404
+    return jsonify(detail)
+
+
+@app.route("/api/qmail/family-recovery/<int:request_id>/share-private-id", methods=["POST"])
+@login_required
+def api_qmail_family_recovery_share(request_id):
+    conn = get_db()
+    try:
+        family_recovery_core.share_private_id(conn, request_id, session["user_id"])
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/qmail/family-recovery/<int:request_id>/approve-pin-reset", methods=["POST"])
+@login_required
+def api_qmail_family_recovery_approve(request_id):
+    conn = get_db()
+    try:
+        family_recovery_core.approve_pin_reset(conn, request_id, session["user_id"])
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/qmail/family-recovery/<int:request_id>/reject", methods=["POST"])
+@login_required
+def api_qmail_family_recovery_reject(request_id):
+    conn = get_db()
+    try:
+        family_recovery_core.reject(conn, request_id, session["user_id"])
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
 @app.route("/api/admin/recover-id")
 @login_required
 def api_recover_id_list():
@@ -2479,6 +2649,169 @@ def api_recover_id_reveal(request_id):
     if not code:
         return jsonify({"error": "No matching account"}), 404
     return jsonify({"private_code": code})
+
+
+# ---- Admin-side actions on an account_recovery admin_queries ticket (2026-11-14). Global Admin/
+# Founder only -- the SAME _is_admin() gate as the two routes immediately above, since Action A
+# deliberately bridges into recovery_core.py's own id_recovery_requests/reveal_private_code()
+# right here, never a second Private-ID-reveal implementation. Reading a ticket's detail and
+# replying/closing it reuse the EXISTING, unmodified /api/admin/queries/<id>,
+# /api/admin/queries/<id>/reply and /api/admin/queries/<id>/close routes -- those already operate
+# generically on any admin_queries row via admin_queries_core.get()'s own `SELECT *` (which picks
+# up this category's extra columns for free) and are already gated the equivalent way
+# (scope["scope"] == "global"), so nothing about them needed to change for this feature. ----
+
+def _account_recovery_ticket_or_404(conn, query_id):
+    query = admin_queries_core.get(conn, query_id)
+    if not query or query["category"] != "account_recovery":
+        return None
+    return query
+
+
+def _resolve_private_id_to_user(conn, raw_private_id):
+    """Admin-authenticated lookup only -- NEVER called from the public ticket-creation route.
+    Unlike that route's own deliberate non-resolution of a submitted Private ID (no enumeration
+    concern here: the caller already passed the global-Admin gate above)."""
+    digits = re.sub(r"\D", "", raw_private_id or "")
+    if len(digits) != 9:
+        return None
+    return conn.execute(
+        "SELECT id, name, private_id_9digit FROM users WHERE private_id_9digit = ? AND is_removed = 0", (digits,)
+    ).fetchone()
+
+
+@app.route("/api/admin/account-recovery/<int:query_id>/verify", methods=["POST"])
+@login_required
+def api_account_recovery_verify(query_id):
+    """Records the Admin's manual identity-verification result (Part 5.1) -- required before
+    either recovery action below will do anything (Part 5.2's "only after successful
+    verification"). `notes` is Admin-internal; never exposed to the requester (there is no
+    requester-facing route for this ticket type at all)."""
+    if not _is_admin():
+        return jsonify({"error": "Admin only"}), 403
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        if not _account_recovery_ticket_or_404(conn, query_id):
+            return jsonify({"error": "Account recovery ticket not found"}), 404
+        admin_queries_core.set_verification(conn, query_id, data.get("status"), data.get("notes"), session["user_id"])
+    except (ValueError, LookupError) as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/admin/account-recovery/<int:query_id>/reveal-private-id", methods=["POST"])
+@login_required
+def api_account_recovery_reveal(query_id):
+    """Action A (Part 5.2). Bridges into the EXISTING, unmodified recovery_core.py Private-ID
+    recovery mechanism rather than building a second one: creates one id_recovery_requests row
+    (status='matched', candidate_user_id = the Admin-resolved account) from this ticket's own
+    already-collected name/DOB, calls the real recovery_core.reveal_private_code() against that
+    row (the same function, and the same id_recovery_reveals audit row, every existing reveal
+    already produces), then immediately marks that bridging row 'sent' -- the same two-call
+    sequence the Admin Panel's existing "Approve & reveal ID" button already performs for a
+    genuine letter-based request -- so it disappears from the separate "ID Recovery" filter tab
+    right away instead of sitting there as a confusing duplicate of this ticket.
+
+    `mailing_address` is NOT NULL on id_recovery_requests but has no meaning here (no physical
+    letter is sent through this path -- the revealed Private ID goes straight back to the Admin's
+    own screen, below). A clearly-labeled placeholder is stored instead of inventing a fake
+    address or leaving a real-looking blank."""
+    if not _is_admin():
+        return jsonify({"error": "Admin only"}), 403
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        ticket = _account_recovery_ticket_or_404(conn, query_id)
+        if not ticket:
+            return jsonify({"error": "Account recovery ticket not found"}), 404
+        if ticket["verification_status"] != "verified":
+            return jsonify({"error": "Verify this requester's identity before revealing a Private ID"}), 400
+        if ticket["status"] == "closed":
+            return jsonify({"error": "This ticket is closed"}), 400
+        candidate = _resolve_private_id_to_user(conn, data.get("candidate_private_id"))
+        if not candidate:
+            return jsonify({"error": "No account found for that Private ID"}), 404
+        # submit_id_recovery() requires a truthy phone OR email ("give us a way to reach you") --
+        # satisfied from the ticket's own contact info when it's phone/email-shaped; a clearly-
+        # synthetic, internal-only placeholder when the ticket's contact method was instead
+        # another member's Private ID (nothing is ever actually sent to this placeholder -- the
+        # revealed code goes straight back to this route's own JSON response, below).
+        bridge_phone = ticket["guest_contact"] if ticket["contact_method"] == "phone" else None
+        bridge_email = ticket["guest_contact"] if ticket["contact_method"] == "email" else None
+        if not bridge_phone and not bridge_email:
+            bridge_email = f"ticket-{query_id}@account-recovery.internal"
+        bridge_id = recovery_core.submit_id_recovery(conn, {
+            "name": ticket["guest_name"] or candidate["name"],
+            "dob": ticket["date_of_birth"] or "1900-01-01",
+            "phone": bridge_phone, "email": bridge_email,
+            "mailing_address": f"(no physical letter -- resolved directly from account_recovery ticket #{query_id})",
+        })
+        recovery_core.decide_request(conn, session["user_id"], bridge_id, "matched",
+                                      admin_note=f"Bridged from account_recovery ticket #{query_id}")
+        conn.execute("UPDATE id_recovery_requests SET candidate_user_id = ? WHERE id = ?", (candidate["id"], bridge_id))
+        conn.commit()
+        private_code = recovery_core.reveal_private_code(conn, session["user_id"], bridge_id)
+        recovery_core.decide_request(conn, session["user_id"], bridge_id, "sent",
+                                      admin_note=f"Bridged from account_recovery ticket #{query_id}")
+        if not private_code:
+            return jsonify({"error": "No matching account"}), 404
+        admin_queries_core.append_verification_note(conn, query_id, f"Private ID revealed to Admin (target user_id={candidate['id']}).")
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    print(f"[account_recovery] PRIVATE_ID_REVEAL_BRIDGED ticket_id={query_id} target_user_id={candidate['id']} by_admin={session['user_id']}")
+    return jsonify({"private_code": private_code})
+
+
+@app.route("/api/admin/account-recovery/<int:query_id>/generate-pin", methods=["POST"])
+@login_required
+def api_account_recovery_generate_pin(query_id):
+    """Action B (Part 5.2). No Admin-initiated PIN-reset mechanism exists anywhere else in this
+    codebase (confirmed by inspection, see docs/account_recovery_fallback_phase_a_2026_11_14.md
+    Part 2.4) -- every other PIN-setting path lets the account holder choose their own new PIN.
+    This reuses the exact existing hashing/reset statement every one of those paths already uses
+    (generate_password_hash + the same UPDATE .../api/user/pin runs), and returns the raw value
+    EXACTLY ONCE, in this authenticated response only -- never written to admin_queries, never
+    logged, never claimed to have been emailed or texted. The Admin relays it to the verified
+    person over whatever channel they're already using to verify them (the phone call in
+    progress, or their own outbound email) -- the same show-once-to-the-Admin shape the existing
+    "Approve & reveal ID" button already uses for Action A's own secret.
+
+    Changing pin_hash also invalidates every one of this account's previously issued Phone App
+    bearer tokens with no extra code here -- _pin_fingerprint() (this file) re-checks the hash's
+    own fingerprint on every request, exactly as it already does for every other PIN-reset path."""
+    if not _is_admin():
+        return jsonify({"error": "Admin only"}), 403
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        ticket = _account_recovery_ticket_or_404(conn, query_id)
+        if not ticket:
+            return jsonify({"error": "Account recovery ticket not found"}), 404
+        if ticket["verification_status"] != "verified":
+            return jsonify({"error": "Verify this requester's identity before generating a PIN"}), 400
+        if ticket["status"] == "closed":
+            return jsonify({"error": "This ticket is closed"}), 400
+        candidate = _resolve_private_id_to_user(conn, data.get("candidate_private_id"))
+        if not candidate:
+            return jsonify({"error": "No account found for that Private ID"}), 404
+        temporary_pin = f"{secrets.randbelow(100000):05d}"
+        conn.execute(
+            "UPDATE users SET pin_hash = ?, pin_fails = 0, pin_locked_until = NULL WHERE id = ?",
+            (generate_password_hash(temporary_pin), candidate["id"]),
+        )
+        admin_queries_core.append_verification_note(conn, query_id, f"Temporary PIN generated (target user_id={candidate['id']}).")
+        conn.commit()
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    print(f"[account_recovery] TEMP_PIN_GENERATED ticket_id={query_id} target_user_id={candidate['id']} by_admin={session['user_id']}")
+    return jsonify({"temporary_pin": temporary_pin})
 
 
 # ---- Admin Panel (2026-10-18): a combined inbox over Citizen Reports, ID recovery requests, and
@@ -2530,12 +2863,19 @@ def _identity_ticket_rows(conn, level=None, location_id=None):
 def _admin_panel_feed_global():
     """The Founder/Admin's view: the three existing sources, unchanged, plus every location's
     council queue (status != 'closed') and every pending identity-correction/birth-time ticket
-    (2026-10-19). Never called for a location-scoped caller."""
+    (2026-10-19), plus (2026-11-14) account_recovery tickets as their own source. Never called
+    for a location-scoped caller -- see Part 6's own Council-exclusion requirement, satisfied
+    structurally: _admin_panel_feed_location() below never calls admin_queries_core.list_open()
+    at all, so an account_recovery row can never reach a council head through this feed."""
     conn = get_db()
     try:
         reports = reports_core.list_all_open(conn)
         id_recovery = [r for r in recovery_core.list_requests(conn) if r["status"] not in ("sent", "rejected")]
-        queries = admin_queries_core.list_open(conn)
+        all_queries = admin_queries_core.list_open(conn)
+        # account_recovery tickets are partitioned OUT of the generic "query" source here, not
+        # fetched with a second query -- list_open() already returns every category in one call.
+        queries = [q for q in all_queries if q["category"] != "account_recovery"]
+        account_recovery_tickets = [q for q in all_queries if q["category"] == "account_recovery"]
         council_rows = conn.execute(
             "SELECT id, level, location_id, subject, status, created_at FROM qpunch_queue_messages "
             "WHERE status != 'closed' ORDER BY created_at DESC"
@@ -2563,6 +2903,22 @@ def _admin_panel_feed_global():
             "source": "query", "id": q["id"], "status": q["status"],
             "title": q["subject"], "author": q["author_name"],
             "location": None, "created_at": q["created_at"],
+        })
+    for ar in account_recovery_tickets:
+        loc = None
+        if ar["present_location_json"]:
+            try:
+                loc = _location_display(json.loads(ar["present_location_json"]))
+            except (ValueError, TypeError):
+                loc = None
+        items.append({
+            "source": "account_recovery", "id": ar["id"], "status": ar["status"],
+            "title": "Account recovery request", "author": ar["author_name"],
+            "location": loc, "created_at": ar["created_at"],
+            # Part 4.1's list requirements beyond the generic row shape -- read only by this
+            # source's own renderer (apOpenAccountRecovery), ignored by every other source.
+            "date_of_birth": ar["date_of_birth"], "contact_method": ar["contact_method"],
+            "verification_status": ar["verification_status"],
         })
     for c in council_rows:
         items.append({
@@ -2739,6 +3095,119 @@ def api_support_ticket():
     finally:
         conn.close()
     return jsonify({"ticket_id": ticket_id, "message": f"Your ticket #{ticket_id} has been received."}), 201
+
+
+# ---- Account recovery fallback for members with no usable Family Tree (2026-11-14) -- additive
+# to recovery_core.py's OTP/Admin-ticket paths and family_recovery_core.py's Family-Tree path,
+# never a replacement for either. Creates an ordinary admin_queries ticket (category=
+# 'account_recovery'), not a new table -- see migrations/038_account_recovery_fallback.py and
+# admin_queries_core.py's own updated docstring for the full schema rationale. Every Admin-side
+# action on these tickets lives further down, right after the existing /api/admin/recover-id/*
+# routes, since Action A deliberately bridges into that exact code. ----
+
+_PHONE_RE = re.compile(r"^[+]?[0-9][0-9 \-]{6,19}$")
+_DOB_MIN_YEAR = 1900
+
+
+def _strip_control_chars(s: str) -> str:
+    return re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", s or "")
+
+
+@app.route("/api/recovery/admin-ticket", methods=["POST"])
+def api_recovery_admin_ticket():
+    """Public, unauthenticated -- for a member who can use NEITHER Family-Tree recovery (no
+    usable tree) NOR the OTP self-service path. Deliberately never asks for the requester's own
+    Private ID (Part 2.1); contact_method's 'member_private_id' option is someone ELSE's Private
+    ID, offered only as a way for the Admin to reach a human who might help verify the requester
+    -- not a Family Tree claim, not itself proof of anything (see the Admin-side actions below for
+    how that's enforced).
+
+    Anti-enumeration (Part 3.1): when contact_method is 'member_private_id', this route NEVER
+    looks the supplied id up against `users` at all -- only format-validates it (9 digits) and
+    stores it exactly like a phone/email guest_contact value, so there is no code path here whose
+    timing, success, or response shape could differ based on whether that id is real. Any
+    resolution happens later, Admin-side, authenticated (see _account_recovery_resolve_candidate()
+    below) -- never from this public route.
+
+    Rate-limited tighter than the general /api/support/ticket (5/hour by IP, not 10): this form
+    names a specific other member's Private ID in one of its three paths, closer in sensitivity to
+    the Family-Tree recovery route's own budget than to a general support query."""
+    if _rate_limited("account_recovery_ticket", _client_ip(), max_calls=5, window_seconds=3600):
+        return jsonify({"error": "Too many requests. Please try again later."}), 429
+    data = request.get_json(silent=True) or {}
+
+    name = _strip_control_chars((data.get("name") or "").strip())[:200]
+    dob_raw = (data.get("date_of_birth") or "").strip()
+    present_location = data.get("present_location")
+    contact_method = (data.get("contact_method") or "").strip()
+    contact_value = _strip_control_chars((data.get("contact_value") or "").strip())[:200]
+
+    if not name or not dob_raw or not isinstance(present_location, dict) or not contact_method or not contact_value:
+        return jsonify({"error": "Name, date of birth, present location, and a contact method with its value are all required"}), 400
+
+    try:
+        dob = dt.date.fromisoformat(dob_raw)
+    except ValueError:
+        return jsonify({"error": "Date of birth must be a valid date"}), 400
+    if dob > dt.date.today() or dob.year < _DOB_MIN_YEAR:
+        return jsonify({"error": "Date of birth must be a real date in the past"}), 400
+
+    if contact_method not in admin_queries_core.CONTACT_METHODS:
+        return jsonify({"error": "Unsupported contact method"}), 400
+    if contact_method == "phone":
+        if not _PHONE_RE.match(contact_value):
+            return jsonify({"error": "Enter a valid phone number"}), 400
+    elif contact_method == "email":
+        if not _EMAIL_RE.match(contact_value):
+            return jsonify({"error": "Enter a valid email address"}), 400
+    else:  # member_private_id
+        digits = re.sub(r"\D", "", contact_value)
+        if len(digits) != 9:
+            return jsonify({"error": "Enter a valid 9-digit Private ID"}), 400
+        contact_value = digits
+
+    if not _location_subfields_well_formed(present_location):
+        return jsonify({"error": "Present location fields must each be an object with an id"}), 400
+    present_country_id = (present_location.get("country") or {}).get("id")
+    present_continent_id = (present_location.get("continent") or {}).get("id")
+    if present_country_id not in SUBCONTINENT_COUNTRY_IDS:
+        if not present_continent_id:
+            return jsonify({"error": "Present location needs a continent"}), 400
+        if any((present_location.get(lvl) or {}).get("id") for lvl in ("state", "zone", "district", "tehsil", "village")):
+            return jsonify({"error": "A Global present location can only be Continent and Country"}), 400
+        if not _is_valid_global_country(present_continent_id, present_country_id):
+            return jsonify({"error": "Unknown continent/country"}), 400
+    else:
+        present_state_id = (present_location.get("state") or {}).get("id")
+        if present_state_id not in _public_state_ids(present_country_id):
+            return jsonify({"error": "Present location needs a valid state/province for its country"}), 400
+        ok, reason = _validate_zone_district_tehsil_ancestry(present_country_id, present_state_id, present_location)
+        if not ok:
+            return jsonify({"error": reason}), 400
+
+    body = (
+        f"Account recovery request (no usable Family Tree). Claimed name: {name}. "
+        f"Date of birth: {dob.isoformat()}. Contact method: {contact_method}."
+    )
+    conn = get_db()
+    try:
+        ticket_id = admin_queries_core.create(
+            conn, None, "account_recovery", "Account recovery request (no Family Tree)", body,
+            guest_name=name, guest_contact=contact_value,
+            date_of_birth=dob.isoformat(), present_location=present_location, contact_method=contact_method,
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    # Never the claimed name/DOB/contact value -- only the ticket id and WHICH kind of contact
+    # method was chosen (never the value itself, per Part 3.1's logging rule).
+    print(f"[account_recovery] TICKET_CREATED ticket_id={ticket_id} contact_method={contact_method}")
+    return jsonify({
+        "status": "received",
+        "message": "Your request has been sent to the Admin. They will contact you using the details you provided.",
+        "reference": f"REC-{ticket_id:06d}",
+    }), 201
 
 
 @app.route("/api/public-ids/suggest")
@@ -4616,6 +5085,14 @@ def api_auth_register():
         wallet_core.check_and_award_bonus(conn, referrer_user_id)
     except ValueError as e:
         print(f"[registration] free Qoin mint failed for user_id={user_id}: {e}")
+
+    # Hybrid Qmail addressing (2026-11-13): every new member gets an automatic Qmail address --
+    # the member never chooses a username. A failure here must never fail the registration that
+    # already succeeded, same non-critical-side-effect pattern as the folder/Qoin writes above.
+    try:
+        qmail_core.auto_activate(conn, user_id)
+    except Exception as e:
+        print(f"[qmail] auto-activation failed for user_id={user_id}: {e}")
     conn.close()
 
     # Admin notification email (2026-10-18, Resend HTTPS API since 2026-10-20) -- notification-
