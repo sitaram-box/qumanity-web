@@ -2361,6 +2361,57 @@ def recursive_member_count(conn, group_id: int, _visited: set | None = None) -> 
     return count
 
 
+def recursive_member_node_ids(conn, group_id: int, _visited: set | None = None) -> set:
+    """Q-Card Stage 3 (2026-11-15): the same cascade traversal as recursive_member_count() above --
+    identical recursion key (husband_parent_group_id only, never wife_parent_group_id -- the
+    Daughter Rule), identical founder-regardless-of-alive/deceased counting, identical
+    married-child exclusion -- but returning the set of family_nodes.id values themselves rather
+    than a count, since a free-eligibility check needs to ask "is THIS specific person in the
+    set," not merely "how many people are in the set."
+
+    Added as a sibling function, not a refactor of recursive_member_count() into calling this one,
+    to avoid touching a function already covered by 211+115 passing checks across
+    tests/test_family_tree.py and tests/test_family_tree_cascade.py for a change neither test
+    suite asked for. tests/test_q_cards.py's own Stage 3 section cross-checks the two can never
+    drift apart: len(recursive_member_node_ids(group_id)) == recursive_member_count(group_id) on
+    every group in the worked example.
+
+    This is additive to family_core.py, not a change to any existing function's behavior -- the
+    only two callers of this cascade (recursive_member_count's own call sites, both display-only)
+    are untouched."""
+    _visited = _visited if _visited is not None else set()
+    if group_id in _visited:
+        return set()
+    _visited.add(group_id)
+
+    group = conn.execute("SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (group_id,)).fetchone()
+    if not group:
+        return set()
+
+    node_ids = set()
+    if group["husband_node_id"]:
+        node_ids.add(group["husband_node_id"])
+    if group["wife_node_id"]:
+        node_ids.add(group["wife_node_id"])
+
+    founder_ids = {group["husband_node_id"], group["wife_node_id"]}
+    child_group_rows = conn.execute(
+        "SELECT id, husband_node_id, wife_node_id, husband_parent_group_id FROM family_groups "
+        "WHERE husband_parent_group_id = ? OR wife_parent_group_id = ?",
+        (group_id, group_id),
+    ).fetchall()
+    married_child_ids = {r["husband_node_id"] for r in child_group_rows} | {r["wife_node_id"] for r in child_group_rows}
+    for r in conn.execute("SELECT node_id FROM family_group_nodes WHERE group_id = ?", (group_id,)):
+        if r["node_id"] not in founder_ids and r["node_id"] not in married_child_ids:
+            node_ids.add(r["node_id"])
+
+    for r in child_group_rows:
+        if r["husband_parent_group_id"] == group_id:
+            node_ids |= recursive_member_node_ids(conn, r["id"], _visited)
+
+    return node_ids
+
+
 def _founder_is_deceased(conn, group_id) -> dict:
     """{"husband": bool, "wife": bool} -- per-founder, live, same _node_is_deceased() source of
     truth _group_is_dormant() already reads, exposed as its own additive field (Rule 3's "visible

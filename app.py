@@ -568,6 +568,100 @@ def api_card_login():
     return jsonify(body)
 
 
+# ---- Q-Cards (Stage 3): Admin-only management actions -- mark paid, mark free, mark delivered,
+# revoke, replace, list pending. Gated on _is_admin() (the global Founder/Admin), not the broader
+# _is_admin_panel_user() scope that also admits a village council head -- the ₹11 fee and
+# free-grant decisions stay with the Founder, never delegated to a council seat. ----
+
+@app.route("/api/admin/q-cards/pending")
+@login_required
+def api_admin_q_cards_pending():
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    try:
+        cards = q_card_core.list_pending(conn)
+    finally:
+        conn.close()
+    return jsonify({"cards": cards})
+
+
+@app.route("/api/admin/q-cards/<int:card_id>/mark-paid", methods=["POST"])
+@login_required
+def api_admin_q_card_mark_paid(card_id):
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        q_card_core.mark_paid(conn, card_id, data.get("method"), data.get("reference"))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/admin/q-cards/<int:card_id>/mark-free", methods=["POST"])
+@login_required
+def api_admin_q_card_mark_free(card_id):
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    try:
+        reason = q_card_core.mark_free(conn, card_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"status": "ok", "free_reason": reason})
+
+
+@app.route("/api/admin/q-cards/<int:card_id>/mark-delivered", methods=["POST"])
+@login_required
+def api_admin_q_card_mark_delivered(card_id):
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    try:
+        q_card_core.mark_delivered(conn, card_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/admin/q-cards/<int:card_id>/revoke", methods=["POST"])
+@login_required
+def api_admin_q_card_revoke(card_id):
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    try:
+        q_card_core.revoke(conn, card_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/admin/q-cards/<int:card_id>/replace", methods=["POST"])
+@login_required
+def api_admin_q_card_replace(card_id):
+    if not _is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    conn = get_db()
+    try:
+        new_card = q_card_core.replace(conn, card_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify(new_card), 201
+
+
 @app.route("/forgot-pin")
 def forgot_pin_page():
     return render_template("forgot_pin.html")
