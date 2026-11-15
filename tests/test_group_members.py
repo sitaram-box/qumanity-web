@@ -158,9 +158,18 @@ fam_stranger = register("Family Non Admin")
 login(fam_admin["private_code"])
 res = client.get(f"/api/family-groups/{parents_group_id}/members")
 check("admin can view the member list", res.status_code == 200)
-check("the member list has exactly 1 entry (the admin, the only member so far)", len(res.get_json()["members"]) == 1)
-check("the single member is flagged is_admin=True", res.get_json()["members"][0]["is_admin"] is True)
-check("the single member is flagged you=True (it's the caller)", res.get_json()["members"][0]["you"] is True)
+members = res.get_json()["members"]
+# 2026-11-16: the list is now the FULL recursive cascade (recursive_member_node_ids()), not just
+# the flat family_group_members chat roster -- both placeholder founders (father/mother, "action":
+# "create", no account at all) now show up alongside fam_admin himself, matching the same unit's
+# own recursive_member_count() (3), which the old roster-only list silently disagreed with.
+check("the member list has all 3 cascade entries (admin + 2 unclaimed founder placeholders)", len(members) == 3)
+admin_row = next(m for m in members if m["user_id"] == fam_admin["user_id"])
+check("the admin's own row is flagged is_admin=True / role=admin", admin_row["is_admin"] is True and admin_row["role"] == "admin")
+check("the admin's own row is flagged you=True (it's the caller)", admin_row["you"] is True)
+placeholder_rows = [m for m in members if m["claimed"] is False]
+check("the two unclaimed founder placeholders appear, unclaimed and role=member", len(placeholder_rows) == 2
+      and all(p["role"] == "member" and p["user_id"] is None for p in placeholder_rows))
 
 # invite_to_group() takes an already-resolved user_id (the admin confirms a name/avatar via
 # /api/people/search first), not a raw Public ID string -- matching social_core.send_group_invite()'s
@@ -194,10 +203,24 @@ check("the invite shows the correct family_group_name, not a stray undefined/nul
 res = client.post(f"/api/people/inbox/{invite_req2['id']}/decide", json={"decision": "accept"})
 check("target accepts the family group invite (200)", res.status_code == 200)
 
+# 2026-11-16: a generic "Add Member by Public ID" invite only approves family_group_members --
+# it never places the target in the tree graph (no self-node, since they never ran
+# activate_timeline()). The Members sheet is now the recursive cascade (recursive_member_node_ids()),
+# which walks the tree graph only, so a member added this way is NOT reachable from it and
+# correctly does not appear here -- confirmed as the intended behavior, not a regression, since
+# the alternative (also unioning in the flat chat roster) would re-introduce a length mismatch
+# against recursive_member_count() whenever someone is added this way instead of through the tree.
+conn = dbmod.get_db()
+target_membership = conn.execute(
+    "SELECT status, is_admin FROM family_group_members WHERE group_id = ? AND user_id = ?",
+    (parents_group_id, fam_target["user_id"]),
+).fetchone()
+conn.close()
+check("the target IS still approved in the chat roster itself (family_group_members), just not tree-placed",
+      target_membership["status"] == "approved" and target_membership["is_admin"] == 0)
 res = client.get(f"/api/family-groups/{parents_group_id}/members")
-check("the accepted target now appears in the member list", any(m["user_id"] == fam_target["user_id"] for m in res.get_json()["members"]))
-target_row = next(m for m in res.get_json()["members"] if m["user_id"] == fam_target["user_id"])
-check("the invited target joined as a PLAIN member, no founder-admin grant from a generic invite", target_row["is_admin"] is False)
+check("the accepted-but-tree-unplaced target does NOT appear in the cascade-based Members list",
+      all(m["user_id"] != fam_target["user_id"] for m in res.get_json()["members"]))
 
 logout()
 login(fam_admin["private_code"])

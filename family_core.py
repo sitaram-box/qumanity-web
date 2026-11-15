@@ -983,41 +983,61 @@ def invite_to_group(conn, admin_user_id: int, group_id: int, target_user_id: int
     return cur.lastrowid
 
 
+def _unclaimed_member_row(conn, node_id: int) -> dict:
+    """The Members modal's row shape for a cascade member nobody has claimed yet -- same keys as
+    social_core.member_display_row() so the frontend renders both uniformly, just with no
+    account behind the name: no user_id, no profile/location (there's no account to carry them),
+    always role='member' (an empty node holds no admin rights for anyone to have), you=False
+    (a placeholder can never be the viewer)."""
+    node = conn.execute("SELECT gender FROM family_nodes WHERE id = ?", (node_id,)).fetchone()
+    return {
+        "user_id": None, "node_id": node_id, "name": _node_display_name(conn, node_id),
+        "gender": node["gender"] if node else None, "age_group": None, "present_location": None,
+        "profile_picture_url": None, "is_admin": False, "role": "member", "you": False, "claimed": False,
+    }
+
+
 def group_members_for(conn, viewer_user_id: int, group_id: int):
-    """The full approved member list for a unit's own Members modal: user_id, name, gender,
-    age_group, present_location, profile_picture_url, is_admin, role, you -- every admin (founders
-    and creator-admins alike) before plain members, alphabetical within each. Name/present_location
-    are masked for a hide_identity member
-    exactly like everywhere else a stranger might see them (social_core.member_display_row() ->
-    display_identity()). `role` ('founder'|'admin'|'member', 2026-10-27) is the honest label --
-    is_admin alone can't tell a unit's actual husband/wife apart from its creator-admin (see
-    create_group()'s own additive creator grant), which rendered a plain child as "Admin" in their
-    parents' unit. None if the group doesn't exist or the viewer isn't an approved member, same
-    404-not-403 convention as neighborhood_for_group()/tree_for_group()."""
+    """The unit's FULL recursive cascade roster for its own Members modal (2026-11-16) -- every
+    family_nodes.id recursive_member_node_ids() reaches from this unit (founders, sons' households
+    recursively via the Daughter Rule, and unmarried daughters), claimed or not -- so this list's
+    length always matches recursive_member_count() on the SAME group_id, the number the Family
+    Tree screen's own unit card already shows. Previously this returned only family_group_members'
+    flat chat roster (approved, claimed accounts who had actually joined that specific unit's
+    chat), which could be a small fraction of the cascade and silently disagreed with that card --
+    e.g. a card reading "8 members" whose own Members sheet showed only 3.
+
+    Each row is social_core.member_display_row()'s shape for a claimed node, or
+    _unclaimed_member_row()'s for one nobody has claimed yet; name/present_location are masked for
+    a hide_identity member exactly like everywhere else a stranger might see them
+    (member_display_row() -> display_identity()).
+
+    `role` ('admin'|'member', 2026-11-16): 'admin' only when _is_admin_of_group() says so for THIS
+    group specifically -- replaces the old three-way 'founder'/'admin'/'member' label, which showed
+    "Founder" for any husband/wife regardless of whether they actually held admin rights over this
+    particular unit (confusing in practice: a unit's founder showing the same "Founder" badge in a
+    DIFFERENT unit they're merely a plain child or in-law member of). None if the group doesn't
+    exist or the viewer isn't an approved member, same 404-not-403 convention as
+    neighborhood_for_group()/tree_for_group()."""
     import social_core
-    group = conn.execute("SELECT husband_node_id, wife_node_id FROM family_groups WHERE id = ?", (group_id,)).fetchone()
-    if not group:
+    if not conn.execute("SELECT 1 FROM family_groups WHERE id = ?", (group_id,)).fetchone():
         return None
-    member_row = conn.execute(
-        "SELECT 1 FROM family_group_members WHERE group_id = ? AND user_id = ? AND status = 'approved'",
-        (group_id, viewer_user_id),
-    ).fetchone()
-    if not member_row:
+    if not _is_approved_member(conn, group_id, viewer_user_id):
         return None
-    founder_node_ids = {nid for nid in (group["husband_node_id"], group["wife_node_id"]) if nid}
-    rows = conn.execute(
-        """SELECT u.id, u.name, m.is_admin, fn.id AS node_id
-           FROM family_group_members m JOIN users u ON u.id = m.user_id
-           LEFT JOIN family_nodes fn ON fn.claimed_user_id = u.id
-           WHERE m.group_id = ? AND m.status = 'approved' ORDER BY m.is_admin DESC, u.name""",
-        (group_id,),
-    ).fetchall()
-    return [
-        social_core.member_display_row(
-            conn, r["id"], viewer_user_id, bool(r["is_admin"]), is_founder=r["node_id"] in founder_node_ids,
-        )
-        for r in rows
-    ]
+    out = []
+    for node_id in recursive_member_node_ids(conn, group_id):
+        node = conn.execute("SELECT claimed_user_id FROM family_nodes WHERE id = ?", (node_id,)).fetchone()
+        if not node:
+            continue
+        if node["claimed_user_id"]:
+            is_admin = _is_admin_of_group(conn, node["claimed_user_id"], group_id)
+            row = social_core.member_display_row(conn, node["claimed_user_id"], viewer_user_id, is_admin)
+        else:
+            row = _unclaimed_member_row(conn, node_id)
+        if row:
+            out.append(row)
+    out.sort(key=lambda m: (m["role"] != "admin", (m["name"] or "").lower()))
+    return out
 
 
 def _classify_membership(conn, self_node_id: int, group_id: int) -> str:
@@ -2197,12 +2217,13 @@ def my_family_groups(conn, user_id: int) -> list[dict]:
         They still render in the D3 tree, faded, as root ancestors -- just not as a chat to open.
       - is_founder tags each row so the frontend can tell "My Family" (the viewer's own founded
         unit) apart from "Joined Family" (approved into someone else's, e.g. their parents' unit)
-        -- distinct from is_admin, since the creator of a freshly-founded unit is also always
-        granted admin even when they're not a founder (see create_group()).
-      - `role` (2026-10-27, additive): 'founder'|'admin'|'member', the same three-way label
-        group_members_for() returns -- the honest version of is_admin alone, which rendered a
-        plain child as "Admin" in their own parents' unit just because they happened to be the
-        one who created it."""
+        -- unrelated to `role` below; a creator-admin is never a founder, but still reads 'admin'
+        there, so this stays its own, separate field rather than being folded into role.
+      - `role` (2026-11-16): 'admin'|'member', straight from _is_admin_of_group() for THIS group
+        specifically. Retired the old three-way 'founder'|'admin'|'member' label (2026-10-27-
+        2026-11-16) -- see group_members_for()'s own docstring for why: it showed "Founder" for a
+        husband/wife regardless of whether they actually held admin rights over this particular
+        unit, which is exactly what confused this row's own badge in practice."""
     rows = conn.execute(
         """SELECT fg.id, fg.name, fg.kind, m.is_admin,
                   (fg.husband_node_id = sn.id OR fg.wife_node_id = sn.id) AS is_founder,
@@ -2217,9 +2238,8 @@ def my_family_groups(conn, user_id: int) -> list[dict]:
     for r in rows:
         if _group_is_dormant(conn, r["id"]):
             continue
-        is_founder = bool(r["is_founder"])
-        role = "founder" if is_founder else ("admin" if r["is_admin"] else "member")
-        out.append({**dict(r), "is_founder": is_founder, "role": role})
+        role = "admin" if _is_admin_of_group(conn, user_id, r["id"]) else "member"
+        out.append({**dict(r), "is_founder": bool(r["is_founder"]), "role": role})
     return out
 
 

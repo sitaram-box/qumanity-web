@@ -338,32 +338,32 @@ def _full_present_location(location_json: str) -> str:
     return ", ".join(parts) or "Unknown"
 
 
-def member_display_row(conn, user_id, viewer_user_id, is_admin, is_founder=False) -> dict:
+def member_display_row(conn, user_id, viewer_user_id, is_admin) -> dict:
     """The one row shape both the personal-group and Family Group Member List modals render:
     avatar, name, gender, age group, present location and role. Name and location are masked for
     a hide_identity member exactly like display_identity() masks them everywhere else a stranger
     might see this member (State-capped place, Account ID instead of name); gender and age group
     are never masked, matching display_identity()'s own age_category precedent.
 
-    `role` (2026-10-27): 'founder' | 'admin' | 'member' -- the honest three-way label. is_admin
-    alone used to render "Admin" for a Family Group's CREATOR too (create_group()'s deliberate,
-    additive grant to whoever first founded a unit with unclaimed placeholder slots), which looks
-    like a bug when that creator is a plain child, not a husband/wife -- see family_core.py
-    §4.18's note. A creator-admin really can act with admin authority (rename nodes, remove
-    members), so 'member' would be a lie; 'founder' is reserved for an actual husband/wife, passed
-    in by the caller (personal groups have no founder concept at all, so is_founder defaults False
-    there and this just degrades to the old admin/member binary). `is_admin` is kept on the
-    response too, unchanged, for any caller still keying off it."""
+    `role` (2026-11-16): 'admin' | 'member' -- a straight mirror of `is_admin`, which the caller is
+    responsible for computing authoritatively for the group/context at hand (for a Family Group,
+    that's family_core._is_admin_of_group(), never the raw family_group_members.is_admin column
+    alone -- see group_members_for()). This used to also carry a third 'founder' value whenever the
+    caller passed is_founder=True, reserved for an actual husband/wife regardless of whether they
+    held admin rights over THAT SPECIFIC unit -- retired (2026-11-16) because it rendered the same
+    "Founder" badge for a unit's founder even in a different unit where they're merely a plain
+    child or in-law member. `claimed` is always True here (an unclaimed Family Tree placeholder has
+    no account and never reaches this function -- see family_core._unclaimed_member_row())."""
     identity = display_identity(conn, user_id, viewer_user_id)
     if not identity:
         return None
     place = identity["place"] if identity["hidden"] else _full_present_location(identity["present_location_json"])
-    role = "founder" if is_founder else ("admin" if is_admin else "member")
     return {
         "user_id": user_id, "name": identity["name"], "gender": identity["gender"],
         "age_group": _age_group(identity["dob"]), "present_location": place,
         "profile_picture_url": _picture_url(user_id, identity["has_picture"]),
-        "is_admin": bool(is_admin), "role": role, "you": user_id == viewer_user_id,
+        "is_admin": bool(is_admin), "role": "admin" if is_admin else "member",
+        "you": user_id == viewer_user_id, "claimed": True,
     }
 
 
