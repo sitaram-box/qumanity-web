@@ -317,11 +317,14 @@ def founders_message():
 
 @app.route("/app")
 def download_app():
-    """Android APK download link (2026-11-12) -- /app redirects straight to the static file rather
-    than serving it directly, so the usual static-file conventions (caching headers, range requests
-    for a resumed download) apply with no extra code here. Public, no login needed, same as every
-    other download/landing link on the site."""
-    return redirect(url_for("static", filename="downloads/qumanity.apk"))
+    """Android APK download link -- the APK exceeds GitHub's 100MB repo file limit, so as of
+    2026-11-16 it's hosted as a GitHub Release asset instead of a static file here; /app just
+    redirects there. Public, no login needed, same as every other download/landing link on the
+    site."""
+    return redirect(
+        "https://github.com/sitaram-box/qumanity-web/releases/download/v1.0.1/"
+        "application-c9e06518-4acb-44cb-85dc-a9a852025ae9.apk"
+    )
 
 
 # Bump this by hand whenever a new APK is released -- there is no build pipeline wiring it to the
