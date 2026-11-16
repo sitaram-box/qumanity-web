@@ -32,54 +32,227 @@
     });
   });
 
-  // ---- Global / Public sub-tabs -- same registered-user demographics
-  // shape/rendering the homepage's Earth/Continent/Country tabs already
-  // use (see earth.js's renderRegisteredStats/renderStatRows), just a
-  // page-local copy since these DOM refs and IDs are dashboard-specific. ----
+  // ---- Statistics Dashboard Upgrade (2026-11-16) ----
+  // Both /api/location/stats/<level>/<id> and /api/earth/stats return small-count-suppressed
+  // person-counts: any true value of 1-4 comes back as the literal string "<5", never a number
+  // (app.py's _suppress_small_count) -- so every helper below must treat "<5" as "a real but
+  // UNKNOWABLE small number", never coerce it to 0 or fabricate a percentage from it.
+  //
+  // Dict-shaped fields (gender/elements/signs) are NOT returned in a stable order: Flask's
+  // jsonify() alphabetizes dict keys on the wire (confirmed directly: jsonify({"male":11,
+  // "female":7,"both":0}) -> {"both":0,"female":7,"male":11}), independent of the Python dict's
+  // own insertion order -- this, not a display bug, is why "Third gender" used to render first.
+  // age_bands is a JSON ARRAY, so it was never affected. Fix: every one of these three fields is
+  // now walked in an explicit, hardcoded order below -- Object.keys() on any of them is never
+  // trusted again.
+  function isSuppressed(v) { return v === "<5"; }
+  function formatCount(v) { return isSuppressed(v) ? "<5" : String(v); }
+
+  // A suppressed slice/bar's TRUE value (1-4) is deliberately unknowable -- 2 is just a plausible
+  // stand-in used ONLY to size its wedge/bar so it reads as "a small amount" relative to the rest,
+  // never shown as a number anywhere; the displayed label is always the literal "<5".
+  var SUPPRESSED_SIZE_ESTIMATE = 2;
+
+  function sliceFraction(value, total) {
+    if (isSuppressed(total) || !total) return 0;
+    return Math.max(0, (isSuppressed(value) ? SUPPRESSED_SIZE_ESTIMATE : value) / total);
+  }
+
+  // null means "can't be computed" (either side suppressed, or no total) -- callers render "<5"
+  // in that case rather than a fabricated number.
+  function computePct(value, total) {
+    if (isSuppressed(value) || isSuppressed(total) || !total) return null;
+    return Math.round((value / total) * 100);
+  }
+  function pctLabel(value, total) {
+    var pct = computePct(value, total);
+    return pct === null ? "<5" : pct + "%";
+  }
+  function countAndPctLabel(value, total) {
+    var pct = computePct(value, total);
+    return pct === null ? formatCount(value) : formatCount(value) + " · " + pct + "%";
+  }
+
   var GENDER_LABELS = { male: "Male", female: "Female", both: "Third gender" };
+  var GENDER_ORDER = ["female", "male", "both"];
+  var GENDER_COLORS = { female: "#E85D9E", male: "#4FA3E0", both: "#B08BF0" };
 
-  function renderProgressRows(container, pairs) {
+  var ELEMENT_ORDER = ["Fire", "Earth", "Air", "Water"];
+  var ELEMENT_COLORS = { Fire: "#FF5B45", Earth: "#5FB85C", Air: "#4FC3D9", Water: "#4A7FE0" };
+
+  // Canonical Aries->Pisces wheel order and element groupings, matching zodiac_core.py's own
+  // ZODIAC_RANGES -- reused here rather than re-derived, so the two can never drift apart.
+  var ZODIAC_ORDER = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio",
+                       "Sagittarius", "Capricorn", "Aquarius", "Pisces"];
+  var SIGN_ELEMENT = {
+    Aries: "Fire", Leo: "Fire", Sagittarius: "Fire",
+    Taurus: "Earth", Virgo: "Earth", Capricorn: "Earth",
+    Gemini: "Air", Libra: "Air", Aquarius: "Air",
+    Cancer: "Water", Scorpio: "Water", Pisces: "Water",
+  };
+
+  function hexToHsl(hex) {
+    var r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b), h = 0, s = 0, l = (max + min) / 2;
+    if (max !== min) {
+      var d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h *= 60;
+    }
+    return { h: h, s: s * 100, l: l * 100 };
+  }
+  function hslToHex(h, s, l) {
+    s /= 100; l /= 100;
+    var c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2, r, g, b;
+    if (h < 60) { r = c; g = x; b = 0; } else if (h < 120) { r = x; g = c; b = 0; }
+    else if (h < 180) { r = 0; g = c; b = x; } else if (h < 240) { r = 0; g = x; b = c; }
+    else if (h < 300) { r = x; g = 0; b = c; } else { r = c; g = 0; b = x; }
+    var toHex = function (v) { var n = Math.round((v + m) * 255); return ("0" + n.toString(16)).slice(-2); };
+    return "#" + toHex(r) + toHex(g) + toHex(b);
+  }
+
+  // Three shades per element (slightly darker / base / slightly lighter), assigned in wheel order
+  // so e.g. Aries/Leo/Sagittarius -- the three Fire signs -- read as a visually related family
+  // without being identical, same idea as a single-hue sequential palette.
+  var SIGN_COLORS = (function () {
+    var seen = {}, colors = {};
+    ZODIAC_ORDER.forEach(function (sign) {
+      var element = SIGN_ELEMENT[sign], idx = seen[element] || 0;
+      var hsl = hexToHsl(ELEMENT_COLORS[element]);
+      var delta = [-12, 0, 14][idx] || 0;
+      colors[sign] = hslToHex(hsl.h, hsl.s, Math.max(15, Math.min(85, hsl.l + delta)));
+      seen[element] = idx + 1;
+    });
+    return colors;
+  })();
+
+  // Builds a donut (ring) chart as inline SVG: one <circle> per slice, stroke-dasharray/-dashoffset
+  // carving out its own arc of the ring -- the standard lightweight, no-library SVG donut technique.
+  // slices: [{frac (0..1 of the full circle), color, title}].
+  function buildDonutSVG(slices, size, strokeWidth) {
+    var r = (size - strokeWidth) / 2, cx = size / 2, cy = size / 2, circumference = 2 * Math.PI * r;
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 " + size + " " + size);
+    svg.setAttribute("class", "qm-donut-svg");
+    var offset = 0;
+    slices.forEach(function (s) {
+      if (s.frac <= 0) return;
+      var len = s.frac * circumference;
+      var circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circle.setAttribute("cx", cx); circle.setAttribute("cy", cy); circle.setAttribute("r", r);
+      circle.setAttribute("fill", "none");
+      circle.setAttribute("stroke", s.color);
+      circle.setAttribute("stroke-width", strokeWidth);
+      circle.setAttribute("stroke-dasharray", len + " " + (circumference - len));
+      circle.setAttribute("stroke-dashoffset", -offset);
+      circle.setAttribute("transform", "rotate(-90 " + cx + " " + cy + ")");
+      circle.setAttribute("class", "qm-donut-slice");
+      var title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+      title.textContent = s.title;
+      circle.appendChild(title);
+      svg.appendChild(circle);
+      offset += len;
+    });
+    return svg;
+  }
+
+  function legendRow(color, label, value, total) {
+    var row = el("div", "qm-legend-row");
+    var swatch = el("span", "qm-legend-swatch"); swatch.style.background = color;
+    row.appendChild(swatch);
+    row.appendChild(el("span", "qm-legend-label", label));
+    row.appendChild(el("span", "qm-legend-pct", pctLabel(value, total)));
+    return row;
+  }
+
+  function renderGenderBars(prefix, stats) {
+    var container = document.getElementById(prefix + "-gender-list");
+    if (!container) return;
     container.innerHTML = "";
-    var total = pairs.reduce(function (sum, p) { return sum + p[1]; }, 0);
-    pairs.forEach(function (pair) {
-      var pct = total > 0 ? Math.round((pair[1] / total) * 100) : 0;
-      var row = document.createElement("div");
-      row.className = "qm-stat-row";
-
-      var label = document.createElement("span");
-      label.className = "qm-stat-row-label";
-      label.textContent = pair[0];
-
-      var barWrap = document.createElement("div");
-      barWrap.className = "qm-stat-row-bar";
-      var barFill = document.createElement("div");
-      barFill.className = "qm-stat-row-bar-fill";
-      barFill.style.width = pct + "%";
+    var total = stats.total_humans;
+    GENDER_ORDER.forEach(function (key) {
+      var value = stats.gender[key];
+      var row = el("div", "qm-stat-row");
+      row.appendChild(el("span", "qm-stat-row-label", GENDER_LABELS[key]));
+      var barWrap = el("div", "qm-stat-row-bar");
+      var barFill = el("div", "qm-stat-row-bar-fill");
+      barFill.style.width = (sliceFraction(value, total) * 100) + "%";
+      barFill.style.background = GENDER_COLORS[key];
       barWrap.appendChild(barFill);
-
-      var value = document.createElement("span");
-      value.className = "qm-stat-row-value";
-      value.textContent = pair[1];
-
-      row.appendChild(label);
       row.appendChild(barWrap);
-      row.appendChild(value);
+      row.appendChild(el("span", "qm-stat-row-value", countAndPctLabel(value, total)));
       container.appendChild(row);
     });
+  }
+
+  function renderAgeColumns(prefix, stats) {
+    var container = document.getElementById(prefix + "-age-chart");
+    if (!container) return;
+    container.innerHTML = "";
+    var total = stats.total_humans;
+    stats.age_bands.forEach(function (band) {
+      var col = el("div", "qm-age-col");
+      col.appendChild(el("div", "qm-age-col-value", countAndPctLabel(band.count, total)));
+      var track = el("div", "qm-age-col-track");
+      var fill = el("div", "qm-age-col-fill");
+      fill.style.height = Math.max(sliceFraction(band.count, total) * 100, band.count === 0 ? 0 : 3) + "%";
+      track.appendChild(fill);
+      col.appendChild(track);
+      col.appendChild(el("div", "qm-age-col-label", band.label));
+      container.appendChild(col);
+    });
+  }
+
+  function renderElementDonut(prefix, stats) {
+    var chart = document.getElementById(prefix + "-element-chart"), legend = document.getElementById(prefix + "-element-legend");
+    if (!chart || !legend) return;
+    chart.innerHTML = ""; legend.innerHTML = "";
+    var total = stats.total_humans;
+    chart.appendChild(buildDonutSVG(ELEMENT_ORDER.map(function (name) {
+      return { frac: sliceFraction(stats.elements[name], total), color: ELEMENT_COLORS[name], title: name };
+    }), 120, 20));
+    ELEMENT_ORDER.forEach(function (name) { legend.appendChild(legendRow(ELEMENT_COLORS[name], name, stats.elements[name], total)); });
+  }
+
+  function renderZodiacDonut(prefix, stats) {
+    var chart = document.getElementById(prefix + "-sign-chart"), legend = document.getElementById(prefix + "-sign-legend");
+    if (!chart || !legend) return;
+    chart.innerHTML = ""; legend.innerHTML = "";
+    var total = stats.total_humans;
+    chart.appendChild(buildDonutSVG(ZODIAC_ORDER.map(function (name) {
+      return { frac: sliceFraction(stats.signs[name], total), color: SIGN_COLORS[name], title: name };
+    }), 120, 16));
+    ZODIAC_ORDER.forEach(function (name) { legend.appendChild(legendRow(SIGN_COLORS[name], name, stats.signs[name], total)); });
   }
 
   function renderRegisteredStats(prefix, stats) {
     var totalEl = document.getElementById(prefix + "-total");
     if (!totalEl) return;
-    totalEl.textContent = stats.total_humans;
+    totalEl.textContent = formatCount(stats.total_humans);
+    var trulyEmpty = stats.total_humans === 0, suppressedTotal = isSuppressed(stats.total_humans);
     var emptyNote = document.getElementById(prefix + "-empty-note");
-    if (emptyNote) emptyNote.hidden = stats.total_humans !== 0;
-    renderProgressRows(document.getElementById(prefix + "-gender-list"), Object.keys(stats.gender).map(function (g) {
-      return [GENDER_LABELS[g] || g, stats.gender[g]];
-    }));
-    renderProgressRows(document.getElementById(prefix + "-age-list"), stats.age_bands.map(function (b) { return [b.label, b.count]; }));
-    renderProgressRows(document.getElementById(prefix + "-element-list"), Object.keys(stats.elements).map(function (e) { return [e, stats.elements[e]]; }));
-    renderProgressRows(document.getElementById(prefix + "-sign-list"), Object.keys(stats.signs).map(function (s) { return [s, stats.signs[s]]; }));
+    if (emptyNote) {
+      emptyNote.hidden = !(trulyEmpty || suppressedTotal);
+      // A location with 1-4 people hides every breakdown outright, not just the raw numbers --
+      // showing "<5" split four ways across gender/age/element/sign rows would still visually
+      // narrow down who's who far more than the flat total alone, defeating the suppression this
+      // is meant to provide. Same message either way; only the wording differs.
+      emptyNote.textContent = suppressedTotal
+        ? "Fewer than 5 registered here — detailed breakdown hidden to protect their privacy."
+        : "No one has registered here yet.";
+    }
+    ["gender", "age", "element", "sign"].forEach(function (key) {
+      var section = document.getElementById(prefix + "-" + key + "-section");
+      if (section) section.hidden = trulyEmpty || suppressedTotal;
+    });
+    if (trulyEmpty || suppressedTotal) return;
+    renderGenderBars(prefix, stats);
+    renderAgeColumns(prefix, stats);
+    renderElementDonut(prefix, stats);
+    renderZodiacDonut(prefix, stats);
   }
 
   function loadStatsFor(prefix, url) {

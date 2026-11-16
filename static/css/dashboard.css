@@ -374,8 +374,141 @@
   transition: width 0.5s ease;
 }
 .qm-stat-row-value {
-  flex: 0 0 30px;
+  flex: 0 0 auto;
+  min-width: 30px;
   text-align: right;
+  font-weight: 700;
+  color: var(--qm-text);
+}
+
+/* ---- Statistics Dashboard Upgrade (2026-11-16): the Age vertical bar chart, and the Element /
+   Zodiac donut charts + their legends. Shared by the sidebar panel (narrow) and the Stats modal
+   (wider) -- .qm-donut-row wraps the legend below the chart at narrow widths instead of squeezing
+   either one, and nothing here is sized in viewport units, so neither host needs its own variant. ---- */
+
+.qm-age-chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  height: 110px;
+  padding-top: 4px;
+}
+.qm-age-col {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  min-width: 0;
+}
+.qm-age-col-value {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--qm-text);
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+.qm-age-col-track {
+  flex: 1;
+  width: 60%;
+  min-width: 14px;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(10, 25, 41, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.qm-age-col-fill {
+  width: 100%;
+  background: linear-gradient(180deg, var(--qm-gold), var(--qm-saffron));
+  border-radius: 4px 4px 0 0;
+  transition: height 0.5s ease;
+}
+.qm-age-col-label {
+  font-size: 0.64rem;
+  color: var(--qm-text-dim);
+  margin-top: 6px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.qm-donut-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.qm-donut-chart {
+  flex: 0 0 auto;
+  width: 120px;
+  height: 120px;
+}
+.qm-donut-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.qm-donut-slice {
+  transition: stroke-dasharray 0.5s ease;
+}
+.qm-donut-legend {
+  flex: 1 1 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.qm-donut-legend--grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 10px;
+}
+.qm-donut-row--stacked {
+  flex-direction: column;
+  align-items: center;
+}
+.qm-donut-row--stacked .qm-donut-legend {
+  width: 100%;
+}
+/* The zodiac legend's 2 columns are still too narrow for "Sagittarius" to fit on one line even at
+   full panel width -- wrap instead of truncating it away, rather than shrinking the font further. */
+.qm-donut-legend--grid .qm-legend-row {
+  align-items: flex-start;
+}
+.qm-donut-legend--grid .qm-legend-swatch {
+  margin-top: 3px;
+}
+.qm-donut-legend--grid .qm-legend-label {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: break-word;
+  line-height: 1.15;
+}
+.qm-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  color: var(--qm-text-dim);
+  min-width: 0;
+}
+.qm-legend-swatch {
+  flex: 0 0 10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.qm-legend-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--qm-text);
+}
+.qm-legend-pct {
+  flex: 0 0 auto;
   font-weight: 700;
   color: var(--qm-text);
 }

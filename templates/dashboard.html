@@ -358,24 +358,37 @@
         <div class="qm-stat-big-label">Recognition earned together here</div>
       </div>
 
-      <div class="qm-stats-section">
+      <!-- 2026-11-16 (Statistics Dashboard Upgrade, Phase 2): each section below now has its own
+           id so renderRegisteredStats() can hide the whole section -- not just empty its list --
+           when total_humans is small-count-suppressed ("<5"); see that function's own comment on
+           why a breakdown is hidden outright rather than shown with "<5" rows. -->
+      <div class="qm-stats-section" id="{{ prefix }}-gender-section">
         <div class="qm-stats-section-title">⚧️ Gender Distribution</div>
         <div id="{{ prefix }}-gender-list"></div>
       </div>
 
-      <div class="qm-stats-section">
+      <div class="qm-stats-section" id="{{ prefix }}-age-section">
         <div class="qm-stats-section-title">📅 Age Distribution</div>
-        <div id="{{ prefix }}-age-list"></div>
+        <div class="qm-age-chart" id="{{ prefix }}-age-chart"></div>
       </div>
 
-      <div class="qm-stats-section">
+      <div class="qm-stats-section" id="{{ prefix }}-element-section">
         <div class="qm-stats-section-title">🔥 Element Distribution</div>
-        <div id="{{ prefix }}-element-list"></div>
+        <div class="qm-donut-row">
+          <div class="qm-donut-chart" id="{{ prefix }}-element-chart"></div>
+          <div class="qm-donut-legend" id="{{ prefix }}-element-legend"></div>
+        </div>
       </div>
 
-      <div class="qm-stats-section">
+      <div class="qm-stats-section" id="{{ prefix }}-sign-section">
         <div class="qm-stats-section-title">♈ Zodiac Sign Distribution</div>
-        <div id="{{ prefix }}-sign-list"></div>
+        <!-- Stacked, not side-by-side like the Element chart above -- 12 rows in a 2-column grid
+             need the panel's full width to fit "Sagittarius" without truncating; squeezed next to
+             a 120px donut there isn't room for it. -->
+        <div class="qm-donut-row qm-donut-row--stacked">
+          <div class="qm-donut-chart" id="{{ prefix }}-sign-chart"></div>
+          <div class="qm-donut-legend qm-donut-legend--grid" id="{{ prefix }}-sign-legend"></div>
+        </div>
       </div>
 
       <div class="qm-stats-section" id="{{ prefix }}-announce-section">
