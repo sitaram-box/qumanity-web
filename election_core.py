@@ -39,8 +39,66 @@ TERM_DAYS = 365
 CANDIDATES_PER_GENDER = 3
 MIN_CANDIDATE_KARMA = 200  # 2026-11-11: the public candidate table always claimed this; nomination_eligible() now actually enforces it
 
+# Q-Punch cascade, Phase 2 (2026-11-16, schema only -- see migrations/040_qpunch_councils.py):
+# Tehsil-and-up council term lengths in years, per the approved governance brief. 'village' is
+# deliberately absent -- it keeps its own existing 1-year-per-sign cycle (TERM_DAYS above),
+# unchanged, via the separate village_council table. Not consumed by any function yet; Phase 3
+# (nomination/voting/the quarterly element-rotation logic) is what will read this.
+TERM_YEARS_BY_LEVEL = {
+    "tehsil": 3, "district": 5, "state": 7, "zone": 9, "country": 11, "continent": 13, "earth": 15,
+}
+
 _SIGN_ORDER = [z["sign"] for z in ZODIAC_RANGES]
 _SIGN_BY_NAME = {z["sign"]: z for z in ZODIAC_RANGES}
+
+# Q-Punch cascade, Phase 2: Tehsil-and-up council schema (village_council, above, is untouched and
+# keeps its own 12-sign-seat shape -- see the approved brief's "Village vs Upper Levels" section).
+# One qpunch_councils row per (location, level, term): 8 qpunch_council_members rows under it, one
+# per gender x element. active_element/head_user_id/head_gender are deliberately left NULL here --
+# Phase 3's not-yet-built quarterly rotation logic is what sets them, this only makes room for it.
+# No SQL CHECK constraints on level/gender/element, same convention as every other status-ish
+# column in this codebase (e.g. q_card_core.py's _STATUSES) -- Python enforces valid values once
+# Phase 3 writes to these tables, not the schema.
+QPUNCH_SCHEMA = """
+CREATE TABLE IF NOT EXISTS qpunch_councils (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    location_id TEXT NOT NULL,
+    level TEXT NOT NULL,              -- tehsil | district | state | zone | country | continent | earth (never 'village')
+    term_start TEXT NOT NULL,         -- ISO date
+    term_end TEXT NOT NULL,           -- ISO date
+    election_cycle_id INTEGER,        -- the election_cycles row (its own new level column set to match) that elected this council
+    active_element TEXT,              -- fire | earth | air | water -- the quarter currently leading; NULL until Phase 3 sets it
+    head_user_id INTEGER,             -- the Male or Female of active_element currently holding Head for this quarter
+    head_gender TEXT,                 -- male | female -- which of the active element's pair actually holds Head
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (location_id, level, term_start),
+    FOREIGN KEY (election_cycle_id) REFERENCES election_cycles(id),
+    FOREIGN KEY (head_user_id) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_qpunch_councils_location ON qpunch_councils(location_id, level);
+
+CREATE TABLE IF NOT EXISTS qpunch_council_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    council_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    gender TEXT NOT NULL,             -- male | female
+    element TEXT NOT NULL,            -- fire | earth | air | water
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (council_id, gender, element),  -- exactly one seat per gender x element on a council
+    UNIQUE (council_id, user_id),          -- the same person can't hold two seats on one council
+    FOREIGN KEY (council_id) REFERENCES qpunch_councils(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_qpunch_council_members_user ON qpunch_council_members(user_id);
+"""
+
+
+def ensure_qpunch_tables(conn) -> None:
+    """Creates qpunch_councils/qpunch_council_members (Phase 2 schema, see QPUNCH_SCHEMA's own
+    docstring) if they don't already exist -- idempotent, same self-healing convention every
+    *_core.py module in this codebase uses for its own tables."""
+    conn.executescript(QPUNCH_SCHEMA)
+    conn.commit()
 
 
 def ensure_council_columns(conn) -> None:
@@ -61,6 +119,13 @@ def ensure_council_columns(conn) -> None:
     ):
         if col not in council_cols:
             conn.execute(f"ALTER TABLE village_council ADD COLUMN {col} {ddl}")
+    # Q-Punch cascade, Phase 2 (2026-11-16): every pre-existing election_cycles row is a village
+    # cycle (the only level that existed before this), so the default keeps them exactly what they
+    # already were -- Phase 3's Tehsil-and-up cycles are the only rows that will ever set this to
+    # anything else.
+    cycle_cols = {r["name"] for r in conn.execute("PRAGMA table_info(election_cycles)")}
+    if "level" not in cycle_cols:
+        conn.execute("ALTER TABLE election_cycles ADD COLUMN level TEXT NOT NULL DEFAULT 'village'")
     conn.commit()
 
 
