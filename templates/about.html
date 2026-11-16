@@ -14,6 +14,11 @@
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
 </head>
 <body class="qm-about">
+  <!-- Contextual Help System (2026-11-16): shown only when this page was reached via a dashboard
+       help icon (?from=dashboard) -- see static/js/about.js. history.back() rather than a fixed
+       href, so it returns to the exact dashboard tab/scroll position the user left, not just
+       "the dashboard" generically. -->
+  <a href="#" class="ab-back-dashboard" id="ab-back-dashboard" hidden>← Back to Dashboard</a>
   <header class="qm-header qm-about-header">
     <a href="{{ url_for('index') }}" style="display:contents">
       <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
@@ -190,7 +195,7 @@
                       <p>Cyclical, rhythmic time: zodiac transits, lunar phases, seasons and social cycles. Actions are stamped
                         within a cycle, so the system can recognise patterns and align with regenerative rhythms.</p>
                     </article>
-                    <article class="ab-tri ab-tri-mind">
+                    <article class="ab-tri ab-tri-mind" id="karma">
                       <span class="ab-tri-tag">Ledger C</span>
                       <h3>Consciousness <small>the “why”</small></h3>
                       <p>The intent → action → outcome registry — the “Karma Ledger”. It turns ethical impact from a subjective
@@ -533,7 +538,7 @@
                       <p>The inner world: reflections, health logs, life events, private notes, unshared drafts, achievements and
                         failures. An encrypted “digital conscience archive”, held in the birth-village ledger node.</p>
                     </article>
-                    <article class="ab-tl ab-tl-y2">
+                    <article class="ab-tl ab-tl-y2" id="family-tree">
                       <header><span class="ab-code">Y2</span><h3>Personal</h3><em>Family &amp; trusted circle</em></header>
                       <p>The social sphere: family tree, friends, study groups, professional collaboration. Membership needs mutual
                         authorisation — an incubator where ideas mature before going public.</p>
@@ -800,7 +805,7 @@
                         <li><b>Zodiac elections</b> — a pilot in one Delhi village: an 8-day nomination window, then 14 days of voting, electing one Nayak and one Nayika per sign.</li>
                         <li><b>Homepage</b> — the Sub-continent shown as one region on a 3D globe, with live statistics for the whole region and for each country.</li>
                         <li><b>Collective Board</b> — live posts, +1/−1 voting, promotion and freeze archive on the Public and Global timelines.</li>
-                        <li><b>Personal Timeline</b> — a Family Tree you build node by node (link a relative by their Public ID, add parents, children and in-laws as the tree grows), plus Friends and Business groups and Qmail internal messaging. A profile picture — or a colored-initial avatar if you haven't uploaded one — shows next to your name everywhere it appears: the tree, group chats, Qmail, and the Collective Board.</li>
+                        <li id="qmail"><b>Personal Timeline</b> — a Family Tree you build node by node (link a relative by their Public ID, add parents, children and in-laws as the tree grows), plus Friends and Business groups and Qmail internal messaging. A profile picture — or a colored-initial avatar if you haven't uploaded one — shows next to your name everywhere it appears: the tree, group chats, Qmail, and the Collective Board.</li>
                       </ul>
                     </div>
                     <div class="ab-status-col ab-status-next">

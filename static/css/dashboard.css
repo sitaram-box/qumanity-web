@@ -4,6 +4,30 @@
   padding: 24px clamp(20px, 3.2vw, 64px) 60px;
 }
 
+/* ---- Contextual Help System (2026-11-16): a small "?" that appears on hover over a widget,
+   deep-linking to that feature's own section on the About page. .qm-help-trigger goes on whichever
+   element should reveal the icon on hover (a block-level card, or -- see the `span` rule below --
+   a tight inline-flex row item like the Q-Punch button, which must keep its own flex sizing
+   unchanged by the wrapper). The icon itself never participates in layout (position: absolute),
+   so adding it never shifts or resizes the thing it's attached to. */
+.qm-help-trigger { position: relative; }
+span.qm-help-trigger { display: inline-flex; flex: 0 0 auto; align-items: center; }
+.qm-help-icon {
+  position: absolute; top: -8px; right: -8px; z-index: 5;
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--qm-gold, #d4af37); color: #16161f;
+  font: 800 12px/1 "Inter", system-ui, sans-serif; text-decoration: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  opacity: 0; transform: scale(0.8); pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.qm-help-trigger:hover .qm-help-icon,
+.qm-help-icon:focus-visible {
+  opacity: 1; transform: scale(1); pointer-events: auto;
+}
+.qm-help-icon:hover { background: var(--qm-saffron, #ff9933); }
+
 /* Item 6: dark chrome band -- visually separates nav "chrome" from the
    light body content below it. Same slate as the Item 13/14/15 section
    headers (#2A3441), reused here for consistency. */

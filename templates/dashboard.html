@@ -346,7 +346,8 @@
         <div class="qm-stat-big-label">Registered Users</div>
       </div>
 
-      <div class="qm-stats-section qm-stats-section--big">
+      <div class="qm-stats-section qm-stats-section--big qm-help-trigger">
+        <a class="qm-help-icon" href="{{ url_for('about') }}?from=dashboard#qoins" title="Learn about Qoins" aria-label="Learn about Qoins">?</a>
         <div class="qm-stats-section-title">💰 Wallet</div>
         <div class="qm-stat-big-number" id="{{ prefix }}-wallet">0 Qoins</div>
         <div class="qm-stat-big-label">Total Circulation</div>
@@ -413,7 +414,10 @@
         <button type="button" class="bd-groups" title="Village groups and places"><span aria-hidden="true">☰</span> <span class="bd-groups-label">Groups</span></button>
         <div class="bd-headtext"><b class="bd-title">Loading…</b><small class="bd-sub"></small></div>
         <button type="button" class="bd-stats" title="Statistics for this place">📊 <span>Stats</span></button>
-        <button type="button" class="bd-qp" title="Quantum Punch council of this group">⚖️ <span>Q-Punch</span></button>
+        <span class="qm-help-trigger">
+          <button type="button" class="bd-qp" title="Quantum Punch council of this group">⚖️ <span>Q-Punch</span></button>
+          <a class="qm-help-icon" href="{{ url_for('about') }}?from=dashboard#punch" title="Learn about Q-Punch" aria-label="Learn about Q-Punch">?</a>
+        </span>
       </header>
       <div class="bd-announce-banner" hidden>
         <span class="bd-announce-banner-icon">📢</span>
@@ -604,7 +608,8 @@
           <div class="pt-panel" id="pt-family-panel" hidden>
 
             <div id="family-activation-gate">
-              <div class="qm-intro-card">
+              <div class="qm-intro-card qm-help-trigger">
+                <a class="qm-help-icon" href="{{ url_for('about') }}?from=dashboard#family-tree" title="Learn about the Family Tree" aria-label="Learn about the Family Tree">?</a>
                 <p>Your Family Tree is the foundation of your Personal Timeline. Activate it once by
                    telling us about your parents (and, if married, your spouse and children) — we'll
                    check whether a Family Group already exists for them before creating a new one.</p>

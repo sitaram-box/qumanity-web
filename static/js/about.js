@@ -40,6 +40,32 @@
   var topBtn = document.getElementById("ab-top");
   if (topBtn) topBtn.addEventListener("click", function () { window.scrollTo({ top: 0, behavior: "smooth" }); });
 
+  // ---- Contextual Help System (2026-11-16): deep-linking from a dashboard "?" icon ----
+  // ?from=dashboard shows the "← Back to Dashboard" button; history.back() returns the user to
+  // their exact dashboard tab/scroll position, not just a fixed /dashboard href, since the
+  // dashboard is a single page whose tabs/levels are all client-side state.
+  if (new URLSearchParams(window.location.search).get("from") === "dashboard") {
+    var backBtn = document.getElementById("ab-back-dashboard");
+    if (backBtn) {
+      backBtn.hidden = false;
+      backBtn.addEventListener("click", function (e) { e.preventDefault(); history.back(); });
+    }
+  }
+
+  // A target landing inside a collapsed <details> (every ab-collapse starts closed) needs that
+  // <details> opened before scrollIntoView() can actually show it -- walks every <details>
+  // ancestor, not just the nearest one, in case a target ever ends up nested two deep.
+  if (window.location.hash) {
+    var target = document.getElementById(window.location.hash.slice(1));
+    if (target) {
+      var d = target.closest("details");
+      while (d) { d.open = true; d = d.parentElement && d.parentElement.closest("details"); }
+      // One frame so the newly-opened <details> has laid out before scrolling to it -- scrolling
+      // in the same frame it opens in can land short, since the browser hasn't reflowed yet.
+      requestAnimationFrame(function () { target.scrollIntoView({ behavior: "smooth", block: "start" }); });
+    }
+  }
+
   // Reveal-on-scroll (skipped when IntersectionObserver isn't available).
   if ("IntersectionObserver" in window) {
     var targets = document.querySelectorAll(".ab-card, .ab-tl, .ab-tri, .ab-book, .ab-status-col, .ab-road li, .ab-steps li, .ab-cosmos div, .ab-el, .ab-callout, .ab-quote");

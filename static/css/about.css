@@ -418,6 +418,20 @@ html { scroll-behavior: smooth; scroll-padding-top: 20px; }
   .ab-content-stops { padding: 24px 16px 60px; }
 }
 
+/* ---------- Contextual Help System: "Back to Dashboard" (2026-11-16) ---------- */
+.ab-back-dashboard {
+  position: fixed; top: 16px; left: 16px; z-index: 60;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 16px; border-radius: 999px; border: 1px solid var(--qm-border);
+  background: var(--qm-saffron); color: #fff; font-weight: 700; font-size: 0.85rem;
+  text-decoration: none; box-shadow: 0 8px 22px rgba(10, 25, 41, 0.25);
+}
+.ab-back-dashboard:hover { background: var(--qm-gold-text); }
+.ab-back-dashboard[hidden] { display: none; }
+@media (max-width: 520px) {
+  .ab-back-dashboard { top: 10px; left: 10px; padding: 8px 12px; font-size: 0.78rem; }
+}
+
 /* ---------- Back to top ---------- */
 .ab-top {
   position: fixed; right: 22px; bottom: 22px; z-index: 50;
