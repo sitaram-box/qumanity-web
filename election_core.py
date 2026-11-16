@@ -159,6 +159,38 @@ CREATE TABLE IF NOT EXISTS qpunch_head_approval_votes (
     UNIQUE (approval_id, voter_user_id),
     FOREIGN KEY (approval_id) REFERENCES qpunch_head_approvals(id)
 );
+
+-- Upper House Sovereignty, Phase 5 (2026-11-16): a direct-democracy referendum the general public
+-- (not just the Lower/Upper House machinery above) can call on ANY question at ANY level, whose
+-- "passed" result overrides the Q-Punch council's own decisions -- see initiate_people_vote()'s
+-- own docstring for how this relates to cast_head_approval_vote() above (the Head Approval is one
+-- standing, pre-wired instance of this same general power, not a separate mechanism).
+CREATE TABLE IF NOT EXISTS qpunch_people_votes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    location_id TEXT NOT NULL,
+    level TEXT NOT NULL,              -- village | tehsil | district | state | zone | country | continent | earth
+    title TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'open',  -- open | passed | failed
+    votes_for INTEGER,                -- NULL while open (hidden during live voting, same convention
+    votes_against INTEGER,            -- election_summary()'s own show_votes already uses) -- set once tally_people_vote() resolves it
+    initiated_by_user_id INTEGER NOT NULL,
+    start_time TEXT NOT NULL,         -- ISO date, same granularity as every other window in this module
+    end_time TEXT NOT NULL,
+    FOREIGN KEY (initiated_by_user_id) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_qpunch_people_votes_location ON qpunch_people_votes(location_id, level, status);
+
+CREATE TABLE IF NOT EXISTS qpunch_people_vote_ballots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vote_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    in_favour INTEGER NOT NULL,       -- 1 = for, 0 = against
+    voted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (vote_id, user_id),
+    FOREIGN KEY (vote_id) REFERENCES qpunch_people_votes(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
 """
 
 
@@ -956,7 +988,14 @@ def _present_location_matches(user_row, level: str, location_id: str) -> bool:
 def cast_head_approval_vote(conn, user_row, council_id: int, approve: bool, today: dt.date | None = None) -> None:
     """Upper House vote: approve or reject the active quarter's Male candidate as Head. No karma
     or age gate -- the approved brief describes the Upper House as simply "the general public at
-    that location," the same bar village voting uses for residency (not candidacy)."""
+    that location," the same bar village voting uses for residency (not candidacy).
+
+    Constitutionally (2026-11-16), this is ONE standing, pre-wired instance of the Upper House's
+    own general sovereignty power -- see this module's "Upper House Sovereignty" section further
+    down (initiate_people_vote()/cast_people_vote()/tally_people_vote()): the same population, the
+    same residency bar, and the same 51%-of-ballots-cast threshold, just asked automatically every
+    quarter on this one specific question rather than called by the people themselves on whatever
+    they choose to ask. This function's own mechanics are unchanged by that section's addition."""
     council = conn.execute("SELECT * FROM qpunch_councils WHERE id = ?", (council_id,)).fetchone()
     if not council:
         raise LookupError("Council not found")
@@ -1051,11 +1090,33 @@ def cascade_status(conn, level: str, location_id: str, user_row, today: dt.date 
     ).fetchone()
     if council_row and dt.date.fromisoformat(council_row["term_end"]) >= today:
         council_row = ensure_head_approval_current(conn, dict(council_row), today)
+        # Phase 4 (2026-11-16): the frontend's own approval-ballot visibility needs to know (a)
+        # whether an approval vote is open to cast at all right now, (b) whether THIS viewer is
+        # Upper House here, and (c) whether they already voted -- all three so the UI can show the
+        # ballot only to someone who can actually use it, rather than showing it to everyone and
+        # relying on a POST failing afterward.
+        approval = None
+        if council_row["active_element"] and not council_row["head_user_id"]:
+            approval_row = conn.execute(
+                "SELECT * FROM qpunch_head_approvals WHERE council_id = ? AND element = ?",
+                (council_row["id"], council_row["active_element"]),
+            ).fetchone()
+            if approval_row and approval_row["result"] is None:
+                already_voted = bool(conn.execute(
+                    "SELECT 1 FROM qpunch_head_approval_votes WHERE approval_id = ? AND voter_user_id = ?",
+                    (approval_row["id"], user_row["id"]),
+                ).fetchone())
+                approval = {
+                    "male_candidate_user_id": approval_row["male_candidate_user_id"],
+                    "approval_end": approval_row["approval_end"], "already_voted": already_voted,
+                }
         council = {
             "id": council_row["id"], "term_start": council_row["term_start"], "term_end": council_row["term_end"],
             "active_element": council_row["active_element"], "head_user_id": council_row["head_user_id"],
             "head_gender": council_row["head_gender"],
             "members": council_members_display(conn, council_row["id"]),
+            "is_upper_house": _present_location_matches(user_row, level, location_id),
+            "approval": approval,
         }
 
     return {
@@ -1076,6 +1137,123 @@ def cascade_status(conn, level: str, location_id: str, user_row, today: dt.date 
         "lower_house_size": len(get_lower_house(conn, level, location_id)),
         "council": council,
     }
+
+
+# ---- Upper House Sovereignty, Phase 5 (2026-11-16) ----
+# The Upper House at any (level, location_id) is always that location's own general population --
+# literally every registered member there (_present_location_matches() below, the same check
+# cast_head_approval_vote() already uses), never just the Lower House or the Q-Punch council
+# itself. Its power is not limited to the one standing 51% Head Approval question: the Upper House
+# may call a direct referendum -- a People's Vote -- on ANY question, at ANY time, and a PASSED
+# People's Vote is binding on the Q-Punch council for that location. Head Approval is simply the
+# one question this project pre-wires and asks automatically every quarter; a People's Vote is the
+# same underlying power, asked on whatever the people themselves choose to ask.
+#
+# This pass builds the record only -- initiate/cast/tally and the three routes below. Actually
+# ENFORCING a passed vote's result against the Q-Punch council's own decisions (e.g. overriding
+# who currently holds Head, or vetoing a specific council action) is explicitly a separate, later
+# task, per the brief that authorized this: "For now, we just need the record." Nothing here
+# changes cast_head_approval_vote()'s or ensure_head_approval_current()'s own behavior.
+
+PEOPLE_VOTE_DAYS = VOTING_DAYS  # 14 -- no duration was specified for a People's Vote; reuses the
+# same window length every other Q-Punch ballot in this module already uses rather than inventing
+# a third number with no stated basis.
+
+
+def initiate_people_vote(conn, level: str, location_id: str, title: str, description: str,
+                          initiated_by_user_id: int, today: dt.date | None = None) -> dict:
+    """Opens a new People's Vote -- the Upper House's own power to call a direct referendum on any
+    question, not just the standing Head Approval one (see this section's own header comment).
+
+    initiated_by_user_id (2026-11-16): not part of the brief's own 3-argument sketch of this
+    function, but added here -- without recording who called the vote there would be nothing to
+    check Upper House eligibility against, and no attribution at all for a power this
+    consequential. Must itself be a member of (level, location_id)'s own population.
+
+    At most one OPEN vote per (location_id, level) at a time -- a second question waits for the
+    first to resolve rather than running two overlapping referenda on the same population at once."""
+    ensure_qpunch_tables(conn)
+    today = today or dt.date.today()
+    initiator = conn.execute("SELECT * FROM users WHERE id = ?", (initiated_by_user_id,)).fetchone()
+    if not initiator or not _present_location_matches(initiator, level, location_id):
+        raise PermissionError(f"Only a member of this {level}'s own population can call a People's Vote here.")
+    title = (title or "").strip()
+    if not title:
+        raise ValueError("A title is required.")
+    if conn.execute(
+        "SELECT 1 FROM qpunch_people_votes WHERE location_id = ? AND level = ? AND status = 'open'",
+        (location_id, level),
+    ).fetchone():
+        raise ValueError("A People's Vote is already open for this location.")
+    start = today
+    end = start + dt.timedelta(days=PEOPLE_VOTE_DAYS - 1)
+    cur = conn.execute(
+        """INSERT INTO qpunch_people_votes
+           (location_id, level, title, description, initiated_by_user_id, start_time, end_time)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (location_id, level, title, (description or "").strip() or None, initiated_by_user_id,
+         start.isoformat(), end.isoformat()),
+    )
+    conn.commit()
+    return dict(conn.execute("SELECT * FROM qpunch_people_votes WHERE id = ?", (cur.lastrowid,)).fetchone())
+
+
+def cast_people_vote(conn, vote_id: int, user_id: int, in_favour: bool, today: dt.date | None = None) -> None:
+    """One ballot per Upper House member per People's Vote. `in_favour` is never shown back to
+    anyone while the vote is open -- votes_for/votes_against stay NULL until tally_people_vote()
+    resolves the vote, the same "no running tallies mid-vote" convention election_summary()'s own
+    show_votes flag already enforces for village elections."""
+    today = today or dt.date.today()
+    vote = conn.execute("SELECT * FROM qpunch_people_votes WHERE id = ?", (vote_id,)).fetchone()
+    if not vote:
+        raise LookupError("People's Vote not found")
+    if vote["status"] != "open" or today > dt.date.fromisoformat(vote["end_time"]):
+        raise ValueError("This People's Vote is not open for voting.")
+    user_row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user_row or not _present_location_matches(user_row, vote["level"], vote["location_id"]):
+        raise PermissionError(f"Only a member of this {vote['level']}'s own population can vote here.")
+    if conn.execute(
+        "SELECT 1 FROM qpunch_people_vote_ballots WHERE vote_id = ? AND user_id = ?", (vote_id, user_id)
+    ).fetchone():
+        raise ValueError("You've already voted on this People's Vote.")
+    conn.execute(
+        "INSERT INTO qpunch_people_vote_ballots (vote_id, user_id, in_favour) VALUES (?, ?, ?)",
+        (vote_id, user_id, 1 if in_favour else 0),
+    )
+    conn.commit()
+
+
+def tally_people_vote(conn, vote_id: int, today: dt.date | None = None) -> dict:
+    """Resolves a People's Vote once its window has closed: 'passed' if votes_for is >= 51% of
+    all ballots cast (for + against) -- the identical 51% share Head Approval already uses, not a
+    different threshold, since the brief is explicit that Head Approval is one instance of this
+    same power. A vote with zero ballots cast never passes (0/0 is never >= 0.51). Safe to call on
+    an already-open, not-yet-due vote (a no-op, returns it unchanged) or an already-resolved one
+    (returns the cached result, never re-tallies a decided vote)."""
+    today = today or dt.date.today()
+    vote = conn.execute("SELECT * FROM qpunch_people_votes WHERE id = ?", (vote_id,)).fetchone()
+    if not vote:
+        raise LookupError("People's Vote not found")
+    if vote["status"] != "open":
+        return dict(vote)
+    if today <= dt.date.fromisoformat(vote["end_time"]):
+        return dict(vote)
+    tally = conn.execute(
+        "SELECT COALESCE(SUM(in_favour), 0) AS votes_for, COALESCE(SUM(1 - in_favour), 0) AS votes_against "
+        "FROM qpunch_people_vote_ballots WHERE vote_id = ?",
+        (vote_id,),
+    ).fetchone()
+    votes_for, votes_against = tally["votes_for"], tally["votes_against"]
+    total = votes_for + votes_against
+    status = "passed" if (total > 0 and (votes_for / total) >= 0.51) else "failed"
+    conn.execute(
+        "UPDATE qpunch_people_votes SET status = ?, votes_for = ?, votes_against = ? WHERE id = ?",
+        (status, votes_for, votes_against, vote_id),
+    )
+    conn.commit()
+    result = dict(vote)
+    result.update(status=status, votes_for=votes_for, votes_against=votes_against)
+    return result
 
 
 # ---- Private, optional election-history record (Lok Sabha / Vidhan Sabha) ----

@@ -6397,6 +6397,81 @@ def api_election_council():
     return jsonify({"village_id": election_core.PILOT_VILLAGE_ID, "council": roster})
 
 
+# ---- Upper House Sovereignty, Phase 5 (2026-11-16): the People's Vote -- a direct referendum the
+# Upper House (a location's own general population) can call on any question. See
+# election_core.py's own "Upper House Sovereignty" section for the full reasoning. ----
+
+@app.route("/api/people-vote/initiate", methods=["POST"])
+@login_required
+def api_people_vote_initiate():
+    data = request.get_json(force=True) or {}
+    level = (data.get("level") or "").strip().lower()
+    location_id = data.get("location_id")
+    if not level or not location_id:
+        return jsonify({"error": "level and location_id are required"}), 400
+    conn = get_db()
+    try:
+        vote = election_core.initiate_people_vote(
+            conn, level, location_id, data.get("title") or "", data.get("description") or "", session["user_id"],
+        )
+    except (ValueError, PermissionError) as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify(vote), 201
+
+
+@app.route("/api/people-vote/cast", methods=["POST"])
+@login_required
+def api_people_vote_cast():
+    data = request.get_json(force=True) or {}
+    try:
+        vote_id = int(data.get("vote_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "vote_id is required"}), 400
+    conn = get_db()
+    try:
+        election_core.cast_people_vote(conn, vote_id, session["user_id"], bool(data.get("in_favour")))
+    except (ValueError, PermissionError, LookupError) as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"status": "voted"})
+
+
+@app.route("/api/people-vote/status")
+@login_required
+def api_people_vote_status():
+    level = (request.args.get("level") or "").strip().lower()
+    location_id = request.args.get("location_id")
+    if not level or not location_id:
+        return jsonify({"error": "level and location_id are required"}), 400
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT id FROM qpunch_people_votes WHERE location_id = ? AND level = ? ORDER BY id DESC LIMIT 1",
+            (location_id, level),
+        ).fetchone()
+        if not row:
+            return jsonify({"vote": None})
+        # Auto-resolves a vote whose window has passed but hasn't been tallied yet -- same
+        # "compute live, persist once decided" pattern current_cycle_for_village()/
+        # ensure_head_approval_current() already use elsewhere in this file.
+        vote = election_core.tally_people_vote(conn, row["id"])
+        user = _current_user_row(conn)
+        already_voted = bool(conn.execute(
+            "SELECT 1 FROM qpunch_people_vote_ballots WHERE vote_id = ? AND user_id = ?", (vote["id"], user["id"])
+        ).fetchone())
+        out = dict(vote)
+        if out["status"] == "open":
+            out["votes_for"] = out["votes_against"] = None
+        out["already_voted"] = already_voted
+        out["is_upper_house"] = election_core._present_location_matches(user, level, location_id)
+    finally:
+        conn.close()
+    return jsonify({"vote": out})
+
+
 @app.route("/api/admin/election/nominate/<int:candidate_id>/approve", methods=["POST"])
 @login_required
 def api_admin_election_approve(candidate_id):
