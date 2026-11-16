@@ -6167,6 +6167,23 @@ def api_wallet_location_balance(location_type, location_id):
 @app.route("/api/election/status")
 @login_required
 def api_election_status():
+    # Q-Punch cascade, Phase 3 (2026-11-16): ?level=tehsil&location_id=... for Tehsil-and-up --
+    # omitted, or level=village, falls straight through to the original village-pilot response
+    # below, byte-for-byte unchanged, so every existing caller of this route is unaffected.
+    level = (request.args.get("level") or "village").strip().lower()
+    if level != "village":
+        location_id = request.args.get("location_id")
+        if not location_id:
+            return jsonify({"error": "location_id is required"}), 400
+        conn = get_db()
+        try:
+            user = _current_user_row(conn)
+            return jsonify(election_core.cascade_status(conn, level, location_id, user))
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        finally:
+            conn.close()
+
     conn = get_db()
     user = _current_user_row(conn)
     cycle = election_core.current_cycle_for_village(conn, election_core.PILOT_VILLAGE_ID)
@@ -6213,6 +6230,24 @@ def api_election_candidates():
     who are born with Sun-Sign Libra"). Winners, once decided, are a different thing entirely --
     council_roster() / /api/election/council is NOT sign-gated, so results stay visible to everyone
     via Q-Punch once the cycle closes."""
+    level = (request.args.get("level") or "village").strip().lower()
+    if level != "village":
+        # Q-Punch cascade, Phase 3: no sign-gating equivalent exists for Tehsil+ in the approved
+        # brief (there's no single "sign" a Tehsil+ cycle belongs to at all) -- every candidate
+        # for every element is visible to any caller, grouped by element/gender.
+        location_id = request.args.get("location_id")
+        if not location_id:
+            return jsonify({"error": "location_id is required"}), 400
+        conn = get_db()
+        try:
+            cycle = election_core.current_cycle_for_location(conn, level, location_id)
+            candidates = election_core.candidates_for_cycle_by_element(conn, cycle["id"])
+            return jsonify({"restricted": False, **candidates})
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        finally:
+            conn.close()
+
     conn = get_db()
     user = _current_user_row(conn)
     cycle = election_core.current_cycle_for_village(conn, election_core.PILOT_VILLAGE_ID)
@@ -6231,6 +6266,11 @@ def api_election_candidates():
 @login_required
 def api_election_nominate():
     data = request.get_json(force=True) or {}
+    # Q-Punch cascade, Phase 3: level/location_id default to the original village pilot, so an
+    # existing caller that never sends them is unaffected -- see election_core.nominate()'s own
+    # docstring on the level='village' fast path.
+    level = (data.get("level") or "village").strip().lower()
+    location_id = data.get("location_id")
     conn = get_db()
     user = _current_user_row(conn)
     try:
@@ -6240,6 +6280,7 @@ def api_election_nominate():
             why_vote=data.get("why_vote") or "",
             changes=data.get("changes") or "",
             past_work=data.get("past_work") or "",
+            level=level, location_id=location_id,
         )
     except ValueError as e:
         conn.close()
@@ -6252,7 +6293,26 @@ def api_election_nominate():
 @login_required
 def api_election_vote():
     data = request.get_json(force=True) or {}
+    # Q-Punch cascade, Phase 3: a head-approval ballot (Upper House, yes/no on one candidate) is a
+    # structurally different vote from a council-seat ballot (Lower House, pick-one-of-N) -- see
+    # election_core.py's own QPUNCH_SCHEMA comment on why they're not the same table. Dispatched
+    # here by which shape the caller actually sent, rather than a third query param, since the two
+    # payloads share no fields a client could get confused between.
+    if "council_id" in data:
+        conn = get_db()
+        user = _current_user_row(conn)
+        try:
+            election_core.cast_head_approval_vote(conn, user, int(data["council_id"]), bool(data.get("approve")))
+        except (ValueError, LookupError) as e:
+            conn.close()
+            return jsonify({"error": str(e)}), 400
+        conn.close()
+        return jsonify({"status": "voted"})
+
     gender = (data.get("gender") or "").strip().lower()
+    level = (data.get("level") or "village").strip().lower()
+    location_id = data.get("location_id")
+    element = data.get("element")
     try:
         candidate_user_id = int(data.get("candidate_user_id"))
     except (TypeError, ValueError):
@@ -6260,7 +6320,7 @@ def api_election_vote():
     conn = get_db()
     user = _current_user_row(conn)
     try:
-        election_core.cast_vote(conn, user, candidate_user_id, gender)
+        election_core.cast_vote(conn, user, candidate_user_id, gender, level=level, location_id=location_id, element=element)
     except ValueError as e:
         conn.close()
         return jsonify({"error": str(e)}), 400

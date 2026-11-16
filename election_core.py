@@ -19,6 +19,8 @@ import json
 
 import account_core
 import cycle_middleware
+import elemental_core
+import geography_core
 import id_generator
 import karma_core
 import wallet_core
@@ -51,14 +53,43 @@ TERM_YEARS_BY_LEVEL = {
 _SIGN_ORDER = [z["sign"] for z in ZODIAC_RANGES]
 _SIGN_BY_NAME = {z["sign"]: z for z in ZODIAC_RANGES}
 
-# Q-Punch cascade, Phase 2: Tehsil-and-up council schema (village_council, above, is untouched and
-# keeps its own 12-sign-seat shape -- see the approved brief's "Village vs Upper Levels" section).
-# One qpunch_councils row per (location, level, term): 8 qpunch_council_members rows under it, one
-# per gender x element. active_element/head_user_id/head_gender are deliberately left NULL here --
-# Phase 3's not-yet-built quarterly rotation logic is what sets them, this only makes room for it.
+# Q-Punch cascade, Phase 3 (2026-11-16): the quarterly element-rotation order (reused, not
+# redefined -- elemental_core.ELEMENTS is the one canonical list/order every element-aware part of
+# this codebase already reads, e.g. the Statistics Dashboard's own element donut). Values stored
+# in active_element/qpunch_council_members.element are this exact casing ("Fire", not "fire"),
+# matching user_zodiac.sun_element's own stored casing -- Phase 2's own schema comments said
+# lowercase, which was wrong before anything actually wrote to these columns; corrected here.
+ELEMENT_ORDER = elemental_core.ELEMENTS  # ["Fire", "Earth", "Air", "Water"]
+HEAD_APPROVAL_DAYS = 7  # not specified in the approved brief -- same order of magnitude as a
+# village voting window (VOTING_DAYS above); each quarter is at minimum ~274 days (a 3-year Tehsil
+# term's shortest quarter), so 7 days is a small fraction of any quarter, not a judgment call that
+# meaningfully shortens anyone's actual leadership time.
+
+# Q-Punch cascade, Phase 2-3: Tehsil-and-up council schema (village_council, above, is untouched
+# and keeps its own 12-sign-seat shape -- see the approved brief's "Village vs Upper Levels"
+# section). One qpunch_councils row per (location, level, term): 8 qpunch_council_members rows
+# under it, one per gender x element. active_element/head_user_id/head_gender start NULL and are
+# set by ensure_head_approval_current() below, once a term's first quarter actually begins.
+#
+# qpunch_cascade_votes (Phase 3, new): the Lower House's own seat votes -- NOT the same table as
+# village's election_votes, even though the shape looks similar, because the uniqueness rule
+# genuinely differs. A village voter casts at most 2 votes per cycle (1 male + 1 female, for their
+# own sign's single seat) -- election_votes' own UNIQUE(election_cycle_id, voter_user_id, gender)
+# encodes exactly that. A Lower House voter at Tehsil+ casts up to 8 (1 male + 1 female, per EACH
+# of the 4 elements, with no "your own element" restriction -- the whole Lower House decides every
+# seat), so the uniqueness key needs `element` too. Widening election_votes' own constraint would
+# mean rebuilding that live table (SQLite can't ALTER a UNIQUE constraint in place) for a
+# capability village voting never needed -- a parallel table is the lower-risk choice.
+#
+# qpunch_head_approvals / qpunch_head_approval_votes (Phase 3, new): the Upper House's 51%-approval
+# ballot on one quarter's Male candidate -- structurally a yes/no referendum on ONE person, not a
+# "pick one of N candidates for a seat" election, so it doesn't fit either votes table's own shape.
+# One qpunch_head_approvals row per (council, element) -- at most 4 per council, one per quarter --
+# `result` stays NULL while voting is open and is set once (approved|rejected) when the window
+# closes; qpunch_head_approval_votes holds the individual ballots behind it.
+#
 # No SQL CHECK constraints on level/gender/element, same convention as every other status-ish
-# column in this codebase (e.g. q_card_core.py's _STATUSES) -- Python enforces valid values once
-# Phase 3 writes to these tables, not the schema.
+# column in this codebase (e.g. q_card_core.py's _STATUSES) -- Python enforces valid values.
 QPUNCH_SCHEMA = """
 CREATE TABLE IF NOT EXISTS qpunch_councils (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,7 +98,7 @@ CREATE TABLE IF NOT EXISTS qpunch_councils (
     term_start TEXT NOT NULL,         -- ISO date
     term_end TEXT NOT NULL,           -- ISO date
     election_cycle_id INTEGER,        -- the election_cycles row (its own new level column set to match) that elected this council
-    active_element TEXT,              -- fire | earth | air | water -- the quarter currently leading; NULL until Phase 3 sets it
+    active_element TEXT,              -- Fire | Earth | Air | Water -- the quarter currently leading; NULL until its term starts
     head_user_id INTEGER,             -- the Male or Female of active_element currently holding Head for this quarter
     head_gender TEXT,                 -- male | female -- which of the active element's pair actually holds Head
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -82,7 +113,7 @@ CREATE TABLE IF NOT EXISTS qpunch_council_members (
     council_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
     gender TEXT NOT NULL,             -- male | female
-    element TEXT NOT NULL,            -- fire | earth | air | water
+    element TEXT NOT NULL,            -- Fire | Earth | Air | Water
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (council_id, gender, element),  -- exactly one seat per gender x element on a council
     UNIQUE (council_id, user_id),          -- the same person can't hold two seats on one council
@@ -90,13 +121,52 @@ CREATE TABLE IF NOT EXISTS qpunch_council_members (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 CREATE INDEX IF NOT EXISTS idx_qpunch_council_members_user ON qpunch_council_members(user_id);
+
+CREATE TABLE IF NOT EXISTS qpunch_cascade_votes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    election_cycle_id INTEGER NOT NULL,
+    voter_user_id INTEGER NOT NULL,
+    candidate_user_id INTEGER NOT NULL,
+    gender TEXT NOT NULL,             -- male | female
+    element TEXT NOT NULL,            -- Fire | Earth | Air | Water -- which of the 4 seats this vote is for
+    voted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (election_cycle_id, voter_user_id, gender, element),
+    FOREIGN KEY (election_cycle_id) REFERENCES election_cycles(id),
+    FOREIGN KEY (voter_user_id) REFERENCES users(id),
+    FOREIGN KEY (candidate_user_id) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_qpunch_cascade_votes_cycle ON qpunch_cascade_votes(election_cycle_id);
+
+CREATE TABLE IF NOT EXISTS qpunch_head_approvals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    council_id INTEGER NOT NULL,
+    element TEXT NOT NULL,
+    male_candidate_user_id INTEGER NOT NULL,
+    female_candidate_user_id INTEGER NOT NULL,
+    approval_start TEXT NOT NULL,
+    approval_end TEXT NOT NULL,
+    result TEXT,                      -- NULL while open; 'approved' | 'rejected' once the window closes
+    UNIQUE (council_id, element),
+    FOREIGN KEY (council_id) REFERENCES qpunch_councils(id)
+);
+
+CREATE TABLE IF NOT EXISTS qpunch_head_approval_votes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    approval_id INTEGER NOT NULL,
+    voter_user_id INTEGER NOT NULL,
+    approve INTEGER NOT NULL,         -- 1 = approve the Male as Head, 0 = reject (defaults to the Female)
+    voted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (approval_id, voter_user_id),
+    FOREIGN KEY (approval_id) REFERENCES qpunch_head_approvals(id)
+);
 """
 
 
 def ensure_qpunch_tables(conn) -> None:
-    """Creates qpunch_councils/qpunch_council_members (Phase 2 schema, see QPUNCH_SCHEMA's own
-    docstring) if they don't already exist -- idempotent, same self-healing convention every
-    *_core.py module in this codebase uses for its own tables."""
+    """Creates every Q-Punch cascade table (Phase 2's councils/members, Phase 3's cascade votes
+    and head approvals -- see QPUNCH_SCHEMA's own docstring) if they don't already exist --
+    idempotent, same self-healing convention every *_core.py module in this codebase uses for its
+    own tables."""
     conn.executescript(QPUNCH_SCHEMA)
     conn.commit()
 
@@ -338,6 +408,21 @@ def _age_years(dob_iso: str, today: dt.date) -> int:
 
 
 def nomination_eligible(conn, user_row, cycle: dict) -> tuple[bool, str]:
+    level = cycle.get("level") or "village"
+    if level != "village":
+        # Q-Punch cascade, Phase 3: nomination above village is "are you a currently-serving
+        # member of the level below, at a child of this location" -- never residency or age/karma
+        # (those are the village-specific gates above; the brief names no equivalent for Tehsil+,
+        # and inventing one isn't asked for).
+        if user_row["id"] not in get_lower_house(conn, level, cycle["village_id"]):
+            child_level = geography_core.LEVELS[geography_core.LEVELS.index(level) + 1]
+            return False, f"Nomination for {level} is only open to currently-serving {child_level}-level council members here."
+        zodiac = conn.execute("SELECT sun_element FROM user_zodiac WHERE user_id = ?", (user_row["id"],)).fetchone()
+        if not zodiac or zodiac["sun_element"] not in ELEMENT_ORDER:
+            return False, "Could not determine your element."
+        if (user_row["gender"] or "").lower() not in ("male", "female"):
+            return False, "Nomination is open to Male and Female candidates only."
+        return True, ""
     if _present_village_id(user_row) != cycle["village_id"]:
         return False, "Nomination is only open to residents of this pilot village."
     age = _age_years(user_row["dob"], dt.date.today())
@@ -364,6 +449,15 @@ def nomination_eligible(conn, user_row, cycle: dict) -> tuple[bool, str]:
 def voting_eligible(conn, user_row, cycle: dict, today: dt.date | None = None) -> tuple[bool, str]:
     """Village cycles: residents born under THIS cycle's sign vote (docs/voting_logic.md) -- men for the
     male seat, women for the female seat; third-gender members by their present gender."""
+    level = cycle.get("level") or "village"
+    if level != "village":
+        # Q-Punch cascade, Phase 3: only the Lower House votes -- not the general public (that's
+        # the SEPARATE Upper House 51%-approval vote, see cast_head_approval_vote()). Every Lower
+        # House member may vote on every one of the 8 seats, not just their own element's.
+        if user_row["id"] not in get_lower_house(conn, level, cycle["village_id"]):
+            child_level = geography_core.LEVELS[geography_core.LEVELS.index(level) + 1]
+            return False, f"Voting for {level} is only open to currently-serving {child_level}-level council members here."
+        return True, ""
     if _present_village_id(user_row) != cycle["village_id"]:
         return False, "Voting is only open to residents of this pilot village."
     today = today or dt.date.today()
@@ -375,12 +469,25 @@ def voting_eligible(conn, user_row, cycle: dict, today: dt.date | None = None) -
     return True, ""
 
 
-def nominate(conn, user_row, reason: str, why_vote: str, changes: str, past_work: str = "") -> dict:
+def nominate(conn, user_row, reason: str, why_vote: str, changes: str, past_work: str = "",
+             level: str = "village", location_id: str | None = None) -> dict:
     """The 4-question candidacy form: why they're running, why members should vote for them, what
     they'd change, and (optionally) past work. `manifest` (the old single free-text field) is kept
-    populated from `reason` so any legacy reader still sees something sensible."""
+    populated from `reason` so any legacy reader still sees something sensible.
+
+    level/location_id (2026-11-16, Q-Punch cascade Phase 3): level='village' (the default) keeps
+    nominating for PILOT_VILLAGE_ID exactly as before -- every existing caller that never passes
+    these two keywords is unaffected. level='tehsil'..'earth' nominates for that location's
+    current multi-year-term cycle instead (current_cycle_for_location()), and skips the
+    village-only CANDIDATES_PER_GENDER cap -- the approved brief names no equivalent cap for
+    Tehsil+, where "the top Male/Female per element wins" already bounds the field naturally."""
     ensure_council_columns(conn)
-    cycle = current_cycle_for_village(conn, PILOT_VILLAGE_ID)
+    if level == "village":
+        cycle = current_cycle_for_village(conn, PILOT_VILLAGE_ID)
+    else:
+        if not location_id:
+            raise ValueError("location_id is required for a non-village nomination")
+        cycle = current_cycle_for_location(conn, level, location_id)
     if cycle["status"] != "nomination":
         raise ValueError("Nomination is closed for the current cycle.")
     ok, elig_reason = nomination_eligible(conn, user_row, cycle)
@@ -395,7 +502,7 @@ def nominate(conn, user_row, reason: str, why_vote: str, changes: str, past_work
     ).fetchone()
     if existing:
         raise ValueError("You've already submitted a nomination for this cycle.")
-    if _gender_full(conn, cycle["id"], user_row["gender"]):
+    if level == "village" and _gender_full(conn, cycle["id"], user_row["gender"]):
         raise ValueError(f"This month's {CANDIDATES_PER_GENDER} {user_row['gender'].lower()} candidates have already been chosen.")
     conn.execute(
         """INSERT INTO election_candidates
@@ -426,7 +533,56 @@ def candidates_for_cycle(conn, cycle_id: int) -> dict:
     return result
 
 
-def cast_vote(conn, user_row, candidate_user_id: int, gender: str, today: dt.date | None = None) -> None:
+def cast_vote(conn, user_row, candidate_user_id: int, gender: str, today: dt.date | None = None,
+              level: str = "village", location_id: str | None = None, element: str | None = None) -> None:
+    """level/location_id/element (2026-11-16, Q-Punch cascade Phase 3): level='village' (the
+    default) is exactly the original village vote, unchanged -- every existing caller that never
+    passes these three keywords is unaffected. level='tehsil'..'earth' casts a Lower House seat
+    vote instead, into qpunch_cascade_votes rather than election_votes (see that table's own
+    schema comment for why it's a separate table, not a widened version of this one) -- `element`
+    is required, since a Tehsil+ voter may cast up to 8 votes in one cycle (1 male + 1 female per
+    element, no "your own element" restriction), where election_votes' own UNIQUE constraint only
+    ever needed to allow 2. The wallet-share-unlock reward below is deliberately NOT extended to
+    cascade voting -- it's specifically "a resident's first-ever vote in the village pilot"
+    (wallet_core.unlock_user_share()'s own contract), and the brief doesn't ask for a second,
+    separate reward trigger here."""
+    if level != "village":
+        if not location_id or not element:
+            raise ValueError("location_id and element are required for a non-village vote")
+        element = element.strip().title()
+        cycle = current_cycle_for_location(conn, level, location_id, today)
+        if cycle["status"] != "voting":
+            raise ValueError("Voting is not open for the current cycle.")
+        ok, reason = voting_eligible(conn, user_row, cycle, today)
+        if not ok:
+            raise ValueError(reason)
+        if element not in ELEMENT_ORDER:
+            raise ValueError("Unknown element.")
+        candidate = conn.execute(
+            """SELECT ec.status, ec.gender, uz.sun_element FROM election_candidates ec
+               JOIN user_zodiac uz ON uz.user_id = ec.user_id
+               WHERE ec.election_cycle_id = ? AND ec.user_id = ?""",
+            (cycle["id"], candidate_user_id),
+        ).fetchone()
+        if not candidate or candidate["status"] != "approved":
+            raise ValueError("That candidate isn't approved for this cycle.")
+        if candidate["gender"] != gender:
+            raise ValueError("Candidate/gender mismatch.")
+        if candidate["sun_element"] != element:
+            raise ValueError("That candidate isn't running for this element's seat.")
+        already = conn.execute(
+            "SELECT 1 FROM qpunch_cascade_votes WHERE election_cycle_id = ? AND voter_user_id = ? AND gender = ? AND element = ?",
+            (cycle["id"], user_row["id"], gender, element),
+        ).fetchone()
+        if already:
+            raise ValueError(f"You've already voted for {gender} {element} in this cycle.")
+        conn.execute(
+            "INSERT INTO qpunch_cascade_votes (election_cycle_id, voter_user_id, candidate_user_id, gender, element) VALUES (?, ?, ?, ?, ?)",
+            (cycle["id"], user_row["id"], candidate_user_id, gender, element),
+        )
+        conn.commit()
+        return
+
     cycle = current_cycle_for_village(conn, PILOT_VILLAGE_ID, today)
     if cycle["status"] != "voting":
         raise ValueError("Voting is not open for the current cycle.")
@@ -494,6 +650,432 @@ def council_roster(conn, village_id: str) -> list[dict]:
             seat["female_head_karma"] = karma_core.individual_karma_score(conn, seat["female_head_user_id"])
         out.append(seat)
     return out
+
+
+# ---- Q-Punch cascade, Phase 3 (2026-11-16): Tehsil-to-Earth nomination, voting, and the
+# quarterly rotating Head. village_council/election_candidates/election_votes and every function
+# above this point keep their exact existing village behavior -- level='village' (the default
+# everywhere below) always takes the original code path, unchanged. ----
+
+def get_lower_house(conn, level: str, location_id: str) -> list[int]:
+    """Every user_id currently serving on an active council one level below (level, location_id)
+    -- e.g. get_lower_house(conn, "tehsil", "CS.DL.3.4") returns every village_council member
+    (both genders, all 12 signs, each currently within their own leadership term) across every
+    village under that tehsil. THIS is a location's voting pool for its own cascade election --
+    never stored, always computed live from geography_core.get_children() plus whichever table
+    the child level's council data actually lives in: village_council for a village child,
+    qpunch_council_members for anything else. Returns [] for 'village' itself (nothing sits below
+    it to form a Lower House from) or for a location with no children yet."""
+    idx = geography_core.LEVELS.index(level)
+    if idx >= len(geography_core.LEVELS) - 1:
+        return []
+    child_level = geography_core.LEVELS[idx + 1]
+    child_ids = geography_core.get_children(conn, level, location_id)
+    if not child_ids:
+        return []
+    today = dt.date.today().isoformat()
+    placeholders = ",".join("?" for _ in child_ids)
+    if child_level == "village":
+        rows = conn.execute(
+            f"""SELECT male_head_user_id, female_head_user_id FROM village_council
+               WHERE village_id IN ({placeholders}) AND leadership_start <= ? AND leadership_end >= ?""",
+            (*child_ids, today, today),
+        ).fetchall()
+        members = set()
+        for r in rows:
+            if r["male_head_user_id"]:
+                members.add(r["male_head_user_id"])
+            if r["female_head_user_id"]:
+                members.add(r["female_head_user_id"])
+        return sorted(members)
+    rows = conn.execute(
+        f"""SELECT DISTINCT qcm.user_id FROM qpunch_council_members qcm
+           JOIN qpunch_councils qc ON qc.id = qcm.council_id
+           WHERE qc.location_id IN ({placeholders}) AND qc.level = ?
+             AND qc.term_start <= ? AND qc.term_end >= ?""",
+        (*child_ids, child_level, today, today),
+    ).fetchall()
+    return sorted(r["user_id"] for r in rows)
+
+
+def current_cycle_for_location(conn, level: str, location_id: str, today: dt.date | None = None) -> dict:
+    """Tehsil-and-up equivalent of current_cycle_for_village(): get-or-create the active
+    election_cycles row for ONE multi-year term's single election -- nomination, then voting, then
+    results, electing all 8 seats (1 Male + 1 Female per element) at once, unlike village's 12
+    staggered per-sign cycles. Term length comes from TERM_YEARS_BY_LEVEL. Nomination/voting
+    window lengths reuse NOMINATION_DAYS/VOTING_DAYS -- the approved brief didn't specify
+    different figures for these levels, so this keeps the one pair of numbers village elections
+    already use rather than inventing a second pair with no stated basis.
+
+    election_cycles.zodiac_sign/element have no meaning above village (there is no one "sign" or
+    "element" for an 8-seat election) but are NOT NULL columns on a table this module doesn't own
+    the schema of (see ensure_council_columns()'s own note on election_cycles predating this
+    codebase) -- '' is stored in both, a documented placeholder, never read for a non-village
+    cycle. village_id holds `location_id` here -- the column name is generic in practice even
+    though it predates this reuse; renaming it would touch every existing village query for no
+    behavioral gain.
+
+    Deliberately NOT village's own "recompute the window fresh every call, resync if it drifted"
+    pattern: that is safe for village only because _sign_window() is a pure function of the
+    calendar (the same sign+today always gives back the same window, no matter when it's called).
+    Here, a first-ever cycle's nomination_start has no such calendar anchor -- it is simply
+    "whenever this function first ran" -- so recomputing it from `today` on every later call would
+    silently push a live nomination/voting window forward every time this is read with a later
+    date, before any council has ever formed. Once a cycle row exists and is still live (today has
+    not yet passed its own stored voting_end), THIS function always reads its stored dates
+    as-is; a new row is only ever created when there is no live one to find."""
+    ensure_qpunch_tables(conn)
+    today = today or dt.date.today()
+    if level not in TERM_YEARS_BY_LEVEL:
+        raise ValueError(f"Unknown cascade level: {level}")
+    term_years = TERM_YEARS_BY_LEVEL[level]
+
+    row = conn.execute(
+        "SELECT * FROM election_cycles WHERE village_id = ? AND level = ? ORDER BY id DESC LIMIT 1",
+        (location_id, level),
+    ).fetchone()
+    # A cycle whose own voting has closed is NOT automatically "stale" -- the council it (will)
+    # produce serves for years afterward, and this row stays its historical record throughout
+    # that whole term. The NEXT cycle is only needed once that council's own term has ended (or
+    # immediately, if this cycle somehow never produced one at all -- see the loop below). Right
+    # after voting closes but before the first tally, no council exists yet for this row; that is
+    # not "needs a new cycle", it is "needs tallying", which the closed-status branch below
+    # already does every time it's called.
+    needs_new = row is None
+    if not needs_new and today > dt.date.fromisoformat(row["voting_end"]):
+        council = conn.execute(
+            "SELECT term_end FROM qpunch_councils WHERE location_id = ? AND level = ? AND election_cycle_id = ?",
+            (location_id, level, row["id"]),
+        ).fetchone()
+        needs_new = council is not None and today > dt.date.fromisoformat(council["term_end"])
+    if needs_new:
+        prev = conn.execute(
+            "SELECT term_end FROM qpunch_councils WHERE location_id = ? AND level = ? ORDER BY term_end DESC LIMIT 1",
+            (location_id, level),
+        ).fetchone()
+        nomination_start = (dt.date.fromisoformat(prev["term_end"]) + dt.timedelta(days=1)) if prev else today
+        nomination_end = nomination_start + dt.timedelta(days=NOMINATION_DAYS - 1)
+        voting_start = nomination_end + dt.timedelta(days=1)
+        voting_end = voting_start + dt.timedelta(days=VOTING_DAYS - 1)
+        conn.execute(
+            """INSERT INTO election_cycles
+               (village_id, zodiac_sign, element, level, year, nomination_start, nomination_end,
+                voting_start, voting_end, status)
+               VALUES (?, '', '', ?, ?, ?, ?, ?, ?, 'nomination')""",
+            (location_id, level, nomination_start.year, nomination_start.isoformat(), nomination_end.isoformat(),
+             voting_start.isoformat(), voting_end.isoformat()),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM election_cycles WHERE village_id = ? AND level = ? ORDER BY id DESC LIMIT 1",
+            (location_id, level),
+        ).fetchone()
+
+    nomination_end = dt.date.fromisoformat(row["nomination_end"])
+    voting_end = dt.date.fromisoformat(row["voting_end"])
+    if today <= nomination_end:
+        status = "nomination"
+    elif today <= voting_end:
+        status = "voting"
+    else:
+        status = "closed"
+    if status != row["status"]:
+        conn.execute("UPDATE election_cycles SET status = ? WHERE id = ?", (status, row["id"]))
+        conn.commit()
+
+    cycle = dict(row)
+    cycle["status"] = status
+    cycle["term_years"] = term_years
+    if status == "closed":
+        council_id = _ensure_tallied_location(conn, cycle, term_years)
+        cycle["council_id"] = council_id
+    return cycle
+
+
+def _ensure_tallied_location(conn, cycle: dict, term_years: int) -> int:
+    """Tallies a closed Tehsil-and-up cycle: for each of the 4 elements, the Male and Female
+    candidate with the most qpunch_cascade_votes wins that element's seat -- same plurality rule
+    village uses (_ensure_tallied() above), just 8 seats instead of 2. Writes qpunch_councils (the
+    term row) and qpunch_council_members (the 8 seats). Re-tallies every time this is called on a
+    closed cycle -- idempotent, same reasoning as _ensure_tallied()'s own 2026-11-08 fix: a cheap,
+    deterministic read with no side effect that must only ever run once. Returns the council's id."""
+    term_start = dt.date.fromisoformat(cycle["voting_end"]) + dt.timedelta(days=1)
+    term_end = dt.date(term_start.year + term_years, term_start.month, term_start.day) - dt.timedelta(days=1)
+
+    winners = {}
+    for element in ELEMENT_ORDER:
+        winners[element] = {}
+        for gender in ("male", "female"):
+            row = conn.execute(
+                """SELECT candidate_user_id, COUNT(*) AS votes FROM qpunch_cascade_votes
+                   WHERE election_cycle_id = ? AND gender = ? AND element = ?
+                   GROUP BY candidate_user_id ORDER BY votes DESC, MIN(id) ASC LIMIT 1""",
+                (cycle["id"], gender, element),
+            ).fetchone()
+            winners[element][gender] = row["candidate_user_id"] if row else None
+
+    existing = conn.execute(
+        "SELECT id FROM qpunch_councils WHERE location_id = ? AND level = ? AND term_start = ?",
+        (cycle["village_id"], cycle["level"], term_start.isoformat()),
+    ).fetchone()
+    if existing:
+        council_id = existing["id"]
+        conn.execute(
+            "UPDATE qpunch_councils SET term_end = ?, election_cycle_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (term_end.isoformat(), cycle["id"], council_id),
+        )
+    else:
+        cur = conn.execute(
+            """INSERT INTO qpunch_councils (location_id, level, term_start, term_end, election_cycle_id)
+               VALUES (?, ?, ?, ?, ?)""",
+            (cycle["village_id"], cycle["level"], term_start.isoformat(), term_end.isoformat(), cycle["id"]),
+        )
+        council_id = cur.lastrowid
+
+    for element in ELEMENT_ORDER:
+        for gender in ("male", "female"):
+            user_id = winners[element][gender]
+            if user_id is None:
+                continue
+            conn.execute(
+                """INSERT INTO qpunch_council_members (council_id, user_id, gender, element)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(council_id, gender, element) DO UPDATE SET user_id = excluded.user_id""",
+                (council_id, user_id, gender, element),
+            )
+    conn.commit()
+    return council_id
+
+
+def _quarter_bounds(council: dict) -> list[tuple[dt.date, dt.date, str]]:
+    """The term's 4 equal(-ish) quarters as (start, end, element) triples, in ELEMENT_ORDER -- a
+    term's day count rarely divides evenly by 4, so any leftover days are folded into the 4th
+    (Water) quarter rather than overshooting the term's own end date."""
+    start = dt.date.fromisoformat(council["term_start"])
+    end = dt.date.fromisoformat(council["term_end"])
+    quarter_days = ((end - start).days + 1) // 4
+    bounds = []
+    cursor = start
+    for i, element in enumerate(ELEMENT_ORDER):
+        q_end = end if i == 3 else cursor + dt.timedelta(days=quarter_days - 1)
+        bounds.append((cursor, q_end, element))
+        cursor = q_end + dt.timedelta(days=1)
+    return bounds
+
+
+def _current_quarter(council: dict, today: dt.date | None = None) -> tuple[dt.date, dt.date, str] | None:
+    today = today or dt.date.today()
+    for q_start, q_end, element in _quarter_bounds(council):
+        if q_start <= today <= q_end:
+            return q_start, q_end, element
+    return None  # term hasn't started yet, or has fully ended
+
+
+def ensure_head_approval_current(conn, council: dict, today: dt.date | None = None) -> dict:
+    """Keeps qpunch_councils.active_element/head_user_id/head_gender current for `council`, and
+    get-or-creates the qpunch_head_approvals row for whichever element's quarter is active right
+    now -- same "recompute from today's date, write if changed" pattern current_cycle_for_village()
+    already uses for a cycle's own status. Call this any time a council's current Head or active
+    element is needed for display, or before an incoming head-approval vote.
+
+    The 51% rule (approved brief): the active element's Male candidate becomes Head if his share
+    of the approval vote (approve / (approve + reject)) is >= 0.51 once the approval window
+    closes; otherwise the Female is Head for that quarter, by default. While the window is still
+    open, head_user_id/head_gender stay NULL -- the brief's rule only resolves once voting
+    actually closes, so this never guesses early. Returns the (possibly updated) council dict."""
+    today = today or dt.date.today()
+    quarter = _current_quarter(council, today)
+    if not quarter:
+        return council  # term not yet started, or fully over -- nothing to rotate
+    q_start, q_end, element = quarter
+
+    members = {r["gender"]: r["user_id"] for r in conn.execute(
+        "SELECT gender, user_id FROM qpunch_council_members WHERE council_id = ? AND element = ?",
+        (council["id"], element),
+    )}
+    male_id, female_id = members.get("male"), members.get("female")
+
+    approval = conn.execute(
+        "SELECT * FROM qpunch_head_approvals WHERE council_id = ? AND element = ?",
+        (council["id"], element),
+    ).fetchone()
+    if not approval and male_id and female_id:
+        approval_start = q_start
+        approval_end = min(q_start + dt.timedelta(days=HEAD_APPROVAL_DAYS - 1), q_end)
+        conn.execute(
+            """INSERT INTO qpunch_head_approvals
+               (council_id, element, male_candidate_user_id, female_candidate_user_id, approval_start, approval_end)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (council["id"], element, male_id, female_id, approval_start.isoformat(), approval_end.isoformat()),
+        )
+        conn.commit()
+        approval = conn.execute(
+            "SELECT * FROM qpunch_head_approvals WHERE council_id = ? AND element = ?",
+            (council["id"], element),
+        ).fetchone()
+
+    head_user_id, head_gender = None, None
+    if approval:
+        result = approval["result"]
+        if result is None and today > dt.date.fromisoformat(approval["approval_end"]):
+            tally = conn.execute(
+                "SELECT COALESCE(SUM(approve), 0) AS yes, COUNT(*) AS n FROM qpunch_head_approval_votes WHERE approval_id = ?",
+                (approval["id"],),
+            ).fetchone()
+            result = "approved" if (tally["n"] > 0 and (tally["yes"] / tally["n"]) >= 0.51) else "rejected"
+            conn.execute("UPDATE qpunch_head_approvals SET result = ? WHERE id = ?", (result, approval["id"]))
+            conn.commit()
+        if result == "approved":
+            head_user_id, head_gender = approval["male_candidate_user_id"], "male"
+        elif result == "rejected":
+            head_user_id, head_gender = approval["female_candidate_user_id"], "female"
+
+    if council.get("active_element") != element or council.get("head_user_id") != head_user_id or council.get("head_gender") != head_gender:
+        conn.execute(
+            "UPDATE qpunch_councils SET active_element = ?, head_user_id = ?, head_gender = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (element, head_user_id, head_gender, council["id"]),
+        )
+        conn.commit()
+        council = dict(council)
+        council.update(active_element=element, head_user_id=head_user_id, head_gender=head_gender)
+    return council
+
+
+def _present_location_matches(user_row, level: str, location_id: str) -> bool:
+    """True if user_row's PRESENT location, at `level`, is exactly `location_id` -- the Upper
+    House residency check (the approved brief's "general public at that location"), generalized
+    from _present_village_id()'s own identical village-only check above (left untouched; this is
+    a separate helper, not a rewrite of it, since every existing village call site already depends
+    on its exact current behavior)."""
+    loc = json.loads(user_row["present_location_json"])
+    if account_core.account_access_type(loc) != "public":
+        return False
+    return (loc.get(level) or {}).get("id") == location_id
+
+
+def cast_head_approval_vote(conn, user_row, council_id: int, approve: bool, today: dt.date | None = None) -> None:
+    """Upper House vote: approve or reject the active quarter's Male candidate as Head. No karma
+    or age gate -- the approved brief describes the Upper House as simply "the general public at
+    that location," the same bar village voting uses for residency (not candidacy)."""
+    council = conn.execute("SELECT * FROM qpunch_councils WHERE id = ?", (council_id,)).fetchone()
+    if not council:
+        raise LookupError("Council not found")
+    council = ensure_head_approval_current(conn, dict(council), today)
+    if not _present_location_matches(user_row, council["level"], council["location_id"]):
+        raise ValueError(f"Head approval voting is only open to residents of this {council['level']}.")
+    approval = conn.execute(
+        "SELECT * FROM qpunch_head_approvals WHERE council_id = ? AND element = ?",
+        (council_id, council["active_element"]),
+    ).fetchone()
+    if not approval or approval["result"] is not None:
+        raise ValueError("Head approval voting is not currently open for this council.")
+    already = conn.execute(
+        "SELECT 1 FROM qpunch_head_approval_votes WHERE approval_id = ? AND voter_user_id = ?",
+        (approval["id"], user_row["id"]),
+    ).fetchone()
+    if already:
+        raise ValueError("You've already voted on this quarter's Head approval.")
+    conn.execute(
+        "INSERT INTO qpunch_head_approval_votes (approval_id, voter_user_id, approve) VALUES (?, ?, ?)",
+        (approval["id"], user_row["id"], 1 if approve else 0),
+    )
+    conn.commit()
+
+
+def candidates_for_cycle_by_element(conn, cycle_id: int) -> dict:
+    """Tehsil-and-up equivalent of candidates_for_cycle(): approved candidates grouped
+    {element: {"male": [...], "female": [...]}}. Element is read live from the candidate's own
+    user_zodiac.sun_element, never stored redundantly on election_candidates -- a user's element
+    can't change once set, so there is nothing to drift out of sync, and this avoids a second
+    column recording a fact user_zodiac already owns."""
+    ensure_council_columns(conn)
+    rows = conn.execute(
+        """SELECT ec.id, ec.user_id, ec.gender, ec.manifest, ec.status, ec.form_reason, ec.form_why_vote,
+                  ec.form_changes, ec.form_past_work, u.name, uz.sun_element AS element
+           FROM election_candidates ec JOIN users u ON u.id = ec.user_id
+           JOIN user_zodiac uz ON uz.user_id = ec.user_id
+           WHERE ec.election_cycle_id = ? AND ec.status = 'approved'
+           ORDER BY u.name""",
+        (cycle_id,),
+    ).fetchall()
+    result = {element: {"male": [], "female": []} for element in ELEMENT_ORDER}
+    for r in rows:
+        candidate = dict(r)
+        candidate["karma"] = karma_core.individual_karma_score(conn, r["user_id"])
+        if r["element"] in result and r["gender"] in ("male", "female"):
+            result[r["element"]][r["gender"]].append(candidate)
+    return result
+
+
+def council_members_display(conn, council_id: int) -> dict:
+    """{element: {"male": {...}, "female": {...}}} for one qpunch_councils row -- names/karma
+    filled in, same display convention council_roster() already uses for village seats."""
+    rows = conn.execute(
+        """SELECT qcm.gender, qcm.element, qcm.user_id, u.name
+           FROM qpunch_council_members qcm JOIN users u ON u.id = qcm.user_id
+           WHERE qcm.council_id = ?""",
+        (council_id,),
+    ).fetchall()
+    result = {element: {"male": None, "female": None} for element in ELEMENT_ORDER}
+    for r in rows:
+        if r["element"] in result and r["gender"] in ("male", "female"):
+            result[r["element"]][r["gender"]] = {
+                "user_id": r["user_id"], "name": r["name"],
+                "karma": karma_core.individual_karma_score(conn, r["user_id"]),
+            }
+    return result
+
+
+def cascade_status(conn, level: str, location_id: str, user_row, today: dt.date | None = None) -> dict:
+    """The Tehsil-and-up equivalent of the village election page's own bundle (cycle + eligibility
+    + council) -- backs GET /api/election/status for level != 'village'. Unlike the village
+    route's several separate inline queries, this is one function so app.py's route stays a thin
+    auth-and-call wrapper, same as election_summary() already is for village."""
+    today = today or dt.date.today()
+    cycle = current_cycle_for_location(conn, level, location_id, today)
+    nomination_ok, nomination_reason = nomination_eligible(conn, user_row, cycle)
+    voting_ok, voting_reason = voting_eligible(conn, user_row, cycle, today)
+    already_nominated = bool(conn.execute(
+        "SELECT 1 FROM election_candidates WHERE election_cycle_id = ? AND user_id = ?",
+        (cycle["id"], user_row["id"]),
+    ).fetchone())
+    voted = [dict(r) for r in conn.execute(
+        "SELECT gender, element FROM qpunch_cascade_votes WHERE election_cycle_id = ? AND voter_user_id = ?",
+        (cycle["id"], user_row["id"]),
+    )]
+
+    council = None
+    council_row = conn.execute(
+        "SELECT * FROM qpunch_councils WHERE location_id = ? AND level = ? ORDER BY term_end DESC LIMIT 1",
+        (location_id, level),
+    ).fetchone()
+    if council_row and dt.date.fromisoformat(council_row["term_end"]) >= today:
+        council_row = ensure_head_approval_current(conn, dict(council_row), today)
+        council = {
+            "id": council_row["id"], "term_start": council_row["term_start"], "term_end": council_row["term_end"],
+            "active_element": council_row["active_element"], "head_user_id": council_row["head_user_id"],
+            "head_gender": council_row["head_gender"],
+            "members": council_members_display(conn, council_row["id"]),
+        }
+
+    return {
+        "level": level, "location_id": location_id,
+        "cycle": {
+            "status": cycle["status"], "year": cycle["year"], "term_years": cycle.get("term_years"),
+            "nomination_start": cycle["nomination_start"], "nomination_end": cycle["nomination_end"],
+            "voting_start": cycle["voting_start"], "voting_end": cycle["voting_end"],
+        },
+        "eligibility": {
+            "can_nominate": nomination_ok and cycle["status"] == "nomination" and not already_nominated,
+            "nominate_reason": "" if nomination_ok else nomination_reason,
+            "already_nominated": already_nominated,
+            "can_vote": voting_ok and cycle["status"] == "voting",
+            "vote_reason": "" if voting_ok else voting_reason,
+            "voted": voted,
+        },
+        "lower_house_size": len(get_lower_house(conn, level, location_id)),
+        "council": council,
+    }
 
 
 # ---- Private, optional election-history record (Lok Sabha / Vidhan Sabha) ----
