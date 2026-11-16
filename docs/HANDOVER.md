@@ -1924,6 +1924,85 @@ Full suite re-run clean after every commit in this window (most recently 43 test
 failures, after `a6abe68`). Not yet reflected in `docs/MASTER_STATUS.md`, which still records the
 `a157d7a` release as current (see §17's own note — unchanged, still due for its own refresh pass).
 
+## 19. Phone App Catch-Up, the APK Release-Hosting Move, and the Tehsil Cycle-Creation Race Fix —
+November 2026
+
+Two more commits land on top of `a6abe68` (§18's own closing point) before this one: `19d2eb4`
+(the About-page `#q-punch`/`#q-card` sections and this document's own §18, both already described
+in §18 above) and `5bc88af` (the APK release-hosting move, §19.3 below). This section's own commit
+adds one more backend fix (§19.4) alongside itself.
+
+### 19.1 Q-Punch Cascading Elections — no change, see §18
+Nothing about the cascade architecture itself moved in this window beyond the one bug fixed in
+§19.4 — the full design (the 8-seat, 4-element councils from Tehsil through Earth; the
+Fire→Earth→Air→Water quarterly Head rotation; the Lower House, computed live from a location's own
+child-location council members, versus the Upper House, that location's entire resident
+population, sovereign over it; the 51% Head Approval ballot as one standing instance of the Upper
+House's general power; and the People's Vote as that power's general form — any member can call a
+referendum on anything, and a PASSED vote, ≥51% of ballots *cast* rather than of turnout, is
+recorded as binding, though enforcing it against the council's own decisions is still a separate,
+later task) is documented in full in §18 above and is not repeated here.
+
+### 19.2 Phone App Catch-Up (separate repo, `Qumanity_App` — read-only verification only; this
+session did not touch that repo)
+Three commits landed there since this document's last word on the phone app (§15), bringing it in
+step with everything §16-§18 built on the website:
+- **`90e10a4` — the Family Recovery screen and verifier notifications.** A locked-out member's own
+  screen (`recover-family.tsx`): the request form, a tracking code, a status checker, the new-PIN
+  form, and the Private ID reveal once approved. The verifying relative's Notifications screen
+  gained its own "Family recovery requests" section with Approve/Deny buttons. The same commit
+  corrected the "Who are they to you?" relationship-direction question to match the asymmetric
+  verification logic `family_core.py` already enforces (see §17).
+- **`070e069` — the in-app Update Checker.** Fetches `GET /api/app-version` (§18's `be22ac4`) on
+  launch and shows a banner when a newer version is available; "Update Now" opens the download URL
+  in the browser. `app.json`'s own version was bumped to 1.0.1 to match.
+- **`8104645` — the phone Q-Punch UI mirroring the web's cascade.** `CascadeElection.tsx` (the
+  8-seat council, the quarterly rotation, the Head-Approval ballot, candidacy) and
+  `PeopleVoteCard.tsx` (the Upper House referendum), with `QPunchSheet.tsx` switching between the
+  Village (zodiac) and Tehsil+ (element) displays by level. Notable for §19.4 below: this commit's
+  own message says the app "sequences the status and candidates API calls to avoid a backend race
+  condition during the first Tehsil election cycle" — the phone app had already built its own
+  client-side workaround for the exact bug §19.4 now fixes at the source. That workaround is
+  harmless to leave in place and is still a reasonable call order on its own merits, but is no
+  longer load-bearing.
+
+### 19.3 APK Hosting Strategy (`5bc88af`)
+The 1.0.1 APK is 101.44 MB — over GitHub's 100 MB per-file repository limit (the 1.0.0 build,
+committed directly to `static/downloads/qumanity.apk`, had been under it). Rather than Git LFS or
+shrinking the build, 1.0.1 is hosted as a **GitHub Release asset** instead — release `v1.0.1`,
+asset `application-c9e06518-4acb-44cb-85dc-a9a852025ae9.apk` — uploaded directly to GitHub, outside
+git history entirely. `/app` in `app.py` no longer serves `static/downloads/qumanity.apk` via
+`url_for("static", ...)`; it's a plain `redirect()` straight to that Release asset's URL. The old
+APK file was removed from the repo (`git rm`) so it stops bloating every future clone. **Do not
+commit an APK to this repository again** — any future build goes to a new GitHub Release, with
+only `/app`'s redirect URL (and `LATEST_APP_VERSION` in `app.py`) updated to point at it.
+
+### 19.4 The Tehsil Cycle-Creation Race Fix
+`current_cycle_for_location()` (the subject of §18's own cycle-anchoring fix) still had one more
+bug: creating a location's first-ever election cycle read `election_cycles` for an existing row
+and only inserted a new one if none was found — an unguarded read-then-write. Two concurrent
+requests for the same location's first cycle (e.g. two members opening the Q-Punch sheet for the
+same freshly-promoted Tehsil at once) could both read "no row," both attempt the `INSERT`, and the
+second would hit `election_cycles`'s own `UNIQUE (village_id, zodiac_sign, year)` constraint
+(`zodiac_sign` is always `''` for a cascade-level cycle) and crash with an uncaught
+`IntegrityError` → 500. Fixed by changing the `INSERT` to `INSERT OR IGNORE`, then always
+re-reading the row immediately afterward regardless of which request's insert actually landed —
+both requests end up agreeing on the one real cycle. A `try/except sqlite3.IntegrityError` around
+the insert is defense in depth for a failure `OR IGNORE` itself doesn't suppress (e.g. a
+`FOREIGN KEY` violation): logged via `logging.getLogger(__name__)` — this module's first use of
+Python's `logging` module, chosen over `flask.current_app.logger` so the database layer doesn't
+need a Flask app-context dependency; it still reaches stderr with zero extra configuration — then
+falling back to the same re-read. If that also finds nothing, a `RuntimeError` is raised rather
+than letting `None` propagate into a confusing `TypeError` several lines later. Both
+`tests/test_qpunch_cascade.py` and `tests/test_people_vote.py` still pass unchanged against the
+fix; neither exercises genuinely concurrent requests, so neither hit the pre-fix bug directly, but
+both confirm the single-caller path is unaffected.
+
+### Regression and release
+Full suite re-run clean after this fix: 42 test files, 0 failures. Not yet reflected in
+`docs/MASTER_STATUS.md` (see §17's and §18's own notes — unchanged, still due for its own refresh
+pass).
+
 ---
 
 *This document supersedes all prior versions of `docs/HANDOVER.md`. For the concise, frequently

@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
+import sqlite3
 
 import account_core
 import cycle_middleware
@@ -25,6 +27,8 @@ import id_generator
 import karma_core
 import wallet_core
 from zodiac_core import ZODIAC_RANGES
+
+logger = logging.getLogger(__name__)
 
 # Same village the old Qumanity prototype used as its election pilot
 # ("Rohini Sector-24", Delhi) — also where this project's own test users
@@ -789,19 +793,41 @@ def current_cycle_for_location(conn, level: str, location_id: str, today: dt.dat
         nomination_end = nomination_start + dt.timedelta(days=NOMINATION_DAYS - 1)
         voting_start = nomination_end + dt.timedelta(days=1)
         voting_end = voting_start + dt.timedelta(days=VOTING_DAYS - 1)
-        conn.execute(
-            """INSERT INTO election_cycles
-               (village_id, zodiac_sign, element, level, year, nomination_start, nomination_end,
-                voting_start, voting_end, status)
-               VALUES (?, '', '', ?, ?, ?, ?, ?, ?, 'nomination')""",
-            (location_id, level, nomination_start.year, nomination_start.isoformat(), nomination_end.isoformat(),
-             voting_start.isoformat(), voting_end.isoformat()),
-        )
-        conn.commit()
+        # OR IGNORE (2026-11-16): election_cycles' own UNIQUE is (village_id, zodiac_sign, year) --
+        # for a cascade level, zodiac_sign is always '', so two concurrent first-ever requests for
+        # the same location+year (both having read `row is None` above, before either committed)
+        # would otherwise race a plain INSERT into an IntegrityError -> 500. Whichever request's
+        # insert wins, the loser's is silently skipped and the re-SELECT below reads the winner's
+        # row either way, so both requests end up agreeing on the one real cycle. The try/except is
+        # defense in depth for an IntegrityError OR IGNORE does NOT suppress (e.g. a FOREIGN KEY or
+        # CHECK failure) -- logged, then the re-SELECT is given a chance to find a row some other
+        # request already committed before re-raising if there's truly nothing to fall back to.
+        try:
+            conn.execute(
+                """INSERT OR IGNORE INTO election_cycles
+                   (village_id, zodiac_sign, element, level, year, nomination_start, nomination_end,
+                    voting_start, voting_end, status)
+                   VALUES (?, '', '', ?, ?, ?, ?, ?, ?, 'nomination')""",
+                (location_id, level, nomination_start.year, nomination_start.isoformat(), nomination_end.isoformat(),
+                 voting_start.isoformat(), voting_end.isoformat()),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            logger.exception(
+                "current_cycle_for_location: INSERT OR IGNORE still raised IntegrityError "
+                "(location_id=%s, level=%s, year=%s); falling back to existing row if any",
+                location_id, level, nomination_start.year,
+            )
+            conn.rollback()
         row = conn.execute(
             "SELECT * FROM election_cycles WHERE village_id = ? AND level = ? ORDER BY id DESC LIMIT 1",
             (location_id, level),
         ).fetchone()
+        if row is None:
+            raise RuntimeError(
+                f"current_cycle_for_location: no election_cycles row for "
+                f"location_id={location_id!r} level={level!r} after insert+fallback"
+            )
 
     nomination_end = dt.date.fromisoformat(row["nomination_end"])
     voting_end = dt.date.fromisoformat(row["voting_end"])
