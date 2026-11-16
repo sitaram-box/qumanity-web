@@ -1265,6 +1265,12 @@ in this section above is the `a157d7a` release's own record and is left as-is; s
 what landed between `a157d7a` and `7699cc6` (Family Tree Cascade, Account Recovery, LBE, the
 synthetic demo route, Q-Cards, and the family-invite/member-list fixes).
 
+**Second update (2026-11-16, later the same day):** local `HEAD` = `origin/main` =
+**`a6abe6859a71b7a6f6f10b805065070b5f1beef0`** (`a6abe68`), same confirmation method as above. See
+§18 below for what landed between `7699cc6` and `a6abe68` (the Q-Punch cascade from Village to
+Earth, Upper House Sovereignty / the People's Vote, `geography_core.py`, and the Contextual Help
+System).
+
 ---
 
 ## 15. Next-phase handover instructions for the phone application
@@ -1773,6 +1779,150 @@ Full suite re-run clean after every commit above (most recently 40 test files, 0
 `7699cc6`). All nine commits pushed to `origin/main`; see the §14 update note above for the
 confirmed `HEAD`/`origin/main` match (`7699cc6`). Not yet reflected in `docs/MASTER_STATUS.md`,
 which still records the `a157d7a` release as current — due for its own refresh pass.
+
+---
+
+## 18. Q-Punch Cascade, Upper House Sovereignty, the Geography Helper, and the Contextual Help
+System — November 2026
+
+Ten more commits landed between `7699cc6` (§17's own closing point) and the current `HEAD`
+(`a6abe68`) — summarized here in the same spirit as §17: what shipped, why, and what's still open.
+**Q-Card Backend is not repeated here** — it's already fully documented in §17 above
+(`15bccc8`/`fbb5546`); nothing about it changed in this window.
+
+### Small, self-contained fixes (`c6cb6b3`, `be22ac4`, `95dccc6`, `dd18516`)
+- **`c6cb6b3` — the "Groups" rename.** The Collective Board's "Groups" button/drawer now reads
+  "Local Areas" at Village level and "Sub-Groups" at Tehsil and above — wired into `board.js`'s
+  own `applyLevel()`, the single existing place that already reacted to a level change.
+- **`be22ac4` — `GET /api/app-version`.** A hand-maintained `LATEST_APP_VERSION` constant plus a
+  public route returning `{"latest_version", "download_url"}`, for the Phone App's own
+  (separately built) update-check UI to poll.
+- **`95dccc6` — the missing grandchild test for Rule 5.** `21d4016`'s own commit message had
+  flagged this as a follow-up; `tests/test_family_recovery.py` now asserts a grandchild is
+  refused as a recovery verifier, the exact inverse of the existing grandparent case.
+- **`dd18516` — the Statistics Dashboard upgrade.** Fixed a real bug — Flask's `jsonify()`
+  alphabetizes dict keys on the wire, confirmed directly (`jsonify({"male":11,"female":7,
+  "both":0})` → `{"both":0,"female":7,"male":11}`), which is why "Third gender" rendered before
+  "Female"/"Male" — and replaced the raw-list Gender/Age/Element/Zodiac panels with a horizontal
+  bar chart, a vertical column chart, and two SVG donut charts (a ~30-line stacked-circle helper,
+  no new dependency). Small-count suppression (`"<5"`) is handled honestly throughout: a
+  suppressed slice gets a fixed placeholder wedge size, never a fabricated percentage, and the
+  whole panel hides outright (not just the numbers) when `total_humans` itself is suppressed.
+
+### Q-Punch Cascade: Village-only to Tehsil-through-Earth (`5fbf229`, `60bbde7`, `2ae7cb6`, `b3369b0`)
+Four commits, each shown as a diff and approved as its own phase before the next began.
+
+**Schema and the geography helper (`5fbf229`).** `election_cycles` gained a `level` column
+(`NOT NULL DEFAULT 'village'`, so every pre-existing row keeps meaning exactly what it already
+did). Two new tables, `qpunch_councils` (one row per location/level/term) and
+`qpunch_council_members` (the 8 seats under it — 1 Male + 1 Female per element), hold the
+Tehsil-and-up council data; `village_council` itself is untouched, still its own 12-sign-seat
+shape. **`geography_core.py`** (new module) answers "what are the direct child locations of X" —
+`get_children(conn, level, location_id)` — needed because a Tehsil's own Lower House is "every
+currently-serving council member across the villages under it," which first requires knowing
+which villages those are. Two different lookup mechanisms live inside it, because the real data
+genuinely differs: Continent→Country, Country→Zone, Zone→State and State→District all read the
+same static JSON files the registration dropdowns already use (reused, not duplicated);
+Tehsil→Village is a direct SQL lookup against `india_villages.tehsil_id`, the dedicated indexed
+foreign key already built for exactly this — not a string match against the id, even though
+today's ids happen to share a dot-prefix that could tempt one. (One place this module *does* rely
+on that dot-prefix: recovering a district's own owning state from its id, since
+`subcontinent_districts.json` nests districts under their state with no flat index of its own.)
+
+**Election logic (`60bbde7`).** `get_lower_house(conn, level, location_id)` — the voting pool one
+level up, computed live every time, never stored. `nomination_eligible()`/`voting_eligible()`/
+`nominate()`/`cast_vote()` are all generalized in place (branching on `cycle["level"]`), with
+`level='village'` (the default everywhere) taking the exact original code path unchanged — no
+existing caller needed to change. A Tehsil-and-up cycle elects all 8 seats at once in a single
+multi-year term (not 12 staggered per-sign cycles like village), tallied by plurality per
+(element, gender) into `qpunch_councils`/`qpunch_council_members`. Votes land in a **new** table,
+`qpunch_cascade_votes`, not the existing `election_votes` — a Lower House voter casts up to 8
+ballots per cycle (1 Male + 1 Female, per each of 4 elements, with no "your own element"
+restriction), which `election_votes`'s own `UNIQUE(cycle_id, voter, gender)` constraint was never
+built to allow, and SQLite cannot widen a `UNIQUE` constraint on a live table in place. A
+quarterly rotation engine (`_quarter_bounds()`/`_current_quarter()`/
+`ensure_head_approval_current()`) splits each council's own term into 4 equal(-ish) quarters, one
+element active at a time in Fire→Earth→Air→Water order, and resolves that quarter's Head: the
+active element's Male candidate needs ≥51% of an Upper-House approval vote
+(`qpunch_head_approvals`/`qpunch_head_approval_votes`, a new, separate yes/no referendum table —
+again not a reuse of an existing votes table, since this is a single-candidate referendum, not a
+pick-one-of-N election); short of 51%, the Female holds Head for that quarter by default.
+
+**A real, caught-and-fixed bug**: the first draft of `current_cycle_for_location()` copied
+village's own "recompute the window fresh every call" pattern — safe for village only because
+`_sign_window()` is a pure function of the calendar (the same sign + today always gives the same
+window). A first-ever Tehsil+ cycle's `nomination_start` has no such anchor; recomputing it from
+`today` on every later call silently pushed a live nomination window forward every time the
+function was read with a later date, making the cycle impossible to ever close. Found while
+writing the verification script (votes kept failing "not open" after the window should have
+passed) — fixed by reading a live cycle's *stored* dates once it exists, only creating a new
+cycle once the previous council's own term has actually ended.
+
+**Upper House Sovereignty / the People's Vote (`2ae7cb6`).** A correction mid-build: the Upper
+House isn't just a one-time 51%-approval gate on the Male Nayak — it's the ultimate sovereign at
+every level, and Head Approval is one *specific, standing instance* of that general power, not
+the whole of it. `initiate_people_vote()`/`cast_people_vote()`/`tally_people_vote()` (new tables
+`qpunch_people_votes`/`qpunch_people_vote_ballots`) let any member of a location's own population
+call a direct referendum on anything; a PASSED vote (≥51% of ballots *cast*, the same share Head
+Approval uses, not a turnout/quorum rule — a quorum would make a large population's own People's
+Vote functionally impossible to pass) is recorded as binding on that location's council. Vote
+counts stay hidden while a vote is open, matching `election_summary()`'s own existing
+`show_votes` convention (no running tallies mid-vote, to avoid bandwagon effects). **Enforcing a
+passed vote against the council's own actions is explicitly a separate, later task** — this phase
+only builds the record.
+
+**Frontend (`b3369b0`).** The Q-Punch modal's `openQp()` now fetches the cascade status/candidates
+endpoints for any level above village and renders the 8-seat election, the active council and its
+rotation roster, and the Head-Approval ballot; a separate, level-agnostic People's Vote card
+(referendum text, Yes/No ballot, or the resolved outcome, plus a "Start a People's Vote" form)
+appears for every level, village included. `tests/test_qpunch_cascade.py` and
+`tests/test_people_vote.py` are both committed, covering the full election/tally/rotation/
+approval and initiate/cast/tally/hidden-counts/residency-refusal flows respectively.
+
+**New API routes**: `GET /api/election/status` / `GET /api/election/candidates` (both generalized
+with optional `?level=&location_id=`, falling straight through to the original village response
+when omitted — no existing caller affected), `POST /api/election/nominate`, `POST
+/api/election/vote` (dispatches on payload shape: `council_id` present means a Head-Approval
+ballot, otherwise a cascade seat vote), `POST /api/people-vote/initiate`, `POST
+/api/people-vote/cast`, `GET /api/people-vote/status`.
+
+**Known gaps, not yet built** — named explicitly in the task briefs that authorized this work,
+not discovered later: enforcement of a passed People's Vote against the council's own decisions;
+the Mentor/Manager/Agent record-keeping layer; `announcements_core.is_council_member()`,
+`qmail_core.QPUNCH_REACHABLE_LEVELS`, and the Admin Panel's own council-scoping are all still
+hardcoded to village-only (pre-existing, already-documented gaps — see §9.2 above — not touched
+by this phase, since wiring Tehsil+ councils into them is its own, separate task).
+
+### Contextual Help System (`a6abe68`)
+Hovering a major dashboard widget (the Q-Punch button, the Qoin Wallet card, the Family Tree
+intro card) now reveals a small "?" linking to `/about?from=dashboard#<anchor>`; the About page
+detects `?from=dashboard`, shows a "← Back to Dashboard" button (using `history.back()`, not a
+fixed `href`), and auto-expands whichever `<details>` contains the target anchor before scrolling
+to it. Two of the three new anchors (`#karma`, `#family-tree`, `#qmail`) needed to be placed on
+the specific existing card/bullet that actually defines that topic, not a new top-level
+`<section>`, since About's own content has no standalone section for Karma or Qmail; `#punch`
+(the pre-`a157d7a` Governance section, linked from `home.html`'s own nav twice) was deliberately
+left unrenamed rather than broken for the sake of matching an illustrative example string.
+**Known limitation, accepted as a later task**: `history.back()` returns to `/dashboard` at its
+default tab, not literally the exact tab the user left — the dashboard's tab selection is pure
+client-side state, never encoded in the URL.
+
+### About page additions (same day, documenting the architecture above)
+Two new sections, `#q-punch` and `#q-card`, inside the existing "The governance model, in full"
+and "The mechanics, in full" `<details>` blocks respectively — the real, as-built cascade (8-seat
+councils, the 4-quarter rotation, Upper/Lower House, the People's Vote) alongside the original
+vision's own "Recursive levels" table (whose term lengths differ from what's actually running —
+both are kept, with an explicit note pointing out the discrepancy rather than silently editing
+the Founder's own earlier text). The dashboard's own Q-Punch help icon now points at `#q-punch`
+instead of the older `#punch`, since that's the section that actually describes what the widget
+shows above village level. The "Where Qumanity stands today" status list moved "Full Quantum
+Punch" and the Q-Card's backend from "Ahead" into "Live," and added a one-line mention of the
+Contextual Help System itself.
+
+### Regression and release
+Full suite re-run clean after every commit in this window (most recently 43 test files, 0
+failures, after `a6abe68`). Not yet reflected in `docs/MASTER_STATUS.md`, which still records the
+`a157d7a` release as current (see §17's own note — unchanged, still due for its own refresh pass).
 
 ---
 

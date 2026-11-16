@@ -501,6 +501,35 @@
                     run on a modest machine, as the design intends for village nodes.</p>
                 </section>
 
+
+                <section class="ab-section" id="q-card">
+                  <p class="ab-kicker">21 · Scan-to-login</p>
+                  <h3 class="ab-h3">The Q-Card: a card that logs you in, without ever carrying your identity</h3>
+                  <p class="ab-lead">
+                    Not everyone wants to type a 9-digit Private ID on a shared or borrowed phone. The Q-Card is a physical card,
+                    carrying a QR code, that resolves straight to a sign-in screen — the same PIN you already use, nothing extra
+                    to remember.
+                  </p>
+                  <h3 class="ab-h3">What the QR code encodes — and what it deliberately never does</h3>
+                  <p>
+                    A QR code is public the moment it's printed: anyone who glances at the card, or photographs it, can read it
+                    instantly. So it never encodes the Private ID, the Account-ID, or anything else that identifies who the card
+                    belongs to — only a long, random, unguessable token. The database stores a one-way hash of that token, never
+                    the token itself, so a copy of the database alone can never reconstruct a working card. Scanning it resolves
+                    to an account; the PIN — the one thing that was always the real secret — is still required to actually sign
+                    in.
+                  </p>
+                  <h3 class="ab-h3">Lost, replaced, never forwarded</h3>
+                  <p>
+                    A lost or damaged card can be revoked and replaced from the admin side. The old card's token is refused
+                    outright the moment a replacement exists for it — never quietly forwarded to the new one — so a found lost
+                    card can't be used to keep signing in just because a replacement was issued.
+                  </p>
+                  <p class="ab-note">Built so far: the scan-to-login backend, and the admin workflow for issuing, pricing, and
+                    revoking a card (including free issuance for the Admin's own family and the pilot village's council). The
+                    physical card itself — its printed design and batch generation — is still ahead.</p>
+                </section>
+
         </div>
       </details>
         <p class="ab-stop-cta"><a class="qm-btn qm-btn-primary" href="#stop-4">See what you can do →</a></p>
@@ -784,6 +813,63 @@
                 </section>
 
 
+                <section class="ab-section" id="q-punch">
+                  <p class="ab-kicker">20 · Governance, as built</p>
+                  <h3 class="ab-h3">Quantum Punch today: the cascading council, Tehsil to Earth</h3>
+                  <p class="ab-lead">
+                    The "Recursive levels" table above is the original vision; what actually runs today differs from it in the
+                    exact numbers, built level by level as the engineering caught up with the idea. The Village election (above)
+                    is still the 24-seat, zodiac-sign model. Every level above Village — Tehsil, District, State, Zone, Country,
+                    Continent, Earth — now runs a simpler, consistent shape instead: eight seats, elected by the level directly
+                    below it, serving a term that lengthens the higher the council sits.
+                  </p>
+                  <div class="ab-table-wrap">
+                    <table class="ab-table">
+                      <thead><tr><th>Level</th><th>Seats</th><th>Elected by (its own "Lower House")</th><th>Term</th></tr></thead>
+                      <tbody>
+                        <tr><td>Tehsil</td><td>8 — 1 Male + 1 Female per element</td><td>Village councils under it</td><td>3 years</td></tr>
+                        <tr><td>District</td><td>8</td><td>Tehsil councils under it</td><td>5 years</td></tr>
+                        <tr><td>State</td><td>8</td><td>District councils under it</td><td>7 years</td></tr>
+                        <tr><td>Zone</td><td>8</td><td>State councils under it</td><td>9 years</td></tr>
+                        <tr><td>Country</td><td>8</td><td>Zone councils under it</td><td>11 years</td></tr>
+                        <tr><td>Continent</td><td>8</td><td>Country councils under it</td><td>13 years</td></tr>
+                        <tr><td>Earth</td><td>8</td><td>Continent councils under it</td><td>15 years</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <h3 class="ab-h3">The four-quarter rotation</h3>
+                  <p>
+                    Each council's own term is split into four equal quarters. One element leads at a time — Fire, then Earth,
+                    then Air, then Water — so by the end of a full term, every element's Male and Female have each held the floor
+                    for one quarter. The other six members keep working in the background (research, pending cases) until their
+                    own quarter comes round.
+                  </p>
+                  <h3 class="ab-h3">Upper House and Lower House — who decides what</h3>
+                  <ul class="ab-list ab-list-2">
+                    <li><strong>Lower House.</strong> The currently-serving council one level down. A Tehsil's Lower House is
+                      every village council member under it; a District's is every Tehsil council under it — and so on, up to
+                      Earth. The Lower House elects the 8 seats, and only a currently-serving member one level down may stand for
+                      one of them.</li>
+                    <li><strong>Upper House.</strong> Everyone registered at that level — the general public, not just the elected
+                      councils. The Upper House decides who actually leads: when an element's quarter begins, its Male candidate
+                      needs 51% approval from the Upper House to become the official Head; short of that, the Female holds the
+                      Head role instead, with standing powers to resolve a stuck case or break a deadlock.</li>
+                  </ul>
+                  <h3 class="ab-h3">The People's Vote: the Upper House's own override</h3>
+                  <p>
+                    The 51% Head Approval is one specific, standing question the system already asks every quarter. The Upper
+                    House can also call a direct referendum — a <strong>People's Vote</strong> — on anything else: any member of
+                    that population may raise a question, and if it passes with 51% of the ballots actually cast (hidden from
+                    everyone until voting closes, so no one votes just to follow a running count), it is recorded as binding on
+                    the council for that location. The Q-Punch council is the administrative team; the People's Vote is the
+                    reminder that the public who actually live there still owns the decision.
+                  </p>
+                  <p class="ab-note">Enforcing a passed People's Vote against a council's own actions is still a separate, later
+                    piece of work — today this records the result and makes it visible, which is the first and necessary step,
+                    not the whole of it.</p>
+                </section>
+
+
                 <section class="ab-section" id="today">
                   <p class="ab-kicker">12 · Status</p>
                   <h3 class="ab-h3">Where Qumanity stands today</h3>
@@ -806,14 +892,16 @@
                         <li><b>Homepage</b> — the Sub-continent shown as one region on a 3D globe, with live statistics for the whole region and for each country.</li>
                         <li><b>Collective Board</b> — live posts, +1/−1 voting, promotion and freeze archive on the Public and Global timelines.</li>
                         <li id="qmail"><b>Personal Timeline</b> — a Family Tree you build node by node (link a relative by their Public ID, add parents, children and in-laws as the tree grows), plus Friends and Business groups and Qmail internal messaging. A profile picture — or a colored-initial avatar if you haven't uploaded one — shows next to your name everywhere it appears: the tree, group chats, Qmail, and the Collective Board.</li>
+                        <li><b>Quantum Punch, Tehsil to Earth</b> — see <a href="#q-punch">above</a>: 8-seat element councils above the pilot village, elected by the level below, with a quarterly rotating Head and the Upper House's own People's Vote override.</li>
+                        <li><b>Q-Card backend</b> — see <a href="#q-card">above</a>: scan-to-login and the admin issuance/revocation workflow. The physical card itself is still ahead (see "Ahead" opposite).</li>
+                        <li><b>Contextual help</b> — hover any major dashboard widget for a small "?" that opens this page, already scrolled and expanded to the section that explains it.</li>
                       </ul>
                     </div>
                     <div class="ab-status-col ab-status-next">
                       <h3><span class="ab-dot"></span>Ahead</h3>
                       <ul>
                         <li><b>Contribution Qoins</b> — verified civic work, Q-Pay and container wallets with public finance dashboards.</li>
-                        <li><b>Full Quantum Punch</b> — elections and councils beyond the pilot village, and upward through tehsil to nation.</li>
-                        <li><b>Kiosks, biometrics &amp; the Q-Card</b> — the physical access layer.</li>
+                        <li><b>Kiosks, biometrics &amp; the printed Q-Card</b> — the physical access layer; the Q-Card's own backend is already live (see opposite).</li>
                         <li><b>S(AI)</b> — the advisory intelligence layer, private dialogue rooms included.</li>
                         <li><b>Services</b> — justice, education, health, agriculture, environment, mobility and the rest of the manuscripts’ modules.</li>
                         <li><b>More countries</b> — beyond the Sub-continent, as their nested location data is compiled.</li>
