@@ -6448,17 +6448,20 @@ def api_people_vote_status():
         return jsonify({"error": "level and location_id are required"}), 400
     conn = get_db()
     try:
+        user = _current_user_row(conn)
+        # Computed unconditionally (not only when a vote exists) so the frontend can decide
+        # whether to offer "Start a People's Vote" without guessing at eligibility first.
+        is_upper_house = election_core._present_location_matches(user, level, location_id)
         row = conn.execute(
             "SELECT id FROM qpunch_people_votes WHERE location_id = ? AND level = ? ORDER BY id DESC LIMIT 1",
             (location_id, level),
         ).fetchone()
         if not row:
-            return jsonify({"vote": None})
+            return jsonify({"vote": None, "is_upper_house": is_upper_house})
         # Auto-resolves a vote whose window has passed but hasn't been tallied yet -- same
         # "compute live, persist once decided" pattern current_cycle_for_village()/
         # ensure_head_approval_current() already use elsewhere in this file.
         vote = election_core.tally_people_vote(conn, row["id"])
-        user = _current_user_row(conn)
         already_voted = bool(conn.execute(
             "SELECT 1 FROM qpunch_people_vote_ballots WHERE vote_id = ? AND user_id = ?", (vote["id"], user["id"])
         ).fetchone())
@@ -6466,10 +6469,10 @@ def api_people_vote_status():
         if out["status"] == "open":
             out["votes_for"] = out["votes_against"] = None
         out["already_voted"] = already_voted
-        out["is_upper_house"] = election_core._present_location_matches(user, level, location_id)
+        out["is_upper_house"] = is_upper_house
     finally:
         conn.close()
-    return jsonify({"vote": out})
+    return jsonify({"vote": out, "is_upper_house": is_upper_house})
 
 
 @app.route("/api/admin/election/nominate/<int:candidate_id>/approve", methods=["POST"])

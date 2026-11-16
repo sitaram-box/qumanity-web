@@ -74,6 +74,16 @@
         qpBody.appendChild(el("p", "qp-lead", line));
       }
       if (d.election) qpBody.appendChild(electionBlock(d.election, d.guide, level));
+      // Q-Punch cascade (2026-11-16): a placeholder, filled in further down once the dedicated
+      // cascade endpoints resolve -- appended here (not at the end) so the election block lands
+      // in the same visual position the village election block occupies above.
+      var cascadeHolder = el("div");
+      qpBody.appendChild(cascadeHolder);
+      // Upper House Sovereignty (2026-11-16): the People's Vote referendum card -- level-agnostic
+      // (a People's Vote can happen at ANY level, village included, unlike the cascade election
+      // above), so this is fetched and appended regardless of level.
+      var peopleVoteHolder = el("div");
+      qpBody.appendChild(peopleVoteHolder);
       d.seats.forEach(function (s) {
         var row = el("div", "qp-seat" + (s.filled ? " is-filled" : ""));
         row.appendChild(el("span", "qp-no", s.seat));
@@ -125,6 +135,26 @@
         }).catch(function (e) { histBox.innerHTML = ""; histBox.appendChild(el("p", "qm-dash-empty", e.message)); });
       });
       qpBody.appendChild(histBtn); qpBody.appendChild(histBox);
+
+      peopleVoteHolder.appendChild(el("p", "qm-dash-empty", "Loading People's Vote…"));
+      api("/api/people-vote/status?level=" + level + "&location_id=" + encodeURIComponent(d.group_id)).then(function (pv) {
+        peopleVoteHolder.innerHTML = "";
+        peopleVoteHolder.appendChild(peopleVoteBlock(pv.vote, pv.is_upper_house, level, d.group_id));
+      }).catch(function (e) { peopleVoteHolder.innerHTML = ""; peopleVoteHolder.appendChild(el("p", "qm-dash-empty", e.message)); });
+
+      // Q-Punch cascade, Phase 4 (2026-11-16): /api/qpunch/<level> above only ever populates
+      // `election` for the single village pilot (see app.py's own api_qpunch()) -- every other
+      // level's 8-seat element election lives behind the dedicated cascade endpoints instead.
+      if (level !== "village") {
+        cascadeHolder.appendChild(el("p", "qm-dash-empty", "Loading council election…"));
+        Promise.all([
+          api("/api/election/status?level=" + level + "&location_id=" + encodeURIComponent(d.group_id)),
+          api("/api/election/candidates?level=" + level + "&location_id=" + encodeURIComponent(d.group_id)),
+        ]).then(function (results) {
+          cascadeHolder.innerHTML = "";
+          cascadeHolder.appendChild(cascadeElectionBlock(results[0], results[1], level, d.group_id));
+        }).catch(function (e) { cascadeHolder.innerHTML = ""; cascadeHolder.appendChild(el("p", "qm-dash-empty", e.message)); });
+      }
     }).catch(function (e) { qpBody.innerHTML = ""; qpBody.appendChild(el("p", "qm-dash-empty", e.message)); });
   }
 
@@ -194,6 +224,206 @@
       });
     });
     box.appendChild(el("small", "qp-elec-turnout", e.turnout + " of " + e.eligible_voters + " " + e.sign + " members have voted."));
+    return box;
+  }
+
+  // ---- Q-Punch cascade, Phase 4 (2026-11-16): the Tehsil-to-Earth 8-seat (4 elements x 2
+  // genders) election, replacing electionBlock()'s 12-sign shape for every level above village.
+  // `status`/`candidatesData` are GET /api/election/status / /api/election/candidates's own
+  // responses (election_core.cascade_status()/candidates_for_cycle_by_element()). ----
+  var CASCADE_ELEMENTS = ["Fire", "Earth", "Air", "Water"];
+  var CASCADE_ROTATION_LABEL = { 1: "Next quarter", 2: "Upcoming", 3: "Just finished" };
+
+  function cascadeElectionBlock(status, candidatesData, level, locationId) {
+    var box = el("div", "qp-cascade");
+    var cycle = status.cycle, elig = status.eligibility, council = status.council;
+    function reload() { openQp(level); }
+
+    box.appendChild(el("p", "qp-lead",
+      "Lower House: " + status.lower_house_size.toLocaleString() + " currently-serving member" + (status.lower_house_size === 1 ? "" : "s")
+      + " · term length " + cycle.term_years + " years · status: " + cycle.status));
+
+    if (council) {
+      var active = council.active_element;
+      var activeMembers = (council.members && council.members[active]) || {};
+      var activeBox = el("div", "qp-elec qp-elec-" + (active || "").toLowerCase());
+      activeBox.appendChild(el("b", "", (active || "—") + " Element leading the council"));
+      activeBox.appendChild(el("p", "qp-elec-text",
+        (activeMembers.male ? activeMembers.male.name : "—") + " (Male) and "
+        + (activeMembers.female ? activeMembers.female.name : "—") + " (Female) are the active leaders this quarter."));
+      if (council.head_user_id) {
+        var headName = council.head_gender === "male"
+          ? (activeMembers.male && activeMembers.male.name) : (activeMembers.female && activeMembers.female.name);
+        activeBox.appendChild(el("p", "qp-elec-winners",
+          council.head_gender === "male"
+            ? "🏆 " + headName + " is the official Head — approved by 51%+ of the Upper House."
+            : "⚡ " + headName + " holds the Head role with exceptional powers — the Male did not reach 51% Upper House approval this quarter."));
+      } else if (council.approval) {
+        activeBox.appendChild(el("p", "qp-elec-text",
+          "Head approval voting is open until " + council.approval.approval_end + " — the Upper House is deciding whether the Male leads officially."));
+      }
+      box.appendChild(activeBox);
+
+      // The other 6 members, with their rotation position relative to the active element.
+      var rosterBox = el("div", "qp-cascade-roster");
+      rosterBox.appendChild(el("b", "qp-elec-sec", "Full council"));
+      var activeIdx = CASCADE_ELEMENTS.indexOf(active);
+      CASCADE_ELEMENTS.forEach(function (element, idx) {
+        if (element === active) return;
+        var m = (council.members && council.members[element]) || {};
+        var row = el("div", "qp-cascade-roster-row");
+        row.appendChild(el("b", "", element));
+        row.appendChild(el("span", "", (m.male ? m.male.name : "—") + " & " + (m.female ? m.female.name : "—")));
+        var diff = activeIdx >= 0 ? (((idx - activeIdx) % 4) + 4) % 4 : null;
+        row.appendChild(el("small", "", CASCADE_ROTATION_LABEL[diff] || ""));
+        rosterBox.appendChild(row);
+      });
+      box.appendChild(rosterBox);
+
+      // Upper House 51% Head-approval ballot -- shown only to a resident of this location who
+      // hasn't already voted on it (see election_core.cascade_status()'s own is_upper_house/
+      // approval fields; the server re-checks both regardless, this just avoids showing a ballot
+      // the click would only fail on).
+      if (council.approval && council.is_upper_house && !council.approval.already_voted) {
+        var approvalBox = el("div", "qp-elec qp-elec-" + (active || "").toLowerCase());
+        var maleName = activeMembers.male ? activeMembers.male.name : "the Male candidate";
+        approvalBox.appendChild(el("b", "", "Approve " + maleName + " as official Head?"));
+        var yes = el("button", "sg-btn", "✅ Approve"), no = el("button", "sg-btn", "❌ Reject");
+        yes.type = no.type = "button";
+        function sendApproval(approve) {
+          api("/api/election/vote", { council_id: council.id, approve: approve }).then(reload).catch(function (er) { alert(er.message); });
+        }
+        yes.addEventListener("click", function () { sendApproval(true); });
+        no.addEventListener("click", function () { sendApproval(false); });
+        approvalBox.appendChild(yes); approvalBox.appendChild(no);
+        box.appendChild(approvalBox);
+      } else if (council.approval && council.approval.already_voted) {
+        box.appendChild(el("p", "qp-elec-text", "✓ You've already voted on this quarter's Head approval."));
+      }
+    } else {
+      box.appendChild(el("p", "qm-dash-empty", "No council elected yet for this " + level + " — the first election is underway."));
+    }
+
+    // Nomination -- not itemized in the Phase 4 brief, but without it a Lower House member has no
+    // way at all to stand as a candidate here through the dashboard (the same form the village
+    // election already shows during its own nomination week, one level down).
+    if (cycle.status === "nomination") {
+      if (elig.can_nominate) {
+        var nf = el("form", "qp-vol qp-elec-form"), nqs = {};
+        [["reason", "Why are you standing?"], ["why_vote", "Why should the Lower House vote for you?"], ["changes", "What will you change?"]].forEach(function (q) {
+          var i = el("input"); i.placeholder = q[1]; i.maxLength = 300; i.required = true; nqs[q[0]] = i; nf.appendChild(i);
+        });
+        var nominateBtn = el("button", "sg-btn", "Stand as a candidate"); nominateBtn.type = "submit"; nf.appendChild(nominateBtn);
+        nf.addEventListener("submit", function (ev) {
+          ev.preventDefault();
+          api("/api/election/nominate", {
+            level: level, location_id: locationId,
+            reason: nqs.reason.value, why_vote: nqs.why_vote.value, changes: nqs.changes.value,
+          }).then(reload).catch(function (er) { alert(er.message); });
+        });
+        box.appendChild(nf);
+      } else if (elig.already_nominated) {
+        box.appendChild(el("p", "qp-elec-text", "✓ You've already submitted your candidacy for this cycle."));
+      } else {
+        box.appendChild(el("p", "qp-elec-text", elig.nominate_reason || "Nomination is open to this location's Lower House only."));
+      }
+    }
+
+    // The Lower House's own ballot: 1 Male + 1 Female per element, 8 seats in all.
+    if (cycle.status === "voting") {
+      if (elig.can_vote) {
+        CASCADE_ELEMENTS.forEach(function (element) {
+          var sec = el("div", "qp-elec qp-elec-" + element.toLowerCase());
+          sec.appendChild(el("b", "", element + " seat"));
+          ["male", "female"].forEach(function (gender) {
+            var list = ((candidatesData[element] || {})[gender]) || [];
+            sec.appendChild(el("b", "qp-elec-sec", (gender === "male" ? "Male" : "Female") + " candidates" + (list.length ? " (" + list.length + ")" : "")));
+            if (!list.length) sec.appendChild(el("small", "", "No candidates."));
+            var alreadyVoted = elig.voted.some(function (v) { return v.gender === gender && v.element === element; });
+            list.forEach(function (c) {
+              var row = el("div", "qp-elec-cand");
+              var t = el("div", "");
+              t.appendChild(el("b", "", c.name));
+              if (c.form_reason || c.manifest) t.appendChild(el("p", "", "“" + (c.form_reason || c.manifest) + "”"));
+              if (c.form_changes) t.appendChild(el("small", "", "Plan: " + c.form_changes));
+              row.appendChild(t);
+              if (!alreadyVoted) {
+                var v = el("button", "sg-btn", "Vote"); v.type = "button";
+                v.addEventListener("click", function () {
+                  if (!confirm("Vote for " + c.name + " as " + element + " " + gender + "? You can vote only once for this seat.")) return;
+                  api("/api/election/vote", {
+                    level: level, location_id: locationId, element: element,
+                    candidate_user_id: c.user_id, gender: gender,
+                  }).then(reload).catch(function (er) { alert(er.message); });
+                });
+                row.appendChild(v);
+              }
+              sec.appendChild(row);
+            });
+          });
+          box.appendChild(sec);
+        });
+      } else {
+        box.appendChild(el("p", "qp-elec-text", elig.vote_reason || "Voting is open to this location's Lower House only."));
+      }
+    }
+
+    return box;
+  }
+
+  // ---- Upper House Sovereignty, Phase 4 (2026-11-16): the People's Vote referendum card --
+  // level-agnostic (unlike cascadeElectionBlock above, a People's Vote exists at every level
+  // including village). `vote` is GET /api/people-vote/status's own "vote" field (null if none
+  // exists yet for this location); `isUpperHouse` is that same response's top-level flag. ----
+  function peopleVoteBlock(vote, isUpperHouse, level, locationId) {
+    var box = el("div", "qp-people-vote");
+    function reload() { openQp(level); }
+
+    if (vote) {
+      var card = el("div", "qp-elec");
+      card.appendChild(el("b", "", "📢 People's Vote: " + vote.title));
+      if (vote.description) card.appendChild(el("p", "qp-elec-text", vote.description));
+      if (vote.status === "open") {
+        card.appendChild(el("small", "", "Voting open until " + vote.end_time + " — counts stay hidden until it closes."));
+        if (isUpperHouse && !vote.already_voted) {
+          var yes = el("button", "sg-btn", "✅ Yes"), no = el("button", "sg-btn", "❌ No");
+          yes.type = no.type = "button";
+          function cast(inFavour) {
+            api("/api/people-vote/cast", { vote_id: vote.id, in_favour: inFavour }).then(reload).catch(function (er) { alert(er.message); });
+          }
+          yes.addEventListener("click", function () { cast(true); });
+          no.addEventListener("click", function () { cast(false); });
+          card.appendChild(yes); card.appendChild(no);
+        } else if (vote.already_voted) {
+          card.appendChild(el("small", "", "✓ You've already voted."));
+        } else {
+          card.appendChild(el("small", "", "Open to this location's own population only."));
+        }
+      } else {
+        card.appendChild(el("p", "qp-elec-winners",
+          (vote.status === "passed" ? "✅ PASSED" : "❌ FAILED") + " — " + vote.votes_for + " for, " + vote.votes_against + " against."
+          + (vote.status === "passed" ? " Binding on the Q-Punch council." : "")));
+      }
+      box.appendChild(card);
+    }
+
+    // Starting a new one is only ever useful once there's no OPEN vote already -- initiate_
+    // people_vote() itself also refuses a second open vote for the same location, this just
+    // avoids showing a form that would only fail.
+    if (!vote || vote.status !== "open") {
+      var f = el("form", "qp-vol qp-elec-form"), ti = el("input"), de = el("input");
+      ti.placeholder = "What should the council do? (title)"; ti.maxLength = 120; ti.required = true;
+      de.placeholder = "Details (optional)"; de.maxLength = 500;
+      var go = el("button", "sg-btn", "📢 Start a People's Vote"); go.type = "submit";
+      f.appendChild(ti); f.appendChild(de); f.appendChild(go);
+      f.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        api("/api/people-vote/initiate", { level: level, location_id: locationId, title: ti.value, description: de.value })
+          .then(reload).catch(function (er) { alert(er.message); });
+      });
+      box.appendChild(f);
+    }
+
     return box;
   }
 

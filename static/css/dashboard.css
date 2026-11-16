@@ -1232,6 +1232,28 @@
 @media (max-width: 520px) { .qp-elec-weeks { grid-template-columns: repeat(2, 1fr); } }
 .qp-elec-form { flex-direction: column; align-items: stretch; }
 
+/* ---- Q-Punch cascade, Phase 4 (2026-11-16): the Tehsil-to-Earth 8-seat election roster, inside
+   the same .qp-elec-* color-coded boxes the village election already uses. ---- */
+.qp-cascade-roster {
+  border: 1px solid var(--qm-input-border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin: 10px 0;
+  background: var(--qm-panel-bg);
+}
+.qp-cascade-roster-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 0;
+  border-top: 1px solid var(--qm-input-border);
+  font-size: 12.5px;
+}
+.qp-cascade-roster-row:first-of-type { border-top: none; }
+.qp-cascade-roster-row b { flex: 0 0 52px; }
+.qp-cascade-roster-row span { flex: 1; color: var(--qm-text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qp-cascade-roster-row small { flex: 0 0 auto; color: var(--qm-text-dim); font-style: italic; }
+
 /* ---- Hierarchical Explorer: FAB + modal (2026-10-28 redesign, replaces the old top-level
    Admin/Multi-View tabs and the panel-scoped .qm-mv-* rules) ---- */
 .qm-explorer-fab {
