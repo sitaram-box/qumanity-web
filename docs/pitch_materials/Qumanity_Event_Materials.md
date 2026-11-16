@@ -48,7 +48,7 @@ Status legend used in the deck: **LIVE** = working today · **PILOT** = working 
 - Open the Family Tree, Qmail, the live member statistics and the Q-Map (North West Delhi pilot dataset).
 - Scan the QR code and try it on your own phone.
 
-**Visual:** Phone-frame screenshot of the dashboard beside a large QR code to qumanity.in. Run the demo live on your own device.
+**Visual:** Phone-frame screenshot of the dashboard beside a large QR code to qumanity.in/app, captioned "Scan to install the Qumanity Android App." Run the demo live on your own device.
 
 ---
 
@@ -57,7 +57,7 @@ Status legend used in the deck: **LIVE** = working today · **PILOT** = working 
 - **Nested governance (LIVE):** eight linked geography levels; every post is scoped to a place and traceable through the levels.
 - **Collective Board (LIVE):** post, vote, promote or archive on a fixed voting cycle.
 - **Karma (LIVE):** a civic-contribution score, separate from money.
-- **Zodiac-cycle council elections (PILOT):** one village council elected each cycle — one man and one woman.
+- **Q-Punch council elections:** zodiac-cycle village councils, one man and one woman each cycle (PILOT) — now extended into a cascading 8-seat elemental council rotating from Tehsil all the way to Earth, with an Upper House People's Vote giving every member a sovereign check on their own council (LIVE architecture).
 
 **Visual:** Flow diagram: Post → Vote → Escalate → Council. Tag each box LIVE or PILOT.
 
@@ -88,7 +88,7 @@ Status legend used in the deck: **LIVE** = working today · **PILOT** = working 
 ## Slide 8 — Traction
 **Headline:** Early, honest and real.
 - **27 real registered members** (demo and test accounts excluded).
-- Website live; mobile app built on Expo and in active development.
+- Website live; Android app live and downloadable at qumanity.in/app (iOS in development).
 - Council-election pilot running in one Delhi village (Rohini Sector 24).
 - White paper published; Digital Public Goods Registry submission filed.
 
@@ -98,7 +98,7 @@ Status legend used in the deck: **LIVE** = working today · **PILOT** = working 
 
 ## Slide 9 — Roadmap and Business Model
 **Headline:** From one village to many, and how it sustains itself.
-- **Next 6 months (this round):** finish the mobile app, build a shared village kiosk prototype, launch two new pilot villages.
+- **Next 6 months (this round):** Android app released; iOS in development. Build a shared village kiosk prototype, launch two new pilot villages.
 - **Revenue, three layers:**
   1. Grants and CSR funding — today.
   2. Paid deployment and support for governments and panchayats — Year 2–3.
@@ -111,14 +111,14 @@ Status legend used in the deck: **LIVE** = working today · **PILOT** = working 
 
 ## Slide 10 — The Ask
 **Headline:** ₹15 lakhs over 6 months to take one village to three.
-- ₹8 lakhs — part-time engineer to finish the mobile app and build the kiosk prototype
+- ₹8 lakhs — part-time engineer to build the iOS app and the kiosk prototype
 - ₹4 lakhs — two new pilot villages (travel, local coordinators, training)
 - ₹2 lakhs — legal foundations: LLP registration, copyright assignment, trademark
 - ₹1 lakh — buffer
 
-**Milestones at six months:** mobile app released · kiosk prototype demonstrated in a village · three villages piloting in total · legal entity formed with IP assigned.
+**Milestones at six months:** iOS app released · kiosk prototype demonstrated in a village · three villages piloting in total · legal entity formed with IP assigned.
 
-**Visual:** A simple four-slice bar of the budget, your photo, QR code, and founder@qumanity.in · qumanity.in.
+**Visual:** A simple four-slice bar of the budget, your photo, a QR code to qumanity.in/app ("Scan to install the Qumanity Android App"), and founder@qumanity.in · qumanity.in.
 
 ---
 
@@ -138,10 +138,16 @@ To give every village a transparent, verifiable voice. Qumanity is a free, open-
 4. **Shared Village Kiosks (in development)** — A public terminal so people without smartphones can take part. A prototype is the next milestone.
 
 **WHERE WE ARE**
-Website live · Mobile app built and in development · Council-election pilot in one Delhi village · 27 registered members
+Website live · Android app live and downloadable at qumanity.in/app (iOS in development) · Council-election pilot in one Delhi village · 27 registered members
+
+Android App: Live at qumanity.in/app (scan the QR code to install)
+
+![Scan to install Qumanity App](./qumanity_app_qr.png)
+
+**Scan to install the Qumanity Android App**
 
 **WHAT WE ARE RAISING**
-₹15 lakhs over 6 months: finish the mobile app and kiosk prototype, launch two new pilot villages, and put the legal foundations in place.
+₹15 lakhs over 6 months: build the iOS app and kiosk prototype, launch two new pilot villages, and put the legal foundations in place.
 
 **HOW IT SUSTAINS ITSELF**
 Grants and CSR today. Paid deployment and support for governments and panchayats from Year 2–3. Training and certification for elected councils from Year 3.

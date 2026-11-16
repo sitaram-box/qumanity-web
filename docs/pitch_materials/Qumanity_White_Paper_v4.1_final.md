@@ -6,7 +6,7 @@
 |---|---|
 | **Author** | Rohit Mudgal (Founder, Qumanity) |
 | **Date** | November 2026 |
-| **Version** | 4.0 (revision of v3.0, June 2026) |
+| **Version** | 4.1 (revision of v4.0, November 2026) |
 | **Website** | https://qumanity.in |
 | **Repository** | github.com/sitaram-box/qumanity-web |
 | **Licence** | GNU Affero General Public License v3.0 (AGPL-3.0) |
@@ -15,7 +15,7 @@
 
 *Technical documentation is maintained in the repository (`docs/ARCHITECTURE.md`, `docs/API.md`, `docs/DATA_MODEL.md`, `docs/HANDOVER.md`).*
 
-**Revision note.** Version 3.0 described several planned capabilities in the present tense. This revision separates what is built from what is designed. Every capability is marked with one of four statuses:
+**Revision note.** Version 3.0 described several planned capabilities in the present tense; v4.0 separated what is built from what is designed. **v4.1 (November 2026)** records two changes since v4.0: the Android mobile app has moved from in development to released, downloadable at qumanity.in/app (iOS remains in development); and village-level council elections have been extended by a Q-Punch cascade — 8-seat elemental councils from Tehsil to Earth, a quarterly rotating Head, and an Upper House People's Vote — which is now implemented and covered by automated tests, though it has not yet been run as a real election on a live population above village level (see §4.6, §6, and §9's new Phase 5a). Every capability is marked with one of four statuses:
 
 - **[IMPLEMENTED]** — working in the live system today.
 - **[PILOT]** — working, but run in a single village and not yet generally available.
@@ -36,7 +36,7 @@
   - 4.3 Nested Governance: Village → Earth
   - 4.4 Dual-Key Identity
   - 4.5 Karma and Qoins
-  - 4.6 Zodiac-Based Elections
+  - 4.6 Zodiac-Based Elections and the Q-Punch Cascade
 - 5. System Architecture
   - 5.1 Three Ecosystem Layers
   - 5.2 High-Level Architecture
@@ -60,9 +60,9 @@ Human civilization stands at a critical juncture. Despite unprecedented technolo
 
 This white paper introduces Qumanity, a governance protocol and civic platform designed to address these systemic failures by embedding transparency, accountability, and participatory decision-making into the architecture of governance itself. It draws conceptual inspiration from Vedic principles of nested self-governance and from the idea of interconnectedness found in quantum science. It uses no quantum technology; the name is shorthand for Quantum + Humanity.
 
-The platform organizes civic life into four timelines — Private, Personal, Public, and Global **[IMPLEMENTED]** — that allow individual reflection to escalate into collective action. A nested governance structure (Village → Tehsil → District → State → Zone → Country → Continent → Earth) ensures that decisions are made at the appropriate scale **[IMPLEMENTED as nested geography and Collective Boards at every level; elected councils exist only in a one-village pilot]**. Each member holds a dual identity: a Private ID anchored to birth location and an Account ID anchored to present location **[IMPLEMENTED]**. A transparent Karma ledger records verified positive actions **[IMPLEMENTED in part; see Section 4.5]**.
+The platform organizes civic life into four timelines — Private, Personal, Public, and Global **[IMPLEMENTED]** — that allow individual reflection to escalate into collective action. A nested governance structure (Village → Tehsil → District → State → Zone → Country → Continent → Earth) ensures that decisions are made at the appropriate scale **[IMPLEMENTED as nested geography and Collective Boards at every level; council elections themselves are a one-village pilot at village level, with the 8-seat elemental cascade architecture from Tehsil to Earth now built and tested but not yet run as a real election above village level]**. Each member holds a dual identity: a Private ID anchored to birth location and an Account ID anchored to present location **[IMPLEMENTED]**. A transparent Karma ledger records verified positive actions **[IMPLEMENTED in part; see Section 4.5]**.
 
-Today Qumanity is delivered as a public website (qumanity.in) offering registration, boards, a family tree, internal messaging, a map, and live statistics **[IMPLEMENTED]**, with a cross-platform mobile app **[IN DEVELOPMENT]**. The wider ecosystem — village kiosks, biometric authentication, offline-first operation, a Planetary Ledger Node Network (PLNN), marketplace, justice, health and education modules, and a voice interface — is the project's **design goal** and is not yet built.
+Today Qumanity is delivered as a public website (qumanity.in) offering registration, boards, a family tree, internal messaging, a map, and live statistics **[IMPLEMENTED]**, with an Android mobile app **[IMPLEMENTED]** downloadable at qumanity.in/app (an iOS app is **[IN DEVELOPMENT]**). The wider ecosystem — village kiosks, biometric authentication, offline-first operation, a Planetary Ledger Node Network (PLNN), marketplace, justice, health and education modules, and a voice interface — is the project's **design goal** and is not yet built.
 
 The system is built with Flask and SQLite and is open-source (AGPL-3.0) and auditable; any community can adopt and adapt it. This paper presents the philosophical foundations, the architecture as it exists, the implementation roadmap, and the future vision. It concludes with an invitation to collaborate.
 
@@ -80,14 +80,14 @@ Qumanity (Quantum + Humanity) is a governance protocol — not another platform 
 
 Five ideas define the protocol:
 1. **Four Timelines** (Private, Personal, Public, Global) that separate lifelong identity from present governance **[IMPLEMENTED]**.
-2. **Nested Governance** from Village to Earth across eight levels **[IMPLEMENTED as geography and boards; councils are a one-village PILOT]**.
+2. **Nested Governance** from Village to Earth across eight levels **[IMPLEMENTED as geography and boards; village-level councils are a one-village PILOT, extended by an 8-seat elemental council cascade from Tehsil to Earth that is IMPLEMENTED architecturally but has not yet run a real election above village level]**.
 3. **Dual-Key Identity** — a birth-based Private ID and a location-based Account ID **[IMPLEMENTED]**.
 4. **A Karma ledger** that records verified actions and is kept separate from money **[IMPLEMENTED in part]**.
-5. **Zodiac-Based Elections** held in monthly cycles **[PILOT in one village]**.
+5. **Zodiac-Based Elections** held in monthly cycles at village level **[PILOT in one village]**, now extended into a cascading 8-seat elemental council from Tehsil to Earth with a quarterly rotating Head and an Upper House People's Vote **[IMPLEMENTED architecture; PILOT not yet run above village level]**.
 
-Two interfaces serve citizens: a website for public transparency, registration and daily participation **[IMPLEMENTED]**, and a cross-platform mobile app that uses the same backend **[IN DEVELOPMENT]**. A distributed Planetary Ledger Node Network (PLNN) and offline-first village kiosks are the long-term infrastructure vision **[PLANNED]**.
+Two interfaces serve citizens: a website for public transparency, registration and daily participation **[IMPLEMENTED]**, and an Android mobile app that uses the same backend **[IMPLEMENTED]**, downloadable at qumanity.in/app (an iOS app is **[IN DEVELOPMENT]**). A distributed Planetary Ledger Node Network (PLNN) and offline-first village kiosks are the long-term infrastructure vision **[PLANNED]**.
 
-**Status.** Qumanity is live at qumanity.in. Registration, nested geography covering more than 635,000 villages across 10 countries of the Indian sub-continent, the Karma ledger, Collective Boards, the Family Tree and a 13-language interface (English plus 12 Indian languages) are operational. A zodiac-cycle council election is being piloted in one village (Rohini Sector 24, Delhi). The mobile app, kiosks, biometrics, marketplace, justice module and national rollout are planned or in development.
+**Status.** Qumanity is live at qumanity.in. Registration, nested geography covering more than 635,000 villages across 10 countries of the Indian sub-continent, the Karma ledger, Collective Boards, the Family Tree and a 13-language interface (English plus 12 Indian languages) are operational. A zodiac-cycle council election is being piloted in one village (Rohini Sector 24, Delhi), and the cascading 8-seat elemental council architecture above it — Tehsil through Earth, with a quarterly rotating Head and an Upper House People's Vote — is built and tested end to end, though no real population has yet elected a Tehsil-and-up council on it. The Android mobile app is live at qumanity.in/app; an iOS app, kiosks, biometrics, marketplace, justice module and national rollout are planned or in development.
 
 > *"Vasudhaiva Kutumbakam" — The world is one family.*
 
@@ -201,17 +201,19 @@ Every member, discussion, and governance mechanism is scoped to one of these lev
 
 **Collective Boards [IMPLEMENTED].** Each level has a Collective Board where residents post and vote. Concerns that earn positive support escalate through the levels — a village issue that resonates nationally can ascend toward the planet, validated by community votes at each stage. Concerns that fail to earn support are archived. The system aims to self-correct without censorship.
 
-**Quantum Punch (Q-Punch) Councils [PILOT; remainder DESIGN GOAL].** Q-Punch is Qumanity's council-addressing and participatory-governance mechanism: the means by which a location, not just an individual member, can be written to and represented. The design gives each level a council with five leadership roles:
+**Quantum Punch (Q-Punch) Councils [village Nayak/Nayika: PILOT, one village; Tehsil-to-Earth cascade: IMPLEMENTED architecture, not yet run on a real population; Mentor/Manager/Agent: remain DESIGN GOAL].** Q-Punch is Qumanity's council-addressing and participatory-governance mechanism: the means by which a location, not just an individual member, can be written to and represented. The design gives each level a council with five leadership roles:
 
 | Role | Function | Status |
 |---|---|---|
-| Nayak | Male elected leader | **[PILOT]**, one village |
-| Nayika | Female elected leader | **[PILOT]**, one village |
+| Nayak | Male elected leader (village level) | **[PILOT]**, one village |
+| Nayika | Female elected leader (village level) | **[PILOT]**, one village |
 | Mentor | Ethical guidance for the council | **[DESIGN GOAL]** |
 | Manager | Day-to-day operational administration | **[DESIGN GOAL]** |
 | Agent | Kiosk operator; assists citizens with access and literacy | **[DESIGN GOAL]** (depends on kiosks) |
 
-**Implementation boundary.** Only the Nayak and Nayika seats exist in the live system, and only at village level. A council address (a way to write to a location's council through Qmail) is reachable at village level only. Addresses for higher levels are created once a location's member count crosses that level's threshold, but they cannot yet receive messages, because no elected councils exist above the village. The vision is eight levels of participatory governance; the current implementation is one level, piloted in one location.
+Above the village, the Nayak/Nayika seats are superseded by a different, already-built structure: an 8-seat elemental council (one Male and one Female seat per Fire, Earth, Air and Water) at every level from Tehsil through Earth, with leadership rotating quarterly among the four elements and an Upper House People's Vote standing above every council as a sovereign check. See Section 4.6 for the full mechanics — the cascade is implemented and covered by automated tests, but has not yet been run as a real election above village level.
+
+**Implementation boundary.** The village-level Nayak/Nayika election is a real, running pilot in one location (Rohini Sector 24, Delhi). The Tehsil-to-Earth cascade exists in the live system — any location at those levels can open a Q-Punch council election and see its own 8-seat ballot, quarterly rotation and People's Vote — but no such election has yet been run with that location's real resident population; it has only been exercised in testing and demonstration. A council address (a way to write to a location's council through Qmail) is reachable at village level only; this is unrelated to the cascade's own readiness and is tracked as separate, later work. Mentor, Manager and Agent remain design goals, not built, at any level.
 
 ### 4.4 Dual-Key Identity **[IMPLEMENTED]**
 
@@ -225,6 +227,10 @@ Every member holds a Qumanity Identity (QID) with two keys:
 The Private ID ensures that karma, history, and accountability persist across a lifetime. The Account ID ensures that voting rights, council eligibility, and local board membership reflect where one actually resides. No email address is required to register. Identity is rooted in place, not in a corporate database.
 
 *Note: v3.0 called the second key the "Public ID". The product now calls it the Account ID.*
+
+**The Q-Card [scan-to-login backend IMPLEMENTED; physical card PLANNED].** A forthcoming physical card carries a QR code that resolves straight to a member's own sign-in screen, so a shared or borrowed phone need not have a 9-digit Private ID typed into it. The QR code deliberately never encodes the Private ID, the Account ID, or anything else identifying — only a long, random, unguessable token, and the database stores a one-way hash of that token rather than the token itself. Scanning the card resolves to an account; the PIN is still required to sign in. A lost or damaged card is revoked and replaced from the admin side, and the old card's token is refused the moment a replacement exists for it, never quietly honoured alongside the new one. The scan-to-login backend and the admin issuance/pricing/revocation workflow are built; the printed card itself and batch generation are not yet built.
+
+**Family-verified account recovery [IMPLEMENTED].** A member locked out of their account — PIN forgotten, device lost — can be restored by a nuclear family member already on the platform: a parent, child, sibling or spouse, confirmed against the real relationship graph in that member's own Family Tree (Section 6), not a self-declared claim. Grandparents and grandchildren are deliberately excluded from this channel — close enough to appear in the tree, but not close enough to vouch for someone's identity. The verifying relative approves or denies the request; approval issues a new PIN to the locked-out member without ever exposing it to the verifier.
 
 ### 4.5 Karma and Qoins
 
@@ -242,7 +248,7 @@ A location also carries a **collective Karma** score, raised when a post that ha
 
 **Ledger integrity [DESIGN GOAL].** The ledger is transparent and entry-based today. A tamper-evident design (for example a hash-chained audit trail) is planned and is not implemented. This document makes no claim about future tokenomics, rewards, or exchange value.
 
-### 4.6 Zodiac-Based Elections **[PILOT — one village]**
+### 4.6 Zodiac-Based Elections and the Q-Punch Cascade **[Village level: PILOT — one village. Tehsil-and-up cascade: IMPLEMENTED architecture, not yet run on a real population]**
 
 Council elections are designed to occur every zodiac month, aligned with the sun's journey through twelve solar months (Aries to Pisces). In the live pilot (Rohini Sector 24, Delhi) each sign's cycle has an 8-day nomination window followed by a 14-day voting window, electing one Nayak and one Nayika.
 
@@ -258,7 +264,9 @@ Council elections are designed to occur every zodiac month, aligned with the sun
 
 **Pilot status.** A pilot election has been held in Rohini Sector 24, Delhi, with one council seated so far. The pilot uses simulated demo voters to test the election mechanics.
 
-Leadership is designed to rotate with the cosmos so that no faction holds power indefinitely. Only one village has run the cycle; the design has not been tested at district level or above.
+Leadership is designed to rotate with the cosmos so that no faction holds power indefinitely. Only one village has run a real election cycle on it.
+
+**Above the village: the Q-Punch cascade [IMPLEMENTED architecture, not yet run on a real population].** Tehsil, District, State, Zone, Country, Continent and Earth each elect an 8-seat council — one Male and one Female seat per element (Fire, Earth, Air, Water) — in a single multi-year term rather than the village's monthly sign cycle (terms lengthen with scale, from 3 years at Tehsil to 15 years at Earth). Each term is split into four quarters, one element's pair leading at a time in Fire → Earth → Air → Water order; within a quarter, the Male candidate needs the approval of at least 51% of an Upper House ballot to hold the Head seat, defaulting to the Female otherwise. The electorate at each level (the "Lower House") is the full set of currently-serving council members from every location directly beneath it, computed live rather than stored. Sovereignty, though, sits above any single council: every location's own resident population (its "Upper House") can call a direct **People's Vote** on any question at any time, and a passed vote (at least 51% of ballots cast) is recorded as binding on that location's council — Head Approval is one standing, built-in instance of this general power, not the whole of it. This architecture is built and covered by automated tests; enforcing a passed People's Vote against a council's own decisions, and the Mentor/Manager/Agent roles below, remain separate, later work.
 
 > *"Your body is made of five elements. Your soul resides in Space. Your actions are recorded in the elements."*
 
@@ -271,21 +279,22 @@ Leadership is designed to rotate with the cosmos so that no faction holds power 
 | Layer | Purpose | Audience | Status |
 |---|---|---|---|
 | Website | Registration, public transparency, boards, daily participation, national statistics | Everyone | **[IMPLEMENTED]** |
-| Mobile app (cross-platform, Expo / React Native) | Daily participation from a phone; a client of the website's API | Citizens | **[IN DEVELOPMENT]** |
+| Mobile app — Android (Expo / React Native) | Daily participation from a phone; a client of the website's API | Citizens | **[IMPLEMENTED]**, downloadable at qumanity.in/app |
+| Mobile app — iOS (Expo / React Native) | Same, for iOS | Citizens | **[IN DEVELOPMENT]** |
 | PLNN | Planetary Ledger Node Network — distributed data infrastructure | Infrastructure | **[PLANNED]** |
 
-The website is the window, open to all. The mobile app is intended to be the daily instrument; it uses the same backend, identity, geography and consent model as the website and does not reimplement them. It has not yet been released. PLNN is the long-term foundation intended to keep data sovereign and available when connectivity fails.
+The website is the window, open to all. The mobile app is the daily instrument; it uses the same backend, identity, geography and consent model as the website and does not reimplement them. The Android build is released; the iOS build is in development. PLNN is the long-term foundation intended to keep data sovereign and available when connectivity fails.
 
 ### 5.2 High-Level Architecture
 
-**Today:** a single Flask application and SQLite database serve both the website and the mobile app through the same API. Members sign in with a Private ID and PIN.
+**Today:** a single Flask application and SQLite database serve the website and the Android mobile app through the same API (an iOS build is in development). Members sign in with a Private ID and PIN.
 
 **Design goal:** citizens would interact through village kiosks, web browsers, or native apps. Above the interface layer, the protocol would enforce governance rules (timeline separation, nested escalation, karma verification, election cycles). Below, PLNN would distribute data across nested nodes — village, tehsil, district, state, nation, planet — so that no single server owns a community's information. A trust layer would ensure ledger integrity and encrypted private data.
 
 ```
-Citizen Interfaces  (Web [LIVE] · Mobile app [IN DEVELOPMENT] · Kiosk [PLANNED])
+Citizen Interfaces  (Web [LIVE] · Mobile app [Android LIVE · iOS IN DEVELOPMENT] · Kiosk [PLANNED])
         ↓
-Qumanity Protocol  (Timelines · Governance · Karma · Elections)        [IMPLEMENTED; elections PILOT]
+Qumanity Protocol  (Timelines · Governance · Karma · Elections)        [IMPLEMENTED; village elections PILOT, Tehsil+ cascade IMPLEMENTED/untested on a real population]
         ↓
 PLNN               (Village → Tehsil → District → State → Nation → Planet)   [PLANNED]
         ↓
@@ -353,6 +362,8 @@ Geography identifiers are stable and load-bearing. They are not renumbered, repa
 | Karma ledger | Entry-based reputation record, separate from money | **[IMPLEMENTED in part]** |
 | Qoins | Internal civic currency earned through civic activity | **[IMPLEMENTED]** |
 | Family Tree | Visual mapping of family relationships across generations, in the Personal timeline | **[IMPLEMENTED]** |
+| Family-Verified Account Recovery | A locked-out member is restored by a nuclear family member (parent, child, sibling or spouse) confirmed in their Family Tree | **[IMPLEMENTED]** |
+| Q-Card | Physical QR-code card for scan-to-login; token-hash privacy, no identifying data on the code | Backend **[IMPLEMENTED]**; physical card **[PLANNED]** |
 | Qmail | Internal member messaging, including messages to a village council address | **[IMPLEMENTED]**; council addresses reachable at village level only |
 | Q-Map | Public map with member-private proximity data | **[IMPLEMENTED]**, pilot dataset for North West Delhi |
 | Crowdsourced locations | Provisional villages and tehsils, activated by resident count | **[IMPLEMENTED]** |
@@ -360,7 +371,9 @@ Geography identifiers are stable and load-bearing. They are not renumbered, repa
 | Global Account | Registration for members outside the 10 Public Account countries | **[IMPLEMENTED]** |
 | Multi-language interface | English plus 12 Indian languages | **[IMPLEMENTED]** |
 | Zodiac-Based Elections | Monthly council elections by sun-sign cycle; Nayak and Nayika seats | **[PILOT]**, one village |
-| Mobile app | Cross-platform client of the website API | **[IN DEVELOPMENT]** |
+| Q-Punch Cascade | 8-seat elemental council from Tehsil to Earth; quarterly Head rotation; Upper House People's Vote | **[IMPLEMENTED]** architecture; not yet run on a real population |
+| Mobile app — Android | Android app live and downloadable at qumanity.in/app | **[IMPLEMENTED]** |
+| Mobile app — iOS | Same, for iOS | **[IN DEVELOPMENT]** |
 | Marketplace | Village-level commerce using Qoins, keeping value in the community (Karma is not currency) | **[PLANNED]** |
 | Justice Module (Restorative) | Councils facilitate dialogue, restitution and community healing | **[PLANNED]** |
 | Health & Education Services | Community health records, teaching-hour verification, service coordination | **[PLANNED]** |
@@ -453,15 +466,16 @@ Qumanity's goals are design-level: making civic participation more accessible at
 |---|---|---|
 | 1: Website | Public site, registration, geography, about pages, national statistics | ✅ Implemented |
 | 2: Backend | Posts, karma ledger, family tree, messaging, admin tools, core protocol | ✅ Implemented; continuing refinement |
-| 3: Dashboard | Four-timeline dashboard, elections interface, council management | ✅ Implemented; council management for the pilot village only |
-| 4: Mobile app | Cross-platform app (Expo / React Native) using the website API; later kiosk client and biometric authentication | 🟡 In development (biometrics: planned) |
+| 3: Dashboard | Four-timeline dashboard, elections interface, council management | ✅ Implemented; real council management for the pilot village only — the Tehsil-to-Earth cascade UI is built but untested on a real population |
+| 4: Mobile app | Cross-platform app (Expo / React Native) using the website API; later kiosk client and biometric authentication | 🟢 Android released; 🟡 iOS in development (biometrics: planned) |
 | 5: Pilot | Village-level election pilot (Rohini Sector 24, Delhi) running; additional pilot villages and kiosk deployment next | 🟡 One-village pilot underway |
+| 5a: Governance cascade | 8-seat elemental councils, Tehsil to Earth, with quarterly Head rotation and an Upper House People's Vote | ✅ Implemented and tested; 🟡 awaiting a real election above village level |
 | 6: PLNN Nodes | Distributed nodes at state level; offline sync protocol | ⏳ Planned |
 | 7: National | State-by-state expansion across India | ⏳ Planned |
 | 8: Global | Continental and planetary nodes; international adoption | ⏳ Planned |
 | 9: Quantum OS | Exploration of quantum-safe infrastructure and an ethical AI layer | ⏳ Long-term research aspiration; no work started |
 
-**Ongoing, outside the phases:** wider Q-Map coverage (beyond the North West Delhi pilot, with the same sourcing and quality standards); controlled improvement of the canonical location data; and governance expansion above village level, which will be pursued only through explicit design review and dedicated implementation, not assumed to follow from the existing architecture.
+**Ongoing, outside the phases:** wider Q-Map coverage (beyond the North West Delhi pilot, with the same sourcing and quality standards); controlled improvement of the canonical location data; and governance expansion above village level, now implemented as the Q-Punch cascade (Phase 5a) — the architecture is built and tested, but running it on a real, live population at Tehsil level or above is still ahead.
 
 Each phase builds on the last. The website establishes public trust. The backend encodes the protocol. The dashboard empowers citizens. The app extends access to phones. The pilot tests the model in real villages. PLNN nodes would distribute sovereignty. National and global scaling extend the protocol. Phase 9 is a research direction for the decades ahead, not a commitment.
 
@@ -478,7 +492,7 @@ Imagine a world where every citizen has a persistent voice; every village has a 
 This is not utopia. It is engineering — the same way roads, electricity, and clean water are engineering. The foundation of that engineering exists today; most of the structure remains to be built.
 
 ### 10.3 The Path Forward
-The foundation is live at qumanity.in, and a village-level pilot is underway. What remains is substantial: finishing the mobile app, building kiosks for people without smartphones, extending pilots to more villages, and earning the trust of communities. That requires more villages, more developers, more partners, and more citizens who refuse to be spectators.
+The foundation is live at qumanity.in, and a village-level pilot is underway. What remains is substantial: finishing the iOS app (Android is live at qumanity.in/app), building kiosks for people without smartphones, extending pilots to more villages, running the Q-Punch cascade on a real Tehsil-and-up population for the first time, and earning the trust of communities. That requires more villages, more developers, more partners, and more citizens who refuse to be spectators.
 
 ### 10.4 Stewardship
 Qumanity is developed and stewarded by its founder, Rohit Mudgal, as open-source public infrastructure. The project does not monetise citizen data, sell governance access, or claim authority over communities that adopt it.
@@ -490,7 +504,7 @@ Qumanity is developed and stewarded by its founder, Rohit Mudgal, as open-source
 | Citizen / User | Register at qumanity.in; participate in your village board |
 | Developer | Contribute to the open-source code on GitHub |
 | Researcher | Study governance, economics, ethics, or restorative justice through the platform |
-| Mobile Developer | Help finish the cross-platform mobile app (Expo / React Native) |
+| Mobile Developer | Help finish the iOS app (Expo / React Native) — Android is already live at qumanity.in/app |
 | Pilot Partner | Help bring a council-election pilot to your village |
 | Administrator | Once kiosks exist, operate a village kiosk or serve as a community Agent |
 | Philanthropist | Fund pilot deployment, kiosk hardware, or connectivity for underserved villages |
