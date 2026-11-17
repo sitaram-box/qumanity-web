@@ -151,6 +151,21 @@ res = client.post("/api/family/activate", json={
 })
 parents_group_id = res.get_json()["parents_group_id"]
 
+# fam_admin (the child who built this unit) is not its admin (2026-11-18 fix: see
+# family_core.create_group()'s own docstring) -- neither founder slot is a claimed, living founder.
+# This section is about invite_to_group()/group_members_for() mechanics, not the admin-claim path
+# itself (tests/test_family_tree.py covers that in full), so fam_admin is granted test-only
+# scaffolding admin directly here, the same kind of row a real founder claim would write.
+_conn = dbmod.get_db()
+_conn.execute(
+    "INSERT INTO family_group_members (group_id, user_id, status, is_admin, invited_by, created_at) "
+    "VALUES (?, ?, 'approved', 1, NULL, datetime('now')) "
+    "ON CONFLICT(group_id, user_id) DO UPDATE SET status = 'approved', is_admin = 1",
+    (parents_group_id, fam_admin["user_id"]),
+)
+_conn.commit()
+_conn.close()
+
 logout()
 fam_target = register("Family Invite Target")
 fam_stranger = register("Family Non Admin")

@@ -329,6 +329,49 @@ def _is_admin_of_group(conn, user_id: int, group_id: int, _visited=None) -> bool
     )
 
 
+def _resolve_group_admin_user_id(conn, group_id: int, _visited=None) -> int | None:
+    """Finds ONE real user_id who currently holds admin authority over group_id -- the same
+    authority _is_admin_of_group() checks for, resolved instead of merely tested against a
+    candidate. Used by request_join_group() (2026-11-18 fix) to address a join request to an actual
+    admin instead of family_groups.created_by_user_id, which this module's own schema comment
+    already documents as historical/audit only, never the permission-check column -- the exact
+    anti-pattern create_group()'s own creator-admin grant was just removed for.
+
+    Mirrors _is_admin_of_group()'s own resolution order: any current, approved is_admin=1 row first
+    (deterministic tie-break by user_id if more than one -- e.g. both founders have claimed and are
+    admins -- since people_requests addresses exactly one to_user_id); failing that, dormant-ancestor
+    succession through either parent-group chain. Returns None if nobody currently holds admin
+    authority at all (e.g. both founder slots are still unclaimed placeholders) -- a real,
+    user-facing state the caller must handle, not something to silently route around."""
+    _visited = _visited if _visited is not None else set()
+    if group_id in _visited:
+        return None
+    _visited.add(group_id)
+
+    row = conn.execute(
+        "SELECT user_id FROM family_group_members WHERE group_id = ? AND is_admin = 1 AND status = 'approved' "
+        "ORDER BY user_id LIMIT 1",
+        (group_id,),
+    ).fetchone()
+    if row:
+        return row["user_id"]
+
+    if not _group_is_dormant(conn, group_id):
+        return None
+
+    group = conn.execute(
+        "SELECT husband_parent_group_id, wife_parent_group_id FROM family_groups WHERE id = ?", (group_id,)
+    ).fetchone()
+    if not group:
+        return None
+    for pid in (group["husband_parent_group_id"], group["wife_parent_group_id"]):
+        if pid:
+            found = _resolve_group_admin_user_id(conn, pid, _visited)
+            if found:
+                return found
+    return None
+
+
 def _is_admin_of_node_group(conn, user_id: int, node_id: int) -> bool:
     """True if user_id has administrative authority (see _is_admin_of_group, including dormant
     ancestor succession) over AT LEAST ONE unit this node belongs to -- the shared check
@@ -740,12 +783,23 @@ def create_group(conn, created_by_user_id: int, name: str, eldest_node_id, husba
     separate column). A widowed founder's unit stays 'active' -- the SURVIVING founder is still
     alive, it's their deceased spouse's own is_deceased flag that records the loss, not this column.
 
-    The creator is ALSO always granted is_admin=1, additive to (not a replacement for) founder
-    admin -- practically necessary the moment a unit is first founded with one or both slots still
-    unclaimed placeholders (e.g. a child activating with parents who haven't registered yet):
-    without this, nobody could rename a typo'd placeholder or link it once that person signs up,
-    since neither slot has a real admin yet. Mirrors the pre-restructure model, which granted the
-    creator admin unconditionally."""
+    The creator is NOT automatically granted admin here (2026-11-18 fix) unless they themselves
+    fill a founder slot -- that falls out of the loop below the same as any other claimed member.
+    A PREVIOUS version of this function also granted created_by_user_id an unconditional is_admin=1
+    row, on the reasoning that a unit founded with both slots still unclaimed placeholders
+    (e.g. a child activating with parents who haven't registered) would otherwise have no admin at
+    all to fix a typo or link a slot once that person signs up. That reasoning produced a real bug:
+    a child who builds their PARENTS' unit became, and permanently remained, that unit's admin too
+    -- additive to, never revoked by, the parent's own founder-admin once they actually registered
+    (see _grant_founder_admin_if_applicable(), which only ever adds a co-admin, never removes one).
+    The corrected rule (per the Founder's own ruling) is unconditional: a user is an admin of the
+    one unit they actually found, never a unit they merely created on someone else's behalf. A
+    unit with two unclaimed founder placeholders and no other admin yet is an accepted, deliberate
+    gap, not an oversight -- its founders' admin rights exist conceptually, waiting to be claimed
+    the moment either of them registers (_grant_founder_admin_if_applicable()); nobody, including
+    the creator, can rename or edit its placeholders in the meantime. created_by_user_id itself
+    (see family_groups' own schema comment) was already documented as historical/audit only, never
+    the permission-check column -- this fix makes the actual behavior match that documentation."""
     if marriage_status not in VALID_MARRIAGE_STATUSES:
         raise ValueError("Unknown marriage status")
     cur = conn.execute(
@@ -757,13 +811,6 @@ def create_group(conn, created_by_user_id: int, name: str, eldest_node_id, husba
          husband_parent_group_id, wife_parent_group_id, marriage_status, eldest_node_id, _now()),
     )
     group_id = cur.lastrowid
-
-    conn.execute(
-        """INSERT INTO family_group_members (group_id, user_id, status, is_admin, invited_by, created_at)
-           VALUES (?, ?, 'approved', 1, NULL, ?)
-           ON CONFLICT(group_id, user_id) DO UPDATE SET status = 'approved', is_admin = 1""",
-        (group_id, created_by_user_id, _now()),
-    )
 
     founder_ids = {husband_node_id, wife_node_id}
     all_node_ids = {nid for nid in (founder_ids | set(member_node_ids or [])) if nid}
@@ -876,13 +923,25 @@ def add_member(conn, group_id: int, user_id: int, invited_by=None, target_node_i
 
 
 def request_join_group(conn, user_id: int, group_id: int, target_node_id=None) -> dict:
-    """Queues a join request for the group's FOUNDING creator to approve (not every current
-    co-admin -- a known simplification) -- via the same people_requests table social_core.py
-    already uses for group invites/rejoins (kind='family_group_join', group_id repurposed to hold
-    family_groups.id, same overloading convention 'rejoin' already uses for private_chats.id).
-    target_node_id (optional): this request is specifically "let me claim this empty founder
-    slot," not just "let me join as a plain member" -- see add_member(). social_core.decide_request()
-    has the matching accept-side branch.
+    """Queues a join request for one of the group's ACTUAL ADMINS to approve -- via the same
+    people_requests table social_core.py already uses for group invites/rejoins (kind=
+    'family_group_join', group_id repurposed to hold family_groups.id, same overloading convention
+    'rejoin' already uses for private_chats.id). target_node_id (optional): this request is
+    specifically "let me claim this empty founder slot," not just "let me join as a plain member"
+    -- see add_member(). social_core.decide_request() has the matching accept-side branch.
+
+    2026-11-18 fix: this used to address the request to family_groups.created_by_user_id -- the
+    exact same anti-pattern create_group()'s own creator-admin grant was just removed for (this
+    module's own schema comment already documents created_by_user_id as historical/audit only,
+    never the permission-check column). Now resolved via _resolve_group_admin_user_id(), the same
+    authority _is_admin_of_group() itself checks for (a current admin, or dormant-ancestor
+    succession) -- if more than one admin currently exists, one is picked deterministically since
+    people_requests addresses exactly one to_user_id, not every eligible approver (a known
+    simplification, same as before). If NOBODY currently holds admin authority over this unit (e.g.
+    both founder slots are still unclaimed placeholders -- the accepted gap create_group()'s own
+    fix left behind), this raises a clear error rather than silently addressing nobody; see the
+    "genuine errors" paragraph below for how a caller inside activate_timeline()/marry_timeline()
+    already handles that without aborting the rest of the call.
 
     Returns {"request_id": int | None, "status": "created" | "already_pending" | "already_member"}.
 
@@ -900,8 +959,9 @@ def request_join_group(conn, user_id: int, group_id: int, target_node_id=None) -
     existing state instead of raising makes every caller of this function naturally idempotent: a
     retried activate_timeline()/marry_timeline() call now finds the same request/membership again
     and proceeds, rather than failing identically forever. Genuine errors (not activated yet, no
-    such group, you own it, or you previously left and need an admin to invite you back) still
-    raise -- those aren't states a retry can recover from on its own.
+    such group, you own it, you previously left and need an admin to invite you back, or nobody
+    currently holds admin authority over this unit) still raise -- those aren't states a retry can
+    recover from on its own.
 
     2026-10-26 (the rejoin rule): a user whose status here is 'left' CANNOT self-request back in
     -- rejoin after a leave or a removal is admin-initiated only (see invite_to_group()); this
@@ -921,16 +981,19 @@ def request_join_group(conn, user_id: int, group_id: int, target_node_id=None) -
         return {"request_id": None, "status": "already_member"}
     if existing and existing["status"] == "left":
         raise ValueError("You previously left this group — ask an admin to invite you back")
+    admin_user_id = _resolve_group_admin_user_id(conn, group_id)
+    if admin_user_id is None:
+        raise ValueError("This group has no admin yet to approve join requests")
     existing_request = conn.execute(
         "SELECT id FROM people_requests WHERE from_user_id=? AND to_user_id=? AND kind='family_group_join' "
         "AND group_id=? AND target_node_id IS ? AND status='pending'",
-        (user_id, group["created_by_user_id"], group_id, target_node_id),
+        (user_id, admin_user_id, group_id, target_node_id),
     ).fetchone()
     if existing_request:
         return {"request_id": existing_request["id"], "status": "already_pending"}
     cur = conn.execute(
         "INSERT INTO people_requests (from_user_id, to_user_id, kind, group_id, target_node_id, created_at, cycle_id) VALUES (?, ?, 'family_group_join', ?, ?, ?, ?)",
-        (user_id, group["created_by_user_id"], group_id, target_node_id, _now(), cycle_middleware.get_active_cycle_id(conn)),
+        (user_id, admin_user_id, group_id, target_node_id, _now(), cycle_middleware.get_active_cycle_id(conn)),
     )
     return {"request_id": cur.lastrowid, "status": "created"}
 

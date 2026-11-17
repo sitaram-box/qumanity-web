@@ -3,8 +3,9 @@ family_groups row is a MARRIAGE UNIT (husband_node_id/wife_node_id), not a gener
 Covers activate_timeline() (father+mother -> find-or-create their couple-unit, the activating user
 added as a plain child-member), marry_timeline() (self+spouse -> find-or-create THEIR OWN
 couple-unit, children added as its child-members), the single alive-and-eldest naming rule,
-is_deceased, admin derivation (founders are admins; the creator of a freshly-founded unit is also
-always granted admin, additive, for when both founder slots start out as unclaimed placeholders),
+is_deceased, admin derivation (2026-11-18 fix: ONLY a living, claimed founder is ever an admin of
+a unit -- the activating/creating user gets no admin grant of their own just for having built it,
+even while both founder slots are still unclaimed placeholders; see create_group()'s own docstring),
 a spousal join claiming an empty founder slot directly (no more family_spouse_links writes), the
 neighborhood endpoint, tree_for_group()'s scoped 404 and spouse-link synthesis, and that
 activating twice is rejected.
@@ -131,8 +132,9 @@ check("unit named via the husband+wife naming code (2026-10-20 format)", body.ge
 
 res = client.get("/api/family/status")
 check("now activated", res.get_json()["activated"] is True)
-check("status shows the new unit, admin=True (creator grant, since neither founder is claimed yet)",
-      any(g["id"] == body["parents_group_id"] and g["is_admin"] for g in res.get_json()["groups"]))
+check("status shows the new unit, admin=False (2026-11-18 fix: the activating child is NOT a "
+      "founder of their PARENTS' unit, so building it grants no admin rights over it)",
+      not any(g["id"] == body["parents_group_id"] and g["is_admin"] for g in res.get_json()["groups"]))
 
 res = client.post("/api/family/activate", json={"father": {"name": "X", "action": "create"}, "mother": {"name": "Y", "action": "create"}})
 check("re-activating is rejected (400)", res.status_code == 400)
@@ -140,7 +142,8 @@ check("re-activating is rejected (400)", res.status_code == 400)
 tree = client.get(f"/api/family-groups/{body['parents_group_id']}/tree").get_json()
 check("unit's legacy tree view has 3 nodes (self, father, mother)", len(tree["nodes"]) == 3)
 check("unit kind is 'unit'", tree["kind"] == "unit")
-check("activating user IS admin of their own freshly-founded unit (creator grant)", tree["is_admin"] is True)
+check("activating user is NOT admin of their PARENTS' unit (2026-11-18 fix -- neither father nor "
+      "mother has been claimed by a real founder yet)", tree["is_admin"] is False)
 
 neighborhood = client.get(f"/api/family/node/{body['parents_group_id']}/neighborhood").get_json()
 check("neighborhood reports the two founders (father, mother)",
@@ -154,11 +157,15 @@ print("=" * 70)
 print("2. Deceased father: naming still combines both founders regardless of alive/deceased status")
 print("=" * 70)
 
+logout()
+priya = register("Priya Patel")  # the REAL mother, registering independently of greg's activation
+
+logout()
 greg = register("Greg Patel")
 login(greg["private_code"])
 res = client.post("/api/family/activate", json={
     "father": {"name": "Deceased Patel", "action": "create", "is_deceased": True},
-    "mother": {"name": "Living Mother Patel", "action": "create"},
+    "mother": {"name": "Living Mother Patel", "action": "notify", "user_id": priya["user_id"]},
 })
 check("activation with a deceased father succeeds", res.status_code == 201)
 greg_body = res.get_json()
@@ -168,7 +175,32 @@ check("naming combines BOTH founders' codes regardless of alive/deceased status 
 greg_tree = client.get(f"/api/family-groups/{greg_body['parents_group_id']}/tree").get_json()
 father_node = next(n for n in greg_tree["nodes"] if n["name"] == "Deceased Patel")
 check("father node is flagged is_deceased", father_node["is_deceased"] is True)
-check("the living child (greg) is still admin of his own freshly-founded unit (creator grant)", greg_tree["is_admin"] is True)
+check("greg (the child who built this unit) is NOT its admin -- neither founder slot is a claimed, "
+      "living founder yet (2026-11-18 fix)", greg_tree["is_admin"] is False)
+
+# 2026-11-18: simulate the real mother REGISTERING and CLAIMING her own placeholder -- the only
+# path that should ever grant admin here, per the Founder's ruling that a unit's admin is whoever
+# actually founds it, never whoever merely built the tree on their behalf. notify+accept (proven
+# in section 7 below) is the self-service mechanism for exactly this: no admin needs to exist for
+# a real founder to claim their own slot.
+login(priya["private_code"])
+res = client.get("/api/people/inbox")
+priya_invite = next(r for r in res.get_json()["requests"] if r["kind"] == "family_relation_invite")
+check("priya's inbox carries the structured family invite for her own placeholder", priya_invite["relationship"] == "mother")
+res = client.post(f"/api/people/inbox/{priya_invite['id']}/decide", json={"decision": "accept"})
+check("priya accepts and claims her own founder slot", res.status_code == 200)
+
+greg_group_row = raw("SELECT wife_node_id FROM family_groups WHERE id = ?", (greg_body["parents_group_id"],))
+priya_self_node = raw("SELECT id FROM family_nodes WHERE claimed_user_id = ?", (priya["user_id"],))
+check("the unit's wife_node_id now points at priya's real self-node, not the placeholder",
+      greg_group_row["wife_node_id"] == priya_self_node["id"])
+
+priya_tree = client.get(f"/api/family-groups/{greg_body['parents_group_id']}/tree").get_json()
+check("priya, having claimed a founder slot, IS now admin of the unit she actually founded", priya_tree["is_admin"] is True)
+login(greg["private_code"])
+greg_tree = client.get(f"/api/family-groups/{greg_body['parents_group_id']}/tree").get_json()
+check("greg STILL is not admin, even after his mother claims her slot -- he only ever founds his "
+      "OWN future unit, never his parents'", greg_tree["is_admin"] is False)
 
 print()
 print("=" * 70)
@@ -246,14 +278,20 @@ print("6. Spousal join (2026-10-26, automatic): claims the OTHER (open) founder 
 print("=" * 70)
 
 logout()
+dana_real_father = register("Dana Real Father")  # real, so there's an actual admin to route Dana's later join request to
+
+logout()
 # Dana's own birth unit is created by a SIBLING first, so Dana herself joins it as a plain
 # (non-admin) child-member -- the realistic case, and the one the "leave on marriage" rule needs:
-# if Dana instead created the unit herself (fresh father+mother placeholders), she'd ALSO be its
-# unconditional creator-admin (create_group()'s own additive grant), and _sync_family_membership()
-# deliberately never revokes an admin row on marriage -- only a plain membership moves to 'left'.
+# _sync_family_membership() only ever moves a PLAIN membership row to 'left' on marriage, never an
+# admin one (not exercised here since neither Dana nor her sibling is a founder of this unit either
+# way, post-2026-11-18 fix -- but the distinction still matters for a founder who later marries).
 dana_sibling = register("Dana Sibling")
 login(dana_sibling["private_code"])
-res = client.post("/api/family/activate", json={"father": {"name": "Dana Father", "action": "create"}, "mother": {"name": "Dana Mother", "action": "create"}})
+res = client.post("/api/family/activate", json={
+    "father": {"name": "Dana Father", "action": "notify", "user_id": dana_real_father["user_id"]},
+    "mother": {"name": "Dana Mother", "action": "create"},
+})
 dana_sibling_body = res.get_json()
 dana_birth_unit_id = dana_sibling_body["parents_group_id"]
 
@@ -264,20 +302,35 @@ login(dana["private_code"])
 res = client.get("/api/family/suggest", query_string={"name": "Diana Mehta"})
 spouse_match = next(r for r in res.get_json()["results"] if r["type"] == "group")
 check("dana finds carl's unit via the spouse name", spouse_match["group_name"] is not None)
+# Searched for BEFORE dana_real_father claims his slot below -- the placeholder is still named
+# "Dana Father" right up until that accept, same live-name rule as everywhere else in this module.
 res = client.get("/api/family/suggest", query_string={"name": "Dana Father"})
 dana_father_match = next(r for r in res.get_json()["results"] if r["type"] == "group")
 
+# 2026-11-18 fix: request_join_group() (about to be called by dana's OWN activation below) now
+# routes approval to an actual admin, not the unit's mere creator -- dana_real_father has to claim
+# his own founder slot first so there's someone to route Dana's join request to. This repoints
+# claimed_user_id on the SAME node id dana_father_match already captured (no pre-existing self-node
+# for dana_real_father to merge onto instead), so matched_node_id below still resolves correctly.
+login(dana_real_father["private_code"])
+res = client.get("/api/people/inbox")
+dana_father_invite = next(r for r in res.get_json()["requests"] if r["kind"] == "family_relation_invite")
+res = client.post(f"/api/people/inbox/{dana_father_invite['id']}/decide", json={"decision": "accept"})
+check("dana's real father accepts and claims his own founder slot", res.status_code == 200)
+
+login(dana["private_code"])
 res = client.post("/api/family/activate", json={
     "father": {"name": "Dana Father", "action": "join", "group_id": dana_father_match["group_id"], "matched_node_id": dana_father_match["matched_node_id"]},
     "mother": {"name": "Dana Mother 2", "action": "create"},
 })
 check("dana activates (joining her sibling's existing Dana Father unit, pending approval)", res.status_code == 201)
 
-login(dana_sibling["private_code"])
+login(dana_real_father["private_code"])  # the unit's REAL admin now, not dana_sibling (2026-11-18 fix)
 res = client.get("/api/people/inbox")
 dana_join_req = next(r for r in res.get_json()["requests"] if r["kind"] == "family_group_join")
 res = client.post(f"/api/people/inbox/{dana_join_req['id']}/decide", json={"decision": "accept"})
-check("dana's sibling accepts her join request (generic joins stay approval-gated, only marriage is automatic)", res.status_code == 200)
+check("dana's real father (the unit's actual admin) accepts her join request (generic joins stay "
+      "approval-gated, only marriage is automatic)", res.status_code == 200)
 
 login(dana["private_code"])
 dana_birth_member_row = raw(
@@ -348,7 +401,7 @@ res = client.post("/api/family/activate", json={
 })
 check("erin's activation (joining greg's parents' unit as a sibling) succeeds", res.status_code == 201)
 
-login(greg["private_code"])
+login(priya["private_code"])  # the unit's REAL admin (2026-11-18 fix), not greg
 res = client.get("/api/people/inbox")
 sib_req = next(r for r in res.get_json()["requests"] if r["kind"] == "family_group_join")
 client.post(f"/api/people/inbox/{sib_req['id']}/decide", json={"decision": "accept"})
@@ -451,13 +504,21 @@ print("=" * 70)
 print("8. Node editing: rename an empty node, link it to a real user (Pass 1 routes)")
 print("=" * 70)
 
-# Reuse greg's unit (father node "Deceased Patel") from section 2.
+# Reuse greg's unit (father node "Deceased Patel") from section 2. By this point, priya -- NOT
+# greg -- is the unit's admin (she claimed the mother founder slot in section 2); every admin-only
+# action below is now performed by priya, and greg is asserted to be refused, swapping roles with
+# the pre-2026-11-18 version of this test (which wrongly had greg, the unit's mere creator, as the
+# one performing these).
 father_node = next(n for n in greg_tree["nodes"] if n["name"] == "Deceased Patel")
 
 logout()
 login(greg["private_code"])
 res = client.post(f"/api/family/node/{father_node['id']}/name", json={"name": "Deceased Patel Sr."})
-check("admin can rename an empty node", res.status_code == 200)
+check("the child who built this unit (greg) CANNOT rename a node in it -- he's not its admin (403)", res.status_code == 403)
+
+login(priya["private_code"])
+res = client.post(f"/api/family/node/{father_node['id']}/name", json={"name": "Deceased Patel Sr."})
+check("the parent who actually founded this unit (priya) CAN rename a node in it", res.status_code == 200)
 greg_tree2 = client.get(f"/api/family-groups/{greg_body['parents_group_id']}/tree").get_json()
 check("the rename is reflected in the tree", any(n["name"] == "Deceased Patel Sr." for n in greg_tree2["nodes"]))
 
@@ -469,36 +530,46 @@ login(erin["private_code"])  # erin is a plain member (not admin) of greg's unit
 res = client.post(f"/api/family/node/{father_node['id']}/name", json={"name": "Hijacked"})
 check("a non-admin cannot rename a node (403)", res.status_code == 403)
 
-hank = register("Hank Patel")  # a real, unclaimed-elsewhere user, to link into greg's mother node
+hank = register("Hank Patel")  # a real, unclaimed-elsewhere user, to link into a plain member node
 hank_search_code = client.get("/api/people/me").get_json()["search_code"]  # session is hank's right after registering
 check("hank has a real 12-digit Public Search ID", hank_search_code is not None and len(hank_search_code) == 12)
-mother_node = next(n for n in greg_tree["nodes"] if n["name"] == "Living Mother Patel")
-logout()
-login(greg["private_code"])
+
+login(priya["private_code"])
+res = client.post(f"/api/family/node/{greg_body['parents_group_id']}/add-child", json={"name": "New Sibling Patel"})
+check("priya (admin) can add a plain child-member placeholder to the unit", res.status_code == 201)
+sibling_node_id = res.get_json()["node_id"]
+
 # Formatted exactly like a user would paste it (spaces, like the UI's "4060 2408 5969" example) --
 # the normalization bug this covers: the backend must strip them before matching search_code.
 formatted_code = hank_search_code[:4] + " " + hank_search_code[4:8] + " " + hank_search_code[8:]
-res = client.post(f"/api/family/node/{mother_node['id']}/link", json={"user_id": formatted_code})
+res = client.post(f"/api/family/node/{sibling_node_id}/link", json={"user_id": formatted_code})
 check("admin can link an empty node by a SPACE-FORMATTED 12-digit Public ID", res.status_code == 200)
-mother_row = raw("SELECT claimed_user_id, status FROM family_nodes WHERE id = ?", (mother_node["id"],))
-check("the node is now claimed by hank", mother_row["claimed_user_id"] == hank["user_id"] and mother_row["status"] == "claimed")
-check("hank, having claimed a founder slot, is now also an admin of greg's parents' unit",
-      bool(raw("SELECT is_admin FROM family_group_members WHERE group_id = ? AND user_id = ?",
-                (greg_body["parents_group_id"], hank["user_id"]))["is_admin"]))
+sibling_row = raw("SELECT claimed_user_id, status FROM family_nodes WHERE id = ?", (sibling_node_id,))
+check("the node is now claimed by hank", sibling_row["claimed_user_id"] == hank["user_id"] and sibling_row["status"] == "claimed")
+check("hank, having claimed a PLAIN (non-founder) node, does NOT become an admin -- only a founder "
+      "slot grants that (2026-11-18 fix, see create_group()/_grant_founder_admin_if_applicable())",
+      not bool((raw("SELECT is_admin FROM family_group_members WHERE group_id = ? AND user_id = ?",
+                     (greg_body["parents_group_id"], hank["user_id"])) or {"is_admin": 0})["is_admin"]))
 
-res = client.post(f"/api/family/node/{mother_node['id']}/link", json={"user_id": hank_search_code})
+res = client.post(f"/api/family/node/{sibling_node_id}/link", json={"user_id": hank_search_code})
 check("re-linking an already-claimed node is rejected (400)", res.status_code == 400)
 
 jill = register("Jill Patel")
 logout()
-login(greg["private_code"])  # registering jill switched the session to jill -- switch back to the admin
+login(priya["private_code"])  # registering jill switched the session to jill -- switch back to the admin
 
 # 2026-10-25: linking a FOUNDER-SLOT placeholder to a target who already has their own node
 # elsewhere no longer blocks with "already has their own profile node elsewhere" -- it re-points
 # every reference to the placeholder at the target's real node instead (the exact bug report
 # scenario: a father's Public ID can't be linked because he already activated independently).
+# father_node is still an empty FOUNDER slot (nobody can ever claim "Deceased Patel Sr." for real,
+# but nothing stops the test from exercising the merge mechanics on it) -- so this ALSO covers the
+# founder-slot admin grant: hank should become a co-admin here, unlike the plain-node link above.
 res = client.post(f"/api/family/node/{father_node['id']}/link", json={"user_id": hank_search_code})
 check("linking a founder-slot node to an already-claimed target now SUCCEEDS (merge, not block) (200)", res.status_code == 200)
+check("hank, HAVING now claimed a founder slot (via the merge), IS granted co-admin",
+      bool(raw("SELECT is_admin FROM family_group_members WHERE group_id = ? AND user_id = ?",
+                (greg_body["parents_group_id"], hank["user_id"]))["is_admin"]))
 
 hank_self_node = raw("SELECT id FROM family_nodes WHERE claimed_user_id = ?", (hank["user_id"],))
 greg_group_row = raw("SELECT husband_node_id FROM family_groups WHERE id = ?", (greg_body["parents_group_id"],))
@@ -514,23 +585,29 @@ check("the old placeholder is left in the database but orphaned -- no family_gro
       not raw("SELECT 1 FROM family_group_nodes WHERE node_id = ?", (father_node["id"],)))
 check("the target (hank) gets the same courtesy 'might be related' ping as any other identity match",
       bool(raw("SELECT 1 FROM people_requests WHERE from_user_id = ? AND to_user_id = ? AND kind = 'message'",
-                (greg["user_id"], hank["user_id"]))))
+                (priya["user_id"], hank["user_id"]))))
 
-# The Public-ID validation checks need a FRESH, still-attached empty node -- father_node above is
-# now deliberately orphaned by the merge, so re-using it here would hit the "not an admin of any
-# group this node belongs to" 403 instead of the validation path being tested.
+# The Public-ID validation checks need a FRESH, still-attached empty node whose unit the caller is
+# actually admin of -- father_node above is now deliberately orphaned by the merge (403 instead of
+# the validation path), and (2026-11-18 fix) a unit this user merely CREATED for someone else, like
+# a parents' unit, no longer makes them its admin either. Their own MARITAL unit still does --
+# they're one of its two real founders -- so the still-empty SPOUSE slot there is the fresh,
+# admin-accessible node these checks need.
 validation_user = register("Validation Parent Test")
 login(validation_user["private_code"])
-res = client.post("/api/family/activate", json={
+client.post("/api/family/activate", json={
     "father": {"name": "Validation Father", "action": "create"}, "mother": {"name": "Validation Mother", "action": "create"},
+    "relationship": "married",
 })
-validation_tree = client.get(f"/api/family-groups/{res.get_json()['parents_group_id']}/tree").get_json()
-validation_father_node = next(n for n in validation_tree["nodes"] if n["name"] == "Validation Father")
+res = client.post("/api/family/marry", json={"spouse": {"name": "Validation Spouse", "action": "create"}})
+validation_marital_id = res.get_json()["marital_group_id"]
+validation_tree = client.get(f"/api/family-groups/{validation_marital_id}/tree").get_json()
+validation_spouse_node = next(n for n in validation_tree["nodes"] if n["name"] == "Validation Spouse")
 
-res = client.post(f"/api/family/node/{validation_father_node['id']}/link", json={"user_id": "999999999999"})
+res = client.post(f"/api/family/node/{validation_spouse_node['id']}/link", json={"user_id": "999999999999"})
 check("a well-formed but non-existent 12-digit Public ID is rejected (400)", res.status_code == 400)
 
-res = client.post(f"/api/family/node/{validation_father_node['id']}/link", json={"user_id": "4060-2408"})
+res = client.post(f"/api/family/node/{validation_spouse_node['id']}/link", json={"user_id": "4060-2408"})
 check("an incomplete/malformed Public ID is rejected (400)", res.status_code == 400)
 
 # A PLAIN child-member placeholder (not a founder slot) takes the generalized swap path --
@@ -753,10 +830,22 @@ print("12. Name + location search for already-activated members, and the join-re
 print("=" * 70)
 
 logout()
+mira_father = register("Mira Father")  # real, so there's an actual admin to route Zara's join request to
+
+logout()
 mira = register("Mira Findme")
 login(mira["private_code"])
-client.post("/api/family/activate", json={"father": {"name": "Mira Father", "action": "create"}, "mother": {"name": "Mira Mother", "action": "create"}})
+client.post("/api/family/activate", json={
+    "father": {"name": "Mira Father", "action": "notify", "user_id": mira_father["user_id"]},
+    "mother": {"name": "Mira Mother", "action": "create"},
+})
 mira_parents_group_id = client.get("/api/family/status").get_json()["groups"][0]["id"]
+
+login(mira_father["private_code"])
+res = client.get("/api/people/inbox")
+mira_father_invite = next(r for r in res.get_json()["requests"] if r["kind"] == "family_relation_invite")
+res = client.post(f"/api/people/inbox/{mira_father_invite['id']}/decide", json={"decision": "accept"})
+check("mira's real father accepts and claims his own founder slot", res.status_code == 200)
 
 logout()
 zara = register("Zara Searcher")
@@ -772,9 +861,9 @@ res = client.post(f"/api/family-groups/{mira_hit['group_id']}/join-request", jso
 check("clicking the result sends a Join Family Group request (201)", res.status_code == 201)
 
 logout()
-login(mira["private_code"])
+login(mira_father["private_code"])  # the unit's REAL admin (2026-11-18 fix), not mira herself
 res = client.get("/api/people/inbox")
-check("Mira (the unit's admin) receives the join request", any(r["kind"] == "family_group_join" for r in res.get_json()["requests"]))
+check("mira's real father (the unit's actual admin) receives the join request", any(r["kind"] == "family_group_join" for r in res.get_json()["requests"]))
 
 # hide_identity exclusion: a real, name-matching, activated user who's hidden must not be returned.
 logout()
@@ -922,10 +1011,15 @@ print("=" * 70)
 print("15. Explicit tree growth: the '+Add' parents/child routes")
 print("=" * 70)
 
+logout()
+grower_father = register("Grower Father")  # the REAL father, registering before his child's activation
+
+logout()
 grower = register("Grower Self")
 login(grower["private_code"])
 res = client.post("/api/family/activate", json={
-    "father": {"name": "Grower Father", "action": "create"}, "mother": {"name": "Grower Mother", "action": "create"},
+    "father": {"name": "Grower Father", "action": "notify", "user_id": grower_father["user_id"]},
+    "mother": {"name": "Grower Mother", "action": "create"},
     "relationship": "married",
 })
 grower_body = res.get_json()
@@ -933,11 +1027,24 @@ grower_parents_id = grower_body["parents_group_id"]  # husband=father, wife=moth
 res = client.post("/api/family/marry", json={"spouse": {"name": "Grower Spouse", "action": "create"}, "marriage_status": "active"})
 grower_marital_id = res.get_json()["marital_group_id"]
 
-# "+ Add Father's Family": fills husband_parent_group_id on grower's PARENTS' unit (i.e. the
-# paternal grandparents).
+# 2026-11-18: grower (the child who built this unit) is NOT its admin -- "+Add Father's Family"
+# is an admin-only action on grower's PARENTS' unit, so the real father has to claim his founder
+# slot first (notify+accept, same mechanism proven in section 2/7) before he can use it.
+login(grower_father["private_code"])
+res = client.get("/api/people/inbox")
+father_invite = next(r for r in res.get_json()["requests"] if r["kind"] == "family_relation_invite")
+res = client.post(f"/api/people/inbox/{father_invite['id']}/decide", json={"decision": "accept"})
+check("grower's real father accepts and claims his founder slot", res.status_code == 200)
+
+logout()
+paternal_grandpa = register("Paternal Grandpa")  # real, so the grandparents' unit has an admin too
+
+login(grower_father["private_code"])
 res = client.post(f"/api/family/node/{grower_parents_id}/add-parents",
-                   json={"side": "husband", "father": {"name": "Paternal Grandpa"}, "mother": {"name": "Paternal Grandma"}})
-check("add-parents (husband side, both names) succeeds (201)", res.status_code == 201)
+                   json={"side": "husband",
+                         "father": {"name": "Paternal Grandpa", "action": "notify", "user_id": paternal_grandpa["user_id"]},
+                         "mother": {"name": "Paternal Grandma"}})
+check("the father (now admin) can add-parents (husband side, both names) (201)", res.status_code == 201)
 grandparents_group_id = res.get_json()["parent_group_id"]
 check("a new grandparents' unit was created", grandparents_group_id is not None)
 row = raw("SELECT husband_parent_group_id FROM family_groups WHERE id = ?", (grower_parents_id,))
@@ -946,6 +1053,21 @@ nbh = client.get(f"/api/family/node/{grower_parents_id}/neighborhood").get_json(
 check("the new grandparents' unit shows up in the neighborhood view, tagged side=husband",
       any(pg["group_id"] == grandparents_group_id and pg["side"] == "husband" for pg in nbh["parent_groups"]))
 
+# The grandparents' unit itself has no admin yet either (same 2026-11-18 rule, one generation up) --
+# paternal_grandpa claims his own slot the same way grower_father claimed his, so there's a real
+# admin to exercise "+Add Sibling" against later.
+login(paternal_grandpa["private_code"])
+res = client.get("/api/people/inbox")
+grandpa_invite = next(r for r in res.get_json()["requests"] if r["kind"] == "family_relation_invite")
+res = client.post(f"/api/people/inbox/{grandpa_invite['id']}/decide", json={"decision": "accept"})
+check("paternal grandpa accepts and claims his own founder slot", res.status_code == 200)
+
+login(grower["private_code"])
+res = client.post(f"/api/family/node/{grower_parents_id}/add-parents",
+                   json={"side": "husband", "father": {"name": "Someone Else"}, "mother": None})
+check("grower (the child, not the admin) cannot add-parents to his own parents' unit (403)", res.status_code == 403)
+
+login(grower_father["private_code"])
 # Repeating on the SAME side is rejected -- additive only, never an overwrite.
 res = client.post(f"/api/family/node/{grower_parents_id}/add-parents",
                    json={"side": "husband", "father": {"name": "Someone Else"}, "mother": None})
@@ -975,10 +1097,13 @@ check("the new child appears in unmarried_children", any(p["id"] == child_node_i
 
 # "+ Add Sibling" is the EXACT SAME primitive, just targeting a different unit's group_id (here,
 # the grandparents' unit from above) -- proving the one-primitive-two-buttons design, not a
-# second code path.
+# second code path. Performed by paternal_grandpa, the grandparents' unit's own real admin --
+# grower has no standing there at all (not even a plain member).
+login(paternal_grandpa["private_code"])
 res = client.post(f"/api/family/node/{grandparents_group_id}/add-child", json={"name": "Grower Uncle", "gender": "male"})
 check("the same add-child route, targeted at the grandparents' unit, adds a 'sibling-in-law' there (201)", res.status_code == 201)
 
+login(grower["private_code"])
 res = client.post(f"/api/family/node/{grower_marital_id}/add-child", json={"name": "", "gender": "male"})
 check("add-child with a blank name is rejected (400)", res.status_code == 400)
 res = client.post(f"/api/family/node/{grower_marital_id}/add-child", json={"name": "Bad Gender Kid", "gender": "nonbinary-typo"})
