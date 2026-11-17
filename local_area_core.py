@@ -67,6 +67,15 @@ CREATE TABLE IF NOT EXISTS local_area_move_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_local_area_move_requests_user ON local_area_move_requests(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_local_area_move_requests_village ON local_area_move_requests(village_id, status);
+
+CREATE TABLE IF NOT EXISTS local_area_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    local_area_id INTEGER NOT NULL REFERENCES local_areas(id),
+    user_id INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_local_area_messages_area ON local_area_messages(local_area_id, id);
 """
 
 
@@ -110,8 +119,14 @@ def create_local_area(conn, user_id: int, village_id: str, name: str, is_admin: 
     return cur.lastrowid
 
 
-def list_local_areas(conn, village_id: str) -> list[dict]:
-    """Every Local Area in a village, with its current active member count."""
+def list_local_areas(conn, user_id: int, village_id: str, is_admin: bool) -> dict:
+    """Every Local Area in a village, with its current active member count, PLUS (2026-11-18, the
+    Phone App's own gaps) three fields the caller can't otherwise derive from the list alone:
+    my_local_area_id/my_pending_move_to are reported once at the top level, not repeated on every
+    row, since each is a single fact about the CALLER, not about any one Local Area; can_manage is
+    the same Founder-or-Nayak/Nayika check create_local_area()/decide_move_request() already
+    enforce, surfaced here so the app knows whether to show admin actions at all before the user
+    even tries one and gets a 403."""
     ensure_tables(conn)
     rows = conn.execute(
         """SELECT la.id, la.name, la.village_id, la.created_at,
@@ -120,7 +135,18 @@ def list_local_areas(conn, village_id: str) -> list[dict]:
            FROM local_areas la WHERE la.village_id = ? ORDER BY la.name""",
         (village_id,),
     ).fetchall()
-    return [dict(r) for r in rows]
+    mine = conn.execute(
+        "SELECT local_area_id FROM local_area_members WHERE user_id = ? AND status = 'active'", (user_id,)
+    ).fetchone()
+    pending = conn.execute(
+        "SELECT to_local_area_id FROM local_area_move_requests WHERE user_id = ? AND status = 'pending'", (user_id,)
+    ).fetchone()
+    return {
+        "local_areas": [dict(r) for r in rows],
+        "my_local_area_id": mine["local_area_id"] if mine else None,
+        "my_pending_move_to": pending["to_local_area_id"] if pending else None,
+        "can_manage": _is_village_admin(conn, user_id, village_id, is_admin),
+    }
 
 
 def members_of(conn, local_area_id: int) -> list[dict]:
@@ -135,6 +161,92 @@ def members_of(conn, local_area_id: int) -> list[dict]:
         (local_area_id,),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def list_pending_move_requests(conn, user_id: int, village_id: str, is_admin: bool) -> list[dict]:
+    """Every pending move request in a village, for the admin's own approve/deny screen
+    (2026-11-18, the Phone App's own gap) -- gated by the SAME can_manage check list_local_areas()
+    already reports, re-verified here rather than trusted from the client."""
+    ensure_tables(conn)
+    if not _is_village_admin(conn, user_id, village_id, is_admin):
+        raise PermissionError("Only the Village Q-Punch (Nayak/Nayika) or the Founder can view pending move requests")
+    rows = conn.execute(
+        """SELECT r.id, r.user_id, u.name AS user_name,
+                  r.from_local_area_id, fla.name AS from_name,
+                  r.to_local_area_id, tla.name AS to_name, r.requested_at
+           FROM local_area_move_requests r
+           JOIN users u ON u.id = r.user_id
+           LEFT JOIN local_areas fla ON fla.id = r.from_local_area_id
+           JOIN local_areas tla ON tla.id = r.to_local_area_id
+           WHERE r.village_id = ? AND r.status = 'pending'
+           ORDER BY r.requested_at""",
+        (village_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ---- Local Area chat (2026-11-18, replacing the older Village sub-group chat for this purpose):
+# its own dedicated message table, not a reuse of board_core's subgroups/board_messages -- a Local
+# Area isn't a subgroup (different creation gate, different membership model, no join-approval
+# queue of its own), and overloading one id column to mean two different things would need its own
+# discriminator column for no real benefit. Mirrors board_core.py's chat SHAPE (same message dict
+# fields, same is_admin-always-can-chat override), not its storage. ----
+
+def _can_chat(conn, user_id: int, local_area_id: int, village_id: str, is_admin: bool) -> bool:
+    if _is_village_admin(conn, user_id, village_id, is_admin):
+        return True
+    return bool(conn.execute(
+        "SELECT 1 FROM local_area_members WHERE local_area_id = ? AND user_id = ? AND status = 'active'",
+        (local_area_id, user_id),
+    ).fetchone())
+
+
+def chat_messages(conn, user_id: int, local_area_id: int, is_admin: bool) -> dict:
+    """The last 100 messages, oldest first (board_core.chat_messages()'s own convention). Only a
+    currently-ACTIVE member of THIS Local Area may read it -- someone who left, or who's active in
+    a different one, is refused the same as a stranger, matching Rule 4's "returns them to just the
+    general Village group" (no Local Area chat access at all, not read-only access to their old one)."""
+    ensure_tables(conn)
+    local_area = conn.execute("SELECT id, name, village_id FROM local_areas WHERE id = ?", (local_area_id,)).fetchone()
+    if not local_area:
+        raise LookupError("Local Area not found")
+    if not _can_chat(conn, user_id, local_area_id, local_area["village_id"], is_admin):
+        raise PermissionError("Only members of this Local Area can read its chat")
+    rows = list(reversed(conn.execute(
+        """SELECT m.id, m.text, m.created_at, m.user_id, u.name, u.gender, u.account_id,
+                  u.profile_picture IS NOT NULL AS has_picture
+           FROM local_area_messages m JOIN users u ON u.id = m.user_id
+           WHERE m.local_area_id = ? ORDER BY m.id DESC LIMIT 100""",
+        (local_area_id,),
+    ).fetchall()))
+    return {
+        "id": local_area["id"], "name": local_area["name"],
+        "messages": [
+            {"id": r["id"], "who": r["name"], "user_id": r["user_id"], "gender": r["gender"],
+             "profile_picture_url": f"/api/users/{r['user_id']}/profile-picture" if r["has_picture"] else None,
+             "account_id": r["account_id"], "mine": r["user_id"] == user_id,
+             "text": r["text"], "at": r["created_at"]}
+            for r in rows
+        ],
+    }
+
+
+def send_message(conn, user_id: int, local_area_id: int, text: str, is_admin: bool) -> None:
+    """Same membership gate as chat_messages() -- a left member or an outsider cannot post either."""
+    ensure_tables(conn)
+    local_area = conn.execute("SELECT village_id FROM local_areas WHERE id = ?", (local_area_id,)).fetchone()
+    if not local_area:
+        raise LookupError("Local Area not found")
+    if not _can_chat(conn, user_id, local_area_id, local_area["village_id"], is_admin):
+        raise PermissionError("Only members of this Local Area can send messages in its chat")
+    text = (text or "").strip()
+    if not text or len(text) > 1000:
+        raise ValueError("Write a message (up to 1000 characters)")
+    conn.execute(
+        "INSERT INTO local_area_messages (local_area_id, user_id, text, created_at) VALUES (?, ?, ?, ?)",
+        (local_area_id, user_id, text, _now()),
+    )
+    conn.commit()
 
 
 def _present_village_id(present_location: dict) -> str | None:

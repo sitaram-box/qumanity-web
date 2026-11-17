@@ -253,6 +253,83 @@ check("deciding an already-denied request is rejected too (400)", res.status_cod
 
 print()
 print("=" * 70)
+print("9. list_local_areas(): my_local_area_id / my_pending_move_to / can_manage")
+print("=" * 70)
+
+login(resident["private_code"])
+res = client.post("/api/local-areas/request-move", json={"to_local_area_id": area_west_id})
+check("resident requests another move (to West again), left pending for this section", res.status_code == 201)
+pending_check_req_id = res.get_json()["request_id"]
+
+res = client.get("/api/local-areas/list", query_string={"village_id": "CS.DL.3.4.1A"})
+check("my_local_area_id reports resident's own active Local Area (East)", res.get_json()["my_local_area_id"] == area_east_id)
+check("my_pending_move_to reports the just-requested West move", res.get_json()["my_pending_move_to"] == area_west_id)
+check("a plain resident's can_manage is False", res.get_json()["can_manage"] is False)
+
+login(founder["private_code"])
+res = client.get("/api/local-areas/list", query_string={"village_id": "CS.DL.3.4.1A"})
+check("the Founder's can_manage is True", res.get_json()["can_manage"] is True)
+check("the Founder has no active Local Area of their own -- my_local_area_id is None", res.get_json()["my_local_area_id"] is None)
+check("the Founder has no pending move request either -- my_pending_move_to is None", res.get_json()["my_pending_move_to"] is None)
+
+print()
+print("=" * 70)
+print("10. GET /api/local-areas/requests: pending list, can_manage-gated")
+print("=" * 70)
+
+login(plain["private_code"])
+res = client.get("/api/local-areas/requests", query_string={"village_id": "CS.DL.3.4.1A"})
+check("a non-admin cannot view the pending-requests list (403)", res.status_code == 403)
+
+login(founder["private_code"])
+res = client.get("/api/local-areas/requests", query_string={"village_id": "CS.DL.3.4.1A"})
+check("the Founder can view the pending-requests list (200)", res.status_code == 200)
+pending_ids = {r["id"] for r in res.get_json()["requests"]}
+check("resident's own just-requested move shows up in the pending list", pending_check_req_id in pending_ids)
+entry = next(r for r in res.get_json()["requests"] if r["id"] == pending_check_req_id)
+check("the entry names the requester and both Local Areas by name, not just id",
+      bool(entry["user_name"]) and entry["from_name"] == "Sector 24 East" and entry["to_name"] == "Sector 24 West")
+
+res = client.post(f"/api/local-areas/requests/{pending_check_req_id}/decide", json={"decision": "deny"})
+check("cleaning up: the Founder denies this request so it doesn't dangle", res.status_code == 200)
+res = client.get("/api/local-areas/requests", query_string={"village_id": "CS.DL.3.4.1A"})
+check("a decided request no longer appears in the pending list", pending_check_req_id not in {r["id"] for r in res.get_json()["requests"]})
+
+print()
+print("=" * 70)
+print("11. Local Area chat: membership-gated read/send, admin override")
+print("=" * 70)
+
+login(resident["private_code"])  # still active in East
+res = client.post(f"/api/local-areas/{area_east_id}/chat", json={"text": "Hello East!"})
+check("an active member can send a chat message (201)", res.status_code == 201)
+res = client.get(f"/api/local-areas/{area_east_id}/chat")
+check("an active member can read the chat (200)", res.status_code == 200)
+check("the message appears, flagged as mine", any(m["text"] == "Hello East!" and m["mine"] for m in res.get_json()["messages"]))
+
+login(denied_resident["private_code"])  # active in West, not East
+res = client.get(f"/api/local-areas/{area_east_id}/chat")
+check("a member of a DIFFERENT Local Area cannot read this one's chat (403)", res.status_code == 403)
+res = client.post(f"/api/local-areas/{area_east_id}/chat", json={"text": "Sneaking in"})
+check("...nor send a message to it (403)", res.status_code == 403)
+
+login(founder["private_code"])
+res = client.get(f"/api/local-areas/{area_east_id}/chat")
+check("the Founder can read ANY Local Area's chat without being a member (admin override)", res.status_code == 200)
+res = client.post(f"/api/local-areas/{area_east_id}/chat", json={"text": "A note from the Founder"})
+check("...and send to it too", res.status_code == 201)
+
+login(resident["private_code"])
+res = client.post(f"/api/local-areas/{area_east_id}/chat", json={"text": ""})
+check("a blank message is rejected (400)", res.status_code == 400)
+res = client.post(f"/api/local-areas/{area_east_id}/chat", json={"text": "x" * 1001})
+check("a message over 1000 characters is rejected (400)", res.status_code == 400)
+
+res = client.post("/api/local-areas/999999/chat", json={"text": "hi"})
+check("sending to a nonexistent Local Area's chat is a 404", res.status_code == 404)
+
+print()
+print("=" * 70)
 if FAILS:
     print(f"{len(FAILS)} check(s) FAILED:")
     for f in FAILS:

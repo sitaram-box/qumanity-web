@@ -930,9 +930,9 @@ def api_local_areas_list():
     if not village_id:
         return jsonify({"error": "village_id is required"}), 400
     conn = _local_areas(get_db())
-    areas = local_area_core.list_local_areas(conn, village_id)
+    result = local_area_core.list_local_areas(conn, session["user_id"], village_id, _is_admin())
     conn.close()
-    return jsonify({"local_areas": areas})
+    return jsonify(result)
 
 
 @app.route("/api/local-areas/<int:local_area_id>/members")
@@ -945,6 +945,37 @@ def api_local_areas_members(local_area_id):
     finally:
         conn.close()
     return jsonify({"members": members})
+
+
+@app.route("/api/local-areas/requests")
+@login_required
+@_board_error
+def api_local_areas_pending_requests():
+    village_id = request.args.get("village_id")
+    if not village_id:
+        return jsonify({"error": "village_id is required"}), 400
+    conn = _local_areas(get_db())
+    try:
+        requests_ = local_area_core.list_pending_move_requests(conn, session["user_id"], village_id, _is_admin())
+    finally:
+        conn.close()
+    return jsonify({"requests": requests_})
+
+
+@app.route("/api/local-areas/<int:local_area_id>/chat", methods=["GET", "POST"])
+@login_required
+@_board_error
+def api_local_areas_chat(local_area_id):
+    conn = _local_areas(get_db())
+    try:
+        if request.method == "POST":
+            local_area_core.send_message(
+                conn, session["user_id"], local_area_id, (request.get_json(silent=True) or {}).get("text"), _is_admin(),
+            )
+            return jsonify({"status": "ok"}), 201
+        return jsonify(local_area_core.chat_messages(conn, session["user_id"], local_area_id, _is_admin()))
+    finally:
+        conn.close()
 
 
 @app.route("/api/local-areas/create", methods=["POST"])
