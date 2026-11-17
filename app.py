@@ -47,6 +47,7 @@ import founder_core
 import id_generator
 import identity_core
 import kundali_analyser
+import local_area_core
 import lunar_core
 import logout_review_core
 import announcements_core
@@ -915,6 +916,110 @@ def api_announcements_unread_recent():
     items = announcements_core.unread_recent(conn, user["id"], _user_location_chain(user), limit=limit)
     conn.close()
     return jsonify({"announcements": items})
+
+
+def _local_areas(conn):
+    local_area_core.ensure_tables(conn)
+    return conn
+
+
+@app.route("/api/local-areas/list")
+@login_required
+def api_local_areas_list():
+    village_id = request.args.get("village_id")
+    if not village_id:
+        return jsonify({"error": "village_id is required"}), 400
+    conn = _local_areas(get_db())
+    areas = local_area_core.list_local_areas(conn, village_id)
+    conn.close()
+    return jsonify({"local_areas": areas})
+
+
+@app.route("/api/local-areas/<int:local_area_id>/members")
+@login_required
+@_board_error
+def api_local_areas_members(local_area_id):
+    conn = _local_areas(get_db())
+    try:
+        members = local_area_core.members_of(conn, local_area_id)
+    finally:
+        conn.close()
+    return jsonify({"members": members})
+
+
+@app.route("/api/local-areas/create", methods=["POST"])
+@login_required
+@_board_error
+def api_local_areas_create():
+    data = request.get_json(silent=True) or {}
+    conn = _local_areas(get_db())
+    try:
+        local_area_id = local_area_core.create_local_area(
+            conn, session["user_id"], data.get("village_id"), data.get("name"), _is_admin(),
+        )
+    finally:
+        conn.close()
+    return jsonify({"id": local_area_id}), 201
+
+
+@app.route("/api/local-areas/join", methods=["POST"])
+@login_required
+@_board_error
+def api_local_areas_join():
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    local_area_core.ensure_tables(conn)
+    try:
+        user = _current_user_row(conn)
+        present_location = json.loads(user["present_location_json"] or "{}")
+        result = local_area_core.join_local_area(conn, user["id"], data.get("local_area_id"), present_location)
+    finally:
+        conn.close()
+    return jsonify(result), 201
+
+
+@app.route("/api/local-areas/request-move", methods=["POST"])
+@login_required
+@_board_error
+def api_local_areas_request_move():
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    local_area_core.ensure_tables(conn)
+    try:
+        user = _current_user_row(conn)
+        present_location = json.loads(user["present_location_json"] or "{}")
+        result = local_area_core.request_move(conn, user["id"], data.get("to_local_area_id"), present_location)
+    finally:
+        conn.close()
+    status = 200 if result.get("status") == "already_pending" else 201
+    return jsonify(result), status
+
+
+@app.route("/api/local-areas/leave", methods=["POST"])
+@login_required
+@_board_error
+def api_local_areas_leave():
+    conn = _local_areas(get_db())
+    try:
+        local_area_core.leave_local_area(conn, session["user_id"])
+    finally:
+        conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/local-areas/requests/<int:request_id>/decide", methods=["POST"])
+@login_required
+@_board_error
+def api_local_areas_decide_request(request_id):
+    data = request.get_json(silent=True) or {}
+    conn = _local_areas(get_db())
+    try:
+        local_area_core.decide_move_request(
+            conn, session["user_id"], request_id, data.get("decision"), _is_admin(),
+        )
+    finally:
+        conn.close()
+    return jsonify({"ok": True})
 
 
 @app.route("/api/reports", methods=["POST"])
