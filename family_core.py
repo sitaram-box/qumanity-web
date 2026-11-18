@@ -2587,13 +2587,23 @@ def _person_summary(conn, node_id, viewer_user_id):
     display_identity()'s own identical choice of account_id as the one safe-to-show identifier for
     a hidden member), age_years/age_is_approx (see _node_age()), the raw approximate_age (so the
     Unclaimed Profile Card editor can pre-fill its own field without a second round trip), and
-    relationship_to_viewer (see _relationship_label() above)."""
+    relationship_to_viewer (see _relationship_label() above).
+
+    2026-11-18 (Phase 1 Item 3 follow-up): also returns birth_order and dob_approx -- the same two
+    inputs (alongside a claimed node's own users.dob, used internally but NOT re-exposed here) that
+    _sort_people_by_birth() itself sorts by, so a client rendering a sorted list (e.g. the Whole
+    Tree's sibling row) can tell WHY that order was chosen, and a reordering UI has the existing
+    manual override to write back via set_birth_order() -- without this, every person in a sorted
+    list looked identical to the client, and a sibling reorder had nothing to persist against.
+    dob_approx is the unclaimed-only estimate (see this module's schema comment); never a claimed
+    node's real users.dob, which stays as private here as everywhere else _person_summary() already
+    reveals only a computed age_years, never the raw birth date, for a real account."""
     if not node_id:
         return None
     row = conn.execute(
         """SELECT fn.id, fn.claimed_user_id, fn.gender AS node_gender, fn.status, fn.is_deceased,
-                  fn.approximate_age, COALESCE(u.name, fn.display_name) AS name, u.gender AS user_gender,
-                  u.account_id, u.profile_picture IS NOT NULL AS has_picture
+                  fn.approximate_age, fn.birth_order, fn.dob_approx, COALESCE(u.name, fn.display_name) AS name,
+                  u.gender AS user_gender, u.account_id, u.profile_picture IS NOT NULL AS has_picture
            FROM family_nodes fn LEFT JOIN users u ON u.id = fn.claimed_user_id WHERE fn.id = ?""",
         (node_id,),
     ).fetchone()
@@ -2608,6 +2618,7 @@ def _person_summary(conn, node_id, viewer_user_id):
         "profile_picture_url": _profile_picture_url(row["claimed_user_id"]) if row["claimed_user_id"] and row["has_picture"] else None,
         "account_id": row["account_id"] if row["claimed_user_id"] else None,
         "age_years": age_years, "age_is_approx": age_is_approx, "approximate_age": row["approximate_age"],
+        "birth_order": row["birth_order"], "dob_approx": row["dob_approx"] if not row["claimed_user_id"] else None,
         "relationship_to_viewer": _relationship_label(conn, viewer_user_id, node_id),
     }
 
