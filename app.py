@@ -323,8 +323,8 @@ def download_app():
     redirects there. Public, no login needed, same as every other download/landing link on the
     site."""
     return redirect(
-        "https://github.com/sitaram-box/qumanity-web/releases/download/v1.0.2/"
-        "application-a5082c68-e334-4d5a-ad73-0e16b267b08f.apk"
+        "https://github.com/sitaram-box/qumanity-web/releases/download/v1.0.3/"
+        "application-6059450f-ce58-4ef6-b6ae-4631f48917f4.apk"
     )
 
 
