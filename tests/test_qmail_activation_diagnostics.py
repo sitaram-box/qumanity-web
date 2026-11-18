@@ -66,7 +66,8 @@ def register():
     payload = {
         "name": f"DiagTester {_n[0]}", "gender": "male", "dob": "1990-06-15", "tob": "06:00",
         "language": "English", "email": "", "phone": "", "pin": "12345",
-        "birth_location": {"continent": ROHINI["continent"], "country": ROHINI["country"]},
+        # Birth location now stops at State (2026-11-19) for a Sub-continent country.
+        "birth_location": {k: ROHINI[k] for k in ("continent", "country", "zone", "state")},
         "present_location": ROHINI, "assisted": False,
     }
     res = client.post("/api/auth/register", json=payload)

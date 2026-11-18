@@ -77,7 +77,8 @@ def register(name, present_location):
     payload = {
         "name": name, "gender": "male", "dob": "1990-06-15", "tob": "06:00",
         "language": "English", "email": "", "phone": "", "pin": "12345",
-        "birth_location": {"continent": ROHINI["continent"], "country": ROHINI["country"]},
+        # Birth location now stops at State (2026-11-19) for a Sub-continent country.
+        "birth_location": {k: ROHINI[k] for k in ("continent", "country", "zone", "state")},
         "present_location": present_location,
         "assisted": False,
     }

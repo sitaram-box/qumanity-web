@@ -84,7 +84,10 @@ def register(name_prefix, location=VILLAGE_A):
     payload = {
         "name": f"{name_prefix} {_n[0]}", "gender": "male", "dob": "1990-06-15", "tob": "06:00",
         "language": "English", "email": "", "phone": "", "pin": "12345",
-        "birth_location": location, "present_location": location, "assisted": False,
+        # Birth location now stops at State (2026-11-19) -- present_location (unchanged) still
+        # carries the full chain down to Village.
+        "birth_location": {k: location[k] for k in ("continent", "country", "zone", "state")},
+        "present_location": location, "assisted": False,
     }
     res = client.post("/api/auth/register", json=payload)
     if res.status_code != 201:

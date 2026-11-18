@@ -19,8 +19,17 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import io
 import os
 import secrets
+from pathlib import Path
+
+import qrcode
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer
 
 import announcements_core
 import election_core
@@ -29,6 +38,10 @@ import family_core
 ACTIONABLE_STATUS = "active"
 _STATUSES = {"pending_payment", "active", "revoked", "replaced"}
 _PAYMENT_METHODS = {"cash", "upi_static"}
+
+BASE_DIR = Path(__file__).resolve().parent
+LOGO_PATH = BASE_DIR / "static" / "images" / "qumanity-logo-dpga.png"
+CARD_LOGIN_URL = "https://qumanity.in/card/"
 
 
 def ensure_tables(conn) -> None:
@@ -306,3 +319,67 @@ def list_pending(conn) -> list[dict]:
     return [dict(r) for r in conn.execute(
         "SELECT * FROM q_cards WHERE status = 'pending_payment' ORDER BY issued_at"
     ).fetchall()]
+
+
+# ---- Stage 4 (2026-11-19): the single-card PDF/QR renderer this module's own docstring long said
+# was still outstanding ("The batch PDF/QR-rendering flow remains Stage 4's") -- built now as a
+# per-card primitive, specifically so the batch exporter proposed in
+# docs/qcard_phase1_2026_11_15.md §4 can loop THIS SAME layout across many pages later, rather than
+# needing a second implementation. ----
+
+def render_card_pdf(card_display_id: str, raw_token: str, name: str) -> bytes:
+    """Renders ONE Q-Card as a single A4 PDF page. Takes raw_token directly from the caller -- it
+    is NEVER re-derived from the database, because it can't be: issue_card() stores only its hash
+    (see that function's own docstring), so this must run in the same request, using the same
+    in-memory value, as the issue_card() call that produced it. There is no later "regenerate the
+    PDF" path that can ever recover a lost raw_token; the caller is responsible for persisting the
+    rendered bytes themselves (see save_card_pdf()) the one time they have it.
+
+    The QR encodes qumanity.in/card/<raw_token> -- never the Private ID, the Account ID, or any
+    other identifier (the explicit security decision from the Phase 1 design doc's own opening
+    section) -- so a photographed or lost card reveals nothing but an opaque, independently
+    revocable bearer token, never the member's real identity."""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4, topMargin=40 * mm, bottomMargin=40 * mm, leftMargin=30 * mm, rightMargin=30 * mm,
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("QCardTitle", parent=styles["Title"], alignment=TA_CENTER)
+    name_style = ParagraphStyle("QCardName", parent=styles["Heading2"], alignment=TA_CENTER)
+    centered = ParagraphStyle("QCardCentered", parent=styles["Normal"], alignment=TA_CENTER)
+
+    card_url = f"{CARD_LOGIN_URL}{raw_token}"
+    qr_buf = io.BytesIO()
+    qrcode.make(card_url).save(qr_buf, format="PNG")
+    qr_buf.seek(0)
+
+    story = []
+    if LOGO_PATH.exists():
+        story.append(Image(str(LOGO_PATH), width=25 * mm, height=25 * mm, hAlign="CENTER"))
+        story.append(Spacer(1, 10 * mm))
+    story.append(Paragraph("Qumanity Q-Card", title_style))
+    story.append(Spacer(1, 6 * mm))
+    story.append(Paragraph(name, name_style))
+    story.append(Spacer(1, 10 * mm))
+    story.append(Image(qr_buf, width=70 * mm, height=70 * mm, hAlign="CENTER"))
+    story.append(Spacer(1, 6 * mm))
+    story.append(Paragraph(card_display_id, centered))
+    story.append(Spacer(1, 4 * mm))
+    story.append(Paragraph(card_url, centered))
+
+    doc.build(story)
+    return buf.getvalue()
+
+
+def save_card_pdf(born_here_dir, pdf_bytes: bytes) -> Path:
+    """private_account/q_card.pdf under a BORN_HERE user folder -- folder_connector.py's own
+    file-under-an-existing-folder convention (save_user_profile()/save_account_ids()), kept here
+    instead since q_card_core.py is where the PDF bytes themselves are produced and this is the
+    only caller. Writes into "private_account", one of create_user_folder()'s own already-created
+    SUB_ACCOUNTS -- never a new folder. Overwrites any previous file at this path: a card is
+    replaced, not versioned (same as replace()'s own 'the old token simply stops working'
+    semantics) -- there is only ever one CURRENT card's PDF to keep per person."""
+    pdf_path = Path(born_here_dir) / "private_account" / "q_card.pdf"
+    with open(pdf_path, "wb") as f:
+        f.write(pdf_bytes)
+    return pdf_path

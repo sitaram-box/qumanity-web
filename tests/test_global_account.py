@@ -91,13 +91,20 @@ MAURITIUS_LOC = {
 
 _n = [0]
 
+# Birth location now stops at State (2026-11-19), decoupled from this file's own
+# present_location fixtures (several of which are DELIBERATELY malformed/fabricated to test
+# present_location's own validation) -- a fixed, always-well-formed default so register()'s
+# callers that never cared about birth_location specifically keep getting past its own gate
+# unchanged, rather than inheriting whatever shape present_location happens to have.
+DEFAULT_BIRTH_LOCATION = {k: INDIA_LOC[k] for k in ("continent", "country", "zone", "state")}
+
 
 def register(name_prefix, present_location, birth_location=None, dob="1990-06-15"):
     _n[0] += 1
     payload = {
         "name": f"{name_prefix} {_n[0]}", "gender": "female", "dob": dob, "tob": "06:00",
         "language": "English", "email": "", "phone": "", "pin": "12345",
-        "birth_location": birth_location or present_location, "present_location": present_location,
+        "birth_location": birth_location or DEFAULT_BIRTH_LOCATION, "present_location": present_location,
         "assisted": False,
     }
     return client.post("/api/auth/register", json=payload)

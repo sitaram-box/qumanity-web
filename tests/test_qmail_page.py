@@ -64,7 +64,8 @@ def register(name_prefix):
     payload = {
         "name": f"{name_prefix} {_n[0]}", "gender": "male", "dob": "1990-06-15", "tob": "06:00",
         "language": "English", "email": "", "phone": "", "pin": "12345",
-        "birth_location": {"continent": VILLAGE["continent"], "country": VILLAGE["country"]},
+        # Birth location now stops at State (2026-11-19) for a Sub-continent country.
+        "birth_location": {k: VILLAGE[k] for k in ("continent", "country", "zone", "state")},
         "present_location": VILLAGE, "assisted": False,
     }
     res = client.post("/api/auth/register", json=payload)

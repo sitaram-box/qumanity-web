@@ -62,6 +62,9 @@ VILLAGE_LOC = {
     "district": {"id": DISTRICT_ID, "name": "North West Delhi"}, "tehsil": {"id": TEHSIL_ID, "name": "Bawana"},
     "village": {"id": "CS.DL.3.4.1A", "name": "Rohini Sector 24"},
 }
+# Birth location now stops at State (2026-11-19) -- present_location (unchanged, and sometimes a
+# provisional Tehsil/Village in this file) still carries the full chain down to Village.
+VILLAGE_LOC_BIRTH = {k: VILLAGE_LOC[k] for k in ("continent", "country", "zone", "state")}
 
 _n = [0]
 
@@ -71,7 +74,7 @@ def register(present_location=None, name_prefix="Prov Tester"):
     payload = {
         "name": f"{name_prefix} {_n[0]}", "gender": "male", "dob": "1990-06-15", "tob": "06:00",
         "language": "English", "email": "", "phone": "", "pin": "12345",
-        "birth_location": VILLAGE_LOC, "present_location": present_location or VILLAGE_LOC, "assisted": False,
+        "birth_location": VILLAGE_LOC_BIRTH, "present_location": present_location or VILLAGE_LOC, "assisted": False,
     }
     res = client.post("/api/auth/register", json=payload)
     return res

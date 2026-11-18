@@ -33,6 +33,7 @@ os.close(_fd)
 os.environ["QM_DB_PATH"] = _DB_PATH
 os.environ["QM_DISABLE_SCHEDULER"] = "1"
 
+import account_core  # noqa: E402
 import app as appmod  # noqa: E402
 import db as dbmod  # noqa: E402
 import social_core  # noqa: E402
@@ -102,12 +103,22 @@ ANDAMAN_LOC = {
 _n = [0]
 
 
+def _birth_location_from(location):
+    """Birth location now stops at State (2026-11-19) for a Sub-continent country, or at
+    Continent+Country for a Global one -- same split account_core.validate_birth_location() itself
+    enforces."""
+    country_id = (location.get("country") or {}).get("id")
+    levels = ("continent", "country", "zone", "state") if country_id in account_core.SUBCONTINENT_COUNTRY_IDS \
+        else ("continent", "country")
+    return {k: location[k] for k in levels if k in location}
+
+
 def register(name_prefix, present_location):
     _n[0] += 1
     payload = {
         "name": f"{name_prefix} {_n[0]}", "gender": "female", "dob": "1990-06-15", "tob": "06:00",
         "language": "English", "email": "", "phone": "", "pin": "12345",
-        "birth_location": present_location, "present_location": present_location,
+        "birth_location": _birth_location_from(present_location), "present_location": present_location,
         "assisted": False,
     }
     res = client.post("/api/auth/register", json=payload)

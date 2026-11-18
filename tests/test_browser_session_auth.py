@@ -66,6 +66,9 @@ INDIA_LOC = {
     "tehsil": {"id": "CS.DL.3.4", "name": "Bawana"},
     "village": {"id": "CS.DL.3.4.1A", "name": "Rohini Sector 24"},
 }
+# Birth location now stops at State (2026-11-19) -- present_location (INDIA_LOC, unchanged) still
+# carries the full chain down to Village.
+INDIA_BIRTH = {k: INDIA_LOC[k] for k in ("continent", "country", "zone", "state")}
 
 _n = [0]
 
@@ -75,7 +78,7 @@ def payload(name_prefix, **extra):
     body = {
         "name": f"{name_prefix} {_n[0]}", "gender": "female", "dob": "1990-06-15", "tob": "06:00",
         "language": "English", "email": "", "phone": "", "pin": "12345",
-        "birth_location": INDIA_LOC, "present_location": INDIA_LOC, "assisted": False,
+        "birth_location": INDIA_BIRTH, "present_location": INDIA_LOC, "assisted": False,
     }
     body.update(extra)
     return body

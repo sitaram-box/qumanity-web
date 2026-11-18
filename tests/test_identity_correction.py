@@ -14,6 +14,7 @@ machine's Flask install).
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
@@ -66,16 +67,24 @@ VILLAGE_B = {
     "village": {"id": "CS.DL.3.4.1B", "name": "Rohini Sector 25"},
 }
 VID_A, VID_B = VILLAGE_A["village"]["id"], VILLAGE_B["village"]["id"]
+JAPAN_LOC = {"continent": {"id": "O_AS", "name": "Asia"}, "country": {"id": "O_AS_JPN", "name": "Japan"}}
 
 _n = [0]
 
 
 def register(name_prefix, birth_location, present_location=None, tob="06:00", tob_unknown=False):
     _n[0] += 1
+    # Birth location now stops at State (2026-11-19); present_location (defaulting to the same
+    # village the caller passed) still needs the full chain, so it's captured BEFORE
+    # birth_location is trimmed down for registration's own payload. A village-level
+    # birth_location (the "legacy" shape this file's own tests need) can only be simulated
+    # afterward via a direct DB write -- see raw_exec() calls below.
+    full_present = present_location or birth_location
+    birth_payload = {k: birth_location[k] for k in ("continent", "country", "zone", "state") if k in birth_location}
     payload = {
         "name": f"{name_prefix} {_n[0]}", "gender": "male", "dob": "1990-06-15",
         "language": "English", "email": "", "phone": "", "pin": "12345",
-        "birth_location": birth_location, "present_location": present_location or birth_location,
+        "birth_location": birth_payload, "present_location": full_present,
         "assisted": False,
     }
     if tob_unknown:
@@ -149,9 +158,14 @@ head_f = register("HeadF", VILLAGE_A)
 seat_council(VID_A, head_m["user_id"], head_f["user_id"], 301)
 
 # Subject's PRESENT location is deliberately Village B -- the ticket must route by BIRTH
-# location (Village A), not present location, proving the two are independent.
+# location (Village A), not present location, proving the two are independent. Registration
+# itself no longer collects a village for birth_location at all (2026-11-19), so a direct write
+# simulates the LEGACY shape (a birth_location_json that still carries one) --
+# identity_core._birth_village_location() must still prefer it over present_location whenever
+# it's there, exactly as before.
 subject = register("Subject", VILLAGE_A, present_location=VILLAGE_B)
 subject_id = subject["user_id"]
+raw_exec("UPDATE users SET birth_location_json = ? WHERE id = ?", (json.dumps(VILLAGE_A), subject_id))
 before = user_row(subject_id)
 
 print()
@@ -271,11 +285,12 @@ print("=" * 70)
 
 logout()
 other = register("Unrelated", VILLAGE_B)
-# A FRESH subject, still born in (and never moved out of) Village A -- subject_id's own birth
-# village moved to Village B in section 4, so a new ticket from THEM would now (correctly) scope
-# to Village B instead, which has no seated council in this test and would make this check
-# meaningless.
-subject2 = register("Subject2", VILLAGE_A, present_location=VILLAGE_B)
+# A FRESH subject with no injected legacy birth village -- their ticket routes by the new
+# present-village fallback (identity_core._birth_village_location()), so PRESENT location is
+# Village A here, to land on head_m's seated scope. subject_id's own birth village moved to
+# Village B in section 4, so a new ticket from THEM would now (correctly) scope to Village B
+# instead, which has no seated council in this test and would make this check meaningless.
+subject2 = register("Subject2", VILLAGE_A, present_location=VILLAGE_A)
 login(subject2["private_code"])
 
 import base64
@@ -316,6 +331,39 @@ known_tob_user = register("KnowsTime", VILLAGE_A, tob="09:15")
 row2 = user_row(known_tob_user["user_id"])
 check("a normal registration keeps birth_time_known = 1", row2["birth_time_known"] == 1)
 check("a normal registration's tob is untouched", row2["tob"] == "09:15")
+
+print()
+print("=" * 70)
+print("9. identity_core._birth_village_location()'s present-village fallback (2026-11-19)")
+print("=" * 70)
+
+# A user with NO birth village at all (registration no longer collects one, and this one has no
+# simulated-legacy injection either) -- the ticket must still route LOCALLY, by falling back to
+# their PRESENT village, rather than silently becoming global-Admin-only.
+logout()
+no_birth_village_user = register("NoBirthVillage", VILLAGE_A, present_location=VILLAGE_A)
+login(no_birth_village_user["private_code"])
+res = client.post("/api/dashboard/identity-request", json={"request_type": "id_change_b", "reason": "testing the present-village fallback"})
+check("9a. ticket queued for a user with no birth village on file", res.status_code == 200)
+fallback_req = res.get_json()["request_id"]
+fallback_row = raw("SELECT location_level, location_id FROM profile_change_requests WHERE id = ?", (fallback_req,))
+check("9b. routes to the user's PRESENT village (Village A) since birth_location has none",
+      fallback_row["location_level"] == "village" and fallback_row["location_id"] == VID_A)
+
+# A Global Account -- no village in EITHER birth or present location -- still falls through to
+# global-Admin-only, exactly as before this fallback was added.
+logout()
+global_user = register("GlobalSubject", JAPAN_LOC, present_location=JAPAN_LOC)
+login(global_user["private_code"])
+res = client.post("/api/dashboard/identity-request", json={"request_type": "id_change_b", "reason": "no village in either location"})
+check("9c. ticket queued for a Global Account", res.status_code == 200)
+global_req = res.get_json()["request_id"]
+global_row = raw("SELECT location_level, location_id FROM profile_change_requests WHERE id = ?", (global_req,))
+check("9d. a Global Account's ticket has NO village scope (location_level/location_id both NULL) -- global-Admin-only",
+      global_row["location_level"] is None and global_row["location_id"] is None)
+login(admin["private_code"])
+res = client.post(f"/api/admin/profile-changes/{global_req}/decide", json={"approve": True})
+check("9e. the global Admin (not a village head) can still decide a village-less ticket", res.status_code == 200)
 
 print()
 print("=" * 70)

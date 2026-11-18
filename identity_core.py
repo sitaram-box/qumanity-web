@@ -91,18 +91,33 @@ def ensure_tables(conn) -> None:
 
 
 def _birth_village_location(conn, user_id: int):
-    """The user's CURRENT birth village, snapshotted onto the ticket at submission time -- so a
-    queued ticket keeps pointing at the village whose council should decide it, even if some
-    other approved change moves the user's birth_location before this one is decided. Returns
-    (None, None) if their birth location has no mapped village (e.g. born outside the Indian
-    Sub-continent) -- such a ticket is global-Admin-only, by omission: _is_admin_panel_user()'s
-    location scope can never match a NULL location_level/location_id."""
-    row = conn.execute("SELECT birth_location_json FROM users WHERE id = ?", (user_id,)).fetchone()
+    """The user's CURRENT home village for routing an identity-correction ticket, snapshotted onto
+    the ticket at submission time -- so a queued ticket keeps pointing at the village whose council
+    should decide it, even if some other approved change moves the user's location before this one
+    is decided.
+
+    2026-11-19 (registration-flow shortening): birth_location no longer collects a village at all
+    for a NEW registration (see account_core.validate_birth_location()) -- only existing/legacy
+    rows still carry one. Tries birth_location_json's own village FIRST, unchanged -- this still
+    routes by BIRTH village, not present, for anyone who has one, exactly as before. Falls back to
+    present_location_json's village ONLY when birth_location has none, so a newly-registered
+    member's tickets still reach their local council instead of silently becoming
+    global-Admin-only by omission, which is what would otherwise happen to every new subcontinent
+    registrant now that their birth_location never has a village to find. Returns (None, None) only
+    when NEITHER location has a mapped village (a Global Account, born and living outside the
+    Indian Sub-continent) -- such a ticket is global-Admin-only: _is_admin_panel_user()'s location
+    scope can never match a NULL location_level/location_id."""
+    row = conn.execute(
+        "SELECT birth_location_json, present_location_json FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
     if not row:
         return None, None
-    village = (json.loads(row["birth_location_json"]) or {}).get("village")
-    if village and village.get("id"):
-        return "village", village["id"]
+    birth_village = (json.loads(row["birth_location_json"]) or {}).get("village")
+    if birth_village and birth_village.get("id"):
+        return "village", birth_village["id"]
+    present_village = (json.loads(row["present_location_json"]) or {}).get("village")
+    if present_village and present_village.get("id"):
+        return "village", present_village["id"]
     return None, None
 
 

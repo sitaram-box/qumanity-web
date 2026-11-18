@@ -68,6 +68,9 @@ INDIA_LOC = {
     "tehsil": {"id": "CS.DL.3.4", "name": "Bawana"},
     "village": {"id": "CS.DL.3.4.1A", "name": "Rohini Sector 24"},
 }
+# Birth location now stops at State (2026-11-19) -- present_location (INDIA_LOC, unchanged) still
+# carries the full chain down to Village.
+INDIA_BIRTH = {k: INDIA_LOC[k] for k in ("continent", "country", "zone", "state")}
 GENERIC_401 = {"error": "Please sign in again"}
 
 _n = [0]
@@ -79,7 +82,7 @@ def register_app(name_prefix, pin="12345"):
     res = client.post("/api/auth/register", json={
         "name": f"{name_prefix} {_n[0]}", "gender": "female", "dob": "1990-06-15", "tob": "06:00",
         "language": "English", "email": "", "phone": "", "pin": pin,
-        "birth_location": INDIA_LOC, "present_location": INDIA_LOC, "assisted": False, "client": "app",
+        "birth_location": INDIA_BIRTH, "present_location": INDIA_LOC, "assisted": False, "client": "app",
     })
     if res.status_code != 201 or not (res.get_json() or {}).get("token"):
         sys.exit(f"REGISTER FAILED for {name_prefix}: {res.status_code} {res.get_data(as_text=True)[:500]}")

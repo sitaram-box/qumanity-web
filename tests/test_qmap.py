@@ -62,6 +62,9 @@ VILLAGE_LOC = {
     "district": {"id": DISTRICT_ID, "name": "North West Delhi"}, "tehsil": {"id": TEHSIL_ID, "name": "Bawana"},
     "village": {"id": "CS.DL.3.4.1A", "name": "Rohini Sector 24"},
 }
+# Birth location now stops at State (2026-11-19) -- present_location (VILLAGE_LOC, unchanged)
+# still carries the full chain down to Village.
+VILLAGE_LOC_BIRTH = {k: VILLAGE_LOC[k] for k in ("continent", "country", "zone", "state")}
 
 _n = [0]
 
@@ -71,7 +74,7 @@ def register_and_login():
     payload = {
         "name": f"QMap Tester {_n[0]}", "gender": "female", "dob": "1992-03-10", "tob": "09:00",
         "language": "English", "email": "", "phone": "", "pin": "12345",
-        "birth_location": VILLAGE_LOC, "present_location": VILLAGE_LOC, "assisted": False,
+        "birth_location": VILLAGE_LOC_BIRTH, "present_location": VILLAGE_LOC, "assisted": False,
     }
     res = client.post("/api/auth/register", json=payload)
     if res.status_code != 201:

@@ -109,6 +109,60 @@ def is_valid_global_country(continent_id: str, country_id: str) -> bool:
     return False
 
 
+def validate_birth_location(birth_location: dict) -> tuple[bool, str | None]:
+    """Birth Location's OWN validation gate (2026-11-19, registration-flow shortening). Before
+    this, birth_location never went through a shared validator at all -- see this module's own
+    earlier comment, "Birth location has never been restricted... it can be anywhere on Earth" --
+    api_auth_register() checked only that a country was present. This adds the one new requirement
+    the shortened wizard needs: a birth in one of the 10 Sub-continent countries must carry at
+    least a State (and a consistent Zone, if one is given) -- never District/Tehsil/Village, which
+    the new wizard no longer asks for at all. A birth OUTSIDE that set still only ever needs
+    Continent + Country, exactly like a Global Account's present location -- there is no "State"
+    concept to impose on it.
+
+    Deliberately does NOT reuse validate_zone_district_tehsil_ancestry() wholesale: that function
+    also enforces District/Tehsil/Village ancestry, which birth_location is no longer asked to
+    carry at all -- reusing it here would fail a correctly-shortened submission for simply lacking
+    fields it no longer collects. This is the State/Zone-only subset of the same underlying
+    subcontinent_states.json data. District/Tehsil/Village are rejected outright if a client sends
+    them, not silently accepted-but-unvalidated -- this function has no ancestry check for them any
+    more, so trusting an unverified value here would be worse than refusing it.
+
+    Returns (True, None) or (False, "<reason>")."""
+    if not isinstance(birth_location, dict) or not location_subfields_well_formed(birth_location):
+        return False, "Birth location fields must each be an object with an id"
+    country_id = (birth_location.get("country") or {}).get("id")
+    if not country_id:
+        return False, "Birth location needs a country"
+
+    if country_id not in SUBCONTINENT_COUNTRY_IDS:
+        continent_id = (birth_location.get("continent") or {}).get("id")
+        if not continent_id:
+            return False, "Birth location needs a continent"
+        if any((birth_location.get(lvl) or {}).get("id") for lvl in
+               ("state", "zone", "district", "tehsil", "village")):
+            return False, "A birth outside the Sub-continent can only have a Continent and Country"
+        if not is_valid_global_country(continent_id, country_id):
+            return False, "Unknown continent/country"
+        return True, None
+
+    state_id = (birth_location.get("state") or {}).get("id")
+    if state_id not in public_state_ids(country_id):
+        return False, "Birth location needs a valid state/province for its country"
+    if any((birth_location.get(lvl) or {}).get("id") for lvl in ("district", "tehsil", "village")):
+        return False, "Birth location no longer collects District, Tehsil, or Village"
+
+    zone_id = (birth_location.get("zone") or {}).get("id")
+    if zone_id:
+        country_entry = next((c for c in _load_json(SUBCONTINENT_STATES_FILE)["countries"] if c["id"] == country_id), None)
+        zone_entry = next((z for z in (country_entry or {}).get("zones", []) if z["id"] == zone_id), None)
+        if not zone_entry:
+            return False, "That zone does not belong to the selected Country"
+        if not any(st["id"] == state_id for st in zone_entry.get("states", [])):
+            return False, "That State does not belong to the selected Zone"
+    return True, None
+
+
 def validate_zone_district_tehsil_ancestry(country_id: str, state_id: str, present_location: dict) -> tuple[bool, str]:
     """Validates Zone-belongs-to-Country+State, District-belongs-to-State, and (for a REAL,
     non-provisional) Tehsil-belongs-to-District, against the same static subcontinent_states.json

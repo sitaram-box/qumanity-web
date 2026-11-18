@@ -5223,13 +5223,12 @@ def api_auth_register():
 
     birth_location = data["birth_location"]
     present_location = data["present_location"]
-    if not isinstance(birth_location, dict) or not _location_subfields_well_formed(birth_location):
-        return jsonify({"error": "Birth location fields must each be an object with an id"}), 400
+    birth_ok, birth_reason = account_core.validate_birth_location(birth_location)
+    if not birth_ok:
+        return jsonify({"error": birth_reason}), 400
     if not isinstance(present_location, dict) or not _location_subfields_well_formed(present_location):
         return jsonify({"error": "Present location fields must each be an object with an id"}), 400
 
-    if not (birth_location.get("country") or {}).get("id"):
-        return jsonify({"error": "Birth location needs a country"}), 400
     present_country_id = (present_location.get("country") or {}).get("id")
     present_continent_id = (present_location.get("continent") or {}).get("id")
     is_global_account = present_country_id not in SUBCONTINENT_COUNTRY_IDS
@@ -5377,8 +5376,8 @@ def api_auth_register():
     social_core.record_new_account_id(conn, user_id, account_id, present_location)
 
     elemental_core.update_location_stats(conn, birth_location, tropical["element"])
-    conn.close()
 
+    folders = {"born_here": None, "living_here": None}
     try:
         # A Global Account's present_location has no on-disk folder of its own to resolve to
         # below the Continent (the 0_Earth tree only has Country/Zone/State/.../Village folders
@@ -5389,7 +5388,7 @@ def api_auth_register():
         # folder-tree change the project's standing rule forbids. BORN_HERE (birth_location) is
         # unaffected -- it was never restricted to the 10 countries and already soft-fails the
         # same way for any birth country with no built folder.
-        folder_connector.register_user_folder(
+        folders = folder_connector.register_user_folder(
             birth_location, None if is_global_account else present_location, tropical["element"], {
                 "user_id": user_id, "name": data["name"], "gender": data["gender"],
                 "dob": data["dob"], "tob": data["tob"],
@@ -5400,6 +5399,25 @@ def api_auth_register():
             })
     except OSError as e:
         print(f"[folder_connector] could not write user folder for {private_id}: {e}")
+
+    # Q-Card (2026-11-19): issued immediately at registration -- pending_payment/unpaid unless
+    # free_eligibility() already recognizes this brand-new user (it almost never will for an
+    # ordinary registrant; this just means an Admin/family/council-eligible one gets the same
+    # immediate-free treatment any other issue_card() caller would). The rendered PDF is saved
+    # into the BORN_HERE folder just resolved above -- the only place it CAN be saved: raw_token
+    # is never stored anywhere (see issue_card()'s own docstring), so this request is the one and
+    # only moment it still exists in memory. Soft-fails like every other non-critical registration
+    # side effect here -- a Q-Card problem must never fail a registration that already succeeded.
+    try:
+        q_card_core.ensure_tables(conn)
+        card = q_card_core.issue_card(conn, user_id, free_reason=q_card_core.free_eligibility(conn, user_id))
+        if folders.get("born_here"):
+            pdf_bytes = q_card_core.render_card_pdf(card["card_display_id"], card["raw_token"], data["name"])
+            q_card_core.save_card_pdf(folders["born_here"], pdf_bytes)
+    except Exception as e:
+        print(f"[q_card] could not issue/render Q-Card for user_id={user_id}: {e}")
+
+    conn.close()
 
     # ---- free registration Qoin mint (wallet_core.apply_free_registration) ----
     # Registration is always free; there is no fee or payment step. A single ₹1-reference Qoin is

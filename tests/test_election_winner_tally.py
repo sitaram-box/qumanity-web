@@ -71,6 +71,9 @@ ROHINI = {
     "district": {"id": "CS.DL.3", "name": "North West Delhi"}, "tehsil": {"id": "CS.DL.3.4", "name": "Bawana"},
     "village": {"id": "CS.DL.3.4.1A", "name": "Rohini Sector 24"},
 }
+# Birth location now stops at State (2026-11-19) -- present_location (ROHINI, unchanged) still
+# carries the full chain down to Village.
+ROHINI_BIRTH = {k: ROHINI[k] for k in ("continent", "country", "zone", "state")}
 V = E.PILOT_VILLAGE_ID
 _n = [0]
 
@@ -82,7 +85,7 @@ def register_resident(gender, dob="1990-10-01"):
     payload = {
         "name": f"Resident {_n[0]}", "gender": gender, "dob": dob, "tob": "06:00",
         "language": "English", "email": "", "phone": "", "pin": "12345",
-        "birth_location": ROHINI, "present_location": ROHINI, "assisted": False,
+        "birth_location": ROHINI_BIRTH, "present_location": ROHINI, "assisted": False,
     }
     res = client.post("/api/auth/register", json=payload)
     if res.status_code != 201:

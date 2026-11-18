@@ -58,6 +58,9 @@ VILLAGE_A = {
     "district": {"id": "CS.DL.3", "name": "North West Delhi"}, "tehsil": {"id": "CS.DL.3.4", "name": "Bawana"},
     "village": {"id": "CS.DL.3.4.1A", "name": "Rohini Sector 24"},
 }
+# Birth location now stops at State (2026-11-19) -- present_location (VILLAGE_A, unchanged) still
+# carries the full chain down to Village.
+VILLAGE_A_BIRTH = {k: VILLAGE_A[k] for k in ("continent", "country", "zone", "state")}
 
 _n = [0]
 
@@ -67,7 +70,7 @@ def register(name_prefix, gender="male"):
     payload = {
         "name": f"{name_prefix} {_n[0]}", "gender": gender, "dob": "1990-06-15", "tob": "06:00",
         "language": "English", "email": "", "phone": "", "pin": "12345",
-        "birth_location": VILLAGE_A, "present_location": VILLAGE_A, "assisted": False,
+        "birth_location": VILLAGE_A_BIRTH, "present_location": VILLAGE_A, "assisted": False,
     }
     res = client.post("/api/auth/register", json=payload)
     if res.status_code != 201:
