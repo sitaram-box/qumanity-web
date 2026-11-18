@@ -2423,6 +2423,19 @@ def api_family_node_update_details(node_id):
     return jsonify({"status": "ok"})
 
 
+@app.route("/api/family/node/<int:node_id>/birth-order", methods=["POST"])
+@login_required
+@_board_error
+def api_family_node_birth_order(node_id):
+    data = request.get_json(silent=True) or {}
+    conn = _family(get_db())
+    try:
+        family_core.set_birth_order(conn, session["user_id"], node_id, data.get("birth_order"))
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
 @app.route("/api/family/node/<int:node_id>/link", methods=["POST"])
 @login_required
 @_board_error
@@ -2538,6 +2551,8 @@ def api_family_person_add_sibling(node_id):
         result = family_core.add_sibling_to_node(
             conn, session["user_id"], node_id, data.get("name"), data.get("gender"),
             is_deceased=bool(data.get("is_deceased", False)),
+            action=data.get("action", "create"), matched_node_id=data.get("matched_node_id"),
+            target_user_id=data.get("user_id"),
         )
     finally:
         conn.close()
@@ -2554,6 +2569,8 @@ def api_family_person_add_child(node_id):
         result = family_core.add_child_to_node(
             conn, session["user_id"], node_id, data.get("name"), data.get("gender"),
             is_deceased=bool(data.get("is_deceased", False)), group_id=data.get("group_id"),
+            action=data.get("action", "create"), matched_node_id=data.get("matched_node_id"),
+            target_user_id=data.get("user_id"),
         )
     finally:
         conn.close()
@@ -2570,6 +2587,8 @@ def api_family_person_add_spouse(node_id):
         result = family_core.add_spouse_to_node(
             conn, session["user_id"], node_id, data.get("name"), data.get("gender"),
             is_deceased=bool(data.get("is_deceased", False)),
+            action=data.get("action", "create"), matched_node_id=data.get("matched_node_id"),
+            target_user_id=data.get("user_id"),
         )
     finally:
         conn.close()
