@@ -90,6 +90,14 @@
     Gemini: "Air", Libra: "Air", Aquarius: "Air",
     Cancer: "Water", Scorpio: "Water", Pisces: "Water",
   };
+  // Same grouping, element-first -- matches the Phone App's statsCharts.logic.ts ELEMENT_SIGNS,
+  // which is what the four-pies design (2026-11-20) is built from.
+  var ELEMENT_SIGNS = {
+    Fire: ["Aries", "Leo", "Sagittarius"],
+    Earth: ["Taurus", "Virgo", "Capricorn"],
+    Air: ["Gemini", "Libra", "Aquarius"],
+    Water: ["Cancer", "Scorpio", "Pisces"],
+  };
 
   function hexToHsl(hex) {
     var r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255;
@@ -159,6 +167,48 @@
     return svg;
   }
 
+  // Filled pie wedges as inline SVG <path> elements, starting at 12 o'clock, clockwise -- the
+  // Phone App's own per-element pie design (components/statsCharts.logic.ts's pieWedges()),
+  // ported here for the four-element Zodiac layout (2026-11-20). Unlike buildDonutSVG() above,
+  // slices here are shares of THIS pie's own total (one element's 3 signs), not of everyone --
+  // the caller passes raw sign counts and this normalizes them itself, same as the mobile logic.
+  // A single slice covering the whole pie is drawn as a full circle, since an arc path can't.
+  function buildPieSVG(slices, size) {
+    var r = size / 2, cx = r, cy = r;
+    var total = slices.reduce(function (s, x) { return s + Math.max(0, x.frac); }, 0);
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 " + size + " " + size);
+    svg.setAttribute("class", "qm-pie-svg");
+    var bg = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    bg.setAttribute("cx", cx); bg.setAttribute("cy", cy); bg.setAttribute("r", r);
+    bg.setAttribute("class", "qm-pie-bg");
+    svg.appendChild(bg);
+    if (total <= 0) return svg;
+    function point(a) { return (cx + r * Math.sin(a)).toFixed(3) + " " + (cy - r * Math.cos(a)).toFixed(3); }
+    var angle = 0;
+    slices.forEach(function (s) {
+      if (s.frac <= 0) return;
+      var share = s.frac / total, node, title;
+      if (share >= 0.9999) {
+        node = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        node.setAttribute("cx", cx); node.setAttribute("cy", cy); node.setAttribute("r", r);
+      } else {
+        var start = angle;
+        angle += share * 2 * Math.PI;
+        var large = share > 0.5 ? 1 : 0;
+        node = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        node.setAttribute("d", "M" + cx + " " + cy + " L" + point(start) + " A" + r + " " + r + " 0 " + large + " 1 " + point(angle) + " Z");
+        node.setAttribute("class", "qm-pie-wedge");
+      }
+      node.setAttribute("fill", s.color);
+      title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+      title.textContent = s.title;
+      node.appendChild(title);
+      svg.appendChild(node);
+    });
+    return svg;
+  }
+
   function legendRow(color, label, value, total) {
     var row = el("div", "qm-legend-row");
     var swatch = el("span", "qm-legend-swatch"); swatch.style.background = color;
@@ -217,15 +267,33 @@
     ELEMENT_ORDER.forEach(function (name) { legend.appendChild(legendRow(ELEMENT_COLORS[name], name, stats.elements[name], total)); });
   }
 
-  function renderZodiacDonut(prefix, stats) {
+  // Four small pies, one per element, each showing its own 3 signs -- matches the Phone App's
+  // design (app/place/[level]/[id].tsx's SignPies, 2026-11-18), replacing the single 12-slice
+  // donut this used to be. Each pie's wedges are sized by the 3 signs relative to EACH OTHER
+  // (buildPieSVG normalizes within the element); every displayed percentage (the cell title and
+  // each legend row) is still of everyone here, same as before -- only the wedge geometry's own
+  // denominator changed, matching the Phone App's identical choice.
+  function renderZodiacPies(prefix, stats) {
     var chart = document.getElementById(prefix + "-sign-chart"), legend = document.getElementById(prefix + "-sign-legend");
     if (!chart || !legend) return;
     chart.innerHTML = ""; legend.innerHTML = "";
     var total = stats.total_humans;
-    chart.appendChild(buildDonutSVG(ZODIAC_ORDER.map(function (name) {
-      return { frac: sliceFraction(stats.signs[name], total), color: SIGN_COLORS[name], title: name };
-    }), 120, 16));
-    ZODIAC_ORDER.forEach(function (name) { legend.appendChild(legendRow(SIGN_COLORS[name], name, stats.signs[name], total)); });
+    var grid = el("div", "qm-sign-grid");
+    ELEMENT_ORDER.forEach(function (name) {
+      var signs = ELEMENT_SIGNS[name];
+      var cell = el("div", "qm-sign-cell");
+      var title = el("div", "qm-sign-cell-title", name + " · " + pctLabel(stats.elements[name], total));
+      title.style.color = ELEMENT_COLORS[name];
+      cell.appendChild(title);
+      cell.appendChild(buildPieSVG(signs.map(function (s) {
+        return { frac: isSuppressed(stats.signs[s]) ? SUPPRESSED_SIZE_ESTIMATE : (stats.signs[s] || 0), color: SIGN_COLORS[s], title: s };
+      }), 104));
+      var cellLegend = el("div", "qm-sign-cell-legend");
+      signs.forEach(function (s) { cellLegend.appendChild(legendRow(SIGN_COLORS[s], s, stats.signs[s], total)); });
+      cell.appendChild(cellLegend);
+      grid.appendChild(cell);
+    });
+    chart.appendChild(grid);
   }
 
   function renderRegisteredStats(prefix, stats) {
@@ -252,7 +320,7 @@
     renderGenderBars(prefix, stats);
     renderAgeColumns(prefix, stats);
     renderElementDonut(prefix, stats);
-    renderZodiacDonut(prefix, stats);
+    renderZodiacPies(prefix, stats);
   }
 
   function loadStatsFor(prefix, url) {

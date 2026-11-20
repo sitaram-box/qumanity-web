@@ -537,6 +537,51 @@ span.qm-help-trigger { display: inline-flex; flex: 0 0 auto; align-items: center
   color: var(--qm-text);
 }
 
+/* ---- Zodiac Sign Distribution, four per-element pies (2026-11-20), matching the Phone App's
+   design (app/place/[level]/[id].tsx's SignPies) in place of the old single 12-slice donut. The
+   #...-sign-chart container is one of .qm-donut-chart's fixed 120x120px boxes (dashboard.html is
+   unchanged) -- overridden here by id-suffix so the new 2x2 grid can use the section's full
+   width instead. The old #...-sign-legend container next to it is simply left empty by
+   dashboard.js now (each pie carries its own small legend beneath it instead), so it needs no
+   styling of its own here. ---- */
+[id$="-sign-chart"] {
+  width: 100%;
+  height: auto;
+  flex: 1 1 100%;
+}
+.qm-sign-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 18px;
+  width: 100%;
+}
+.qm-sign-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+.qm-sign-cell-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.qm-pie-svg {
+  width: 104px;
+  height: 104px;
+  display: block;
+}
+.qm-pie-bg {
+  fill: rgba(10, 25, 41, 0.08);
+}
+.qm-sign-cell-legend {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 10px;
+}
+
 /* ---- top bar: language dot, logout, time-box ---- */
 .qm-header-actions { align-items: center; }
 .dq-pop { position: relative; }
