@@ -30,6 +30,7 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import account_core
+import chat_core
 import cycle_middleware
 import election_core
 import election_test_scheduler
@@ -252,6 +253,26 @@ def _retired_session_guard():
     if row and row["is_removed"]:
         session.pop("user_id", None)
     return None
+
+
+@app.after_request
+def _touch_presence(response):
+    """Unified Chat Architecture presence (2026-11-24): touches users.last_seen_at on every
+    authenticated request -- the one write the whole presence feature costs; no dedicated
+    heartbeat loop, see chat_core.py's own module docstring for why (status is computed live from
+    this timestamp, never a separately stored, driftable value). Runs for both session and Bearer
+    auth, since _app_token_auth()'s before_request already set session["user_id"] for a Bearer
+    request too by the time this runs. Never lets a presence-write failure affect the actual
+    response -- presence is advisory, a real request must never fail because of it."""
+    uid = session.get("user_id")
+    if uid is not None:
+        try:
+            conn = get_db()
+            chat_core.touch_presence(conn, uid)
+            conn.close()
+        except Exception as e:
+            print(f"[chat_core] presence touch failed for user_id={uid}: {e}")
+    return response
 
 
 @app.route("/")
@@ -1259,24 +1280,36 @@ def _village_id(loc):
 @app.route("/api/subgroups")
 @login_required
 def api_subgroups():
+    # 2026-11-24 (Unified Chat Architecture): level/id query params are the generalized form --
+    # defaulting to the caller's own present village keeps every existing caller (the mobile app,
+    # the website's own Sub-Groups drawer) working unchanged, since neither sends them today.
     conn, user, loc = _board_user()
-    vid = _village_id(loc)
+    level = request.args.get("level", "village")
+    location_id = request.args.get("id") or (_village_id(loc) if level == "village" else None)
     admin = _is_admin()
-    groups = board_core.list_subgroups(conn, user["id"], vid, admin) if vid else []
+    groups = board_core.list_subgroups(conn, user["id"], location_id, level, admin) if location_id else []
     conn.close()
-    return jsonify({"village": (loc.get("village") or {}).get("name"), "is_admin": admin, "groups": groups})
+    return jsonify({
+        "location_id": location_id, "location_level": level,
+        "village": (loc.get("village") or {}).get("name"), "is_admin": admin, "groups": groups,
+    })
 
 
 @app.route("/api/subgroups", methods=["POST"])
 @login_required
 @_board_error
 def api_subgroup_create():
-    if not _is_admin():
-        return jsonify({"error": "Only council members can create sub-groups"}), 403
     data = request.get_json(silent=True) or {}
     conn, user, loc = _board_user()
+    level = data.get("location_level", "village")
+    location_id = data.get("location_id") or (_village_id(loc) if level == "village" else None)
     try:
-        sid = board_core.create_subgroup(conn, user["id"], _village_id(loc), data.get("name"), data.get("description"), data.get("admin_label"))
+        if not location_id:
+            return jsonify({"error": "A location is required"}), 400
+        sid = chat_core.create_channel(
+            conn, user["id"], level, location_id, data.get("name"), data.get("description"), _is_admin(),
+            admin_label=data.get("admin_label"), people_vote_id=data.get("people_vote_id"),
+        )
     finally:
         conn.close()
     return jsonify({"id": sid}), 201
@@ -1298,11 +1331,15 @@ def api_subgroup_join(sg_id):
 @login_required
 @_board_error
 def api_subgroup_decide(sg_id):
-    if not _is_admin():
-        return jsonify({"error": "Only council members can approve"}), 403
     data = request.get_json(silent=True) or {}
-    conn, _user, _loc = _board_user()
+    conn, user, _loc = _board_user()
     try:
+        # 2026-11-24: generalized from a bare _is_admin() check -- despite its old error message,
+        # that was never actually "council members," just the Founder. Now the Village's own
+        # Nayak/Nayika qualifies too (chat_core.can_administer_channel()), same authority
+        # chat_core.create_channel() already grants at Village level.
+        if not chat_core.can_administer_channel(conn, user["id"], sg_id, _is_admin()):
+            return jsonify({"error": "Only this channel's own admin can approve"}), 403
         board_core.decide_join(conn, sg_id, int(data.get("user_id", 0)), bool(data.get("approve")))
     finally:
         conn.close()
@@ -1321,6 +1358,79 @@ def api_subgroup_chat(sg_id):
         return jsonify(board_core.chat_messages(conn, user["id"], sg_id, _is_admin()))
     finally:
         conn.close()
+
+
+# ---- Unified Chat Architecture, Phase 2 Step 1 (2026-11-24) ----
+
+@app.route("/api/chat/conversations")
+@login_required
+def api_chat_conversations():
+    conn = get_db()
+    try:
+        conversations = chat_core.list_my_conversations(conn, session["user_id"])
+    finally:
+        conn.close()
+    return jsonify({"conversations": conversations})
+
+
+@app.route("/api/presence/ping", methods=["POST"])
+@login_required
+def api_presence_ping():
+    """Explicit presence ping for a client that wants to assert "I'm actively looking at chat
+    right now" between ordinary API calls -- not required for the baseline Green/Yellow/Grey
+    computation, which the after_request hook above already drives off every authenticated
+    request regardless of whether this route is ever called."""
+    conn = get_db()
+    try:
+        chat_core.touch_presence(conn, session["user_id"])
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/presence/override", methods=["POST"])
+@login_required
+def api_presence_override():
+    """Sets or clears the one presence state that can't be computed live -- the user declaring
+    themselves Busy (Red)."""
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        chat_core.set_presence_override(conn, session["user_id"], bool(data.get("busy")))
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/chat/temporary-access", methods=["GET", "POST"])
+@login_required
+@_board_error
+def api_chat_temporary_access():
+    conn = get_db()
+    try:
+        if request.method == "POST":
+            data = request.get_json(silent=True) or {}
+            result = chat_core.request_temporary_access(conn, session["user_id"], data.get("location_level"), data.get("location_id"))
+            return jsonify(result), 201
+        return jsonify({"requests": chat_core.my_temporary_access(conn, session["user_id"])})
+    finally:
+        conn.close()
+
+
+@app.route("/api/chat/temporary-access/<int:request_id>/decide", methods=["POST"])
+@login_required
+@_board_error
+def api_chat_temporary_access_decide(request_id):
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        chat_core.decide_temporary_access(
+            conn, session["user_id"], request_id, bool(data.get("approve")), _is_admin(),
+            location_name=data.get("location_name"),
+        )
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
 
 
 @app.route("/api/referrer/apply", methods=["POST"])

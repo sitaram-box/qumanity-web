@@ -522,12 +522,18 @@ def removed_posts(conn, user_id):
 
 # ---- Village sub-groups (societies / RWAs), group chat, volunteers ----
 SUB_SCHEMA = """
+-- 2026-11-24 (Unified Chat Architecture, Step 1): location_id/location_level below is the shape
+-- for a FRESH database only -- an existing one still has the old village_id-only column until
+-- ensure_sub_tables() below runs its ALTER/RENAME pass, since CREATE TABLE IF NOT EXISTS is a
+-- no-op against a table that already exists.
 CREATE TABLE IF NOT EXISTS subgroups (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, village_id TEXT NOT NULL, name TEXT NOT NULL, description TEXT,
-    admin_label TEXT, created_by INTEGER NOT NULL, created_at TEXT NOT NULL
+    id INTEGER PRIMARY KEY AUTOINCREMENT, location_id TEXT NOT NULL, location_level TEXT NOT NULL DEFAULT 'village',
+    name TEXT NOT NULL, description TEXT,
+    admin_label TEXT, created_by INTEGER NOT NULL, created_at TEXT NOT NULL, created_via_vote_id INTEGER
 );
 CREATE TABLE IF NOT EXISTS subgroup_members (
     subgroup_id INTEGER NOT NULL, user_id INTEGER NOT NULL, status TEXT NOT NULL, requested_at TEXT NOT NULL,
+    membership_kind TEXT NOT NULL DEFAULT 'active',
     PRIMARY KEY (subgroup_id, user_id)
 );
 CREATE TABLE IF NOT EXISTS board_messages (
@@ -550,6 +556,29 @@ CREATE TABLE IF NOT EXISTS referrers (
 
 def ensure_sub_tables(conn):
     conn.executescript(SUB_SCHEMA)
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(subgroups)")}
+    if "village_id" in cols and "location_id" not in cols:
+        conn.execute("ALTER TABLE subgroups RENAME COLUMN village_id TO location_id")
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(subgroups)")}
+    if "location_level" not in cols:
+        # Backfilled 'village' -- every row created before this generalization WAS village-scoped
+        # by construction (village was the only level subgroups ever supported), so this is the
+        # only correct value for pre-existing rows, not a guess.
+        conn.execute("ALTER TABLE subgroups ADD COLUMN location_level TEXT NOT NULL DEFAULT 'village'")
+    if "created_via_vote_id" not in cols:
+        # NULL for every Village-level channel (Nayak/Nayika-or-Founder authority is enough, see
+        # chat_core.can_create_channel()); set for a Tehsil-or-above channel to the PASSED People's
+        # Vote (election_core.qpunch_people_votes.id) that authorized it -- doubles as the audit
+        # trail that stops the same passed vote being spent on a second channel.
+        conn.execute("ALTER TABLE subgroups ADD COLUMN created_via_vote_id INTEGER")
+    member_cols = {r["name"] for r in conn.execute("PRAGMA table_info(subgroup_members)")}
+    if "membership_kind" not in member_cols:
+        # Distinct from this table's own EXISTING `status` column (pending|approved -- the join-
+        # request workflow): membership_kind says whether this is the member's normal home
+        # membership or a temporary cross-location grant (chat_core.py's dual Account ID feature).
+        # A deliberately different name -- overloading `status` for a second, unrelated axis would
+        # make every existing `status = 'approved'` query ambiguous about which thing it means.
+        conn.execute("ALTER TABLE subgroup_members ADD COLUMN membership_kind TEXT NOT NULL DEFAULT 'active'")
     conn.commit()
 
 
@@ -557,12 +586,25 @@ def _now_iso():
     return _iso(dt.datetime.now(dt.timezone.utc))
 
 
-def list_subgroups(conn, user_id, village_id, is_admin):
+def _residency_matches(present_location, location_level, location_id) -> bool:
+    """Generalized version of the old village-only residency check (2026-11-24, Unified Chat
+    Architecture): true if the user's PRESENT location, at location_level, is exactly location_id.
+    A Village channel's own join-request is still the only place an ordinary member hits this --
+    a Tehsil-or-above channel is only ever created from an ALREADY-PASSED People's Vote, which
+    re-checks residency itself at that population (election_core.cast_people_vote()) -- but this
+    is kept generic, not village-only, so a future direct join-request at those levels (if ever
+    added) reuses it unchanged rather than needing a second copy."""
+    return (present_location.get(location_level) or {}).get("id") == location_id
+
+
+def list_subgroups(conn, user_id, location_id, location_level, is_admin):
     out = []
-    for g in conn.execute("SELECT * FROM subgroups WHERE village_id=? ORDER BY name", (village_id,)):
+    for g in conn.execute(
+        "SELECT * FROM subgroups WHERE location_id=? AND location_level=? ORDER BY name", (location_id, location_level)
+    ):
         mine = conn.execute("SELECT status FROM subgroup_members WHERE subgroup_id=? AND user_id=?", (g["id"], user_id)).fetchone()
         item = {"id": g["id"], "name": g["name"], "description": g["description"] or "", "my_status": mine["status"] if mine else None,
-                "admin_label": g["admin_label"] or "Village Council",
+                "admin_label": g["admin_label"] or "Village Council", "location_level": g["location_level"],
                 "members": conn.execute("SELECT COUNT(*) FROM subgroup_members WHERE subgroup_id=? AND status='approved'", (g["id"],)).fetchone()[0]}
         if is_admin:
             item["pending"] = [{"user_id": r["user_id"], "name": r["name"]} for r in conn.execute(
@@ -571,13 +613,23 @@ def list_subgroups(conn, user_id, village_id, is_admin):
     return out
 
 
-def create_subgroup(conn, admin_id, village_id, name, description, admin_label=None):
+def create_subgroup(conn, admin_id, location_id, location_level, name, description, admin_label=None, created_via_vote_id=None):
+    """The low-level insert -- permission (Village Nayak/Nayika-or-Founder, or a passed Tehsil+
+    People's Vote) is chat_core.create_channel()'s job, not this function's; this is the same
+    split every other *_core.py module in this codebase uses between a permission-checking
+    wrapper and its own unconditional insert primitive."""
     name = (name or "").strip()
     if not 2 <= len(name) <= 60:
         raise ValueError("Give the sub-group a name (2–60 characters)")
+    if location_level not in LEVELS:
+        raise ValueError("Unknown location level")
     label = (admin_label or "").strip()[:80] or "Village Council"  # e.g. "RWA Committee" (urban) or "Panchayat" (rural) -- the creator names their own local body
-    cur = conn.execute("INSERT INTO subgroups (village_id, name, description, admin_label, created_by, created_at, cycle_id) VALUES (?,?,?,?,?,?,?)",
-                       (village_id, name, (description or "").strip()[:200], label, admin_id, _now_iso(), cycle_middleware.get_active_cycle_id(conn)))
+    cur = conn.execute(
+        "INSERT INTO subgroups (location_id, location_level, name, description, admin_label, created_by, created_at, created_via_vote_id, cycle_id) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        (location_id, location_level, name, (description or "").strip()[:200], label, admin_id, _now_iso(),
+         created_via_vote_id, cycle_middleware.get_active_cycle_id(conn)),
+    )
     conn.commit()
     return cur.lastrowid
 
@@ -591,13 +643,15 @@ def _subgroup(conn, sg_id):
 
 def request_join(conn, user_id, present_location, sg_id):
     g = _subgroup(conn, sg_id)
-    if (present_location.get("village") or {}).get("id") != g["village_id"]:
-        raise PermissionError("Only people living in this village can ask to join")
+    if not _residency_matches(present_location, g["location_level"], g["location_id"]):
+        raise PermissionError(f"Only people living in this {LEVEL_LABEL[g['location_level']].lower()} can ask to join")
     if conn.execute("SELECT 1 FROM subgroup_members WHERE subgroup_id=? AND user_id=?", (sg_id, user_id)).fetchone():
         raise ValueError("You have already asked to join")
-    if conn.execute("""SELECT 1 FROM subgroup_members m JOIN subgroups g ON g.id = m.subgroup_id
-                       WHERE m.user_id = ? AND g.village_id = ?""", (user_id, g["village_id"])).fetchone():
-        raise ValueError("You can be a member of only one village group")
+    # 2026-11-24 (Unified Chat Architecture): the old "only one village group at a time" cap is
+    # REMOVED -- a member may now belong to as many Governance Channels as they're approved into,
+    # the Teams-style multi-channel membership the Phase 2 decision explicitly asked for. Local
+    # Areas' own, separately-decided one-at-a-time rule (local_area_core.py) is untouched -- that
+    # is a different, deliberately-designed feature, not "the subgroups cap" this removes.
     conn.execute("INSERT INTO subgroup_members (subgroup_id, user_id, status, requested_at, cycle_id) VALUES (?,?,?,?,?)",
                 (sg_id, user_id, "pending", _now_iso(), cycle_middleware.get_active_cycle_id(conn)))
     conn.commit()
