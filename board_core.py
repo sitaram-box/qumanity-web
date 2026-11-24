@@ -693,7 +693,17 @@ def _can_chat(conn, user_id, sg_id, is_admin):
     refused permission to post in their own creation. Fixed by also granting chat to whoever
     currently ADMINISTERS the channel -- the exact same authority chat_core.can_administer_channel()
     already grants for deciding join requests; import kept local (not local_area_core's module
-    docstring at top) since this is the only function here that needs it."""
+    docstring at top) since this is the only function here that needs it.
+
+    Chat-as-Dashboard Phase 2 Step 1 (2026-11-24): also grants chat to a Temporary Member -- an
+    active temporary_location_access grant for this exact channel's own (location_level,
+    location_id), checked with raw SQL against chat_core.py's table rather than importing that
+    module (chat_core imports board_core; board_core must never import chat_core back, or the two
+    import each other -- same constraint this file's create_channel()-adjacent code already
+    works around). A temporary member is an observer/communicator, not a citizen, but every
+    vote/post/comment/rating gate elsewhere is untouched by this and already refuses them on its
+    own -- those all check the user's REAL present_location, which a temporary grant never
+    changes (see chat_core.py's own module docstring)."""
     if is_admin:
         return True
     g = _subgroup(conn, sg_id)
@@ -702,7 +712,13 @@ def _can_chat(conn, user_id, sg_id, is_admin):
         if local_area_core._is_village_admin(conn, user_id, g["location_id"], is_admin):
             return True
     r = conn.execute("SELECT status FROM subgroup_members WHERE subgroup_id=? AND user_id=?", (sg_id, user_id)).fetchone()
-    return bool(r and r["status"] == "approved")
+    if r and r["status"] == "approved":
+        return True
+    temp = conn.execute(
+        "SELECT 1 FROM temporary_location_access WHERE user_id = ? AND location_level = ? AND location_id = ? AND status = 'active'",
+        (user_id, g["location_level"], g["location_id"]),
+    ).fetchone()
+    return temp is not None
 
 
 def chat_messages(conn, user_id, sg_id, is_admin):

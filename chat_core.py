@@ -43,6 +43,25 @@ status column, matching this codebase's own repeated "compute live, never trust 
 convention (account_core.account_access_type(), family_core._node_dob(), dormancy checks all work
 this way). users.presence_override is the one piece that CAN'T be computed live -- Red/Busy is a
 user-DECLARED state, not activity-derived.
+
+3-Strike Request Escalation (Chat-as-Dashboard Phase 2 Step 1, 2026-11-24): extends
+temporary_location_access rather than replacing it -- a request's `location_level`/`location_id`
+(what the user actually wants access to) never change once set; `decision_level`/
+`decision_location_id` (whose council is being asked RIGHT NOW) start equal to those and walk
+UPWARD one level at a time via geography_core.get_parent() on each rejection, while
+`strike_count` counts rejections so far (0..3). After the 3rd rejection the request's status
+becomes 'denied_final' -- a new terminal state, deliberately distinct from the pre-existing
+'revoked', which keeps its original, narrower meaning: an ACTIVE grant being pulled after
+approval, never a rejection outcome. Every exhausted escalation ends in 'denied_final', no matter
+how many strikes it took. request_temporary_access() refuses a fresh request once a
+'denied_final' row already exists for that exact (user, location) -- "after 3 rejections, they
+cannot request that location again" is enforced there, not by the UI alone.
+
+temporary_access_strikes is this feature's own audit trail: one immutable row per DECISION
+(approve or reject), at whatever level actually decided it, who decided it and when -- the parent
+row only ever holds the CURRENT state (latest decided_by_user_id/decided_at, current
+strike_count/decision_level/decision_location_id), same "live row + append-only history table"
+split this codebase already uses elsewhere (e.g. karma_entries vs. a user's running total).
 """
 from __future__ import annotations
 
@@ -51,6 +70,8 @@ import json
 
 import announcements_core
 import board_core
+import election_core
+import geography_core
 import id_generator
 import local_area_core
 
@@ -65,7 +86,7 @@ CREATE TABLE IF NOT EXISTS temporary_location_access (
     location_level TEXT NOT NULL,
     location_id TEXT NOT NULL,
     foreign_account_id TEXT NOT NULL UNIQUE,
-    status TEXT NOT NULL DEFAULT 'pending',  -- pending | active | revoked | expired
+    status TEXT NOT NULL DEFAULT 'pending',  -- pending | active | revoked | expired | denied_final
     requested_at TEXT NOT NULL,
     decided_by_user_id INTEGER,
     decided_at TEXT,
@@ -76,6 +97,21 @@ CREATE INDEX IF NOT EXISTS idx_temp_access_user ON temporary_location_access(use
 -- first to resolve rather than queueing a duplicate.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_temp_access_one_live ON temporary_location_access(user_id, location_level, location_id)
     WHERE status IN ('pending', 'active');
+-- 3-Strike Request Escalation (2026-11-24): one immutable row per decision, at whatever level
+-- actually decided it -- see this module's own docstring for why this is separate from the live
+-- request row above.
+CREATE TABLE IF NOT EXISTS temporary_access_strikes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id INTEGER NOT NULL,
+    strike_number INTEGER NOT NULL,   -- 1, 2, or 3 -- which attempt this decision closed
+    decision_level TEXT NOT NULL,     -- the level whose council/Founder actually decided THIS strike
+    decision_location_id TEXT NOT NULL,
+    outcome TEXT NOT NULL,            -- approved | rejected
+    decided_by_user_id INTEGER NOT NULL,
+    decided_at TEXT NOT NULL,
+    FOREIGN KEY (request_id) REFERENCES temporary_location_access(id)
+);
+CREATE INDEX IF NOT EXISTS idx_temp_access_strikes_request ON temporary_access_strikes(request_id);
 """
 
 
@@ -91,6 +127,18 @@ def ensure_tables(conn) -> None:
         # a "Busy" a user forgot to clear would stay Red forever, defeating the whole point of a
         # computed-live status.
         conn.execute("ALTER TABLE users ADD COLUMN presence_override_at TEXT")
+    temp_access_cols = {r["name"] for r in conn.execute("PRAGMA table_info(temporary_location_access)")}
+    if "strike_count" not in temp_access_cols:
+        conn.execute("ALTER TABLE temporary_location_access ADD COLUMN strike_count INTEGER NOT NULL DEFAULT 0")
+    if "decision_level" not in temp_access_cols:
+        # Backfilled from location_level/location_id for any pre-existing row (Step 1 of this
+        # session's own prior Chat Architecture pass) -- a request made before escalation existed
+        # was always, in effect, "strike 1, decided at its own target level."
+        conn.execute("ALTER TABLE temporary_location_access ADD COLUMN decision_level TEXT")
+        conn.execute("UPDATE temporary_location_access SET decision_level = location_level WHERE decision_level IS NULL")
+    if "decision_location_id" not in temp_access_cols:
+        conn.execute("ALTER TABLE temporary_location_access ADD COLUMN decision_location_id TEXT")
+        conn.execute("UPDATE temporary_location_access SET decision_location_id = location_id WHERE decision_location_id IS NULL")
     conn.commit()
 
 
@@ -199,12 +247,21 @@ def _present_temp_access(row) -> dict:
 
 def request_temporary_access(conn, user_id: int, location_level: str, location_id: str) -> dict:
     """Queues a request for temporary access to a location the user doesn't live in -- e.g. "I
-    work there virtually." Starts 'pending'; nothing is minted or usable until an admin approves
-    it (decide_temporary_access()). Idempotent-on-retry: an existing pending/active request for
-    the same (user, location) is returned as-is rather than raising, the same style
-    request_join_group()/request_join() already use elsewhere in this codebase."""
+    work there virtually." Starts 'pending', decided at this exact (location_level, location_id)
+    first (strike 1 -- see this module's own docstring on escalation). Nothing is minted or usable
+    until an admin approves it (decide_temporary_access()). Idempotent-on-retry: an existing
+    pending/active request for the same (user, location) is returned as-is rather than raising,
+    the same style request_join_group()/request_join() already use elsewhere in this codebase.
+    Raises PermissionError outright if a PRIOR request for this exact (user, location) already
+    ran all 3 strikes -- "after 3 rejections, they cannot request that location again" is
+    enforced here, not left to the UI alone."""
     if location_level not in board_core.LEVELS:
         raise ValueError("Unknown location level")
+    if conn.execute(
+        "SELECT 1 FROM temporary_location_access WHERE user_id = ? AND location_level = ? AND location_id = ? AND status = 'denied_final'",
+        (user_id, location_level, location_id),
+    ).fetchone():
+        raise PermissionError("This request was rejected 3 times and cannot be re-submitted for this location")
     existing = conn.execute(
         "SELECT * FROM temporary_location_access WHERE user_id = ? AND location_level = ? AND location_id = ? "
         "AND status IN ('pending', 'active')",
@@ -216,9 +273,10 @@ def request_temporary_access(conn, user_id: int, location_level: str, location_i
     if not user_row:
         raise LookupError("User not found")
     cur = conn.execute(
-        "INSERT INTO temporary_location_access (user_id, location_level, location_id, foreign_account_id, status, requested_at) "
-        "VALUES (?, ?, ?, ?, 'pending', ?)",
-        (user_id, location_level, location_id, f"PENDING-{user_id}-{_now()}", _now()),
+        "INSERT INTO temporary_location_access "
+        "(user_id, location_level, location_id, decision_level, decision_location_id, foreign_account_id, status, requested_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)",
+        (user_id, location_level, location_id, location_level, location_id, f"PENDING-{user_id}-{_now()}", _now()),
     )
     # foreign_account_id is a real, globally-unique column (UNIQUE constraint) and must hold SOME
     # value even while pending -- the placeholder above is overwritten with the real, properly
@@ -231,31 +289,69 @@ def request_temporary_access(conn, user_id: int, location_level: str, location_i
 
 def decide_temporary_access(conn, admin_user_id: int, request_id: int, approve: bool, is_admin: bool,
                              location_name: dict | None = None) -> None:
-    """Approves or revokes-before-use a pending temporary-access request. location_name (the
-    foreign location's own full dict, e.g. {"continent":..., "country":..., ..., "village":...})
-    is required to approve -- the caller (the admin's own UI) already has it on screen; this
-    module has no independent source of "what is location_id called"."""
+    """Approves, rejects, or escalates a pending temporary-access request. Authority is checked
+    against the request's CURRENT decider -- req["decision_level"]/req["decision_location_id"],
+    NOT its original target location_level/location_id -- since a rejected request's decider
+    moves one level up the hierarchy on each strike (this module's own docstring). Every decision
+    is logged to temporary_access_strikes before the live row is touched, so the history survives
+    even what the live row's columns get overwritten to next.
+
+    Rejecting with fewer than 3 strikes so far re-opens the request as 'pending' one level up
+    (geography_core.get_parent() of the CURRENT decision level/location) -- it is not a terminal
+    outcome. The 3rd rejection sets 'denied_final' instead. location_name (the foreign location's
+    own full dict, e.g. {"continent":..., "country":..., ..., "village":...}) is required to
+    approve -- the caller (the admin's own UI) already has it on screen; this module has no
+    independent source of "what is location_id called"."""
     req = conn.execute("SELECT * FROM temporary_location_access WHERE id = ?", (request_id,)).fetchone()
     if not req:
         raise LookupError("Request not found")
-    if not _can_approve_temporary_access(conn, admin_user_id, req["location_level"], req["location_id"], is_admin):
+    if not _can_approve_temporary_access(conn, admin_user_id, req["decision_level"], req["decision_location_id"], is_admin):
         raise PermissionError("Only an admin of this location can decide temporary access")
     if req["status"] != "pending":
         raise ValueError("This request has already been decided")
+
+    strike_number = req["strike_count"] + 1
+    now = _now()
+    conn.execute(
+        "INSERT INTO temporary_access_strikes "
+        "(request_id, strike_number, decision_level, decision_location_id, outcome, decided_by_user_id, decided_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (request_id, strike_number, req["decision_level"], req["decision_location_id"],
+         "approved" if approve else "rejected", admin_user_id, now),
+    )
+
     if not approve:
+        if strike_number >= 3:
+            conn.execute(
+                "UPDATE temporary_location_access SET status = 'denied_final', strike_count = ?, "
+                "decided_by_user_id = ?, decided_at = ? WHERE id = ?",
+                (strike_number, admin_user_id, now, request_id),
+            )
+            conn.commit()
+            return
+        parent = geography_core.get_parent(conn, req["decision_level"], req["decision_location_id"])
+        if not parent:
+            # get_parent() only returns None for level == "earth" or an id missing from its own
+            # owning data -- a request's decision_level/decision_location_id always starts at a
+            # real level/id someone actually lives at or below, so landing here means that data
+            # is malformed, not that escalation has legitimately run out of levels to try.
+            raise RuntimeError(f"No parent found above {req['decision_level']}:{req['decision_location_id']} to escalate to")
         conn.execute(
-            "UPDATE temporary_location_access SET status = 'revoked', decided_by_user_id = ?, decided_at = ? WHERE id = ?",
-            (admin_user_id, _now(), request_id),
+            "UPDATE temporary_location_access SET status = 'pending', strike_count = ?, decision_level = ?, "
+            "decision_location_id = ?, decided_by_user_id = ?, decided_at = ? WHERE id = ?",
+            (strike_number, parent["level"], parent["id"], admin_user_id, now, request_id),
         )
         conn.commit()
         return
+
     if not location_name:
         raise ValueError("The foreign location's own name/chain is required to approve")
     user_row = conn.execute("SELECT * FROM users WHERE id = ?", (req["user_id"],)).fetchone()
     foreign_account_id = _mint_foreign_account_id(conn, user_row, location_name)
     conn.execute(
-        "UPDATE temporary_location_access SET status = 'active', foreign_account_id = ?, decided_by_user_id = ?, decided_at = ? WHERE id = ?",
-        (foreign_account_id, admin_user_id, _now(), request_id),
+        "UPDATE temporary_location_access SET status = 'active', strike_count = ?, foreign_account_id = ?, "
+        "decided_by_user_id = ?, decided_at = ? WHERE id = ?",
+        (strike_number, foreign_account_id, admin_user_id, now, request_id),
     )
     conn.commit()
 

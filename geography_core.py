@@ -31,6 +31,16 @@ on today's id-generation convention, not a general-purpose id parser.
 
 get_children() never mutates and never writes to the DB; `conn` is read-only here, needed only
 for the tehsil->village branch.
+
+get_parent()/get_siblings() (Chat-as-Dashboard Phase 2 Step 1, 2026-11-24): the reverse and
+sideways questions get_children() was never asked. Built for the new Public/Global rail's
+"adjacent locations" list (siblings) and the 3-strike request escalation (parent, repeatedly, to
+find who decides the next strike) -- both need these, so they live here rather than being
+duplicated in chat_core.py. Reuse the EXACT SAME static JSON files and the same dot-suffix
+convention documented above; never a second, independently-maintained copy of the hierarchy.
+get_parent() additionally accepts level == "earth" (get_children() never did, and still doesn't --
+Earth has no children to list, but it IS the parent of every continent, so get_parent() needs to
+know about it where get_children() never had to).
 """
 from __future__ import annotations
 
@@ -43,6 +53,7 @@ BASE_DIR = Path(__file__).resolve().parent
 GLOBAL_COUNTRIES_FILE = BASE_DIR / "static" / "data" / "global_countries.json"
 
 LEVELS = account_core.LOCATION_LEVELS  # ("continent", "country", "zone", "state", "district", "tehsil", "village")
+LEVELS_WITH_EARTH = LEVELS + ("earth",)  # get_parent()'s own valid-level set -- see module docstring
 
 
 def _load_json(path):
@@ -116,3 +127,80 @@ def get_children(conn, level: str, location_id: str) -> list[str]:
         "tehsil": lambda loc_id: _children_tehsil_village(conn, loc_id),
         "village": lambda loc_id: [],
     }[level](location_id)
+
+
+def _parent_village_tehsil(conn, village_id: str) -> dict | None:
+    row = conn.execute("SELECT tehsil_id FROM india_villages WHERE id = ?", (village_id,)).fetchone()
+    return {"level": "tehsil", "id": row["tehsil_id"]} if row and row["tehsil_id"] else None
+
+
+def _parent_by_dot_suffix(location_id: str, parent_level: str) -> dict | None:
+    # The one place get_parent() relies on the dot-suffix id convention this module's own
+    # docstring documents (state->district->tehsil only) -- a malformed id with no dot segment at
+    # all is treated as "no parent found" (None), not a crash, mirroring get_children()'s own
+    # "nothing found is a valid state, not a caller error" stance.
+    if "." not in location_id:
+        return None
+    return {"level": parent_level, "id": location_id.rsplit(".", 1)[0]}
+
+
+def _parent_state_zone(state_id: str) -> dict | None:
+    for country in _load_json(account_core.SUBCONTINENT_STATES_FILE)["countries"]:
+        for zone in country.get("zones", []):
+            if any(st["id"] == state_id for st in zone.get("states", [])):
+                return {"level": "zone", "id": zone["id"]}
+    return None
+
+
+def _parent_zone_country(zone_id: str) -> dict | None:
+    for country in _load_json(account_core.SUBCONTINENT_STATES_FILE)["countries"]:
+        if any(z["id"] == zone_id for z in country.get("zones", [])):
+            return {"level": "country", "id": country["id"]}
+    return None
+
+
+def _parent_country_continent(country_id: str) -> dict | None:
+    for continent in _load_json(GLOBAL_COUNTRIES_FILE)["continents"]:
+        if any(c["id"] == country_id for c in continent["countries"]):
+            return {"level": "continent", "id": continent["id"]}
+    return None
+
+
+def get_parent(conn, level: str, location_id: str) -> dict | None:
+    """{"level":..., "id":...} for the direct parent of (level, location_id), or None when
+    `level` is "earth" (nothing sits above it) or location_id isn't found in the owning data for
+    its level -- never raises for "nothing found", same convention as get_children(). Raises
+    ValueError only for a `level` string outside LEVELS_WITH_EARTH.
+
+    zone/country/continent parents are found by searching the nesting JSON (no shared-id-prefix
+    shortcut exists across that boundary -- see module docstring); state/district/tehsil parents
+    use the documented dot-suffix convention instead, exactly like get_children()'s own
+    _children_district_tehsil() already does in the other direction."""
+    if level not in LEVELS_WITH_EARTH:
+        raise ValueError(f"Unknown level: {level}")
+    if level == "earth":
+        return None
+    if level == "continent":
+        return {"level": "earth", "id": "EARTH"}
+    return {
+        "country": _parent_country_continent,
+        "zone": _parent_zone_country,
+        "state": _parent_state_zone,
+        "district": lambda loc_id: _parent_by_dot_suffix(loc_id, "state"),
+        "tehsil": lambda loc_id: _parent_by_dot_suffix(loc_id, "district"),
+        "village": lambda loc_id: _parent_village_tehsil(conn, loc_id),
+    }[level](location_id)
+
+
+def get_siblings(conn, level: str, location_id: str) -> list[str]:
+    """Every OTHER location id at this same level sharing (level, location_id)'s own parent --
+    i.e. get_children() of the parent, minus location_id itself. [] for level == "earth" (nothing
+    else is Earth) or when no parent is found (an orphaned/unknown id) -- deliberately built on
+    get_parent() + get_children() rather than a third, independent lookup per level, so there is
+    exactly one place each level's actual hierarchy data is read from."""
+    if level == "earth":
+        return []
+    parent = get_parent(conn, level, location_id)
+    if not parent:
+        return []
+    return [cid for cid in get_children(conn, parent["level"], parent["id"]) if cid != location_id]

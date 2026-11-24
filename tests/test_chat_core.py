@@ -28,6 +28,7 @@ import board_core  # noqa: E402
 import chat_core  # noqa: E402
 import db as dbmod  # noqa: E402
 import election_core  # noqa: E402
+import geography_core  # noqa: E402
 
 VILLAGE_A = {
     "continent": {"id": "O_AS", "name": "Asia"}, "country": {"id": "O_AS_IND", "name": "India"},
@@ -110,6 +111,26 @@ def seat_council(village_id, male_id, female_id, cycle_id):
         "election_cycle_id, leadership_start, leadership_end) VALUES (?, 'Aries', 2026, ?, ?, ?, ?, ?)",
         (village_id, male_id, female_id, cycle_id, (today - dt.timedelta(days=1)).isoformat(), (today + dt.timedelta(days=300)).isoformat()),
     )
+
+
+def seat_cascade_council(level, location_id, seat_user_id):
+    """A minimal Tehsil+ qpunch_councils/qpunch_council_members pair -- just the one seat
+    is_cascade_council_member() needs to find, not a full 8-seat council (election_core's own
+    _ensure_tallied_location() builds the real thing; this test only needs a currently-serving
+    row to exist)."""
+    today = dt.date.today()
+    conn = dbmod.get_db()
+    cur = conn.execute(
+        "INSERT INTO qpunch_councils (location_id, level, term_start, term_end) VALUES (?, ?, ?, ?)",
+        (location_id, level, (today - dt.timedelta(days=1)).isoformat(), (today + dt.timedelta(days=1000)).isoformat()),
+    )
+    council_id = cur.lastrowid
+    conn.execute(
+        "INSERT INTO qpunch_council_members (council_id, user_id, gender, element) VALUES (?, ?, 'male', 'Fire')",
+        (council_id, seat_user_id),
+    )
+    conn.commit()
+    conn.close()
 
 
 print("=" * 70)
@@ -310,6 +331,99 @@ check("7f. the Busy override auto-expires after PRESENCE_BUSY_HOURS, falling bac
 chat_core.set_presence_override(conn, fresh_user["user_id"], False)
 check("7g. clearing the override removes the Red state immediately",
       chat_core.presence_status(conn, fresh_user["user_id"], now=now) == "green")
+conn.close()
+
+
+print()
+print("=" * 70)
+print("8. geography_core.get_parent() / get_siblings()")
+print("=" * 70)
+conn = dbmod.get_db()
+check("8a. village -> tehsil", geography_core.get_parent(conn, "village", VILLAGE_A["village"]["id"]) == {"level": "tehsil", "id": "CS.DL.3.4"})
+check("8b. tehsil -> district (dot-suffix)", geography_core.get_parent(conn, "tehsil", "CS.DL.3.4") == {"level": "district", "id": "CS.DL.3"})
+check("8c. district -> state (dot-suffix)", geography_core.get_parent(conn, "district", "CS.DL.3") == {"level": "state", "id": "CS.DL"})
+check("8d. state -> zone (JSON search)", geography_core.get_parent(conn, "state", "CS.DL") == {"level": "zone", "id": "IND/CS"})
+check("8e. zone -> country (JSON search)", geography_core.get_parent(conn, "zone", "IND/CS") == {"level": "country", "id": "O_AS_IND"})
+check("8f. country -> continent (JSON search)", geography_core.get_parent(conn, "country", "O_AS_IND") == {"level": "continent", "id": "O_AS"})
+check("8g. continent -> earth (fixed)", geography_core.get_parent(conn, "continent", "O_AS") == {"level": "earth", "id": "EARTH"})
+check("8h. earth has no parent", geography_core.get_parent(conn, "earth", "EARTH") is None)
+check("8i. an unknown id has no parent", geography_core.get_parent(conn, "state", "NOT.A.REAL.STATE") is None)
+siblings = geography_core.get_siblings(conn, "village", VILLAGE_A["village"]["id"])
+check("8j. Village A and Village B share the same Tehsil -> siblings of each other",
+      VILLAGE_B["village"]["id"] in siblings and VILLAGE_A["village"]["id"] not in siblings)
+check("8k. Earth has no siblings", geography_core.get_siblings(conn, "earth", "EARTH") == [])
+conn.close()
+
+
+print()
+print("=" * 70)
+print("9. election_core.is_cascade_council_member()")
+print("=" * 70)
+try:
+    election_core.is_cascade_council_member(dbmod.get_db(), nayak["user_id"], "village", VILLAGE_A["village"]["id"])
+    check("9a. raises ValueError for level='village' (that's announcements_core's job)", False)
+except ValueError:
+    check("9a. raises ValueError for level='village' (that's announcements_core's job)", True)
+conn = dbmod.get_db()
+check("9b. no seated cascade council yet -> False, not a crash",
+      election_core.is_cascade_council_member(conn, resident["user_id"], "tehsil", "CS.DL.3.4") is False)
+seat_cascade_council("tehsil", "CS.DL.3.4", resident["user_id"])
+check("9c. a seated cascade council member -> True",
+      election_core.is_cascade_council_member(conn, resident["user_id"], "tehsil", "CS.DL.3.4") is True)
+check("9d. a DIFFERENT user is not on that seat -> False",
+      election_core.is_cascade_council_member(conn, other_resident["user_id"], "tehsil", "CS.DL.3.4") is False)
+conn.close()
+
+
+print()
+print("=" * 70)
+print("10. The 3-Strike Request Escalation")
+print("=" * 70)
+req2 = chat_core.request_temporary_access(dbmod.get_db(), other_resident["user_id"], "village", VILLAGE_B["village"]["id"])
+check("10a. a fresh request's decider starts at its own target (level, location)",
+      req2["decision_level"] == "village" and req2["decision_location_id"] == VILLAGE_B["village"]["id"] and req2["strike_count"] == 0)
+
+conn = dbmod.get_db()
+chat_core.decide_temporary_access(conn, 0, req2["id"], False, is_admin=True)  # strike 1: Village -- rejected
+after_1 = chat_core.my_temporary_access(conn, other_resident["user_id"])[0]
+check("10b. strike 1 rejected -> still pending, escalated to the Tehsil (the village's own parent)",
+      after_1["status"] == "pending" and after_1["strike_count"] == 1 and after_1["decision_level"] == "tehsil"
+      and after_1["decision_location_id"] == "CS.DL.3.4")
+
+chat_core.decide_temporary_access(conn, 0, req2["id"], False, is_admin=True)  # strike 2: Tehsil -- rejected
+after_2 = chat_core.my_temporary_access(conn, other_resident["user_id"])[0]
+check("10c. strike 2 rejected -> escalated again, to the District",
+      after_2["status"] == "pending" and after_2["strike_count"] == 2 and after_2["decision_level"] == "district"
+      and after_2["decision_location_id"] == "CS.DL.3")
+
+chat_core.decide_temporary_access(conn, 0, req2["id"], False, is_admin=True)  # strike 3: District -- rejected
+after_3 = chat_core.my_temporary_access(conn, other_resident["user_id"])[0]
+check("10d. strike 3 rejected -> denied_final, no further escalation", after_3["status"] == "denied_final" and after_3["strike_count"] == 3)
+
+strikes = conn.execute("SELECT * FROM temporary_access_strikes WHERE request_id = ? ORDER BY strike_number", (req2["id"],)).fetchall()
+check("10e. all 3 decisions were logged to temporary_access_strikes, in order, all 'rejected'",
+      [s["strike_number"] for s in strikes] == [1, 2, 3] and all(s["outcome"] == "rejected" for s in strikes))
+check("10f. the strike log's own decision levels trace the escalation path",
+      [s["decision_level"] for s in strikes] == ["village", "tehsil", "district"])
+
+try:
+    chat_core.request_temporary_access(conn, other_resident["user_id"], "village", VILLAGE_B["village"]["id"])
+    check("10g. after denied_final, re-requesting the SAME location is refused outright", False)
+except PermissionError:
+    check("10g. after denied_final, re-requesting the SAME location is refused outright", True)
+
+# A SEPARATE request (different user) can still be approved after exactly one escalation --
+# denied_final is per (user, location), not a village-wide lockout, and approval doesn't require
+# starting over from strike 1 every time. A fresh user, not `resident` (already holds an ACTIVE
+# grant for this same village from Section 6) or `other_resident` (now denied_final for it).
+tester3 = register("Tester3")
+req3 = chat_core.request_temporary_access(conn, tester3["user_id"], "village", VILLAGE_B["village"]["id"])
+chat_core.decide_temporary_access(conn, 0, req3["id"], False, is_admin=True)  # strike 1 rejected -> escalates to Tehsil
+chat_core.decide_temporary_access(conn, 0, req3["id"], True, is_admin=True, location_name=VILLAGE_B)  # strike 2 approved
+approved_req3 = chat_core.my_temporary_access(conn, tester3["user_id"])[0]
+check("10h. a later strike can still approve -- status active, strike_count reflects which attempt won",
+      approved_req3["status"] == "active" and approved_req3["strike_count"] == 2
+      and approved_req3["foreign_account_id"] and not approved_req3["foreign_account_id"].startswith("PENDING-"))
 conn.close()
 
 

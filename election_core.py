@@ -1091,6 +1091,37 @@ def council_members_display(conn, council_id: int) -> dict:
     return result
 
 
+def is_cascade_council_member(conn, user_id: int, level: str, location_id: str, today: dt.date | None = None) -> bool:
+    """Tehsil-and-up equivalent of announcements_core.is_council_member() -- is `user_id`
+    CURRENTLY one of the (up to) 8 qpunch_council_members seated for the live-term
+    qpunch_councils row at (level, location_id)? Village keeps its own separate
+    announcements_core.is_council_member()/village_council path -- raises ValueError if called
+    with level == "village" rather than silently returning False, since that would read as "no
+    one is on this village's council," which is not what an empty qpunch_council_members query
+    for a level that never has rows there actually means.
+
+    Built for the Chat-as-Dashboard Phase 2 3-strike escalation (2026-11-24): strikes 2/3 above
+    Village are decided by whoever actually holds a seat on the real, elected cascade council for
+    that escalation level -- not the Founder-only fallback chat_core.py's temporary-access
+    approval and Governance Channel creation have used until now, now that this election data is
+    real and live for the pilot village's own Tehsil-and-up chain (see PILOT_VILLAGE_ID). Any seat
+    counts, not just the quarter's current Head -- the brief asks "does this location's council
+    hear the request," not "is this person currently leading it."
+
+    today is injectable for deterministic testing, the same convention this module's own
+    current_cycle_for_location()/council_term_status() already use."""
+    if level == "village":
+        raise ValueError("Village uses announcements_core.is_council_member(), not this")
+    today_s = (today or dt.date.today()).isoformat()
+    row = conn.execute(
+        """SELECT 1 FROM qpunch_council_members m
+           JOIN qpunch_councils c ON c.id = m.council_id
+           WHERE c.location_id = ? AND c.level = ? AND c.term_start <= ? AND c.term_end >= ? AND m.user_id = ?""",
+        (location_id, level, today_s, today_s, user_id),
+    ).fetchone()
+    return row is not None
+
+
 def cascade_status(conn, level: str, location_id: str, user_row, today: dt.date | None = None) -> dict:
     """The Tehsil-and-up equivalent of the village election page's own bundle (cycle + eligibility
     + council) -- backs GET /api/election/status for level != 'village'. Unlike the village
