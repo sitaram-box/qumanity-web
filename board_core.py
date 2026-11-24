@@ -666,9 +666,41 @@ def decide_join(conn, sg_id, user_id, approve):
     conn.commit()
 
 
+def members_of(conn, sg_id) -> list[dict]:
+    """A Governance Channel's own member list for its Members panel (2026-11-24, Step 2 UI) --
+    mirrors local_area_core.members_of()'s {user_id, name} shape. The creator is PREPENDED
+    explicitly: they're never their own subgroup_members row (same "+1 for owner" the member
+    COUNT in chat_messages() already accounts for), so the plain membership query below would
+    otherwise silently omit the one person a Governance Channel's own Members panel most needs to
+    show -- caught during Step 2's own UI verification, where the channel's Nayak was invisible in
+    their own Members panel."""
+    g = _subgroup(conn, sg_id)
+    creator = conn.execute("SELECT id AS user_id, name FROM users WHERE id = ?", (g["created_by"],)).fetchone()
+    out = [dict(creator)] if creator else []
+    out.extend(dict(r) for r in conn.execute(
+        """SELECT m.user_id, u.name FROM subgroup_members m JOIN users u ON u.id = m.user_id
+           WHERE m.subgroup_id = ? AND m.status = 'approved' AND m.user_id != ? ORDER BY m.requested_at""",
+        (sg_id, g["created_by"]),
+    ))
+    return out
+
+
 def _can_chat(conn, user_id, sg_id, is_admin):
+    """2026-11-24 (Unified Chat Architecture, Step 2 UI verification): a real, pre-existing gap
+    found while testing the new /chat page live -- a channel's own creator was never added as a
+    subgroup_members row (create_subgroup() only inserts the subgroups row itself), so a Village
+    Nayak/Nayika who isn't ALSO the global Founder could create a channel and then immediately be
+    refused permission to post in their own creation. Fixed by also granting chat to whoever
+    currently ADMINISTERS the channel -- the exact same authority chat_core.can_administer_channel()
+    already grants for deciding join requests; import kept local (not local_area_core's module
+    docstring at top) since this is the only function here that needs it."""
     if is_admin:
         return True
+    g = _subgroup(conn, sg_id)
+    if g["location_level"] == "village":
+        import local_area_core
+        if local_area_core._is_village_admin(conn, user_id, g["location_id"], is_admin):
+            return True
     r = conn.execute("SELECT status FROM subgroup_members WHERE subgroup_id=? AND user_id=?", (sg_id, user_id)).fetchone()
     return bool(r and r["status"] == "approved")
 

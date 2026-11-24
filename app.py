@@ -1433,6 +1433,42 @@ def api_chat_temporary_access_decide(request_id):
     return jsonify({"status": "ok"})
 
 
+@app.route("/api/subgroups/<int:sg_id>/members")
+@login_required
+@_board_error
+def api_subgroup_members(sg_id):
+    conn = get_db()
+    try:
+        return jsonify({"members": board_core.members_of(conn, sg_id)})
+    finally:
+        conn.close()
+
+
+@app.route("/api/presence/batch")
+@login_required
+def api_presence_batch():
+    ids = [int(x) for x in request.args.get("user_ids", "").split(",") if x.strip().isdigit()]
+    conn = get_db()
+    try:
+        statuses = chat_core.presence_batch(conn, ids)
+    finally:
+        conn.close()
+    return jsonify({"statuses": statuses})
+
+
+@app.route("/api/karma/recent")
+@login_required
+def api_karma_recent():
+    ids = [int(x) for x in request.args.get("user_ids", "").split(",") if x.strip().isdigit()]
+    since = request.args.get("since") or (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=24)).isoformat(timespec="seconds")
+    conn = get_db()
+    try:
+        entries = chat_core.recent_karma_for(conn, ids, since)
+    finally:
+        conn.close()
+    return jsonify({"karma": entries})
+
+
 @app.route("/api/referrer/apply", methods=["POST"])
 @login_required
 @_board_error
@@ -3908,6 +3944,23 @@ def qmail_page():
         print(f"[qmail] QMAIL_PAGE_REDIRECT user_id={session['user_id']} reason=not_activated target=dashboard")
         return redirect(url_for("dashboard"))
     return render_template("qmail.html", member_name=user["name"])
+
+
+@app.route("/chat")
+@login_required
+def chat_page():
+    """Unified Chat Architecture, Phase 2 Step 2 (2026-11-24): the Teams-style dual-pane chat UI --
+    a standalone, full-screen page (same reasoning as /qmail: its own scroll/focus context, a real
+    bookmarkable URL), desktop/web only (the mobile app keeps its own single-column screens, Step
+    3). Needs only enough to render the header -- the page loads everything else itself via
+    /api/chat/conversations."""
+    conn = get_db()
+    user = conn.execute("SELECT name FROM users WHERE id = ?", (session["user_id"],)).fetchone()
+    conn.close()
+    if not user:
+        session.pop("user_id", None)
+        return redirect(url_for("login"))
+    return render_template("chat.html", member_name=user["name"])
 
 
 @app.route("/api/me")

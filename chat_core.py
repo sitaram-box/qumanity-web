@@ -142,6 +142,12 @@ def presence_status(conn, user_id: int, now: dt.datetime | None = None) -> str:
     return "grey"
 
 
+def presence_batch(conn, user_ids: list[int], now: dt.datetime | None = None) -> dict[int, str]:
+    """presence_status() for several users at once -- the Members panel's own need (Step 2 UI),
+    one call instead of one per row."""
+    return {uid: presence_status(conn, uid, now=now) for uid in user_ids}
+
+
 # ---- Dual Account ID: temporary cross-location access ----
 
 def _mint_foreign_account_id(conn, user_row, foreign_location: dict) -> str:
@@ -367,6 +373,11 @@ def list_my_conversations(conn, user_id: int) -> list[dict]:
         out.append({
             "kind": "private", "id": r["id"], "title": r["name"] or (other["name"] if other else "Unknown"),
             "pane": "private", "location_id": None, "location_level": None,
+            # other_user_id (2026-11-24, Step 2): the one piece of extra context a 1:1 row needs
+            # beyond every other conversation kind -- a Teams-style list shows THIS specific
+            # person's presence dot next to the row, which a Governance Channel has no single
+            # equivalent of (see chat.js's own presence-dot logic, Private pane only).
+            "other_user_id": r["other_id"],
             "last_message_at": _last_message_at(conn, "private_messages", "chat_id", r["id"]), "unread_count": 0,
         })
 
@@ -413,4 +424,36 @@ def list_my_conversations(conn, user_id: int) -> list[dict]:
         })
 
     out.sort(key=lambda c: c["last_message_at"] or "", reverse=True)
+    return out
+
+
+# ---- Karma badge (Governance pane only, Step 2 UI) ----
+
+def recent_karma_for(conn, user_ids: list[int], since: str) -> dict[int, dict]:
+    """For the Governance pane's '+Karma' badge: the most recent POSITIVE karma_entries row for
+    each of user_ids at or after `since` (an ISO timestamp), if any. This is deliberately the ONLY
+    way Karma ever touches chat -- surfacing an event that was ALREADY earned elsewhere (a rated
+    business transaction, or a Collective Board post freezing positively -- karma_core.py's own
+    module docstring is explicit these are the only two sources), never a new trigger. Sending a
+    chat message never awards Karma, here or anywhere else in this codebase.
+
+    This is a correlation, not a precise link: karma_entries has no column tying a row to a
+    specific chat message (no such relationship exists in the schema, and inventing one is out of
+    scope for this pass) -- the badge means "this person earned Karma recently," not "this exact
+    message earned it." The caller must keep that distinction visible in the UI (e.g. a tooltip
+    with the real reason/timestamp), never present it as if the message itself was rewarded."""
+    if not user_ids:
+        return {}
+    import karma_core
+    karma_core.ensure_tables(conn)
+    placeholders = ",".join("?" * len(user_ids))
+    rows = conn.execute(
+        f"""SELECT user_id, points, reason, created_at FROM karma_entries
+            WHERE user_id IN ({placeholders}) AND points > 0 AND created_at >= ?
+            ORDER BY id DESC""",
+        (*user_ids, since),
+    ).fetchall()
+    out = {}
+    for r in rows:
+        out.setdefault(r["user_id"], {"points": r["points"], "reason": r["reason"], "at": r["created_at"]})
     return out

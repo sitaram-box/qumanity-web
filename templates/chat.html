@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qumanity — Chat</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body>
+  <!-- Unified Chat Architecture, Phase 2 Step 2 (2026-11-24): the Teams-style dual-pane layout --
+       far-left icon rail, a middle conversation list (filter tabs + Favorites/Private/Channels),
+       and a flexible right-hand feed. Desktop/web only, same .qm-chat-shell CSS-grid technique
+       qmail.html's own .qmail-shell already uses (rail/list/reading as three grid columns), just
+       with an added narrow icon rail where Qmail has a folder sidebar instead. -->
+  <div class="qm-chat-shell" id="qm-chat-shell">
+    <nav class="qm-chat-rail" aria-label="Chat navigation">
+      <a class="qm-chat-rail-logo" href="{{ url_for('dashboard') }}" title="Back to Dashboard">
+        <img src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+      </a>
+      <button type="button" class="qm-chat-rail-btn is-active" data-rail="activity" title="Activity" aria-label="Activity">
+        <span aria-hidden="true">🔔</span>
+      </button>
+      <button type="button" class="qm-chat-rail-btn" data-rail="chat" title="Chat" aria-label="Chat">
+        <span aria-hidden="true">💬</span>
+      </button>
+      <button type="button" class="qm-chat-rail-btn" data-rail="channels" title="Channels" aria-label="Channels">
+        <span aria-hidden="true">📣</span>
+      </button>
+      <button type="button" class="qm-chat-rail-btn" data-rail="karma" title="Karma Ledger" aria-label="Karma Ledger">
+        <span aria-hidden="true">🏅</span>
+      </button>
+      <a class="qm-chat-rail-btn qm-chat-rail-spacer" href="{{ url_for('dashboard') }}" title="Profile" aria-label="Profile">
+        <span aria-hidden="true">👤</span>
+      </a>
+    </nav>
+
+    <section class="qm-chat-list-pane">
+      <div class="qm-chat-list-header">
+        <h1>Chat</h1>
+        <div class="qm-chat-filter-tabs" role="tablist">
+          <button type="button" class="qm-chat-filter-tab is-active" data-filter="all" role="tab" aria-selected="true">All</button>
+          <button type="button" class="qm-chat-filter-tab" data-filter="unread" role="tab" aria-selected="false">Unread</button>
+          <button type="button" class="qm-chat-filter-tab" data-filter="mentions" role="tab" aria-selected="false">Mentions</button>
+        </div>
+      </div>
+      <!-- Populated entirely by chat.js (renderList()) -- no static placeholder children here,
+           since innerHTML="" on every re-render would otherwise delete them. -->
+      <div class="qm-chat-list" id="qm-chat-list">
+        <p class="qm-chat-empty">Loading…</p>
+      </div>
+    </section>
+
+    <section class="qm-chat-feed">
+      <div class="qm-chat-feed-empty" id="qm-chat-feed-empty">
+        <p>Select a conversation from the list.</p>
+      </div>
+      <div class="qm-chat-feed-active" id="qm-chat-feed-active" hidden>
+        <header class="qm-chat-feed-header">
+          <div class="qm-chat-feed-title">
+            <h2 id="qm-chat-feed-name"></h2>
+            <p id="qm-chat-feed-desc"></p>
+          </div>
+          <button type="button" class="qm-chat-members-btn" id="qm-chat-members-btn" title="Members" aria-label="Members">
+            👥 <span id="qm-chat-members-count"></span>
+          </button>
+        </header>
+        <div class="qm-chat-messages" id="qm-chat-messages"></div>
+        <form class="qm-chat-composer" id="qm-chat-composer">
+          <input type="text" id="qm-chat-input" placeholder="Write a message…" maxlength="1000" autocomplete="off" />
+          <button type="submit" class="qm-btn qm-btn-primary">Send</button>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <div class="qm-chat-members-overlay" id="qm-chat-members-overlay" hidden>
+    <div class="qm-chat-members-panel">
+      <div class="qm-chat-members-head">
+        <span>Members</span>
+        <button type="button" class="qm-chat-members-close" id="qm-chat-members-close" aria-label="Close">✕</button>
+      </div>
+      <div class="qm-chat-members-list" id="qm-chat-members-list"></div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+</body>
+</html>
