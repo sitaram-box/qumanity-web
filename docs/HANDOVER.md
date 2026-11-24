@@ -2005,6 +2005,129 @@ pass).
 
 ---
 
+## 20. Chat-as-Dashboard: the Rail Pivot and the 3-Strike Temporary Access System — November 2026
+
+**Documentation gap, flagged rather than silently bridged:** between §19's own closing point
+(`a6abe68`) and this section's starting point, several real commits landed that are not separately
+described anywhere in this document — registration shortening and auto-issued Q-Cards, the 4-circle
+zodiac chart redesign, and the Unified Chat Architecture's first two steps (`2c27111`: `chat_core.py`
+itself — the read-side aggregator across six pre-existing messaging systems, live-computed
+presence, and the dual Account ID design for temporary cross-location access; `b590a01`: the
+original standalone, 3-column `/chat` page). None of that is repeated or reconstructed here. This
+section covers only the three commits that follow `b590a01` — `734e0cf`, `d15769c`, `dd91306` — a
+pivot that builds directly on `chat_core.py` rather than replacing it.
+
+### 20.1 The Pivot: Chat Becomes the Dashboard's Home Tab
+The standalone `/chat` page is retired. `templates/chat.html`, `static/js/chat.js`, and
+`static/css/chat.css` are deleted outright — their content now lives inside `templates/dashboard.html`
+/ `static/js/dashboard.js` / `static/css/dashboard.css`, as a new tab rather than a second page.
+`/chat` itself is kept as a plain redirect to `/dashboard` for one release (bookmarks, any stale
+client-side link), meant to be deleted entirely once that's elapsed.
+
+The old `dashboard.html`'s horizontal 4-tab bar (`qm-dash-tabs`: Global/Public/Personal/Private) is
+replaced by a left icon rail (`qm-dash-rail`) with five icons — **Home** (new, now the default tab),
+**Private**, **Personal**, **Public**, **Global** — reusing the exact same `qm-dash-tab`/`data-tab`
+class and attribute the old tab bar used, so `dashboard.js`'s own tab-switching logic (a `panels`
+object mapping tab name to DOM element, toggling `.hidden`) needed only one new map entry
+(`home`), not a rewrite. Notifications, the language switcher, the time/weather/Vedic-calendar
+button, and Logout all move from the old top header into the rail's own bottom cluster — same ids,
+same existing `dash_extras.js`/`i18n.js` logic, relocated rather than rebuilt. A new Settings gear
+in that cluster has no second settings surface behind it; it simply clicks the Private tab (reusing
+its own existing click handler) and expands the `pv-settings` card that already lives there. The
+`<header class="qm-header">` element itself is kept, stripped down to logo + title only, rather
+than removed outright — `multiview.js`'s `measureDockOffsets()` reads `.qm-header`'s own rendered
+height for the admin-only full-screen board dock's positioning, and a real header of roughly the
+same height is lower-risk than relying on that function's `72px` CSS fallback for every admin
+session.
+
+**What the Home tab actually is:** the promoted content of the old `/chat` page, unchanged in
+behavior — `chat_core.list_my_conversations()`'s aggregator feeding a middle conversation list
+(Private chats/Family/Personal Groups vs. Governance Channels, grouped by location) and a right-hand
+feed (messages, presence dots, the Members panel, the Governance-pane-only Karma badge). The one
+thing dropped in the move is `/chat`'s own icon rail (Activity/Chat/Channels/Karma/Profile) — it was
+always non-functional placeholders (its own module docstring said so), now superseded by the
+dashboard's real one.
+
+**What was deliberately NOT touched:** the Public and Global tabs' existing 3-column governance
+panels (location-explorer sidebar, a center column with the Collective Board's post-and-vote feed,
+Country/Zone Perception voting, Village Council election nomination/voting, and the Sub-Groups
+create form, plus a Statistics sidebar) are kept exactly as they were. These are real, in-use
+governance tools — not a chat surface this pivot could responsibly fold into "just another channel
+list" without deleting live functionality nobody asked to lose. The same is true of the Private
+tab's Identity/Qmail/Locations/Qoins Wallet/Karma/Election-history cards and the Personal tab's
+Family Tree (zoom/scroll/edit) and Friend/Business Groups — all relocated under the new rail with
+zero content changes. The only additions to the Public/Global panels are the two described in
+§20.2 below: each explorer-tree node now shows its own Location ID, and the Stats modal gained a
+"Request to Join" section.
+
+### 20.2 The 3-Strike Temporary Access System
+A user can request temporary access to a location they don't live in (e.g. "I coordinate a
+trekking group that operates in this state each summer"), from the Stats modal reached via any
+explorer-tree node, Public or Global. The request is decided by that location's own council first;
+if rejected, it escalates one level up the geography hierarchy and is decided again, up to three
+times total, before being closed out for good.
+
+**Schema** (`chat_core.py`, `temporary_location_access` table, extended this pass):
+- `strike_count` — rejections so far (0–3).
+- `decision_level` / `decision_location_id` — whose council is being asked *right now*. These
+  start equal to the request's own `location_level`/`location_id` (strike 1 is always decided by
+  the target's own level) and walk upward one geography level per rejection
+  (`geography_core.get_parent()`, new this pass — village→tehsil→district→state→zone→country→
+  continent→earth, built from the same static JSON files and `india_villages` table the existing
+  `get_children()` already reads, never a second copy of the hierarchy).
+- `reason` — free text from the requester, shown to whoever decides each strike.
+- `status` gained a new terminal value, `denied_final` — set on the third rejection. The
+  pre-existing `revoked` status keeps its original, narrower meaning (an *active*, already-approved
+  grant being pulled), never reused for an exhausted escalation.
+- A new child table, `temporary_access_strikes` — one immutable row per decision (approve or
+  reject), at whatever level actually decided it, who decided it and when. The parent row only
+  ever holds current state; this table is the audit trail, the same "live row + append-only
+  history" split `karma_entries` already uses elsewhere in this codebase.
+
+**Who decides:** `chat_core._can_approve_temporary_access()` — the Founder always; a Village's own
+Q-Punch Nayak/Nayika at Village level; at Tehsil-and-up, a seated member of that level's real,
+elected Q-Punch cascade council (`election_core.is_cascade_council_member()`, new this pass — the
+Tehsil+ equivalent of the Village-only `announcements_core.is_council_member()`, reading the
+`qpunch_council_members`/`qpunch_councils` tables §18 built). A `GET /api/chat/temporary-access/
+pending` route (`chat_core.pending_requests_for_approver()`) lists every pending request a given
+user can currently decide, surfaced as a new "🔑 Access Requests" section in the existing
+notifications dropdown, with Approve/Deny buttons.
+
+**Enforcement, found to already be mostly in place rather than built fresh:** a temporary member
+can chat in the foreign location's Governance Channel (`board_core._can_chat()` gained one
+OR-branch for an active grant) but cannot vote, post, comment, or rate a business there — not
+because new restriction code was written, but because `board_core.cast_vote()`/`create_post()`/
+`add_comment()` and `karma_core.rate_business()` already gate purely on the user's own *real,
+live* `present_location`, which a temporary grant never changes. The UI shows a gold "Temporary
+Member" badge in the chat feed header (`chat_core.list_my_conversations()`'s new `membership`
+field, `'active'` vs `'temporary'`) as a UX cue on top of that server-side gate, not a replacement
+for it.
+
+**Two bugs this pass found and fixed, not introduced by it:** (1) the `PENDING-` placeholder
+`foreign_account_id` used while a request is pending only had second-resolution uniqueness
+(`user_id` + timestamp), so the same user requesting two different locations within the same
+wall-clock second collided on the column's own `UNIQUE` constraint — fixed by folding
+`location_level`/`location_id` into the placeholder. (2) `chat_core.ensure_tables()` was only ever
+called from `migrations/045_unified_chat_architecture.py`, which runs at most once per database —
+a column added to that same function's body after a database had already applied that migration
+would silently never reach it. Fixed by calling `ensure_tables(conn)` defensively at the top of
+every public function that touches `temporary_location_access`, the same convention
+`board_core.ensure_sub_tables()` and `local_area_core.ensure_tables()` already use throughout
+`app.py`.
+
+### Regression and release
+Full suite re-run clean after all three commits: 44 test files, 0 failures, including 32 new
+checks added to `tests/test_chat_core.py` across this arc (its sections 8–11) — the full
+geography-parent traversal, the cascade council checker, the complete 3-strike escalation path
+(reject → escalate ×2 → `denied_final` → blocked re-request, plus a separate request proving a
+later strike can still approve), and Step 3's reason storage, Approver View, and
+temporary-channel-visibility behavior. All three steps were also verified live against a seeded
+local server via the Browser pane before being committed — the CSS flyout-collapse bug described
+in §20.2 was found this way, not by code review alone. Not yet reflected in
+`docs/MASTER_STATUS.md` (same standing note as §17–§19).
+
+---
+
 *This document supersedes all prior versions of `docs/HANDOVER.md`. For the concise, frequently
 updated status tracker, see `docs/MASTER_STATUS.md`. For a partner- and public-facing overview of
 the project, see `docs/QUMANITY_WHITEPAPER.md`.*
