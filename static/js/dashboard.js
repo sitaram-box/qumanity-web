@@ -15,6 +15,10 @@
 
   var tabs = Array.prototype.slice.call(document.querySelectorAll(".qm-dash-tab"));
   var panels = {
+    // "home" (2026-11-24, Chat-as-Dashboard Phase 2 Step 2): the only new entry -- everything
+    // else in this map, and the click-handling loop below it, is unchanged from the old
+    // horizontal tab bar.
+    home: document.getElementById("qm-dash-home"),
     private: document.getElementById("qm-dash-private"),
     personal: document.getElementById("qm-dash-personal"),
     public: document.getElementById("qm-dash-public"),
@@ -31,6 +35,309 @@
       });
     });
   });
+
+  // Settings (2026-11-24): lives inside the Private panel's own pv-settings card (Language/PIN/
+  // sign-out) -- always has. Rather than build a second settings surface, the rail's gear just
+  // opens Private (by reusing the SAME click handler above, not a second copy of the panel-switch
+  // logic) and expands that card.
+  var settingsBtn = document.getElementById("qm-dash-settings-btn");
+  if (settingsBtn) {
+    settingsBtn.addEventListener("click", function () {
+      var privateTab = document.querySelector('.qm-dash-tab[data-tab="private"]');
+      if (privateTab) privateTab.click();
+      var settingsCard = document.querySelector(".pv-settings");
+      if (settingsCard) {
+        settingsCard.open = true;
+        settingsCard.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  }
+
+  // ==================== Home tab: Unified Chat (Chat-as-Dashboard Phase 2 Step 2, 2026-11-24) ====================
+  // Promoted verbatim from the standalone /chat page (templates/chat.html + static/js/chat.js,
+  // now retired -- app.py's /chat redirects here). The ONLY thing dropped is that page's own
+  // icon rail (Activity/Chat/Channels/Karma/Profile) -- always non-functional placeholders (see
+  // that file's own module docstring), now replaced by this dashboard's real one above. Every
+  // other function below -- the aggregator fetch, the list/filter/presence/feed/composer/Members-
+  // panel/Karma-badge logic -- is unchanged. `el()` is reused from this file's own top-of-file
+  // helper (identical signature) rather than redefined a second time.
+  function $(id) { return document.getElementById(id); }
+  function chatApi(url, body) {
+    var opt = body !== undefined
+      ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+      : {};
+    return fetch(url, opt).then(function (r) {
+      return r.json().then(function (j) {
+        if (!r.ok) throw new Error(j.error || "Something went wrong");
+        return j;
+      });
+    });
+  }
+  function chatAgo(iso) {
+    if (!iso) return "";
+    var d = new Date(iso);
+    var sameDay = d.toDateString() === new Date().toDateString();
+    return sameDay ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : d.toLocaleDateString();
+  }
+
+  // ---- Per-kind message routes -- mirrors Qumanity_App/mobile/src/api/qumanity.ts exactly ----
+  var CHAT_ROUTE = {
+    sub: function (id) { return "/api/chat/" + id; },
+    local: function (id) { return "/api/local-areas/" + id + "/chat"; },
+    family: function (id) { return "/api/family-groups/" + id + "/messages"; },
+    group: function (id) { return "/api/people/groups/" + id + "/messages"; },
+    private: function (id) { return "/api/people/chats/" + id; },
+  };
+
+  var CHAT_PRESENCE_COLOR = { green: "#3DBE6B", yellow: "#F2B705", grey: "#8A97A3", red: "#E0483E" };
+  var CHAT_PRESENCE_LABEL = { green: "Active now", yellow: "Away", grey: "Offline", red: "Busy" };
+
+  var chatState = {
+    conversations: [],
+    filter: "all",
+    active: null,       // the open conversation's own row from chatState.conversations
+    activeMembers: [],  // [{user_id, name}], refreshed each time a conversation opens
+  };
+
+  function loadConversations() {
+    return chatApi("/api/chat/conversations").then(function (r) {
+      chatState.conversations = r.conversations;
+      renderChatList();
+      refreshPrivatePresence();
+    });
+  }
+
+  function matchesChatFilter(c) {
+    if (chatState.filter === "unread") return c.unread_count > 0;
+    if (chatState.filter === "mentions") return false; // no @mention detection exists yet
+    return true;
+  }
+
+  function renderChatList() {
+    var list = $("qm-chat-list");
+    if (!list) return;
+    list.innerHTML = "";
+    var visible = chatState.conversations.filter(matchesChatFilter);
+    if (!visible.length) {
+      var emptyText = chatState.filter === "unread" ? "No unread conversations."
+        : chatState.filter === "mentions" ? "No mentions yet."
+        : "Nothing here yet.";
+      list.appendChild(el("p", "qm-chat-empty", emptyText));
+      return;
+    }
+
+    var privateItems = visible.filter(function (c) { return c.pane === "private"; });
+    var channelItems = visible.filter(function (c) { return c.pane === "channel"; });
+
+    if (privateItems.length) {
+      list.appendChild(el("div", "qm-chat-list-section-title", "Private"));
+      privateItems.forEach(function (c) { list.appendChild(buildChatRow(c)); });
+    }
+
+    if (channelItems.length) {
+      list.appendChild(el("div", "qm-chat-list-section-title", "Channels"));
+      var groups = {};
+      var order = [];
+      channelItems.forEach(function (c) {
+        var key = (c.location_level || "") + ":" + (c.location_id || "");
+        if (!groups[key]) { groups[key] = []; order.push(key); }
+        groups[key].push(c);
+      });
+      order.forEach(function (key) {
+        var group = groups[key];
+        var level = group[0].location_level;
+        var label = level ? level.charAt(0).toUpperCase() + level.slice(1) + " · " + group[0].location_id : "Channel";
+        list.appendChild(el("div", "qm-chat-list-group-label", label));
+        group.forEach(function (c) { list.appendChild(buildChatRow(c)); });
+      });
+    }
+  }
+
+  function buildChatRow(c) {
+    var row = el("button", "qm-chat-row" + (chatState.active && chatState.active.kind === c.kind && chatState.active.id === c.id ? " is-active" : ""));
+    row.type = "button";
+    row.setAttribute("data-kind", c.kind);
+    row.setAttribute("data-id", c.id);
+
+    var avatar = el("span", "qm-chat-row-avatar", (c.title || "?").trim().charAt(0).toUpperCase());
+    if (c.pane === "private") {
+      var dot = el("span", "qm-presence-dot qm-presence-dot--grey");
+      dot.setAttribute("data-presence-for", c.other_user_id);
+      avatar.appendChild(dot);
+    }
+    row.appendChild(avatar);
+
+    var body = el("div", "qm-chat-row-body");
+    var titleRow = el("div", "qm-chat-row-title-row");
+    titleRow.appendChild(el("span", "qm-chat-row-title", c.title));
+    titleRow.appendChild(el("span", "qm-chat-row-time", chatAgo(c.last_message_at)));
+    body.appendChild(titleRow);
+    var sub = el("div", "qm-chat-row-sub", c.pane === "channel" ? (c.location_level ? c.location_level.charAt(0).toUpperCase() + c.location_level.slice(1) + " Channel" : "Channel") : "Private chat");
+    body.appendChild(sub);
+    row.appendChild(body);
+
+    if (c.unread_count > 0) row.appendChild(el("span", "qm-chat-row-badge", String(c.unread_count)));
+
+    row.addEventListener("click", function () { openConversation(c); });
+    return row;
+  }
+
+  function refreshPrivatePresence() {
+    var ids = chatState.conversations.filter(function (c) { return c.pane === "private" && c.other_user_id; }).map(function (c) { return c.other_user_id; });
+    if (!ids.length) return;
+    chatApi("/api/presence/batch?user_ids=" + ids.join(",")).then(function (r) {
+      Object.keys(r.statuses).forEach(function (uid) {
+        document.querySelectorAll('[data-presence-for="' + uid + '"]').forEach(function (dot) {
+          dot.className = "qm-presence-dot qm-presence-dot--" + r.statuses[uid];
+          dot.title = CHAT_PRESENCE_LABEL[r.statuses[uid]] || "";
+        });
+      });
+    }).catch(function () { /* presence is advisory; a failed fetch just leaves the grey default */ });
+  }
+
+  document.querySelectorAll(".qm-chat-filter-tab").forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      document.querySelectorAll(".qm-chat-filter-tab").forEach(function (t) {
+        t.classList.toggle("is-active", t === tab);
+        t.setAttribute("aria-selected", t === tab ? "true" : "false");
+      });
+      chatState.filter = tab.getAttribute("data-filter");
+      renderChatList();
+    });
+  });
+
+  function openConversation(c) {
+    chatState.active = c;
+    renderChatList();
+    $("qm-chat-feed-empty").hidden = true;
+    $("qm-chat-feed-active").hidden = false;
+    $("qm-chat-feed-name").textContent = c.title;
+    $("qm-chat-feed-desc").textContent = c.pane === "channel"
+      ? (c.location_level ? c.location_level.charAt(0).toUpperCase() + c.location_level.slice(1) + " · " + c.location_id : "")
+      : "";
+    $("qm-chat-messages").innerHTML = "<p class=\"qm-chat-empty\">Loading…</p>";
+
+    chatApi(CHAT_ROUTE[c.kind](c.id)).then(function (r) {
+      chatState.activeMembers = (r.extra && r.extra.members) || [];
+      $("qm-chat-members-count").textContent = chatState.activeMembers.length ? String(chatState.activeMembers.length) : "";
+      renderChatMessages(r.messages || [], c.pane === "channel");
+    }).catch(function (e) {
+      $("qm-chat-messages").innerHTML = "";
+      $("qm-chat-messages").appendChild(el("p", "qm-chat-empty", e.message));
+    });
+  }
+
+  function renderChatMessages(messages, isChannel) {
+    var box = $("qm-chat-messages");
+    box.innerHTML = "";
+    messages.forEach(function (m) {
+      var row = el("div", "qm-chat-message" + (m.mine ? " qm-chat-message--mine" : ""));
+      if (!m.mine) row.appendChild(el("div", "qm-chat-message-who", m.who || ""));
+      var bubble = el("div", "qm-chat-message-bubble");
+      bubble.appendChild(el("span", "qm-chat-message-text", m.text));
+      var badge = el("span", "qm-karma-badge");
+      badge.hidden = true; // filled in by applyKarmaBadges() once the lookup resolves, Governance pane only
+      badge.setAttribute("data-karma-for", m.user_id || "");
+      bubble.appendChild(badge);
+      row.appendChild(bubble);
+      row.appendChild(el("div", "qm-chat-message-at", chatAgo(m.at)));
+      box.appendChild(row);
+    });
+    box.scrollTop = box.scrollHeight;
+    if (isChannel) applyKarmaBadges(messages);
+  }
+
+  function applyKarmaBadges(messages) {
+    var ids = Array.from(new Set(messages.map(function (m) { return m.user_id; }).filter(Boolean)));
+    if (!ids.length) return;
+    var since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    chatApi("/api/karma/recent?user_ids=" + ids.join(",") + "&since=" + encodeURIComponent(since)).then(function (r) {
+      Object.keys(r.karma).forEach(function (uid) {
+        var entry = r.karma[uid];
+        document.querySelectorAll('[data-karma-for="' + uid + '"]').forEach(function (badge) {
+          badge.hidden = false;
+          badge.textContent = "✦ +" + entry.points + " Karma";
+          badge.title = entry.reason + " · " + chatAgo(entry.at);
+        });
+      });
+    }).catch(function () { /* the badge is a bonus; a failed lookup just means no badge shows */ });
+  }
+
+  var chatComposer = $("qm-chat-composer");
+  if (chatComposer) {
+    chatComposer.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (!chatState.active) return;
+      var input = $("qm-chat-input");
+      var text = input.value.trim();
+      if (!text) return;
+      input.disabled = true;
+      chatApi(CHAT_ROUTE[chatState.active.kind](chatState.active.id), { text: text }).then(function () {
+        input.value = "";
+        input.disabled = false;
+        openConversation(chatState.active); // reload so the new message (and anyone else's since) shows
+      }).catch(function (err) {
+        input.disabled = false;
+        window.alert(err.message);
+      });
+    });
+  }
+
+  var chatMembersBtn = $("qm-chat-members-btn");
+  if (chatMembersBtn) {
+    chatMembersBtn.addEventListener("click", function () {
+      if (!chatState.active) return;
+      var overlay = $("qm-chat-members-overlay");
+      var listEl = $("qm-chat-members-list");
+      listEl.innerHTML = "<p class=\"qm-chat-empty\">Loading…</p>";
+      overlay.hidden = false;
+
+      chatMembersFor(chatState.active).then(function (members) {
+        listEl.innerHTML = "";
+        if (!members.length) {
+          listEl.appendChild(el("p", "qm-chat-empty", "No other members yet."));
+          return;
+        }
+        members.forEach(function (m) {
+          var row = el("div", "qm-chat-members-row");
+          var avatar = el("span", "qm-chat-row-avatar", (m.name || "?").trim().charAt(0).toUpperCase());
+          var dot = el("span", "qm-presence-dot qm-presence-dot--grey");
+          dot.setAttribute("data-presence-for", m.user_id);
+          avatar.appendChild(dot);
+          row.appendChild(avatar);
+          row.appendChild(el("span", "qm-chat-members-name", m.name));
+          listEl.appendChild(row);
+        });
+        var ids = members.map(function (m) { return m.user_id; });
+        chatApi("/api/presence/batch?user_ids=" + ids.join(",")).then(function (r) {
+          Object.keys(r.statuses).forEach(function (uid) {
+            listEl.querySelectorAll('[data-presence-for="' + uid + '"]').forEach(function (dot) {
+              dot.className = "qm-presence-dot qm-presence-dot--" + r.statuses[uid];
+              dot.title = CHAT_PRESENCE_LABEL[r.statuses[uid]] || "";
+            });
+          });
+        }).catch(function () { /* advisory only */ });
+      });
+    });
+  }
+
+  function chatMembersFor(c) {
+    if (c.kind === "family" || c.kind === "group") return Promise.resolve(chatState.activeMembers);
+    if (c.kind === "private") return Promise.resolve(c.other_user_id ? [{ user_id: c.other_user_id, name: c.title }] : []);
+    if (c.kind === "local") return chatApi("/api/local-areas/" + c.id + "/members").then(function (r) { return r.members; });
+    return chatApi("/api/subgroups/" + c.id + "/members").then(function (r) { return r.members; }); // kind === 'sub'
+  }
+
+  var chatMembersClose = $("qm-chat-members-close");
+  if (chatMembersClose) chatMembersClose.addEventListener("click", function () { $("qm-chat-members-overlay").hidden = true; });
+
+  if ($("qm-chat-list")) {
+    loadConversations();
+    // Same 30-second cadence dash_extras.js's own notification poll already uses elsewhere on
+    // this page -- not a new, more aggressive loop. Keeps running regardless of which rail tab
+    // is active, same as that poll.
+    setInterval(loadConversations, 30000);
+  }
 
   // ---- Statistics Dashboard Upgrade (2026-11-16) ----
   // Both /api/location/stats/<level>/<id> and /api/earth/stats return small-count-suppressed
@@ -427,8 +734,68 @@
     loadWalletBalanceFor("qm-stats-modal", level, locationId, true);
     loadCollectiveKarmaFor("qm-stats-modal", level, locationId);
     loadWalletHistoryFor("qm-stats-modal", level, locationId);
+    renderRequestJoin(level, locationId);
   }
   window.QMOpenStatsModal = openStatsModal;
+
+  // ---- Request to Join (Chat-as-Dashboard Phase 2 Step 2, 2026-11-24) ----
+  // Modal-only (see this section's own comment in dashboard.html) -- wired to chat_core.py's
+  // 3-strike escalation built in Step 1 (GET/POST /api/chat/temporary-access, already live).
+  // "Home" here means the viewer's OWN present-location chain at this exact level -- comparing
+  // against window.QM_PRESENT_LOCATION, the same global this file already reads for the explorer
+  // sidebar's own siblings-of-my-own-chain scoping, never re-derived a second way.
+  function isHomeLocation(level, locationId) {
+    var node = presentLocation[level];
+    return !!(node && String(node.id) === String(locationId));
+  }
+
+  function renderRequestJoin(level, locationId) {
+    var section = document.getElementById("qm-stats-modal-request-join");
+    if (!section) return;
+    if (level === "earth" || isHomeLocation(level, locationId)) { section.hidden = true; return; }
+    section.hidden = false;
+    var idEl = document.getElementById("qm-stats-modal-request-join-id");
+    var statusEl = document.getElementById("qm-stats-modal-request-join-status");
+    var btn = document.getElementById("qm-stats-modal-request-join-btn");
+    var errEl = document.getElementById("qm-stats-modal-request-join-error");
+    idEl.textContent = "Location ID: " + locationId;
+    statusEl.hidden = true;
+    btn.hidden = true;
+    errEl.hidden = true;
+
+    fetch("/api/chat/temporary-access").then(function (r) { return r.json(); }).then(function (data) {
+      var mine = (data.requests || []).filter(function (r) { return r.location_level === level && r.location_id === locationId; });
+      var live = mine.filter(function (r) { return r.status === "pending" || r.status === "active"; })[0];
+      var deniedFinal = mine.filter(function (r) { return r.status === "denied_final"; })[0];
+      if (live) {
+        statusEl.hidden = false;
+        statusEl.textContent = live.status === "pending"
+          ? "⏳ Request pending — awaiting the " + (live.decision_level || level) + " council."
+          : "✅ You have temporary access here.";
+      } else if (deniedFinal) {
+        statusEl.hidden = false;
+        statusEl.textContent = "🚫 Request denied after 3 attempts — this location can't be requested again.";
+      } else {
+        btn.hidden = false;
+      }
+    }).catch(function () { /* advisory only -- a failed lookup just leaves the button hidden */ });
+
+    btn.onclick = function () {
+      btn.disabled = true;
+      fetch("/api/chat/temporary-access", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ location_level: level, location_id: locationId }),
+      }).then(function (r) {
+        return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || "Something went wrong"); return j; });
+      }).then(function () {
+        renderRequestJoin(level, locationId);
+      }).catch(function (e) {
+        btn.disabled = false;
+        errEl.hidden = false;
+        errEl.textContent = e.message;
+      });
+    };
+  }
 
   // 2026-11-01: the always-on sidebar itself (not just its "📊 Stats" board-header button) now
   // opens the same modal -- one delegated listener per sidebar rather than re-binding on every
@@ -504,7 +871,7 @@
   // label. Children are built lazily on first expand -- getChildren may
   // return an array (already-cached data) or a Promise (the one live
   // per-tehsil village fetch). ----
-  function buildNode(tab, label, onSelect, getChildren, depth) {
+  function buildNode(tab, label, idText, onSelect, getChildren, depth) {
     var li = document.createElement("li");
     li.className = "qm-explorer-node";
 
@@ -520,6 +887,16 @@
     labelBtn.type = "button";
     labelBtn.className = "qm-explorer-label";
     labelBtn.textContent = label;
+    // Chat-as-Dashboard Phase 2 Step 2 (2026-11-24): the Location ID shown alongside every node,
+    // not just the user's own -- "Request to Join" (the stats modal, selectLocation() below)
+    // needs the viewer to actually see the id they're requesting against, same reason the old
+    // Phase 1 proposal called this out as a real missing piece, not a cosmetic one.
+    if (idText) {
+      var idSpan = document.createElement("span");
+      idSpan.className = "qm-explorer-node-id";
+      idSpan.textContent = " (" + idText + ")";
+      labelBtn.appendChild(idSpan);
+    }
 
     var childList = document.createElement("ul");
     childList.className = "qm-explorer-tree";
@@ -561,10 +938,10 @@
   }
 
   function villageNode(tab, village, depth) {
-    return buildNode(tab, village.name, function () { selectLocation(tab, "village", village.id, village.name); }, null, depth);
+    return buildNode(tab, village.name, village.id, function () { selectLocation(tab, "village", village.id, village.name); }, null, depth);
   }
   function tehsilNode(tab, tehsil, depth) {
-    return buildNode(tab, tehsil.name, function () { selectLocation(tab, "tehsil", tehsil.id, tehsil.name); }, function () {
+    return buildNode(tab, tehsil.name, tehsil.id, function () { selectLocation(tab, "tehsil", tehsil.id, tehsil.name); }, function () {
       return fetch("/api/india-villages/" + encodeURIComponent(tehsil.id))
         .then(function (r) { return r.json(); })
         .then(function (data) { return (data.villages || []).map(function (v) { return villageNode(tab, v, depth + 1); }); });
@@ -582,21 +959,21 @@
       });
   }
   function districtNode(tab, district, depth) {
-    return buildNode(tab, district.name, function () { selectLocation(tab, "district", district.id, district.name); }, function () {
+    return buildNode(tab, district.name, district.id, function () { selectLocation(tab, "district", district.id, district.name); }, function () {
       return districtChildren(tab, district, depth + 1);
     }, depth);
   }
   function stateNode(tab, state, depth) {
-    return buildNode(tab, state.name, function () { selectLocation(tab, "state", state.id, state.name); }, function () {
+    return buildNode(tab, state.name, state.id, function () { selectLocation(tab, "state", state.id, state.name); }, function () {
       var stateData = indiaDistricts.states[state.id];
       return (stateData ? stateData.districts : []).map(function (d) { return districtNode(tab, d, depth + 1); });
     }, depth);
   }
   function countryLeafNode(tab, country, depth) {
-    return buildNode(tab, country.name, function () { selectLocation(tab, "country", country.id, country.name); }, null, depth);
+    return buildNode(tab, country.name, country.id, function () { selectLocation(tab, "country", country.id, country.name); }, null, depth);
   }
   function continentNode(tab, continent, depth) {
-    return buildNode(tab, continent.name, function () { selectLocation(tab, "continent", continent.id, continent.name); }, function () {
+    return buildNode(tab, continent.name, continent.id, function () { selectLocation(tab, "continent", continent.id, continent.name); }, function () {
       return (continent.countries || []).map(function (c) { return countryLeafNode(tab, c, depth + 1); });
     }, depth);
   }
@@ -634,7 +1011,7 @@
         renderTreeRoot("global-explorer-tree", (indiaStates.zones || []).filter(function (z) {
           return z.country_id === presentLocation.country.id;
         }).map(function (z) {
-          return buildNode("global", z.name, function () { selectLocation("global", "zone", z.id, z.name); }, function () {
+          return buildNode("global", z.name, z.id, function () { selectLocation("global", "zone", z.id, z.name); }, function () {
             return (z.states || []).map(function (s) { return stateNode("global", s, 1); });
           }, 0);
         }), "No zones available.");

@@ -277,6 +277,12 @@ def _touch_presence(response):
 
 @app.route("/")
 def index():
+    # Chat-as-Dashboard Phase 2 Step 2 (2026-11-24): an already-logged-in visitor landing on the
+    # public marketing page (a bookmark, a shared link, the browser's own back button) goes
+    # straight to their dashboard instead -- this page was never meant to be seen signed in.
+    # Pre-existing gap, not introduced by this pivot; fixed here since it's one line.
+    if session.get("user_id"):
+        return redirect(url_for("dashboard"))
     # No public religion-based identity symbol or Poems Marquee exists on this page any more --
     # removed 2026-11-08 (owner legal decision; see the note above api_global_data() below).
     return render_template("home.html")
@@ -3899,10 +3905,12 @@ def api_user_languages():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    """User dashboard: 4 tabs (Private/Personal/Public/Global). Only
-    Private is built out this pass — Karma/Activities have zero real
-    backing data anywhere in this repo yet, so they're shown as honest
-    empty-state sections, not fabricated numbers."""
+    """User dashboard: Home (the Unified Chat Architecture's list+feed, promoted here from the
+    now-retired standalone /chat page, 2026-11-24) plus the original Private/Personal/Public/
+    Global tabs, reached via a left icon rail instead of the old horizontal tab bar -- same
+    panels, same ids, same backing JS, just restyled navigation. Karma/Activities have zero real
+    backing data anywhere in this repo yet, so they're shown as honest empty-state sections, not
+    fabricated numbers."""
     profile = _profile_for(session["user_id"])
     if not profile:
         session.pop("user_id", None)
@@ -3949,18 +3957,11 @@ def qmail_page():
 @app.route("/chat")
 @login_required
 def chat_page():
-    """Unified Chat Architecture, Phase 2 Step 2 (2026-11-24): the Teams-style dual-pane chat UI --
-    a standalone, full-screen page (same reasoning as /qmail: its own scroll/focus context, a real
-    bookmarkable URL), desktop/web only (the mobile app keeps its own single-column screens, Step
-    3). Needs only enough to render the header -- the page loads everything else itself via
-    /api/chat/conversations."""
-    conn = get_db()
-    user = conn.execute("SELECT name FROM users WHERE id = ?", (session["user_id"],)).fetchone()
-    conn.close()
-    if not user:
-        session.pop("user_id", None)
-        return redirect(url_for("login"))
-    return render_template("chat.html", member_name=user["name"])
+    """Retired (Chat-as-Dashboard Phase 2 Step 2, 2026-11-24): the standalone Teams-style chat UI
+    this route used to render is now the dashboard's own Home tab -- see dashboard(). Kept as a
+    redirect for one release (bookmarks, any stale client-side link) rather than removed outright;
+    delete this route entirely once that's elapsed."""
+    return redirect(url_for("dashboard"))
 
 
 @app.route("/api/me")

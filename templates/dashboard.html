@@ -27,13 +27,49 @@
       <h1 data-i18n="dashboard">Qumanity</h1>
       <p>{{ profile.name }}</p>
     </div>
-    <nav class="qm-header-actions">
-      <div class="dq-pop" id="ui-lang-wrap">
-        <button type="button" class="dq-dot dq-dot-lang" id="ui-lang-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Language" title="Change language"></button>
+  </header>
+
+  <!-- Chat-as-Dashboard Phase 2 Step 2 (2026-11-24): the far-left icon rail. The 5 main icons
+       reuse the SAME qm-dash-tab/data-tab class+attribute the old horizontal tab bar used --
+       dashboard.js's own tab-switch block (the `panels` map, below in that file) is UNCHANGED,
+       just restyled vertical; "home" is the one new tab value, added to that map. Notifications/
+       Settings/Logout/Language/Timebox are RELOCATED here from the old header -- same ids, same
+       working dash_extras.js/i18n.js logic, never rebuilt. The header itself stays (logo + title
+       only) rather than being removed outright: multiview.js's measureDockOffsets() measures
+       .qm-header's own height for its admin-only full-screen board dock, and leaving a real,
+       similarly-sized header in place is lower-risk than relying on that function's fallback
+       default for every admin session. -->
+  <div class="qm-dash-shell">
+    <nav class="qm-dash-rail" aria-label="Dashboard navigation">
+      <button class="qm-dash-tab qm-dash-rail-btn is-active" data-tab="home" type="button" title="Home">
+        <span aria-hidden="true">🏠</span><small>Home</small>
+      </button>
+      <button class="qm-dash-tab qm-dash-rail-btn" data-tab="private" type="button" title="Private">
+        <span aria-hidden="true">👤</span><small data-i18n="tab_private">Private</small>
+      </button>
+      <button class="qm-dash-tab qm-dash-rail-btn" data-tab="personal" type="button" title="Personal">
+        <span aria-hidden="true">❤️</span><small data-i18n="tab_personal">Personal</small>
+      </button>
+      {% if not profile.is_global_account %}
+      <button class="qm-dash-tab qm-dash-rail-btn" data-tab="public" type="button" title="Public">
+        <span aria-hidden="true">🏘️</span><small data-i18n="tab_public">Public</small>
+      </button>
+      {% endif %}
+      <button class="qm-dash-tab qm-dash-rail-btn" data-tab="global" type="button" title="Global">
+        <span aria-hidden="true">🌍</span><small data-i18n="tab_global">Global</small>
+      </button>
+
+      <div class="qm-dash-rail-spacer"></div>
+
+      <div class="dq-pop qm-dash-rail-pop" id="ui-lang-wrap">
+        <button type="button" class="dq-dot dq-dot-lang qm-dash-rail-btn" id="ui-lang-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Language" title="Change language"></button>
         <ul class="dq-menu" id="ui-lang-menu" role="listbox" hidden></ul>
       </div>
-      <div class="dq-pop" id="notif-wrap">
-        <button type="button" class="dq-dot dq-dot-icon" id="notif-btn" aria-haspopup="true" aria-expanded="false" aria-label="Notifications" title="New messages and requests">
+      <button type="button" class="dq-dot dq-dot-icon qm-dash-rail-btn" id="timebox-btn" aria-label="Time, weather and Vedic calendar" title="Time · weather · Vedic calendar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      </button>
+      <div class="dq-pop qm-dash-rail-pop" id="notif-wrap">
+        <button type="button" class="dq-dot dq-dot-icon qm-dash-rail-btn" id="notif-btn" aria-haspopup="true" aria-expanded="false" aria-label="Notifications" title="New messages and requests">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 00-6 6v3.5L4 16h16l-2-3.5V9a6 6 0 00-6-6z"/><path d="M9.5 19a2.5 2.5 0 005 0"/></svg>
           <span class="dq-badge" id="notif-badge" hidden>0</span>
         </button>
@@ -50,25 +86,60 @@
           </div>
         </div>
       </div>
-      <button type="button" class="dq-dot dq-dot-icon" id="timebox-btn" aria-label="Time, weather and Vedic calendar" title="Time · weather · Vedic calendar">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-      </button>
-      <!-- Item 10a: extreme top-right corner -->
-      <button type="button" class="qm-btn qm-btn-ghost qm-logout-btn" id="logout-btn" data-i18n="logout">Logout</button>
+      <!-- Settings (2026-11-24): Settings has always lived INSIDE the Private panel (the
+           pv-settings details card -- Language/PIN/sign-out), not as its own page; rather than
+           build a second, duplicate settings surface, this button just opens Private and expands
+           that card -- see dashboard.js's own rail-click handling. -->
+      <button type="button" class="qm-dash-rail-btn" id="qm-dash-settings-btn" title="Settings" aria-label="Settings">⚙️</button>
+      <!-- Item 10a -->
+      <button type="button" class="qm-dash-rail-btn" id="logout-btn" aria-label="Logout" title="Logout">🔌</button>
     </nav>
-  </header>
 
   <main class="qm-dashboard-main">
-    <div class="qm-dash-tabs">
-      <button class="qm-dash-tab" data-tab="global" type="button" data-i18n="tab_global" title="Earth, your Continent and Country">Global</button>
-      {% if not profile.is_global_account %}
-      <button class="qm-dash-tab" data-tab="public" type="button" data-i18n="tab_public" title="Where you live now: Zone down to Village">Public</button>
-      {% endif %}
-      <button class="qm-dash-tab" data-tab="personal" type="button" data-i18n="tab_personal" title="Your Family, Friends and Business groups">Personal</button>
-      <button class="qm-dash-tab is-active" data-tab="private" type="button" data-i18n="tab_private" title="Your own profile, wallet and settings">Private</button>
-    </div>
+    <!-- The new Home tab (2026-11-24): the Teams-style unified inbox, promoted from the
+         standalone /chat page (now retired -- see app.py's own redirect). Reuses chat.js/
+         chat.css's list+feed markup verbatim, MINUS that page's own icon rail -- this dashboard's
+         new rail (above) replaces it; chat.html's rail was always non-functional placeholders
+         for exactly this page anyway (see its own module docstring). -->
+    <section class="qm-dash-panel qm-chat-dash-shell is-active" id="qm-dash-home">
+      <section class="qm-chat-list-pane">
+        <div class="qm-chat-list-header">
+          <h1>Chat</h1>
+          <div class="qm-chat-filter-tabs" role="tablist">
+            <button type="button" class="qm-chat-filter-tab is-active" data-filter="all" role="tab" aria-selected="true">All</button>
+            <button type="button" class="qm-chat-filter-tab" data-filter="unread" role="tab" aria-selected="false">Unread</button>
+            <button type="button" class="qm-chat-filter-tab" data-filter="mentions" role="tab" aria-selected="false">Mentions</button>
+          </div>
+        </div>
+        <div class="qm-chat-list" id="qm-chat-list">
+          <p class="qm-chat-empty">Loading…</p>
+        </div>
+      </section>
 
-    <section class="qm-dash-panel is-active" id="qm-dash-private">
+      <section class="qm-chat-feed">
+        <div class="qm-chat-feed-empty" id="qm-chat-feed-empty">
+          <p>Select a conversation from the list.</p>
+        </div>
+        <div class="qm-chat-feed-active" id="qm-chat-feed-active" hidden>
+          <header class="qm-chat-feed-header">
+            <div class="qm-chat-feed-title">
+              <h2 id="qm-chat-feed-name"></h2>
+              <p id="qm-chat-feed-desc"></p>
+            </div>
+            <button type="button" class="qm-chat-members-btn" id="qm-chat-members-btn" title="Members" aria-label="Members">
+              👥 <span id="qm-chat-members-count"></span>
+            </button>
+          </header>
+          <div class="qm-chat-messages" id="qm-chat-messages"></div>
+          <form class="qm-chat-composer" id="qm-chat-composer">
+            <input type="text" id="qm-chat-input" placeholder="Write a message…" maxlength="1000" autocomplete="off" />
+            <button type="submit" class="qm-btn qm-btn-primary">Send</button>
+          </form>
+        </div>
+      </section>
+    </section>
+
+    <section class="qm-dash-panel" id="qm-dash-private">
       <div class="pv-hero">
         <div class="pv-avatar-wrap">
           <div class="pv-avatar" id="pv-avatar" aria-hidden="true"
@@ -945,6 +1016,17 @@
 
     </section>
   </main>
+  </div>
+
+  <div class="qm-chat-members-overlay" id="qm-chat-members-overlay" hidden>
+    <div class="qm-chat-members-panel">
+      <div class="qm-chat-members-head">
+        <span>Members</span>
+        <button type="button" class="qm-chat-members-close" id="qm-chat-members-close" aria-label="Close">✕</button>
+      </div>
+      <div class="qm-chat-members-list" id="qm-chat-members-list"></div>
+    </div>
+  </div>
 
   {% if is_admin_panel_user %}
   <!-- 2026-10-28 (Hierarchical Explorer redesign): replaces the old top-level Admin/Multi-View
@@ -1038,6 +1120,24 @@
         <p class="qm-dash-empty" id="qm-stats-modal-tx-note" hidden></p>
         <div class="qp-history" id="qm-stats-modal-tx-list"></div>
         <p class="qm-dash-empty" id="qm-stats-modal-tx-empty" hidden>No transactions yet.</p>
+      </div>
+      <!-- Request to Join (Chat-as-Dashboard Phase 2 Step 2, 2026-11-24): modal-only, same
+           reasoning as Transactions above -- the explorer sidebar's own quick-glance panel is
+           untouched; this is the one place "view a location's stats" already funnels through
+           (board.js's own "📊 Stats" button, the sidebar panel's own click-through, and
+           selectLocation() for any tree node) for EITHER root (Public or Global), so one block
+           here covers every path, never duplicated per-panel. Hidden outright for the user's own
+           home location at this level -- see dashboard.js's renderRequestJoin(). Wired to
+           chat_core.py's 3-strike escalation (temporary_location_access/temporary_access_strikes,
+           Phase 2 Step 1) -- NOT a reason textarea: request_temporary_access() takes no reason
+           parameter today (that would be new backend schema work, out of this step's scope; a
+           free-text box with nowhere real to put it would be worse than leaving it out). -->
+      <div class="qm-stats-section" id="qm-stats-modal-request-join" hidden>
+        <div class="qm-stats-section-title">🤝 Request to Join</div>
+        <p class="qm-dash-empty" id="qm-stats-modal-request-join-id"></p>
+        <p class="qm-dash-empty" id="qm-stats-modal-request-join-status" hidden></p>
+        <button type="button" class="qm-btn qm-btn-ghost" id="qm-stats-modal-request-join-btn">Request to Join</button>
+        <p class="qm-timeline-note" id="qm-stats-modal-request-join-error" hidden></p>
       </div>
     </div>
   </div>
