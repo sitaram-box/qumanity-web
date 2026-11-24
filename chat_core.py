@@ -75,6 +75,8 @@ import geography_core
 import id_generator
 import local_area_core
 
+TEMP_ACCESS_REASON_MAX_CHARS = 500
+
 PRESENCE_GREEN_MINUTES = 2
 PRESENCE_YELLOW_MINUTES = 15
 PRESENCE_BUSY_HOURS = 4  # how long a user-set "Busy" override lasts before it's treated as expired
@@ -139,6 +141,11 @@ def ensure_tables(conn) -> None:
     if "decision_location_id" not in temp_access_cols:
         conn.execute("ALTER TABLE temporary_location_access ADD COLUMN decision_location_id TEXT")
         conn.execute("UPDATE temporary_location_access SET decision_location_id = location_id WHERE decision_location_id IS NULL")
+    if "reason" not in temp_access_cols:
+        # The 3-Strike Request UI (Chat-as-Dashboard Phase 2 Step 3, 2026-11-24): why the
+        # requester wants access, shown to whoever decides each strike. Optional -- a pre-existing
+        # row from before this column existed just has no reason to show, not an error.
+        conn.execute("ALTER TABLE temporary_location_access ADD COLUMN reason TEXT")
     conn.commit()
 
 
@@ -222,16 +229,19 @@ def _mint_foreign_account_id(conn, user_row, foreign_location: dict) -> str:
 
 
 def _can_approve_temporary_access(conn, user_id: int, location_level: str, location_id: str, is_admin: bool) -> bool:
-    """The Founder, always; at Village level, also that village's own Q-Punch Nayak/Nayika
+    """The Founder, always; at Village level, that village's own Q-Punch Nayak/Nayika
     (announcements_core.is_council_member(), same reuse local_area_core._is_village_admin()
-    already established). No elected authority exists above Village yet anywhere in this
-    codebase, so only the Founder can approve temporary access there for now -- the same
-    real limitation can_create_channel() below documents for channel creation."""
+    already established); at Tehsil-and-up, a seated member of that level's real, elected
+    Q-Punch cascade council (election_core.is_cascade_council_member(), 2026-11-24 Step 3 --
+    this module's own docstring used to say no elected authority existed above Village; that data
+    is real now, see is_cascade_council_member()'s own docstring for why chat_core.py was wrong
+    about this). Used both for deciding a single request (decide_temporary_access()) and for
+    listing which requests a given user may even see (pending_requests_for_approver())."""
     if is_admin:
         return True
     if location_level == "village":
         return announcements_core.is_council_member(conn, user_id, location_id, "village")
-    return False
+    return election_core.is_cascade_council_member(conn, user_id, location_level, location_id)
 
 
 def _present_temp_access(row) -> dict:
@@ -245,7 +255,7 @@ def _present_temp_access(row) -> dict:
     return d
 
 
-def request_temporary_access(conn, user_id: int, location_level: str, location_id: str) -> dict:
+def request_temporary_access(conn, user_id: int, location_level: str, location_id: str, reason: str | None = None) -> dict:
     """Queues a request for temporary access to a location the user doesn't live in -- e.g. "I
     work there virtually." Starts 'pending', decided at this exact (location_level, location_id)
     first (strike 1 -- see this module's own docstring on escalation). Nothing is minted or usable
@@ -254,7 +264,20 @@ def request_temporary_access(conn, user_id: int, location_level: str, location_i
     the same style request_join_group()/request_join() already use elsewhere in this codebase.
     Raises PermissionError outright if a PRIOR request for this exact (user, location) already
     ran all 3 strikes -- "after 3 rejections, they cannot request that location again" is
-    enforced here, not left to the UI alone."""
+    enforced here, not left to the UI alone.
+
+    reason (2026-11-24, Step 3): free text shown to whoever decides each strike (the Approver
+    View) -- optional, never required; an existing pending/active request is returned as-is on
+    retry WITHOUT overwriting its stored reason with this call's (if any), same as every other
+    field on the idempotent-return path."""
+    # ensure_tables() is called defensively here (and in every other public function below that
+    # touches temporary_location_access), not only from migrations/045 -- a column added to this
+    # module's own SCHEMA/ensure_tables() after a database already applied that migration would
+    # otherwise never actually reach it (migrations run at most once each); this is the same
+    # defensive-call convention board_core.ensure_sub_tables()/local_area_core.ensure_tables()
+    # etc. already use throughout app.py, not a new pattern. Found live, 2026-11-24, when adding
+    # the `reason` column broke an already-migrated database until this was added.
+    ensure_tables(conn)
     if location_level not in board_core.LEVELS:
         raise ValueError("Unknown location level")
     if conn.execute(
@@ -274,9 +297,17 @@ def request_temporary_access(conn, user_id: int, location_level: str, location_i
         raise LookupError("User not found")
     cur = conn.execute(
         "INSERT INTO temporary_location_access "
-        "(user_id, location_level, location_id, decision_level, decision_location_id, foreign_account_id, status, requested_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)",
-        (user_id, location_level, location_id, location_level, location_id, f"PENDING-{user_id}-{_now()}", _now()),
+        "(user_id, location_level, location_id, decision_level, decision_location_id, foreign_account_id, status, requested_at, reason) "
+        "VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
+        (user_id, location_level, location_id, location_level, location_id,
+         # Bug fix (found by testing, Step 3, 2026-11-24): the placeholder used to be
+         # f"PENDING-{user_id}-{_now()}" -- _now() has only SECOND resolution, so the same user
+         # requesting two DIFFERENT locations within the same wall-clock second collided on this
+         # UNIQUE column (the idempotent check above only returns early for the SAME location).
+         # location_level/location_id are already part of what makes a row distinct, so they're
+         # part of the placeholder too now.
+         f"PENDING-{user_id}-{location_level}-{location_id}-{_now()}", _now(),
+         (reason or "").strip()[:TEMP_ACCESS_REASON_MAX_CHARS] or None),
     )
     # foreign_account_id is a real, globally-unique column (UNIQUE constraint) and must hold SOME
     # value even while pending -- the placeholder above is overwritten with the real, properly
@@ -302,6 +333,7 @@ def decide_temporary_access(conn, admin_user_id: int, request_id: int, approve: 
     own full dict, e.g. {"continent":..., "country":..., ..., "village":...}) is required to
     approve -- the caller (the admin's own UI) already has it on screen; this module has no
     independent source of "what is location_id called"."""
+    ensure_tables(conn)  # see request_temporary_access()'s own comment on why this is called defensively here too
     req = conn.execute("SELECT * FROM temporary_location_access WHERE id = ?", (request_id,)).fetchone()
     if not req:
         raise LookupError("Request not found")
@@ -357,9 +389,32 @@ def decide_temporary_access(conn, admin_user_id: int, request_id: int, approve: 
 
 
 def my_temporary_access(conn, user_id: int) -> list[dict]:
+    ensure_tables(conn)  # see request_temporary_access()'s own comment on why this is called defensively here too
     return [_present_temp_access(r) for r in conn.execute(
         "SELECT * FROM temporary_location_access WHERE user_id = ? ORDER BY requested_at DESC", (user_id,)
     )]
+
+
+def pending_requests_for_approver(conn, user_id: int, is_admin: bool) -> list[dict]:
+    """The Approver View (Chat-as-Dashboard Phase 2 Step 3, 2026-11-24): every PENDING request
+    this user is CURRENTLY authorized to decide, with the requester's name attached for display.
+    Reuses _can_approve_temporary_access() per row rather than a single blanket query, since
+    authority genuinely varies row-by-row -- a Village Nayak/Nayika only ever sees their own
+    village's requests; a Tehsil+ cascade council member only their own level+location; the
+    Founder sees every pending row, everywhere. A request mid-escalation is only ever shown to
+    whoever can decide its CURRENT strike (decision_level/decision_location_id), never its
+    original target -- same current-decider rule decide_temporary_access() itself enforces."""
+    ensure_tables(conn)  # see request_temporary_access()'s own comment on why this is called defensively here too
+    out = []
+    for r in conn.execute(
+        "SELECT t.*, u.name AS requester_name FROM temporary_location_access t "
+        "JOIN users u ON u.id = t.user_id WHERE t.status = 'pending' ORDER BY t.requested_at"
+    ):
+        if _can_approve_temporary_access(conn, user_id, r["decision_level"], r["decision_location_id"], is_admin):
+            item = _present_temp_access(r)
+            item["requester_name"] = r["requester_name"]
+            out.append(item)
+    return out
 
 
 def account_id_for_context(conn, user_id: int, location_level: str | None = None, location_id: str | None = None) -> str:
@@ -458,7 +513,15 @@ def list_my_conversations(conn, user_id: int) -> list[dict]:
     unread_count is NOT computed here yet -- no per-user "last read" timestamp exists anywhere in
     this codebase today (confirmed by grep across every messaging table); that is real, separate
     schema work for Step 2, not silently invented here. Always 0 for now, an honest placeholder a
-    UI can already build the unread/All tabs around once it exists."""
+    UI can already build the unread/All tabs around once it exists.
+
+    `membership` (2026-11-24, Step 3): 'active' | 'temporary', present on every 'channel'-pane row
+    only (a 'private'-pane row has no such concept). 'temporary' means an ACTIVE
+    temporary_location_access grant, not an approved subgroup_members/local_area_members row --
+    the UI's cue for the gold "Temporary Member" badge and for hiding citizen-only controls
+    (voting/posting/rating are already refused server-side regardless, by residency -- see
+    chat_core.py's own module docstring; this flag is the UI-level signal on top of that)."""
+    ensure_tables(conn)  # see request_temporary_access()'s own comment on why this is called defensively here too
     out = []
 
     for r in conn.execute(
@@ -507,6 +570,7 @@ def list_my_conversations(conn, user_id: int) -> list[dict]:
             "kind": "sub", "id": r["id"], "title": r["name"], "pane": "channel",
             "location_id": r["location_id"], "location_level": r["location_level"],
             "last_message_at": _last_message_at(conn, "board_messages", "subgroup_id", r["id"]), "unread_count": 0,
+            "membership": "active",
         })
 
     for r in conn.execute(
@@ -517,7 +581,29 @@ def list_my_conversations(conn, user_id: int) -> list[dict]:
             "kind": "local", "id": r["id"], "title": r["name"], "pane": "channel",
             "location_id": r["village_id"], "location_level": "village",
             "last_message_at": _last_message_at(conn, "local_area_messages", "local_area_id", r["id"]), "unread_count": 0,
+            "membership": "active",
         })
+
+    # Temporary Member channels (Chat-as-Dashboard Phase 2 Step 3, 2026-11-24): an ACTIVE
+    # temporary_location_access grant never puts a row in subgroup_members (that table still
+    # means "this council approved you as a resident member") -- without this, a temporary member
+    # would have chat access (board_core._can_chat(), Step 1) but no way to ever SEE the channel
+    # here to open it. Surfaces every subgroup at that exact (location_level, location_id) --
+    # reuses board_core.list_subgroups() (already generic over any location), not a new query.
+    # Skips a subgroup the user is ALREADY an approved member of (g["my_status"] == "approved"),
+    # so a user who holds both never gets a duplicate row.
+    for grant in conn.execute(
+        "SELECT location_level, location_id FROM temporary_location_access WHERE user_id = ? AND status = 'active'", (user_id,)
+    ):
+        for g in board_core.list_subgroups(conn, user_id, grant["location_id"], grant["location_level"], is_admin=False):
+            if g["my_status"] == "approved":
+                continue
+            out.append({
+                "kind": "sub", "id": g["id"], "title": g["name"], "pane": "channel",
+                "location_id": grant["location_id"], "location_level": grant["location_level"],
+                "last_message_at": _last_message_at(conn, "board_messages", "subgroup_id", g["id"]), "unread_count": 0,
+                "membership": "temporary",
+            })
 
     out.sort(key=lambda c: c["last_message_at"] or "", reverse=True)
     return out

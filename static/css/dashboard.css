@@ -1244,6 +1244,16 @@ span.qm-help-trigger { display: inline-flex; flex: 0 0 auto; align-items: center
 .qm-notif-section-title { margin: 0; padding: 0 12px; font: 700 0.72rem "Inter", system-ui, sans-serif; letter-spacing: 0.04em; text-transform: uppercase; color: var(--qm-text-dim); }
 .qm-notif-section .qm-announce-dropdown { min-width: 0; max-width: none; }
 .qm-notif-viewall { margin: 2px 12px 4px; width: calc(100% - 24px); }
+
+/* The Approver View (Chat-as-Dashboard Phase 2 Step 3, 2026-11-24) -- its own list items, since
+   .qm-announce-dropdown's button-per-row shape doesn't fit a row with two action buttons. */
+.qm-access-request-row { list-style: none; padding: 8px 12px; border-top: 1px solid var(--qm-border); }
+.qm-access-request-row:first-child { border-top: none; }
+.qm-access-request-head { font: 600 0.85rem "Inter", system-ui, sans-serif; color: var(--qm-text); }
+.qm-access-request-meta { font-size: 0.74rem; color: var(--qm-text-dim); margin-top: 2px; }
+.qm-access-request-reason { font: italic 400 0.8rem "Inter", system-ui, sans-serif; color: var(--qm-text-dim); margin: 6px 0 0; }
+.qm-access-request-actions { display: flex; gap: 8px; margin-top: 8px; }
+.qm-access-request-actions .qm-btn { flex: 1; padding: 6px 0; font-size: 0.8rem; }
 #qm-dg-stats-announce-viewall, #qm-dp-stats-announce-viewall, #qm-dg-stats-announce-new, #qm-dp-stats-announce-new { margin-top: 6px; width: 100%; }
 
 /* ---- Item 9: Citizen Report (FIR) ---- */
@@ -1438,7 +1448,17 @@ span.qm-help-trigger { display: inline-flex; flex: 0 0 auto; align-items: center
    flyout menus default to opening below/left of the button, which overflows a 72px rail. Pinned
    to the rail's own right edge instead. */
 .qm-dash-rail-pop { position: relative; }
-.qm-dash-rail-pop .dq-menu { position: absolute; left: 100%; top: 0; margin-left: 8px; z-index: 50; }
+/* bottom: 0 (not top: 0) -- every .qm-dash-rail-pop lives in the rail's BOTTOM cluster, so
+   anchoring from the bottom keeps the flyout growing upward into visible space instead of
+   downward off the bottom of the viewport (found live, 2026-11-24, testing the Approver View's
+   own "Access Requests" dropdown section). max-height + scroll is this cluster's own safety net
+   for a long list on a short viewport, same idea .qm-chat-list already uses. */
+/* right: auto / top: auto override .dq-menu's own base "right: 0" / "top: calc(100% + 8px)" --
+   leaving either of those in effect alongside this rule's own left/bottom pinned BOTH edges on
+   an axis (top+bottom, or left+right) at once, which forces the browser to compute a near-zero
+   box from the gap between them instead of sizing to content (found live, 2026-11-24, debugging
+   why the Approver View's dropdown rendered as a 14px sliver). */
+.qm-dash-rail-pop .dq-menu { position: absolute; left: 100%; right: auto; top: auto; bottom: 0; margin-left: 8px; z-index: 50; max-height: 80vh; overflow-y: auto; }
 
 /* ---- The Home tab: Unified Chat (list pane + feed; the rail above replaces chat.html's own) --- */
 .qm-chat-dash-shell {
@@ -1607,6 +1627,20 @@ span.qm-help-trigger { display: inline-flex; flex: 0 0 auto; align-items: center
   background: rgba(255, 215, 0, 0.16);
   border-radius: 8px;
   padding: 2px 7px;
+}
+
+/* Temporary Member badge (Chat-as-Dashboard Phase 2 Step 3, 2026-11-24): the feed header's own
+   cue, next to the channel name -- solid gold, not the Karma badge's low-opacity tint above, so
+   the two are never visually confused (one's a status, the other's a recent-event callout). */
+.qm-temp-badge {
+  flex: 0 0 auto;
+  font: 700 0.72rem "Inter", system-ui, sans-serif;
+  color: #1a1205;
+  background: linear-gradient(90deg, var(--qm-saffron), var(--qm-gold));
+  border-radius: 999px;
+  padding: 4px 10px;
+  margin-right: 10px;
+  white-space: nowrap;
 }
 
 .qm-chat-composer { display: flex; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--qm-border); }

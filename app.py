@@ -1416,9 +1416,24 @@ def api_chat_temporary_access():
     try:
         if request.method == "POST":
             data = request.get_json(silent=True) or {}
-            result = chat_core.request_temporary_access(conn, session["user_id"], data.get("location_level"), data.get("location_id"))
+            result = chat_core.request_temporary_access(
+                conn, session["user_id"], data.get("location_level"), data.get("location_id"), reason=data.get("reason"),
+            )
             return jsonify(result), 201
         return jsonify({"requests": chat_core.my_temporary_access(conn, session["user_id"])})
+    finally:
+        conn.close()
+
+
+@app.route("/api/chat/temporary-access/pending")
+@login_required
+@_board_error
+def api_chat_temporary_access_pending():
+    """The Approver View (2026-11-24, Step 3): every pending temporary-access request the
+    logged-in user currently has authority to decide -- see chat_core.pending_requests_for_approver()."""
+    conn = get_db()
+    try:
+        return jsonify({"requests": chat_core.pending_requests_for_approver(conn, session["user_id"], _is_admin())})
     finally:
         conn.close()
 

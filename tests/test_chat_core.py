@@ -429,6 +429,62 @@ conn.close()
 
 print()
 print("=" * 70)
+print("11. The 3-Strike Request UI's backend (Step 3): reason, Approver View, temp channels in the list")
+print("=" * 70)
+conn = dbmod.get_db()
+
+# 11a. reason is stored, and NOT overwritten by an idempotent retry.
+req_reason = chat_core.request_temporary_access(
+    conn, other_resident["user_id"], "village", VILLAGE_A["village"]["id"], reason="I run a shop there and need to coordinate with the council.",
+)
+check("11a. a request's reason is stored", req_reason["reason"] == "I run a shop there and need to coordinate with the council.")
+retry = chat_core.request_temporary_access(conn, other_resident["user_id"], "village", VILLAGE_A["village"]["id"], reason="a different, later reason")
+check("11a2. an idempotent retry returns the SAME row, reason unchanged", retry["id"] == req_reason["id"] and retry["reason"] == req_reason["reason"])
+
+# 11b. Approver View: the Village A Nayak sees this pending request; a plain resident doesn't.
+other_resident_name = raw("SELECT name FROM users WHERE id = ?", (other_resident["user_id"],))["name"]
+nayak_sees = chat_core.pending_requests_for_approver(conn, nayak["user_id"], is_admin=False)
+check("11b. the Village A Nayak sees the pending request, with the requester's name and reason",
+      any(r["id"] == req_reason["id"] and r["requester_name"] == other_resident_name and r["reason"] == req_reason["reason"] for r in nayak_sees))
+plain_resident_sees = chat_core.pending_requests_for_approver(conn, resident["user_id"], is_admin=False)
+check("11b2. a plain resident (not on the council) sees nothing", len(plain_resident_sees) == 0)
+
+# 11c. Approver View at Tehsil+: the seated cascade council member (seated in Section 9, at
+# tehsil CS.DL.3.4) sees a pending request decided at that exact level -- someone who ISN'T
+# seated there does not.
+tehsil_req = chat_core.request_temporary_access(conn, other_resident["user_id"], "tehsil", VILLAGE_A["tehsil"]["id"],
+                                                 reason="Tehsil-level test request")
+cascade_member_sees = chat_core.pending_requests_for_approver(conn, resident["user_id"], is_admin=False)
+check("11c. the seated Tehsil cascade council member sees the Tehsil-level pending request",
+      any(r["id"] == tehsil_req["id"] for r in cascade_member_sees))
+non_member_sees = chat_core.pending_requests_for_approver(conn, nayak["user_id"], is_admin=False)
+check("11c2. the Village A Nayak (not a Tehsil cascade council member) does not see it",
+      not any(r["id"] == tehsil_req["id"] for r in non_member_sees))
+
+# 11d. list_my_conversations(): a Temporary Member sees a foreign channel they hold no
+# subgroup_members row for, tagged 'membership': 'temporary'; an ordinary approved member's own
+# channels are tagged 'active'.
+channel_b_id = chat_core.create_channel(conn, 0, "village", VILLAGE_B["village"]["id"], "Village B Notices", "desc", is_admin=True)
+tester3_convos = chat_core.list_my_conversations(conn, tester3["user_id"])  # tester3 holds an ACTIVE grant for Village B (Section 10h)
+temp_row = next((c for c in tester3_convos if c["kind"] == "sub" and c["title"] == "Village B Notices"), None)
+check("11d. a Temporary Member sees the foreign channel, tagged 'temporary'", temp_row is not None and temp_row["membership"] == "temporary")
+own_convos = chat_core.list_my_conversations(conn, resident["user_id"])  # resident is an approved member of Water Supply (Section 3)
+own_channel_row = next((c for c in own_convos if c["kind"] == "sub" and c["title"] == "Water Supply"), None)
+check("11d2. an ordinary approved member's own channel is tagged 'active'", own_channel_row is not None and own_channel_row["membership"] == "active")
+
+# 11e. No duplicate row once that same Temporary Member is ALSO approved as a real member.
+board_core.request_join(conn, tester3["user_id"], VILLAGE_B, channel_b_id)
+conn.execute("UPDATE subgroup_members SET status='approved' WHERE subgroup_id=? AND user_id=?", (channel_b_id, tester3["user_id"]))
+conn.commit()
+tester3_convos_after = chat_core.list_my_conversations(conn, tester3["user_id"])
+matching = [c for c in tester3_convos_after if c["kind"] == "sub" and c["title"] == "Village B Notices"]
+check("11e. once also an approved member, exactly ONE row remains, tagged 'active'",
+      len(matching) == 1 and matching[0]["membership"] == "active")
+conn.close()
+
+
+print()
+print("=" * 70)
 if FAILS:
     print(f"{len(FAILS)} check(s) FAILED:")
     for f in FAILS:

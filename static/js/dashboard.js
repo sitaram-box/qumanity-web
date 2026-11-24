@@ -215,6 +215,9 @@
     $("qm-chat-feed-desc").textContent = c.pane === "channel"
       ? (c.location_level ? c.location_level.charAt(0).toUpperCase() + c.location_level.slice(1) + " · " + c.location_id : "")
       : "";
+    // Temporary Member badge (Step 3, 2026-11-24) -- chat_core.list_my_conversations()'s own
+    // `membership` field, 'channel'-pane rows only.
+    $("qm-chat-feed-temp-badge").hidden = c.membership !== "temporary";
     $("qm-chat-messages").innerHTML = "<p class=\"qm-chat-empty\">Loading…</p>";
 
     chatApi(CHAT_ROUTE[c.kind](c.id)).then(function (r) {
@@ -738,16 +741,21 @@
   }
   window.QMOpenStatsModal = openStatsModal;
 
-  // ---- Request to Join (Chat-as-Dashboard Phase 2 Step 2, 2026-11-24) ----
-  // Modal-only (see this section's own comment in dashboard.html) -- wired to chat_core.py's
-  // 3-strike escalation built in Step 1 (GET/POST /api/chat/temporary-access, already live).
-  // "Home" here means the viewer's OWN present-location chain at this exact level -- comparing
-  // against window.QM_PRESENT_LOCATION, the same global this file already reads for the explorer
+  // ---- Request to Join (Chat-as-Dashboard Phase 2, Steps 2-3, 2026-11-24) ----
+  // Wired to chat_core.py's 3-strike escalation (GET/POST /api/chat/temporary-access). "Home"
+  // here means the viewer's OWN present-location chain at this exact level -- comparing against
+  // window.QM_PRESENT_LOCATION, the same global this file already reads for the explorer
   // sidebar's own siblings-of-my-own-chain scoping, never re-derived a second way.
   function isHomeLocation(level, locationId) {
     var node = presentLocation[level];
     return !!(node && String(node.id) === String(locationId));
   }
+
+  function levelLabel(level) {
+    return level ? level.charAt(0).toUpperCase() + level.slice(1) : level;
+  }
+
+  var requestJoinTarget = null; // {level, locationId} -- set when the reason modal opens, read on submit
 
   function renderRequestJoin(level, locationId) {
     var section = document.getElementById("qm-stats-modal-request-join");
@@ -757,11 +765,9 @@
     var idEl = document.getElementById("qm-stats-modal-request-join-id");
     var statusEl = document.getElementById("qm-stats-modal-request-join-status");
     var btn = document.getElementById("qm-stats-modal-request-join-btn");
-    var errEl = document.getElementById("qm-stats-modal-request-join-error");
     idEl.textContent = "Location ID: " + locationId;
     statusEl.hidden = true;
     btn.hidden = true;
-    errEl.hidden = true;
 
     fetch("/api/chat/temporary-access").then(function (r) { return r.json(); }).then(function (data) {
       var mine = (data.requests || []).filter(function (r) { return r.location_level === level && r.location_id === locationId; });
@@ -769,33 +775,123 @@
       var deniedFinal = mine.filter(function (r) { return r.status === "denied_final"; })[0];
       if (live) {
         statusEl.hidden = false;
-        statusEl.textContent = live.status === "pending"
-          ? "⏳ Request pending — awaiting the " + (live.decision_level || level) + " council."
-          : "✅ You have temporary access here.";
+        if (live.status === "active") {
+          statusEl.textContent = "✅ Temporary Member";
+        } else {
+          // strike_count counts REJECTIONS so far -- the attempt currently in progress is
+          // strike_count + 1 (the exact arithmetic chat_core.decide_temporary_access() itself
+          // uses for the strike it's about to log).
+          var strikeNumber = (live.strike_count || 0) + 1;
+          statusEl.textContent = "⏳ Pending (Strike " + strikeNumber + ": " + levelLabel(live.decision_level || level) + " Council)";
+        }
       } else if (deniedFinal) {
         statusEl.hidden = false;
-        statusEl.textContent = "🚫 Request denied after 3 attempts — this location can't be requested again.";
+        statusEl.textContent = "🚫 Denied Final — this location can't be requested again.";
       } else {
         btn.hidden = false;
       }
     }).catch(function () { /* advisory only -- a failed lookup just leaves the button hidden */ });
 
     btn.onclick = function () {
-      btn.disabled = true;
+      requestJoinTarget = { level: level, locationId: locationId };
+      document.getElementById("qm-request-join-location").textContent = levelLabel(level) + " · Location ID: " + locationId;
+      document.getElementById("qm-request-join-reason").value = "";
+      document.getElementById("qm-request-join-error").hidden = true;
+      document.getElementById("qm-request-join-modal").hidden = false;
+    };
+  }
+
+  var requestJoinSubmitBtn = document.getElementById("qm-request-join-submit");
+  if (requestJoinSubmitBtn) {
+    requestJoinSubmitBtn.addEventListener("click", function () {
+      if (!requestJoinTarget) return;
+      var reason = document.getElementById("qm-request-join-reason").value.trim();
+      var errEl = document.getElementById("qm-request-join-error");
+      errEl.hidden = true;
+      requestJoinSubmitBtn.disabled = true;
       fetch("/api/chat/temporary-access", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ location_level: level, location_id: locationId }),
+        body: JSON.stringify({ location_level: requestJoinTarget.level, location_id: requestJoinTarget.locationId, reason: reason }),
       }).then(function (r) {
         return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || "Something went wrong"); return j; });
       }).then(function () {
-        renderRequestJoin(level, locationId);
+        requestJoinSubmitBtn.disabled = false;
+        document.getElementById("qm-request-join-modal").hidden = true;
+        renderRequestJoin(requestJoinTarget.level, requestJoinTarget.locationId);
       }).catch(function (e) {
-        btn.disabled = false;
+        requestJoinSubmitBtn.disabled = false;
         errEl.hidden = false;
         errEl.textContent = e.message;
       });
-    };
+    });
   }
+
+  // ---- The Approver View (Step 3, 2026-11-24) ----
+  // A third section in the existing notifications dropdown -- dash_extras.js already owns
+  // opening/closing #notif-menu; this just refreshes its own section's content, same trigger
+  // (the dropdown's own open) dash_extras.js's Announcements/Notifications sections already use.
+  function toApprovalLocationDict(level, locationId) {
+    // decide_temporary_access() only ever reads the DEEPEST level's own id out of this dict
+    // (id_generator.location_path_for()'s own documented behavior, confirmed by reading it --
+    // "the path is just the deepest selected level's id", names included or not) -- a one-key
+    // object is the real, full contract here, not a shorthand for something bigger.
+    var obj = {};
+    obj[level] = { id: locationId };
+    return obj;
+  }
+
+  function decideAccessRequest(requestId, approve, locationName, clickedBtn, otherBtn) {
+    clickedBtn.disabled = true;
+    otherBtn.disabled = true;
+    fetch("/api/chat/temporary-access/" + requestId + "/decide", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ approve: approve, location_name: locationName }),
+    }).then(function (r) {
+      return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || "Something went wrong"); return j; });
+    }).then(function () {
+      renderAccessRequests();
+    }).catch(function (e) {
+      clickedBtn.disabled = false;
+      otherBtn.disabled = false;
+      window.alert(e.message);
+    });
+  }
+
+  function renderAccessRequests() {
+    var section = document.getElementById("notif-access-requests-section");
+    var list = document.getElementById("notif-access-requests-list");
+    if (!section || !list) return;
+    fetch("/api/chat/temporary-access/pending").then(function (r) { return r.json(); }).then(function (data) {
+      var rows = data.requests || [];
+      section.hidden = rows.length === 0;
+      list.innerHTML = "";
+      rows.forEach(function (r) {
+        var li = el("li", "qm-access-request-row");
+        var strikeNumber = (r.strike_count || 0) + 1;
+        li.appendChild(el("div", "qm-access-request-head", r.requester_name + " → " + levelLabel(r.location_level) + " (" + r.location_id + ")"));
+        li.appendChild(el("div", "qm-access-request-meta", "Strike " + strikeNumber + " · decided at " + levelLabel(r.decision_level) + " level"));
+        if (r.reason) li.appendChild(el("p", "qm-access-request-reason", "“" + r.reason + "”"));
+
+        var actions = el("div", "qm-access-request-actions");
+        var approveBtn = el("button", "qm-btn qm-btn-primary", "Approve");
+        approveBtn.type = "button";
+        var denyBtn = el("button", "qm-btn qm-btn-ghost", "Deny");
+        denyBtn.type = "button";
+        actions.appendChild(approveBtn);
+        actions.appendChild(denyBtn);
+        li.appendChild(actions);
+        list.appendChild(li);
+
+        denyBtn.addEventListener("click", function () { decideAccessRequest(r.id, false, null, denyBtn, approveBtn); });
+        approveBtn.addEventListener("click", function () {
+          decideAccessRequest(r.id, true, toApprovalLocationDict(r.location_level, r.location_id), approveBtn, denyBtn);
+        });
+      });
+    }).catch(function () { /* advisory only */ });
+  }
+
+  var notifBtnForAccessRequests = document.getElementById("notif-btn");
+  if (notifBtnForAccessRequests) notifBtnForAccessRequests.addEventListener("click", renderAccessRequests);
 
   // 2026-11-01: the always-on sidebar itself (not just its "📊 Stats" board-header button) now
   // opens the same modal -- one delegated listener per sidebar rather than re-binding on every

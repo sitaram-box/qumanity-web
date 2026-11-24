@@ -84,6 +84,15 @@
             <ul class="qm-announce-dropdown" id="notif-personal-list"></ul>
             <button type="button" class="qm-btn qm-btn-ghost qm-notif-viewall" id="notif-personal-viewall">View all</button>
           </div>
+          <!-- The Approver View (Chat-as-Dashboard Phase 2 Step 3, 2026-11-24): hidden outright
+               (not just empty) for anyone with zero decision authority anywhere -- see
+               dashboard.js's renderAccessRequests(), which only shows this section at all once
+               GET /api/chat/temporary-access/pending returns at least one row. A council member
+               or the Founder only ever sees requests they can ACTUALLY decide right now. -->
+          <div class="qm-notif-section" id="notif-access-requests-section" hidden>
+            <p class="qm-notif-section-title">🔑 Access Requests</p>
+            <ul class="qm-announce-dropdown" id="notif-access-requests-list"></ul>
+          </div>
         </div>
       </div>
       <!-- Settings (2026-11-24): Settings has always lived INSIDE the Private panel (the
@@ -126,6 +135,15 @@
               <h2 id="qm-chat-feed-name"></h2>
               <p id="qm-chat-feed-desc"></p>
             </div>
+            <!-- Temporary Member badge (Chat-as-Dashboard Phase 2 Step 3, 2026-11-24): shown only
+                 when the open conversation's own membership is 'temporary' (chat_core.
+                 list_my_conversations()). No "Create Post"/"Vote" controls exist in this feed to
+                 disable -- it's a flat chat composer, not the separate Collective Board
+                 post+voting system (which a temporary member has no UI path to reach for a
+                 foreign location anyway); every real vote/post/comment/rating gate elsewhere is
+                 already refused server-side by residency regardless, see chat_core.py's own
+                 module docstring. -->
+            <span class="qm-temp-badge" id="qm-chat-feed-temp-badge" hidden>🔸 Temporary Member</span>
             <button type="button" class="qm-chat-members-btn" id="qm-chat-members-btn" title="Members" aria-label="Members">
               👥 <span id="qm-chat-members-count"></span>
             </button>
@@ -1129,16 +1147,34 @@
            here covers every path, never duplicated per-panel. Hidden outright for the user's own
            home location at this level -- see dashboard.js's renderRequestJoin(). Wired to
            chat_core.py's 3-strike escalation (temporary_location_access/temporary_access_strikes,
-           Phase 2 Step 1) -- NOT a reason textarea: request_temporary_access() takes no reason
-           parameter today (that would be new backend schema work, out of this step's scope; a
-           free-text box with nowhere real to put it would be worse than leaving it out). -->
+           Phase 2 Steps 1+3). The button opens #qm-request-join-modal (below) rather than
+           posting directly -- the reason textarea lives there. -->
       <div class="qm-stats-section" id="qm-stats-modal-request-join" hidden>
         <div class="qm-stats-section-title">🤝 Request to Join</div>
         <p class="qm-dash-empty" id="qm-stats-modal-request-join-id"></p>
         <p class="qm-dash-empty" id="qm-stats-modal-request-join-status" hidden></p>
         <button type="button" class="qm-btn qm-btn-ghost" id="qm-stats-modal-request-join-btn">Request to Join</button>
-        <p class="qm-timeline-note" id="qm-stats-modal-request-join-error" hidden></p>
       </div>
+    </div>
+  </div>
+
+  <!-- Request to Join (Chat-as-Dashboard Phase 2 Step 3, 2026-11-24): the reason form --
+       #qm-stats-modal-request-join-btn (above) opens this instead of posting directly. Stacks
+       on top of the Stats modal (both are fixed-position .dq-modal overlays; z-index order in
+       dashboard.css puts this one above). -->
+  <div class="dq-modal" id="qm-request-join-modal" hidden role="dialog" aria-modal="true" aria-labelledby="qm-request-join-title">
+    <div class="dq-modal-box">
+      <button type="button" class="dq-modal-close" data-close aria-label="Close">×</button>
+      <h3 id="qm-request-join-title">🤝 Request to Join</h3>
+      <p class="pv-hint" id="qm-request-join-location"></p>
+      <label class="qm-field"><span>Reason for requesting access</span>
+        <textarea id="qm-request-join-reason" rows="3" maxlength="500" placeholder="e.g. I work virtually in this village and need to coordinate with the council."></textarea>
+      </label>
+      <div class="qm-confirm-actions">
+        <button type="button" class="qm-btn qm-btn-ghost" data-close>Cancel</button>
+        <button type="button" class="qm-btn qm-btn-primary" id="qm-request-join-submit">Submit request →</button>
+      </div>
+      <p class="qm-summary-error" id="qm-request-join-error" hidden></p>
     </div>
   </div>
 
