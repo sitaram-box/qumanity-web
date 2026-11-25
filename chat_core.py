@@ -228,6 +228,37 @@ def _mint_foreign_account_id(conn, user_row, foreign_location: dict) -> str:
     raise RuntimeError("Could not generate a unique foreign Account ID")
 
 
+def can_manage_location(conn, user_id: int, level: str, location_id: str, is_admin: bool) -> bool:
+    """The Unified Authority Checker (Economic Engine Phase 2 Step 2, Founder's Decision 6,
+    2026-11-25): True if `user_id` is the Founder/Admin, a seated member of that location's real
+    elected Q-Punch council (village: announcements_core.is_council_member() /village_council;
+    tehsil-and-up: election_core.is_cascade_council_member() /qpunch_council_members), OR the
+    Agent currently assigned to work that exact location (case_core.py's `agents` table -- queried
+    directly by SQL rather than importing case_core, since case_core.py imports THIS module for
+    this exact function and a two-way import would be circular).
+
+    Consolidates three of the four divergent authority checks flagged in the Phase 1 research
+    (docs/economic_engine_phase1_design_2026_11_25.md §1): the village/tehsil+ split below is
+    exactly what `_can_approve_temporary_access` used to inline itself (now just calls this), and
+    is the same split local_area_core._is_village_admin() and reports_core.is_holder_council() use
+    for their own village-only halves. Those two, and board_core-adjacent can_administer_channel()
+    above, are NOT swapped to call this -- doing so would silently hand an assigned Agent authority
+    over Local Areas / channel administration / citizen Reports, which nothing asked for. Routing
+    them through here too is a deliberate, separate follow-up, not done in this pass."""
+    if is_admin:
+        return True
+    if level == "village":
+        if announcements_core.is_council_member(conn, user_id, location_id, "village"):
+            return True
+    elif election_core.is_cascade_council_member(conn, user_id, level, location_id):
+        return True
+    row = conn.execute(
+        "SELECT 1 FROM agents WHERE user_id = ? AND location_id = ? AND location_level = ? AND is_active = 1",
+        (user_id, location_id, level),
+    ).fetchone()
+    return row is not None
+
+
 def _can_approve_temporary_access(conn, user_id: int, location_level: str, location_id: str, is_admin: bool) -> bool:
     """The Founder, always; at Village level, that village's own Q-Punch Nayak/Nayika
     (announcements_core.is_council_member(), same reuse local_area_core._is_village_admin()
@@ -236,12 +267,13 @@ def _can_approve_temporary_access(conn, user_id: int, location_level: str, locat
     this module's own docstring used to say no elected authority existed above Village; that data
     is real now, see is_cascade_council_member()'s own docstring for why chat_core.py was wrong
     about this). Used both for deciding a single request (decide_temporary_access()) and for
-    listing which requests a given user may even see (pending_requests_for_approver())."""
-    if is_admin:
-        return True
-    if location_level == "village":
-        return announcements_core.is_council_member(conn, user_id, location_id, "village")
-    return election_core.is_cascade_council_member(conn, user_id, location_level, location_id)
+    listing which requests a given user may even see (pending_requests_for_approver()).
+
+    Now just calls can_manage_location() (2026-11-25) -- same village/tehsil+ logic, plus one
+    deliberate, flagged behavior addition: a location's assigned Agent can now also approve
+    temporary access requests there. Revert to the inline village/tehsil+-only check above if
+    that turns out to be unwanted."""
+    return can_manage_location(conn, user_id, location_level, location_id, is_admin)
 
 
 def _present_temp_access(row) -> dict:
