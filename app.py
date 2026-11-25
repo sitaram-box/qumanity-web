@@ -356,14 +356,14 @@ def download_app():
     redirects there. Public, no login needed, same as every other download/landing link on the
     site."""
     return redirect(
-        "https://github.com/sitaram-box/qumanity-web/releases/download/v1.0.4/"
-        "application-33dc23b5-8f94-46f1-b620-41e0a1548d35.apk"
+        "https://github.com/sitaram-box/qumanity-web/releases/download/v1.0.5/"
+        "application-5f9b2474-28ba-4610-a35f-c343f2bd547b.apk"
     )
 
 
 # Bump this by hand whenever a new APK is released -- there is no build pipeline wiring it to the
 # actual APK file, so it is only ever as current as whoever last edited this line (2026-11-16).
-LATEST_APP_VERSION = "1.0.4"
+LATEST_APP_VERSION = "1.0.5"
 
 
 @app.route("/api/app-version")
