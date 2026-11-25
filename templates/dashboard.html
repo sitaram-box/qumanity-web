@@ -1129,6 +1129,16 @@
             <button type="button" class="qm-btn qm-btn-ghost" id="ap-notify-migrated-btn">📧 Notify Migrated Users of New ID</button>
             <span class="qm-dash-empty" id="ap-notify-migrated-status" hidden></span>
           </div>
+          {% if is_admin %}
+            <!-- Database Viewer (2026-11-26): a plain link, not a sub-tab -- it's a whole separate
+                 page (templates/admin_database.html), not another panel inside this modal. Gated
+                 on is_admin specifically (the Founder), stricter than this pane's own
+                 is_admin_panel_user gate, since raw table contents are far more sensitive than the
+                 Admin Queue items the pane otherwise shows. -->
+            <div class="ap-notify-row">
+              <a class="qm-btn qm-btn-ghost" href="{{ url_for('admin_database') }}" target="_blank" rel="noopener">🗄️ Database Viewer</a>
+            </div>
+          {% endif %}
           <div class="ap-body">
             <div class="ap-list" id="ap-list"></div>
             <div class="ap-detail" id="ap-detail">

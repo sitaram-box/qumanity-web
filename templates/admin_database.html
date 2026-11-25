@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qumanity — Database Viewer</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+  <style>
+    .dbv-main { display: flex; gap: 24px; align-items: flex-start; padding: 24px; max-width: 1400px; margin: 0 auto; }
+    .dbv-tables { flex: 0 0 220px; background: var(--qm-panel, #1b1b22); border-radius: 10px; padding: 8px; }
+    .dbv-tables a { display: block; padding: 8px 10px; border-radius: 6px; text-decoration: none; color: inherit; font-size: 14px; word-break: break-all; }
+    .dbv-tables a.is-active { background: var(--qm-gold, #c9a227); color: #111; font-weight: 600; }
+    .dbv-tables a:hover:not(.is-active) { background: rgba(255,255,255,0.08); }
+    .dbv-view { flex: 1; min-width: 0; }
+    .dbv-view h2 { margin-top: 0; }
+    .dbv-meta { opacity: 0.7; font-size: 13px; margin-bottom: 12px; }
+    .dbv-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
+    table.dbv-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    table.dbv-table th, table.dbv-table td { padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left; white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+    table.dbv-table th { position: sticky; top: 0; background: var(--qm-panel, #1b1b22); }
+    table.dbv-table tr:hover td { background: rgba(255,255,255,0.04); }
+    .dbv-pagination { display: flex; gap: 10px; align-items: center; margin-top: 14px; }
+    .dbv-pagination a, .dbv-pagination span { padding: 6px 12px; border-radius: 6px; text-decoration: none; }
+    .dbv-pagination a { background: rgba(255,255,255,0.08); color: inherit; }
+    .dbv-pagination .is-disabled { opacity: 0.35; pointer-events: none; }
+    .dbv-empty { opacity: 0.7; padding: 20px; }
+    @media (max-width: 720px) { .dbv-main { flex-direction: column; } .dbv-tables { flex: none; width: 100%; } }
+  </style>
+</head>
+<body>
+  <header class="qm-header">
+    <a href="{{ url_for('dashboard') }}" style="display:contents">
+      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+    </a>
+    <div class="qm-header-text">
+      <h1>Database Viewer</h1>
+      <p>Read-only. Admin access only. <a href="{{ url_for('dashboard') }}">← Back to dashboard</a></p>
+    </div>
+  </header>
+
+  <main class="dbv-main">
+    <nav class="dbv-tables">
+      {% for t in tables %}
+        <a href="{{ url_for('admin_database', table=t) }}" class="{{ 'is-active' if t == table else '' }}">{{ t }}</a>
+      {% else %}
+        <p class="dbv-empty">No tables found.</p>
+      {% endfor %}
+    </nav>
+
+    <section class="dbv-view">
+      {% if table %}
+        <h2>{{ table }}</h2>
+        <p class="dbv-meta">{{ total_rows }} row{{ '' if total_rows == 1 else 's' }} total — page {{ page }} of {{ total_pages }}</p>
+
+        {% if rows %}
+          <div class="dbv-table-wrap">
+            <table class="dbv-table">
+              <thead>
+                <tr>{% for c in columns %}<th>{{ c }}</th>{% endfor %}</tr>
+              </thead>
+              <tbody>
+                {% for row in rows %}
+                  <tr>{% for value in row %}<td title="{{ value if value is not none else '' }}">{{ value if value is not none else '—' }}</td>{% endfor %}</tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="dbv-pagination">
+            {% if page > 1 %}
+              <a href="{{ url_for('admin_database', table=table, page=page - 1) }}">← Previous</a>
+            {% else %}
+              <span class="is-disabled">← Previous</span>
+            {% endif %}
+            <span>Page {{ page }} of {{ total_pages }}</span>
+            {% if page < total_pages %}
+              <a href="{{ url_for('admin_database', table=table, page=page + 1) }}">Next →</a>
+            {% else %}
+              <span class="is-disabled">Next →</span>
+            {% endif %}
+          </div>
+        {% else %}
+          <p class="dbv-empty">This table has no rows.</p>
+        {% endif %}
+      {% else %}
+        <p class="dbv-empty">No tables found in this database.</p>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

@@ -7047,6 +7047,76 @@ def api_admin_notify_id_change():
     return jsonify({"emailed": emailed, "failed": failed, "no_channel": no_channel, "total": len(rows)})
 
 
+# Database Viewer (2026-11-26): lets the Admin inspect the live database from inside the Admin
+# Panel -- read-only, no Railway CLI or file download needed. Gated on _is_admin() directly (not
+# _is_admin_panel_user(), which also admits a village council head) -- raw table contents are far
+# more sensitive than the Admin Queue items that gate shares.
+#
+# `table` arrives as a query-string value chosen from a plain <select>/links, never typed free
+# text by the page itself, but it is still untrusted input -- validated against the table names
+# SQLite's own sqlite_master reports for THIS database before it is ever placed in a SQL string,
+# so no caller-supplied identifier reaches a query. Every value (the page number, the LIMIT/OFFSET)
+# still goes through `?` placeholders. No INSERT/UPDATE/DELETE anywhere on this path.
+ADMIN_DB_VIEWER_ROWS_PER_PAGE = 50
+ADMIN_DB_VIEWER_COLUMNS = {
+    "users": ["id", "name", "dob", "private_id_9digit", "dob_id_country_digit",
+              "birth_location_json", "present_location_json", "is_demo"],
+    "id_migrations": ["user_id", "old_private_id_9digit", "new_private_id_9digit", "migrated_at"],
+}
+
+
+@app.route("/admin/database")
+@login_required
+def admin_database():
+    if not _is_admin():
+        return redirect(url_for("dashboard"))
+
+    conn = get_db()
+    try:
+        tables = [
+            r["name"] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' "
+                "ORDER BY name"
+            ).fetchall()
+        ]
+
+        table = request.args.get("table", "users")
+        if table not in tables:
+            table = "users" if "users" in tables else (tables[0] if tables else None)
+
+        rows = columns = []
+        total_rows = 0
+        page = 1
+        total_pages = 1
+        if table:
+            try:
+                page = max(1, int(request.args.get("page", "1")))
+            except ValueError:
+                page = 1
+
+            total_rows = conn.execute(f'SELECT COUNT(*) AS n FROM "{table}"').fetchone()["n"]
+            total_pages = max(1, -(-total_rows // ADMIN_DB_VIEWER_ROWS_PER_PAGE))
+            page = min(page, total_pages)
+            offset = (page - 1) * ADMIN_DB_VIEWER_ROWS_PER_PAGE
+
+            picked_columns = ADMIN_DB_VIEWER_COLUMNS.get(table)
+            select_cols = ", ".join(f'"{c}"' for c in picked_columns) if picked_columns else "*"
+            result = conn.execute(
+                f'SELECT {select_cols} FROM "{table}" ORDER BY rowid LIMIT ? OFFSET ?',
+                (ADMIN_DB_VIEWER_ROWS_PER_PAGE, offset),
+            ).fetchall()
+            columns = picked_columns or (list(result[0].keys()) if result else [])
+            rows = [[row[c] for c in columns] for row in result]
+    finally:
+        conn.close()
+
+    return render_template(
+        "admin_database.html", tables=tables, table=table, columns=columns, rows=rows,
+        page=page, total_pages=total_pages, total_rows=total_rows,
+        rows_per_page=ADMIN_DB_VIEWER_ROWS_PER_PAGE,
+    )
+
+
 # ---- Karma Qoins wallet API ----
 # Visibility rule (2026-10-17): the NUMBER of Qoins a wallet holds is public. The rupee VALUE
 # (balance_qoins, 1 Qoin = ₹1 today) is private -- visible only to the wallet's own owner, a
