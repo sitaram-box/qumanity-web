@@ -12,6 +12,14 @@ registration is the free one (`apply_free_registration`): a single ₹1-referenc
 paise at a time across the location tiers, the referrer and the new member. The new member's own
 share is credited as *locked* -- held out of their wallet balance until they cast their first
 election vote (see `unlock_user_share`, called from election_core.cast_vote).
+
+Economic Engine escrow (2026-11-25): `owner_type='case'` is now a recognized wallet owner, one
+per Qumanity Case (owner_id=str(case_id)) -- see `lock_escrow`/`release_escrow`/`refund_escrow`
+below. `wallets` has no CHECK constraint on owner_type (it's always been an opaque pair of
+strings, same as 'user' or any location tier), so no schema change was needed to allow this --
+only the escrow lifecycle functions themselves are new. case_core.py (Phase 2 Step 2) owns the
+Case state machine and calls these; wallet_core stays location-agnostic, so the caller resolves
+which location ids the commerce fee split should land in (see `release_escrow`'s docstring).
 """
 
 from __future__ import annotations
@@ -267,6 +275,80 @@ def merge_qoins(conn, owner_type: str, owner_id: str) -> list[int]:
     for d in denoms:
         conn.execute("INSERT INTO qoins (wallet_id, denomination, created_at) VALUES (?, ?, ?)", (wallet_id, d, now))
     return denoms
+
+
+# ---- Economic Engine escrow lifecycle (2026-11-25) ------------------------------------------
+# One escrow wallet per Case (owner_type='case', owner_id=str(case_id)). A commerce Case cannot
+# leave PENDING_PAYMENT until lock_escrow() succeeds, which is what makes "Member refuses to pay"
+# structurally impossible rather than a dispute to resolve afterward (see
+# docs/economic_engine_phase1_design_2026_11_25.md §2). service_request Cases never call these.
+
+# Decision 1 (2026-11-25, Founder): Agents are salaried, no commission -- the 5% platform fee on
+# a resolved commerce Case's escrow is split across the location ladder instead, never to the
+# Agent. (level, pct) pairs; the Supplier gets the remainder (100% minus whatever of these levels
+# the caller actually supplies a location id for).
+COMMERCE_FEE_SPLIT = (("village", 2), ("state", 2), ("country", 1))
+
+
+def lock_escrow(conn, case_id: int, member_user_id: int, amount: int,
+                 reason: str = "case_escrow_lock") -> None:
+    """Moves `amount` Qoins from the Member's own wallet into this Case's escrow wallet. Raises
+    ValueError (propagated from debit_qoins) if the Member doesn't have enough -- the caller
+    (case_core) must catch that and keep the Case in PENDING_PAYMENT rather than advancing it."""
+    debit_qoins(conn, "user", str(member_user_id), amount, reason, related_user_id=member_user_id)
+    credit_qoins(conn, "case", str(case_id), amount, reason, related_user_id=member_user_id)
+    conn.commit()
+
+
+def refund_escrow(conn, case_id: int, member_user_id: int,
+                   reason: str = "case_escrow_refund") -> int:
+    """Returns a Case's full escrow balance to the Member (the CANCELLED/REFUNDED paths -- a
+    DISPUTED case the council resolves in the Member's favor uses this too). Returns the amount
+    refunded; 0 if nothing was ever locked (safe to call unconditionally)."""
+    amount = wallet_balance(conn, "case", str(case_id))
+    if amount:
+        debit_qoins(conn, "case", str(case_id), amount, reason, related_user_id=member_user_id)
+        credit_qoins(conn, "user", str(member_user_id), amount, reason, related_user_id=member_user_id)
+        conn.commit()
+    return amount
+
+
+def release_escrow(conn, case_id: int, supplier_user_id: int,
+                    fee_location_ids: dict[str, str] | None = None,
+                    reason: str = "case_escrow_release") -> dict:
+    """Pays out a Case's full escrow on RESOLVED. `fee_location_ids` maps each
+    COMMERCE_FEE_SPLIT level ('village'/'state'/'country') to the actual location id to credit --
+    the Case's own village id, and its state/country ancestors, resolved by the caller (e.g. via
+    reports_core.get_ancestor_at_level(conn, member_user_id, level)), since wallet_core stays
+    location-agnostic and never walks the location tree itself. Pass None (or an empty dict) for
+    a service_request Case -- the Supplier then gets the full 100%, no fee at all.
+
+    Each fee is floor-divided from the total, so the Supplier's share absorbs any rounding
+    remainder (same "remainder stays with the member share" convention as apply_free_registration
+    above) -- no Qoin is ever lost to rounding. Returns {"supplier_amount": int, "fees": {level: amount}}."""
+    total = wallet_balance(conn, "case", str(case_id))
+    if not total:
+        return {"supplier_amount": 0, "fees": {}}
+    fees: dict[str, int] = {}
+    fee_total = 0
+    if fee_location_ids:
+        for level, pct in COMMERCE_FEE_SPLIT:
+            loc_id = fee_location_ids.get(level)
+            if not loc_id:
+                continue
+            fee_amount = (total * pct) // 100
+            if fee_amount <= 0:
+                continue
+            fees[level] = fee_amount
+            fee_total += fee_amount
+    supplier_amount = total - fee_total
+    debit_qoins(conn, "case", str(case_id), total, reason, related_user_id=supplier_user_id)
+    if supplier_amount:
+        credit_qoins(conn, "user", str(supplier_user_id), supplier_amount, reason, related_user_id=supplier_user_id)
+    for level, fee_amount in fees.items():
+        credit_qoins(conn, level, fee_location_ids[level], fee_amount, f"{reason}_fee_{level}")
+    conn.commit()
+    return {"supplier_amount": supplier_amount, "fees": fees}
 
 
 def has_locked_share(conn, user_id: int) -> bool:
