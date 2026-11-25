@@ -20,6 +20,16 @@ Excludes:
 
 Usage:
     python3 scripts/migrate_to_dob_ids.py --confirm
+
+Also importable as a library (2026-11-26): app.py's api_admin_run_dob_migration() imports
+run_migration()/_ensure_id_migrations_table() directly to back the Admin Panel's "Run DOB-ID
+Migration" button, reusing this exact logic instead of shelling out to the CLI. Because of that,
+everything CLI-ONLY (the --confirm gate and `import app` -- which would be circular when the
+importer IS app.py) lives inside main() below, never at module level: importing this module must
+never exit the process or re-trigger app's own startup. The sys.path fix below stays at module
+level (harmless and idempotent either way) since it's what lets a standalone `python3
+scripts/migrate_to_dob_ids.py` run find `id_generator` at ROOT in the first place -- when imported
+as scripts.migrate_to_dob_ids from app.py, ROOT is already on sys.path and this is a no-op.
 """
 from __future__ import annotations
 
@@ -29,17 +39,11 @@ import os
 import sys
 from pathlib import Path
 
-if "--confirm" not in sys.argv:
-    print(__doc__)
-    print("Refusing to run without --confirm.", file=sys.stderr)
-    sys.exit(1)
-
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-import app  # noqa: F401,E402  (runs ensure_database_ready()/_ensure_user_columns() at import time)
-import id_generator  # noqa: E402
-from db import get_db  # noqa: E402
+import id_generator  # no dependency on app.py -- safe to import unconditionally
 
 
 def _ensure_id_migrations_table(conn) -> None:
@@ -55,14 +59,11 @@ def _ensure_id_migrations_table(conn) -> None:
     conn.commit()
 
 
-def main() -> None:
-    conn = get_db()
-    _ensure_id_migrations_table(conn)
-
-    admin_ids = {pid.strip() for pid in os.environ.get("QM_ADMIN_PRIVATE_IDS", "").split(",") if pid.strip()}
-    if not admin_ids:
-        print("[warn] QM_ADMIN_PRIVATE_IDS is unset or empty -- no user will be excluded as Admin.")
-
+def run_migration(conn, admin_ids: set[str]) -> dict:
+    """The core migration loop, shared by this script's own main() below and the Admin Panel's
+    "Run DOB-ID Migration" button (app.py's api_admin_run_dob_migration()) -- extracted
+    (2026-11-26) so the panel can never drift from the one already proven safe from the CLI.
+    Expects _ensure_id_migrations_table(conn) to have already been called by the caller."""
     demo_count = conn.execute("SELECT COUNT(*) FROM users WHERE is_demo = 1").fetchone()[0]
 
     rows = conn.execute(
@@ -71,6 +72,7 @@ def main() -> None:
     ).fetchall()
 
     migrated = skipped_admin = skipped_bad_data = 0
+    migrated_rows = []
     for row in rows:
         if row["private_id_9digit"] in admin_ids:
             skipped_admin += 1
@@ -112,12 +114,39 @@ def main() -> None:
         )
         conn.commit()
         migrated += 1
+        migrated_rows.append({"user_id": row["id"], "old_private_id_9digit": old_code, "new_private_id_9digit": new_code})
 
+    return {
+        "migrated": migrated,
+        "skipped_admin": skipped_admin,
+        "skipped_demo": demo_count,
+        "skipped_bad_data": skipped_bad_data,
+        "migrated_rows": migrated_rows,
+    }
+
+
+def main() -> None:
+    if "--confirm" not in sys.argv:
+        print(__doc__)
+        print("Refusing to run without --confirm.", file=sys.stderr)
+        sys.exit(1)
+
+    import app  # noqa: F401  (runs ensure_database_ready()/_ensure_user_columns() at import time)
+    from db import get_db
+
+    conn = get_db()
+    _ensure_id_migrations_table(conn)
+
+    admin_ids = {pid.strip() for pid in os.environ.get("QM_ADMIN_PRIVATE_IDS", "").split(",") if pid.strip()}
+    if not admin_ids:
+        print("[warn] QM_ADMIN_PRIVATE_IDS is unset or empty -- no user will be excluded as Admin.")
+
+    result = run_migration(conn, admin_ids)
     conn.close()
     print(
-        f"Migrated {migrated} user(s). "
-        f"Skipped {skipped_admin} Admin ID(s), {demo_count} demo user(s), "
-        f"{skipped_bad_data} with missing/unparseable data."
+        f"Migrated {result['migrated']} user(s). "
+        f"Skipped {result['skipped_admin']} Admin ID(s), {result['skipped_demo']} demo user(s), "
+        f"{result['skipped_bad_data']} with missing/unparseable data."
     )
 
 

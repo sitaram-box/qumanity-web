@@ -46,6 +46,7 @@ import folder_connector
 import folder_sync
 import founder_core
 import id_generator
+import scripts.migrate_to_dob_ids as migrate_to_dob_ids  # reused by api_admin_run_dob_migration() below
 import identity_core
 import kundali_analyser
 import local_area_core
@@ -7115,6 +7116,58 @@ def admin_database():
         page=page, total_pages=total_pages, total_rows=total_rows,
         rows_per_page=ADMIN_DB_VIEWER_ROWS_PER_PAGE,
     )
+
+
+@app.route("/api/admin/run-dob-migration", methods=["POST"])
+@login_required
+def api_admin_run_dob_migration():
+    """Runs scripts/migrate_to_dob_ids.py's exact migration logic from inside the Admin Panel
+    (2026-11-26), for an Admin who would rather not use the Railway Console. Calls
+    migrate_to_dob_ids.run_migration() directly -- the same function the CLI's own main() calls --
+    so this can never drift from the already-verified script.
+
+    Idempotency: migrate_to_dob_ids.run_migration() itself is NOT safe to re-run (see its own
+    docstring -- a second pass would re-migrate everyone again with different IDs), so a double
+    click here must never reach it twice. Before calling it, this checks whether any non-demo,
+    non-Admin user still has no dob_id_country_digit; if none do, it refuses outright rather than
+    re-running. This is a courtesy guard for the button specifically -- the CLI has no equivalent
+    check and still must only ever be run once by hand."""
+    if not _is_admin():
+        return jsonify({"error": "Admin only"}), 403
+
+    admin_ids = {pid.strip() for pid in os.environ.get("QM_ADMIN_PRIVATE_IDS", "").split(",") if pid.strip()}
+    conn = get_db()
+    try:
+        migrate_to_dob_ids._ensure_id_migrations_table(conn)
+
+        placeholders = ",".join("?" for _ in admin_ids) if admin_ids else "NULL"
+        remaining = conn.execute(
+            f"SELECT COUNT(*) AS n FROM users WHERE is_demo = 0 AND dob_id_country_digit IS NULL "
+            f"AND private_id_9digit NOT IN ({placeholders})",
+            tuple(admin_ids),
+        ).fetchone()["n"]
+        if remaining == 0:
+            return jsonify({
+                "error": "Already migrated — every real user already has a dob_id_country_digit. Refusing to run again.",
+            }), 409
+
+        result = migrate_to_dob_ids.run_migration(conn, admin_ids)
+    finally:
+        conn.close()
+
+    print(
+        f"[admin_run_dob_migration] triggered by user_id={session['user_id']} at "
+        f"{dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds')}: "
+        f"migrated={result['migrated']} skipped_admin={result['skipped_admin']} "
+        f"skipped_demo={result['skipped_demo']} skipped_bad_data={result['skipped_bad_data']}"
+    )
+
+    return jsonify({
+        "migrated": result["migrated"],
+        "skipped_admin": result["skipped_admin"],
+        "skipped_demo": result["skipped_demo"],
+        "skipped_bad_data": result["skipped_bad_data"],
+    })
 
 
 # ---- Karma Qoins wallet API ----

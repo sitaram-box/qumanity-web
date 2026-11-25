@@ -2240,6 +2240,32 @@
       });
     }
 
+    // Run DOB-ID Migration (2026-11-26): the production one-shot, from inside the panel instead
+    // of the Railway Console. api_admin_run_dob_migration() itself refuses a second run (every
+    // real user already has a dob_id_country_digit), but that check happens server-side on
+    // whatever the CURRENT click reaches -- this confirm() is the only thing stopping an
+    // accidental first click from firing at all.
+    var apRunMigrationBtn = document.getElementById("ap-run-dob-migration-btn");
+    var apRunMigrationStatus = document.getElementById("ap-run-dob-migration-status");
+    if (apRunMigrationBtn) {
+      apRunMigrationBtn.addEventListener("click", function () {
+        if (!window.confirm("This will change the Private IDs of all real users. This cannot be undone. Are you sure?")) return;
+        apRunMigrationBtn.disabled = true;
+        apRunMigrationStatus.hidden = false;
+        apRunMigrationStatus.textContent = "Running…";
+        chatApi("/api/admin/run-dob-migration", {})
+          .then(function (res) {
+            var parts = ["Migrated " + res.migrated + " user(s)."];
+            parts.push(res.skipped_admin + " Admin ID(s) skipped.");
+            parts.push(res.skipped_demo + " demo user(s) skipped.");
+            if (res.skipped_bad_data) parts.push(res.skipped_bad_data + " skipped for missing/unparseable data.");
+            apRunMigrationStatus.textContent = parts.join(" ");
+          })
+          .catch(function (err) { apRunMigrationStatus.textContent = err.message; })
+          .finally(function () { apRunMigrationBtn.disabled = false; });
+      });
+    }
+
     function apOpenDetail(item) {
       apDetail.innerHTML = "";
       apDetail.appendChild(apEl("p", "qm-dash-empty", "Loading…"));

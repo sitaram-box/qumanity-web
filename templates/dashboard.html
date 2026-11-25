@@ -1138,6 +1138,15 @@
             <div class="ap-notify-row">
               <a class="qm-btn qm-btn-ghost" href="{{ url_for('admin_database') }}" target="_blank" rel="noopener">🗄️ Database Viewer</a>
             </div>
+            <!-- Run DOB-ID Migration (2026-11-26): the production one-shot, triggerable without
+                 the Railway Console -- see api_admin_run_dob_migration(). Same is_admin gate as
+                 the Database Viewer link above; the real "are you sure" is the JS confirm()
+                 dashboard.js shows before this ever calls the route, since the route itself has
+                 no way to distinguish a deliberate click from an accidental one. -->
+            <div class="ap-notify-row">
+              <button type="button" class="qm-btn qm-btn-ghost" id="ap-run-dob-migration-btn">🧬 Run DOB-ID Migration</button>
+              <span class="qm-dash-empty" id="ap-run-dob-migration-status" hidden></span>
+            </div>
           {% endif %}
           <div class="ap-body">
             <div class="ap-list" id="ap-list"></div>
