@@ -313,6 +313,29 @@ def eligible_family_tree(conn, user_id: int) -> bool:
     return len(_related_claimed_nodes(conn, node_id)) > 0
 
 
+def nuclear_family_members_with_phone(conn, user_id: int) -> list[dict]:
+    """Every NUCLEAR (parent/child/sibling/spouse) family member of user_id who has a claimed,
+    non-retired account with a phone number on file. Used by the Family-OTP account-recovery path
+    (app.py's /api/auth/recover-id-by-family-otp) to verify a submitted phone number genuinely
+    belongs to a real nuclear relative -- via the Family Tree graph -- before sending an OTP to
+    it, never to an arbitrary contact. Reuses _related_claimed_nodes()/_graph_relation() unchanged
+    (the same candidate pool verify_relationship()'s "forgot everything" mode searches by name),
+    filtered to NUCLEAR_RELATIONSHIPS the same way verify_relationship() already filters its own
+    match list -- grandparent/grandchild stay excluded here too, same Rule 5 as everywhere else in
+    this module."""
+    node_id = _node_for_user(conn, user_id)
+    if not node_id:
+        return []
+    out = []
+    for c in _related_claimed_nodes(conn, node_id):
+        if c["relation"] not in NUCLEAR_RELATIONSHIPS:
+            continue
+        row = conn.execute("SELECT phone FROM users WHERE id = ?", (c["user_id"],)).fetchone()
+        if row and row["phone"]:
+            out.append({"user_id": c["user_id"], "name": c["name"], "relation": c["relation"], "phone": row["phone"]})
+    return out
+
+
 def available_methods_for_private_id(conn, private_id: str) -> dict:
     """The Part 5.1 "which recovery screen to show" check -- 2026-11-14 security correction: this
     used to look up the real account and return `otp_reset`/`family_recovery` computed from ITS

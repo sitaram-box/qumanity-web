@@ -7,6 +7,19 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}" />
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+  <style>
+    /* Three-tab shell (2026-11-25) -- scoped to this page only, no new shared stylesheet for
+       three buttons. Reuses style.css's existing --qm-* tokens, same as every other page here. */
+    .ri-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+    .ri-tab-btn {
+      padding: 9px 14px; border-radius: 999px; border: 1px solid var(--qm-border);
+      background: var(--qm-panel-bg); color: var(--qm-text-dim);
+      font: 600 0.85rem "Inter", system-ui, sans-serif; cursor: pointer;
+    }
+    .ri-tab-btn.is-active { background: var(--qm-navy); color: var(--qm-gold); border-color: var(--qm-navy); }
+    .ri-panel[hidden] { display: none; }
+    .ri-reveal { font-size: 1.3rem; font-weight: 700; letter-spacing: 0.04em; color: var(--qm-gold-text); }
+  </style>
 </head>
 <body>
   <header class="qm-header">
@@ -15,54 +28,174 @@
     </a>
     <div class="qm-header-text">
       <h1>Forgot your Private ID?</h1>
-      <p>Your Private ID is never sent by SMS or email. Tell us who you are and where to reach you, and — once our team has checked it against your birth details — we post it to your home address in a sealed letter.</p>
+      <p>Three ways to recover it, depending on what you still remember.</p>
     </div>
   </header>
 
   <main class="qm-register-main">
     <section class="qm-screen is-active">
-      <form id="ri-form" class="qm-form">
-        <label class="qm-field"><span>👤 Full name (as you registered it)</span><input type="text" id="ri-name" required /></label>
-        <label class="qm-field"><span>📅 Date of birth</span><input type="date" id="ri-dob" required /></label>
-        <label class="qm-field"><span>🌍 Birth country (optional, narrows the search)</span><input type="text" id="ri-country" placeholder="e.g. India" /></label>
-        <div class="qm-row2">
-          <label class="qm-field"><span>📱 Phone</span><input type="text" id="ri-phone" placeholder="at least one of phone/email" /></label>
-          <label class="qm-field"><span>📧 Email</span><input type="email" id="ri-email" /></label>
-        </div>
-        <label class="qm-field"><span>🏠 Home mailing address (where the letter should go)</span><textarea id="ri-address" rows="3" required></textarea></label>
-        <label class="qm-field"><span>📝 Anything else that helps us confirm it's you (optional)</span><textarea id="ri-note" rows="2"></textarea></label>
-        <p class="qm-timeline-note">⚠️ This is a manual process reviewed by our team — it is not instant, and your Private ID is only ever sent by physical post, never electronically.</p>
-        <button type="submit" class="qm-btn qm-btn-primary qm-form-submit">Submit request →</button>
-      </form>
-      <p class="qm-summary-error" id="ri-error" hidden></p>
-      <div class="qm-timeline-note" id="ri-success" hidden></div>
+      <div class="ri-tabs" id="ri-tabs">
+        <button type="button" class="ri-tab-btn is-active" data-ri-tab="pin">🔑 I know my PIN</button>
+        <button type="button" class="ri-tab-btn" data-ri-tab="family">👪 I forgot everything (family OTP)</button>
+        <button type="button" class="ri-tab-btn" data-ri-tab="letter">✉️ Mail me a letter</button>
+      </div>
+
+      <!-- Path 1: PIN-based lookup (instant, self-service) -->
+      <div class="ri-panel" id="ri-panel-pin">
+        <form id="ri-pin-form" class="qm-form">
+          <label class="qm-field"><span>👤 Full name (as you registered it)</span><input type="text" id="ri-pin-name" required /></label>
+          <label class="qm-field"><span>📅 Date of birth</span><input type="date" id="ri-pin-dob" required /></label>
+          <label class="qm-field"><span>🌍 Birth country</span><select id="ri-pin-country" required><option value="">Select a country…</option></select></label>
+          <label class="qm-field"><span>🔢 PIN</span><input type="password" id="ri-pin-pin" maxlength="5" required /></label>
+          <button type="submit" class="qm-btn qm-btn-primary qm-form-submit">Find my Private ID →</button>
+        </form>
+        <p class="qm-summary-error" id="ri-pin-error" hidden></p>
+        <div class="qm-timeline-note" id="ri-pin-success" hidden></div>
+      </div>
+
+      <!-- Path 3: Family-member OTP (two-step: request, then verify) -->
+      <div class="ri-panel" id="ri-panel-family" hidden>
+        <p class="qm-timeline-note">For when you've forgotten both your Private ID and your PIN. We'll send a one-time code to a parent, child, sibling, or spouse's phone who is already a verified family member on your Family Tree -- not to you.</p>
+        <form id="ri-family-request-form" class="qm-form">
+          <label class="qm-field"><span>👤 Your full name (as you registered it)</span><input type="text" id="ri-family-name" required /></label>
+          <label class="qm-field"><span>📅 Your date of birth</span><input type="date" id="ri-family-dob" required /></label>
+          <label class="qm-field"><span>🌍 Your birth country</span><select id="ri-family-country" required><option value="">Select a country…</option></select></label>
+          <label class="qm-field"><span>📱 That family member's phone number</span><input type="text" id="ri-family-phone" placeholder="parent / child / sibling / spouse" required /></label>
+          <button type="submit" class="qm-btn qm-btn-primary qm-form-submit">Send OTP →</button>
+        </form>
+        <p class="qm-summary-error" id="ri-family-request-error" hidden></p>
+        <div class="qm-timeline-note" id="ri-family-sent-note" hidden></div>
+
+        <form id="ri-family-verify-form" class="qm-form" hidden>
+          <label class="qm-field"><span>🔢 Enter the OTP sent to that phone</span><input type="text" id="ri-family-otp" inputmode="numeric" maxlength="6" required /></label>
+          <button type="submit" class="qm-btn qm-btn-primary qm-form-submit">Verify →</button>
+        </form>
+        <p class="qm-summary-error" id="ri-family-verify-error" hidden></p>
+        <div class="qm-timeline-note" id="ri-family-success" hidden></div>
+      </div>
+
+      <!-- Path 2 (existing, unchanged): mail-a-letter, manual Admin-mediated reveal -->
+      <div class="ri-panel" id="ri-panel-letter" hidden>
+        <form id="ri-form" class="qm-form">
+          <label class="qm-field"><span>👤 Full name (as you registered it)</span><input type="text" id="ri-name" required /></label>
+          <label class="qm-field"><span>📅 Date of birth</span><input type="date" id="ri-dob" required /></label>
+          <label class="qm-field"><span>🌍 Birth country (optional, narrows the search)</span><input type="text" id="ri-country" placeholder="e.g. India" /></label>
+          <div class="qm-row2">
+            <label class="qm-field"><span>📱 Phone</span><input type="text" id="ri-phone" placeholder="at least one of phone/email" /></label>
+            <label class="qm-field"><span>📧 Email</span><input type="email" id="ri-email" /></label>
+          </div>
+          <label class="qm-field"><span>🏠 Home mailing address (where the letter should go)</span><textarea id="ri-address" rows="3" required></textarea></label>
+          <label class="qm-field"><span>📝 Anything else that helps us confirm it's you (optional)</span><textarea id="ri-note" rows="2"></textarea></label>
+          <p class="qm-timeline-note">⚠️ This is a manual process reviewed by our team — it is not instant, and your Private ID is only ever sent by physical post, never electronically.</p>
+          <button type="submit" class="qm-btn qm-btn-primary qm-form-submit">Submit request →</button>
+        </form>
+        <p class="qm-summary-error" id="ri-error" hidden></p>
+        <div class="qm-timeline-note" id="ri-success" hidden></div>
+      </div>
     </section>
   </main>
 
   <script>
     (function () {
       "use strict";
-      var form = document.getElementById("ri-form"), errorEl = document.getElementById("ri-error"), successEl = document.getElementById("ri-success");
+      function $(id) { return document.getElementById(id); }
+      function api(url, body) {
+        return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+          .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, status: r.status, b: b }; }); });
+      }
+
+      // ---- Country selects (shared data, two separate <select> elements) ----
+      var SUBCONTINENT_IDS = ["O_AS_IND", "O_AS_NPL", "O_AS_BTN", "O_AS_BGD", "O_AS_MMR", "O_AS_LKA", "O_AS_PAK", "O_AS_BLC", "O_AS_AFG", "O_AS_MDV"];
+      fetch("/static/data/global_countries.json").then(function (r) { return r.json(); }).then(function (world) {
+        var countries = [];
+        world.continents.forEach(function (c) { c.countries.forEach(function (co) { countries.push(co); }); });
+        countries.sort(function (a, b) {
+          var ia = SUBCONTINENT_IDS.indexOf(a.id), ib = SUBCONTINENT_IDS.indexOf(b.id);
+          if (ia === -1) ia = 999; if (ib === -1) ib = 999;
+          return ia !== ib ? ia - ib : a.name.localeCompare(b.name);
+        });
+        [$("ri-pin-country"), $("ri-family-country")].forEach(function (sel) {
+          countries.forEach(function (co) {
+            var opt = document.createElement("option");
+            opt.value = co.id; opt.textContent = co.name;
+            sel.appendChild(opt);
+          });
+        });
+      });
+
+      // ---- Tabs ----
+      var tabs = $("ri-tabs");
+      var panels = { pin: $("ri-panel-pin"), family: $("ri-panel-family"), letter: $("ri-panel-letter") };
+      tabs.addEventListener("click", function (e) {
+        var btn = e.target.closest("[data-ri-tab]");
+        if (!btn) return;
+        Array.prototype.forEach.call(tabs.querySelectorAll(".ri-tab-btn"), function (b) { b.classList.toggle("is-active", b === btn); });
+        var name = btn.getAttribute("data-ri-tab");
+        Object.keys(panels).forEach(function (k) { panels[k].hidden = k !== name; });
+      });
+
+      // ---- Path 1: PIN lookup ----
+      var pinForm = $("ri-pin-form"), pinError = $("ri-pin-error"), pinSuccess = $("ri-pin-success");
+      pinForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        pinError.hidden = true;
+        api("/api/auth/recover-id-by-pin", {
+          name: $("ri-pin-name").value.trim(), dob: $("ri-pin-dob").value,
+          country_id: $("ri-pin-country").value, pin: $("ri-pin-pin").value.trim(),
+        }).then(function (res) {
+          if (!res.ok) throw new Error(res.b.error || "We couldn't verify those details.");
+          pinForm.hidden = true;
+          pinSuccess.hidden = false;
+          pinSuccess.innerHTML = "✅ Your Private ID is <span class=\"ri-reveal\">" + res.b.private_id_9digit + "</span>. Use it with your PIN to sign in.";
+        }).catch(function (err) { pinError.textContent = err.message; pinError.hidden = false; });
+      });
+
+      // ---- Path 3: Family OTP (two steps) ----
+      var familyRequestForm = $("ri-family-request-form"), familyRequestError = $("ri-family-request-error"), familySentNote = $("ri-family-sent-note");
+      var familyVerifyForm = $("ri-family-verify-form"), familyVerifyError = $("ri-family-verify-error"), familySuccess = $("ri-family-success");
+      var familyFields = null; // the 4 fields the verify step must resubmit, captured from the request step
+      familyRequestForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        familyRequestError.hidden = true;
+        familyFields = {
+          name: $("ri-family-name").value.trim(), dob: $("ri-family-dob").value,
+          country_id: $("ri-family-country").value, family_phone: $("ri-family-phone").value.trim(),
+        };
+        api("/api/auth/recover-id-by-family-otp", familyFields).then(function (res) {
+          if (!res.ok) throw new Error(res.b.error || "Something went wrong");
+          familyRequestForm.hidden = true;
+          familySentNote.hidden = false;
+          familySentNote.textContent = "📨 If those details matched, we sent a code to " + res.b.masked_target + ". Ask that family member for the code, then enter it below.";
+          familyVerifyForm.hidden = false;
+        }).catch(function (err) { familyRequestError.textContent = err.message; familyRequestError.hidden = false; });
+      });
+      familyVerifyForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        familyVerifyError.hidden = true;
+        api("/api/auth/verify-family-otp", Object.assign({}, familyFields, { otp: $("ri-family-otp").value.trim() })).then(function (res) {
+          if (!res.ok) throw new Error(res.b.error || "Incorrect code");
+          familyVerifyForm.hidden = true;
+          familySuccess.hidden = false;
+          familySuccess.innerHTML = "✅ Your Private ID is <span class=\"ri-reveal\">" + res.b.private_id_9digit + "</span>. Use it with your PIN to sign in.";
+        }).catch(function (err) { familyVerifyError.textContent = err.message; familyVerifyError.hidden = false; });
+      });
+
+      // ---- Path 2 (existing, unchanged behavior) ----
+      var form = $("ri-form"), errorEl = $("ri-error"), successEl = $("ri-success");
       form.addEventListener("submit", function (e) {
         e.preventDefault();
         errorEl.hidden = true;
-        fetch("/api/auth/recover-id", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: document.getElementById("ri-name").value.trim(), dob: document.getElementById("ri-dob").value,
-            birth_country: document.getElementById("ri-country").value.trim(),
-            phone: document.getElementById("ri-phone").value.trim(), email: document.getElementById("ri-email").value.trim(),
-            mailing_address: document.getElementById("ri-address").value.trim(), note: document.getElementById("ri-note").value.trim(),
-          }),
-        })
-          .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
-          .then(function (res) {
-            if (!res.ok) throw new Error(res.b.error || "Could not submit your request");
-            form.hidden = true;
-            successEl.hidden = false;
-            successEl.textContent = "✅ Request received — reference " + res.b.reference + ". Keep this reference in case you need to follow up.";
-          })
-          .catch(function (err) { errorEl.textContent = err.message; errorEl.hidden = false; });
+        api("/api/auth/recover-id", {
+          name: $("ri-name").value.trim(), dob: $("ri-dob").value,
+          birth_country: $("ri-country").value.trim(),
+          phone: $("ri-phone").value.trim(), email: $("ri-email").value.trim(),
+          mailing_address: $("ri-address").value.trim(), note: $("ri-note").value.trim(),
+        }).then(function (res) {
+          if (!res.ok) throw new Error(res.b.error || "Could not submit your request");
+          form.hidden = true;
+          successEl.hidden = false;
+          successEl.textContent = "✅ Request received — reference " + res.b.reference + ". Keep this reference in case you need to follow up.";
+        }).catch(function (err) { errorEl.textContent = err.message; errorEl.hidden = false; });
       });
     })();
   </script>

@@ -114,6 +114,53 @@ def verify_pin_reset(conn, private_code: str, otp: str, new_pin: str):
     conn.commit()
 
 
+# ---- Private ID recovery by a nuclear family member's OTP (2026-11-25, "I forgot everything") --
+# the OTP goes to a DIFFERENT account's phone (a verified nuclear relative's, confirmed by the
+# caller via family_recovery_core.nuclear_family_members_with_phone() before either function below
+# is called), to reveal THIS account's private_id_9digit. Reuses otp_requests as-is (its `purpose`
+# column already generalizes beyond 'pin_reset'), not a parallel table. ----
+
+FAMILY_OTP_PURPOSE = "family_id_recovery"
+
+
+def request_family_id_recovery_otp(conn, user_id: int, family_member_phone: str) -> dict:
+    """Sends (simulated) an OTP to family_member_phone, to later reveal user_id's Private ID.
+    Does not re-verify the phone belongs to a real nuclear relative -- that check already happened
+    in app.py before this is called; this function only stores/sends the code."""
+    ensure_tables(conn)
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    conn.execute(
+        "INSERT INTO otp_requests (user_id, channel, purpose, code_hash, expires_at, created_at) VALUES (?, 'phone', ?, ?, ?, ?)",
+        (user_id, FAMILY_OTP_PURPOSE, _hash(code), (_now() + dt.timedelta(minutes=OTP_TTL_MINUTES)).isoformat(), _now().isoformat()),
+    )
+    conn.commit()
+    masked = (family_member_phone[:2] + "…" + family_member_phone[-2:]) if len(family_member_phone) > 4 else "…"
+    return {"masked_target": masked, "dev_code": code}  # dev_code is stripped by the route unless QM_DEV_SHOW_OTP is on
+
+
+def verify_family_id_recovery_otp(conn, user_id: int, otp: str) -> str | None:
+    """Returns user_id's CURRENT private_id_9digit on a correct code (the live column value --
+    already the post-migration id if this user was ever migrated, see migrate_to_dob_ids.py;
+    nothing here needs to know or care whether that happened). Raises ValueError otherwise, same
+    shape/wording as verify_pin_reset()'s own checks."""
+    row = conn.execute(
+        "SELECT * FROM otp_requests WHERE user_id = ? AND purpose = ? AND consumed_at IS NULL ORDER BY id DESC LIMIT 1",
+        (user_id, FAMILY_OTP_PURPOSE),
+    ).fetchone()
+    if not row or row["expires_at"] < _now().isoformat():
+        raise ValueError("That code has expired — request a new one")
+    if row["attempts"] >= OTP_MAX_ATTEMPTS:
+        raise ValueError("Too many attempts — request a new code")
+    if row["code_hash"] != _hash((otp or "").strip()):
+        conn.execute("UPDATE otp_requests SET attempts = attempts + 1 WHERE id = ?", (row["id"],))
+        conn.commit()
+        raise ValueError("Incorrect code")
+    conn.execute("UPDATE otp_requests SET consumed_at = ? WHERE id = ?", (_now().isoformat(), row["id"]))
+    conn.commit()
+    user = conn.execute("SELECT private_id_9digit FROM users WHERE id = ?", (user_id,)).fetchone()
+    return user["private_id_9digit"] if user else None
+
+
 # ---- Private ID recovery: intake + a manual, admin-mediated reveal ----
 
 def submit_id_recovery(conn, data: dict) -> int:

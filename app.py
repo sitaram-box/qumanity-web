@@ -3310,7 +3310,10 @@ def api_forgot_pin_verify():
     return jsonify({"status": "ok"})
 
 
-# ---- Forgotten Private ID: never self-service -- intake form, then a manual, audited, by-post reveal ----
+# ---- Forgotten Private ID -- three paths. This route (the oldest) is deliberately NEVER
+# self-service: intake form, then a manual, audited, by-post reveal. The two routes right after it
+# (2026-11-25) deliberately REVERSE that "never self-service" rule for two specific, stronger-
+# proof cases -- see each route's own docstring for why that reversal is safe. ----
 
 @app.route("/api/auth/recover-id", methods=["POST"])
 def api_recover_id_submit():
@@ -3322,6 +3325,162 @@ def api_recover_id_submit():
     finally:
         conn.close()
     return jsonify({"status": "received", "reference": f"REQ-{request_id:06d}"}), 201
+
+
+def _find_users_by_identity(conn, name: str, dob_str: str, country_id: str):
+    """Candidate users matching Name + DOB + Birth Country exactly -- the shared lookup Path 1
+    (recover-id-by-pin) and Path 3 (recover-id-by-family-otp/verify-family-otp) both start from.
+    Keyed on birth_location_json's country, same as id_generator's own private_id (never
+    present_location) -- see api_auth_register()'s own comment on that rule."""
+    return conn.execute(
+        """SELECT id, private_id_9digit, pin_hash FROM users
+           WHERE lower(name) = lower(?) AND dob = ?
+             AND json_extract(birth_location_json, '$.country.id') = ?
+             AND is_removed = 0 AND is_demo = 0""",
+        (name, dob_str, country_id),
+    ).fetchall()
+
+
+def _match_family_recovery_user(conn, name: str, dob_str: str, country_id: str, family_phone: str):
+    """The Path 3 "which specific candidate" resolver (loophole 2: same Name+DOB disambiguated by
+    whose Family Tree the submitted phone actually belongs to) -- shared by both the request and
+    verify steps below, so verify can re-derive the SAME user_id the request step found without a
+    stored token (same stateless-by-resubmission pattern recovery_core.verify_pin_reset() already
+    uses, re-taking private_code on its own second call). Returns None on zero OR on more than one
+    match -- an ambiguous match is refused exactly like no match, never guessed."""
+    matched_user_id = None
+    for c in _find_users_by_identity(conn, name, dob_str, country_id):
+        relatives = family_recovery_core.nuclear_family_members_with_phone(conn, c["id"])
+        if any(re.sub(r"[^\d+]", "", r["phone"] or "") == family_phone for r in relatives):
+            if matched_user_id is not None:
+                return None  # two different candidates both linked to this phone -- refuse, don't guess
+            matched_user_id = c["id"]
+    return matched_user_id
+
+
+@app.route("/api/auth/recover-id-by-pin", methods=["POST"])
+def api_recover_id_by_pin():
+    """Path 1 (self-service, instant): Name + DOB + Birth Country + PIN -> reveal
+    private_id_9digit directly from the live `users` row (already the post-migration id if this
+    account was ever migrated -- migrate_to_dob_ids.py already overwrote that column in place, so
+    there is nothing to "recalculate" here; id_generator.generate_dob_id() is a one-shot minting
+    function with a live, mutating counter, never a decode function -- calling it again would not
+    reliably reproduce any specific past assignment).
+
+    Deliberately reverses recovery_core.py's own "never self-service" Private-ID rule for this one
+    factor combination: the PIN is the exact same secret that already gates normal login, so
+    proving it here is exactly as strong a proof of identity as logging in directly would be.
+
+    Never mutates any candidate's pin_fails/pin_locked_until (unlike normal login's own lockout):
+    more than one account can share this name+dob+country, and ticking a WRONG candidate's lockout
+    counter on every attempt would let one person's legitimate recovery silently lock out an
+    unrelated stranger who happens to share their name and birthday. IP rate-limited instead, same
+    budget as the existing account-recovery-ticket route."""
+    if _rate_limited("recover_id_by_pin", _client_ip(), max_calls=5, window_seconds=3600):
+        return jsonify({"error": "Too many requests. Please try again later."}), 429
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    dob_raw = (data.get("dob") or "").strip()
+    country_id = (data.get("country_id") or "").strip()
+    pin = (data.get("pin") or "").strip()
+    generic = jsonify({"error": "We couldn't verify those details."}), 401
+    if not name or not country_id or not PIN_RE.fullmatch(pin):
+        return generic
+    try:
+        dt.date.fromisoformat(dob_raw)
+    except ValueError:
+        return generic
+    conn = get_db()
+    try:
+        candidates = _find_users_by_identity(conn, name, dob_raw, country_id)
+        matches = [c for c in candidates if c["pin_hash"] and check_password_hash(c["pin_hash"], pin)]
+    finally:
+        conn.close()
+    if len(matches) != 1:
+        # Zero matches and more-than-one (an ambiguous shared-PIN collision) are both refused with
+        # the identical message -- never a hint which case it was.
+        return generic
+    return jsonify({"private_id_9digit": matches[0]["private_id_9digit"]})
+
+
+@app.route("/api/auth/recover-id-by-family-otp", methods=["POST"])
+def api_recover_id_by_family_otp():
+    """Path 3 step 1 (self-service, "I forgot everything"): Name + DOB + Birth Country + a
+    NUCLEAR family member's phone (parent/child/sibling/spouse, verified against the real Family
+    Tree graph via family_recovery_core.nuclear_family_members_with_phone() -- never an arbitrary
+    contact) -> sends an OTP to THAT phone. Never reveals anything itself; /api/auth/verify-family-
+    otp below does, only after the correct code comes back.
+
+    Anti-enumeration: returns the identical {"status": "sent", "masked_target": ...} shape whether
+    or not a real match was found, masking the phone number the caller ALREADY typed in (so no new
+    information leaks either way) -- same precedent as family_recovery_core.py's own
+    _GENERIC_VERIFICATION_ERROR and the account-recovery-ticket route's contact_method handling."""
+    if _rate_limited("recover_id_by_family_otp", _client_ip(), max_calls=5, window_seconds=3600):
+        return jsonify({"error": "Too many requests. Please try again later."}), 429
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    dob_raw = (data.get("dob") or "").strip()
+    country_id = (data.get("country_id") or "").strip()
+    family_phone = re.sub(r"[^\d+]", "", data.get("family_phone") or "")
+    if not name or not country_id or not _PHONE_RE.match(family_phone):
+        return jsonify({"error": "Enter a valid name, date of birth, country, and family member's phone number"}), 400
+    try:
+        dt.date.fromisoformat(dob_raw)
+    except ValueError:
+        return jsonify({"error": "Date of birth must be a valid date"}), 400
+
+    masked = (family_phone[:2] + "…" + family_phone[-2:]) if len(family_phone) > 4 else "…"
+    conn = get_db()
+    try:
+        matched_user_id = _match_family_recovery_user(conn, name, dob_raw, country_id, family_phone)
+        if matched_user_id is None:
+            return jsonify({"status": "sent", "masked_target": masked})
+        otp_result = recovery_core.request_family_id_recovery_otp(conn, matched_user_id, family_phone)
+    finally:
+        conn.close()
+    body = {"status": "sent", "masked_target": otp_result["masked_target"]}
+    if os.environ.get("QM_DEV_SHOW_OTP") == "1":
+        body["dev_code"] = otp_result["dev_code"]
+    else:
+        print(f"[SIMULATED OTP][family_id_recovery] {otp_result['masked_target']}: {otp_result['dev_code']}")
+    return jsonify(body)
+
+
+@app.route("/api/auth/verify-family-otp", methods=["POST"])
+def api_verify_family_otp():
+    """Path 3 step 2. Re-takes the SAME four fields the request step used (name, dob, country_id,
+    family_phone) rather than trusting a bare `otp` alone: this is a public, unauthenticated,
+    multi-user endpoint with no session, so an OTP code by itself can't say WHICH pending
+    family_id_recovery row to check -- mirrors recovery_core.verify_pin_reset()'s own established
+    pattern of re-taking private_code on its own second call for the identical reason."""
+    if _rate_limited("verify_family_otp", _client_ip(), max_calls=10, window_seconds=3600):
+        return jsonify({"error": "Too many requests. Please try again later."}), 429
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    dob_raw = (data.get("dob") or "").strip()
+    country_id = (data.get("country_id") or "").strip()
+    family_phone = re.sub(r"[^\d+]", "", data.get("family_phone") or "")
+    otp = (data.get("otp") or "").strip()
+    generic = jsonify({"error": "Incorrect code"}), 400
+    if not name or not country_id or not family_phone or not otp:
+        return generic
+    try:
+        dt.date.fromisoformat(dob_raw)
+    except ValueError:
+        return generic
+
+    conn = get_db()
+    try:
+        matched_user_id = _match_family_recovery_user(conn, name, dob_raw, country_id, family_phone)
+        if matched_user_id is None:
+            return generic
+        try:
+            private_id = recovery_core.verify_family_id_recovery_otp(conn, matched_user_id, otp)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"private_id_9digit": private_id})
 
 
 # ---- Family Tree-based recovery (2026-11-13) -- additive to the two routes above, never a
@@ -5703,6 +5862,28 @@ def api_auth_register():
         tob = dt.time.fromisoformat(data["tob"])
     except ValueError as e:
         return jsonify({"error": f"Invalid dob/tob: {e}"}), 400
+
+    # Duplicate-identity intercept (2026-11-25, recovery Path 3 Step 3): catches someone who
+    # forgot their existing Private ID/PIN and is about to register a SECOND account instead of
+    # recovering their first one. Name + DOB only -- deliberately looser than the recovery routes'
+    # own exact Name+DOB+Country match, since a false positive here only shows a confirmation
+    # prompt, never a hard block, so casting a wider net is safe.
+    # `confirm_new_account_despite_duplicate` lets the client re-submit once a person has
+    # confirmed it's genuinely a different person with the same name and birth date.
+    if not data.get("confirm_new_account_despite_duplicate"):
+        dup_conn = get_db()
+        existing = dup_conn.execute(
+            "SELECT 1 FROM users WHERE lower(name) = lower(?) AND dob = ? AND is_removed = 0 AND is_demo = 0",
+            (data["name"], data["dob"]),
+        ).fetchone()
+        dup_conn.close()
+        if existing:
+            return jsonify({
+                "error": "duplicate_identity",
+                "message": "A user with this name and birth date already exists. Is this you? If so, "
+                            "recover your existing account instead of creating a new one.",
+                "recover_url": "/recover-id",
+            }), 409
 
     language = (data.get("language") or "").strip()
     if language and language not in _language_names():
