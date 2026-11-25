@@ -264,19 +264,28 @@ def assign_agent(conn, case_id: int, agent_user_id: int, actor_user_id: int, is_
 
 
 def update_status(conn, case_id: int, new_status: str, actor_user_id: int, actor_role: str,
-                   message: str | None = None, escrow_amount: int | None = None) -> dict:
+                   is_admin: bool, message: str | None = None, escrow_amount: int | None = None) -> dict:
     """Enforces TRANSITIONS[case_type]. 'resolved' is deliberately rejected here -- use
     resolve_case(), which also handles the escrow release / Karma award that status alone can't.
     Moving a commerce Case OUT of 'pending_payment' requires `escrow_amount` -- this is the exact
     moment wallet_core.lock_escrow() runs, so a Member with insufficient Qoins gets a ValueError
     here and the Case stays in 'pending_payment' (nothing is written beforehand). Moving INTO
     'cancelled' always calls wallet_core.refund_escrow() first (a safe no-op if nothing was ever
-    locked), so a Member is never left with Qoins stuck in a dead Case."""
+    locked), so a Member is never left with Qoins stuck in a dead Case.
+
+    `is_admin` added in Phase 2 Step 3 (2026-11-25): Step 2 enforced the transition table but
+    never checked WHO may trigger it -- fine while nothing called this over HTTP yet, not once
+    `/api/agent/cases/<id>/status` is a real route. Same authority as resolve_case(): this Case's
+    assigned Agent, or this location's council/Founder."""
     if new_status == "resolved":
         raise ValueError("Use resolve_case() to resolve a Case, not update_status()")
     case = get_case(conn, case_id)
     if not case:
         raise LookupError("Case not found")
+    if actor_user_id != case["agent_user_id"] and not chat_core.can_manage_location(
+        conn, actor_user_id, case["location_level"], case["location_id"], is_admin
+    ):
+        raise PermissionError("Only this Case's assigned Agent, or this location's council/Founder, may change its status")
     legal = TRANSITIONS[case["case_type"]].get(case["status"], set())
     if new_status not in legal:
         raise ValueError(f"Cannot move a {case['case_type']} Case from '{case['status']}' to '{new_status}'")
@@ -399,3 +408,158 @@ def resolve_case(conn, case_id: int, actor_user_id: int, actor_role: str, is_adm
     _log(conn, case_id, actor_user_id, actor_role, "status_change", outcome_note or "Case resolved")
     conn.commit()
     return get_case(conn, case_id)
+
+
+# ---- Phase 2 Step 3 (2026-11-25): list/view/comment helpers for the Member/Agent/Supplier APIs -
+
+def list_for_member(conn, member_user_id: int, active_only: bool = True) -> list[dict]:
+    q = "SELECT * FROM qumanity_cases WHERE member_user_id = ?"
+    if active_only:
+        q += " AND status NOT IN ('resolved', 'cancelled')"
+    q += " ORDER BY created_at DESC"
+    return [dict(r) for r in conn.execute(q, (member_user_id,))]
+
+
+def get_agent(conn, user_id: int) -> dict | None:
+    row = conn.execute("SELECT * FROM agents WHERE user_id = ? AND is_active = 1", (user_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_for_agent(conn, agent_user_id: int) -> list[dict]:
+    """This Agent's own queue: every Case already assigned to them (any status), plus every
+    still-'created' (unassigned) Case at their own registered location -- an Agent sees fresh
+    Cases opened at their location even before anyone has claimed one."""
+    agent = get_agent(conn, agent_user_id)
+    if not agent:
+        raise PermissionError("Not a registered, active Agent")
+    rows = conn.execute(
+        """SELECT * FROM qumanity_cases
+           WHERE agent_user_id = ?
+              OR (status = 'created' AND location_id = ? AND location_level = ?)
+           ORDER BY created_at DESC""",
+        (agent_user_id, agent["location_id"], agent["location_level"]),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def can_view_case(conn, user_id: int, case: dict, is_admin: bool) -> bool:
+    """The Member, the assigned Agent, the attached Supplier, or this location's council/Founder
+    (the audit path reports_core.mask_identity() uses the same shape of check for)."""
+    if user_id in (case["member_user_id"], case["agent_user_id"], case["supplier_user_id"]):
+        return True
+    return chat_core.can_manage_location(conn, user_id, case["location_level"], case["location_id"], is_admin)
+
+
+def logs_for(conn, case_id: int, viewer_user_id: int, is_admin: bool) -> list[dict]:
+    """The TID Comments for a Case. 'internal' entries (an Agent's own Compass notes, e.g.) are
+    stripped out for the Member and the Supplier -- only this Case's assigned Agent, or this
+    location's council/Founder, see them. That council/Founder visibility is deliberate, not a
+    gap: it's what lets a Manager audit screen catch Agent-Supplier collusion (Phase 1 design
+    doc §2) -- hiding internal notes from the people auditing for collusion would defeat the point."""
+    case = get_case(conn, case_id)
+    if not case:
+        raise LookupError("Case not found")
+    if not can_view_case(conn, viewer_user_id, case, is_admin):
+        raise PermissionError("You can't view this Case")
+    can_see_internal = viewer_user_id == case["agent_user_id"] or chat_core.can_manage_location(
+        conn, viewer_user_id, case["location_level"], case["location_id"], is_admin
+    )
+    q = "SELECT * FROM case_logs WHERE case_id = ?"
+    if not can_see_internal:
+        q += " AND visibility = 'member'"
+    q += " ORDER BY id"
+    return [dict(r) for r in conn.execute(q, (case_id,))]
+
+
+def add_comment(conn, case_id: int, author_user_id: int, message: str, is_admin: bool = False) -> dict:
+    """Posts to the Case Chat -- Decision 3/4 (2026-11-25): the TID Comments log IS the chat, and
+    it's the only channel (no telephony). The author's role is derived from the Case itself
+    (never trusted from the caller), so there's no way to post AS a role you don't actually hold
+    on this Case; an admin override posts as 'system'. Only the Member, the assigned Agent, the
+    attached Supplier, or an admin may post -- everyone else gets PermissionError."""
+    case = get_case(conn, case_id)
+    if not case:
+        raise LookupError("Case not found")
+    if author_user_id == case["member_user_id"]:
+        role = "member"
+    elif author_user_id == case["agent_user_id"]:
+        role = "agent"
+    elif author_user_id == case["supplier_user_id"]:
+        role = "supplier"
+    elif is_admin:
+        role = "system"
+    else:
+        raise PermissionError("Only this Case's Member, Agent, or Supplier may post to its chat")
+    message = (message or "").strip()
+    if not message:
+        raise ValueError("A message is required")
+    _log(conn, case_id, author_user_id, role, "comment", message, visibility="member")
+    conn.commit()
+    row = conn.execute("SELECT * FROM case_logs WHERE case_id = ? ORDER BY id DESC LIMIT 1", (case_id,)).fetchone()
+    return dict(row)
+
+
+def attach_supplier(conn, case_id: int, supplier_user_id: int, actor_user_id: int) -> dict:
+    """Adds the chosen Supplier to a commerce Case (Decision 4 -- they then negotiate directly in
+    the Case Chat, no 3-way call). Only this Case's own assigned Agent may do this, and the
+    target must already be a registered Supplier (register_supplier())."""
+    case = get_case(conn, case_id)
+    if not case:
+        raise LookupError("Case not found")
+    if actor_user_id != case["agent_user_id"]:
+        raise PermissionError("Only this Case's assigned Agent may add a Supplier")
+    if not get_supplier(conn, supplier_user_id):
+        raise ValueError("That user is not a registered Supplier")
+    conn.execute(
+        "UPDATE qumanity_cases SET supplier_user_id = ?, updated_at = ? WHERE id = ?",
+        (supplier_user_id, _now(), case_id),
+    )
+    _log(conn, case_id, actor_user_id, "agent", "supplier_selected", f"Supplier #{supplier_user_id} added to this Case")
+    conn.commit()
+    return get_case(conn, case_id)
+
+
+def register_supplier(conn, user_id: int, service_category: str, location_id: str, location_level: str,
+                       description: str | None = None, price_list: str | None = None) -> dict:
+    """Get-or-create a member's own Supplier directory listing (Decision 2 -- every Supplier is
+    a registered Qumanity member; this IS their "extended user profile", not a new role column)."""
+    service_category = (service_category or "").strip()
+    if not service_category:
+        raise ValueError("A service_category is required")
+    now = _now()
+    existing = conn.execute("SELECT id FROM suppliers WHERE user_id = ?", (user_id,)).fetchone()
+    if existing:
+        conn.execute(
+            """UPDATE suppliers SET service_category = ?, description = ?, price_list = ?,
+               location_id = ?, location_level = ?, is_active = 1, updated_at = ? WHERE user_id = ?""",
+            (service_category, description, price_list, location_id, location_level, now, user_id),
+        )
+    else:
+        conn.execute(
+            """INSERT INTO suppliers (user_id, service_category, description, price_list,
+               location_id, location_level, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, service_category, description, price_list, location_id, location_level, now, now),
+        )
+    conn.commit()
+    return get_supplier(conn, user_id)
+
+
+def get_supplier(conn, user_id: int) -> dict | None:
+    row = conn.execute("SELECT * FROM suppliers WHERE user_id = ?", (user_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_suppliers(conn, location_level: str, location_id: str, service_category: str | None = None) -> list[dict]:
+    """The Agent's own directory search (Decision 2): every active Supplier registered at this
+    exact location, optionally narrowed to one service_category, each with their Karma score
+    attached so the Agent can present price list + Karma together, per the brief."""
+    q = "SELECT * FROM suppliers WHERE location_level = ? AND location_id = ? AND is_active = 1"
+    params: list = [location_level, location_id]
+    if service_category:
+        q += " AND service_category = ?"
+        params.append(service_category)
+    q += " ORDER BY service_category, created_at"
+    rows = [dict(r) for r in conn.execute(q, params)]
+    for r in rows:
+        r["karma"] = karma_core.individual_karma_score(conn, r["user_id"])
+    return rows

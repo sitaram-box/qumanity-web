@@ -56,6 +56,7 @@ import admin_queries_core
 import q_card_core
 import reports_core
 import board_core
+import case_core
 import karma_core
 import notify_core
 import perception_core
@@ -1202,6 +1203,195 @@ def api_report_escalate(report_id):
         )
     conn.close()
     return jsonify({"current_holder_level": new_level, "current_holder_id": new_holder_id})
+
+
+# ---- Qumanity Economic Engine: Cases (Member/Agent/Supplier) (2026-11-25) ----
+# See docs/economic_engine_phase1_design_2026_11_25.md for the full design. case_core.py owns
+# every authority check and state-transition rule; these routes only parse the request, call it,
+# and translate its exceptions -- same division of responsibility as every other *_core.py module
+# in this file (reports_core, board_core, etc.).
+
+def _case_error(fn):
+    @functools.wraps(fn)
+    def wrapper(*a, **kw):
+        try:
+            return fn(*a, **kw)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except PermissionError as e:
+            return jsonify({"error": str(e)}), 403
+        except LookupError as e:
+            return jsonify({"error": str(e)}), 404
+    return wrapper
+
+
+@app.route("/api/cases/create", methods=["POST"])
+@login_required
+@_case_error
+def api_cases_create():
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    user = _current_user_row(conn)
+    present = json.loads(user["present_location_json"] or "{}")
+    village = present.get("village")
+    if not village:
+        conn.close()
+        return jsonify({"error": "You need a present Village to open a Case"}), 400
+    case = case_core.create_case(conn, user["id"], data.get("case_type"), village["id"], data.get("subject"))
+    conn.close()
+    return jsonify(case)
+
+
+@app.route("/api/cases/my-cases")
+@login_required
+def api_cases_mine():
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    cases = case_core.list_for_member(conn, session["user_id"], active_only=request.args.get("all") != "1")
+    conn.close()
+    return jsonify({"cases": cases})
+
+
+@app.route("/api/cases/<int:case_id>/logs")
+@login_required
+@_case_error
+def api_case_logs(case_id):
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    logs = case_core.logs_for(conn, case_id, session["user_id"], _is_admin())
+    conn.close()
+    return jsonify({"logs": logs})
+
+
+@app.route("/api/cases/<int:case_id>/message", methods=["POST"])
+@login_required
+@_case_error
+def api_case_message(case_id):
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    comment = case_core.add_comment(conn, case_id, session["user_id"], data.get("message"), _is_admin())
+    conn.close()
+    return jsonify(comment)
+
+
+@app.route("/api/agent/cases")
+@login_required
+@_case_error
+def api_agent_cases():
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    cases = case_core.list_for_agent(conn, session["user_id"])
+    conn.close()
+    return jsonify({"cases": cases})
+
+
+@app.route("/api/agent/cases/<int:case_id>/assign", methods=["POST"])
+@login_required
+@_case_error
+def api_agent_case_assign(case_id):
+    """Claim a case -- the Agent assigns themselves. An Agent assigning someone ELSE, or this
+    location's council/Founder assigning a specific Agent, both go through the same
+    case_core.assign_agent() but aren't exposed as a route yet -- nothing in this pass's brief
+    asked for that UI."""
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    case = case_core.assign_agent(conn, case_id, session["user_id"], session["user_id"], _is_admin())
+    conn.close()
+    return jsonify(case)
+
+
+@app.route("/api/agent/cases/<int:case_id>/status", methods=["POST"])
+@login_required
+@_case_error
+def api_agent_case_status(case_id):
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    case = case_core.update_status(
+        conn, case_id, data.get("status"), session["user_id"], "agent", _is_admin(),
+        message=data.get("message"), escrow_amount=data.get("escrow_amount"),
+    )
+    conn.close()
+    return jsonify(case)
+
+
+@app.route("/api/agent/cases/<int:case_id>/compass", methods=["POST"])
+@login_required
+@_case_error
+def api_agent_case_compass(case_id):
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    task = case_core.add_compass_task(conn, case_id, session["user_id"], data.get("note"), data.get("due_at"))
+    conn.close()
+    return jsonify(task)
+
+
+@app.route("/api/agent/cases/<int:case_id>/add-supplier", methods=["POST"])
+@login_required
+@_case_error
+def api_agent_case_add_supplier(case_id):
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    case = case_core.attach_supplier(conn, case_id, data.get("supplier_user_id"), session["user_id"])
+    conn.close()
+    return jsonify(case)
+
+
+@app.route("/api/agent/cases/<int:case_id>/resolve", methods=["POST"])
+@login_required
+@_case_error
+def api_agent_case_resolve(case_id):
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    case = case_core.resolve_case(
+        conn, case_id, session["user_id"], "agent", _is_admin(), outcome_note=data.get("outcome_note"),
+    )
+    conn.close()
+    return jsonify(case)
+
+
+@app.route("/api/supplier/profile", methods=["POST"])
+@login_required
+@_case_error
+def api_supplier_profile():
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    user = _current_user_row(conn)
+    location_id = data.get("location_id")
+    location_level = data.get("location_level", "village")
+    if not location_id:
+        present = json.loads(user["present_location_json"] or "{}")
+        village = present.get("village")
+        if not village:
+            conn.close()
+            return jsonify({"error": "You need a present Village, or an explicit location, to register as a Supplier"}), 400
+        location_id, location_level = village["id"], "village"
+    supplier = case_core.register_supplier(
+        conn, user["id"], data.get("service_category"), location_id, location_level,
+        description=data.get("description"), price_list=data.get("price_list"),
+    )
+    conn.close()
+    return jsonify(supplier)
+
+
+@app.route("/api/supplier/list")
+@login_required
+def api_supplier_list():
+    location_level = request.args.get("location_level", "village")
+    location_id = request.args.get("location_id")
+    if not location_id:
+        return jsonify({"error": "location_id is required"}), 400
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    suppliers = case_core.list_suppliers(conn, location_level, location_id, request.args.get("service_category"))
+    conn.close()
+    return jsonify({"suppliers": suppliers})
 
 
 @app.route("/api/board/post", methods=["POST"])
