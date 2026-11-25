@@ -721,6 +721,17 @@ span.qm-help-trigger { display: inline-flex; flex: 0 0 auto; align-items: center
 .dq-modal-wide { width: min(980px, 100%); }
 .dq-modal-box h3 { margin: 0 34px 12px 0; color: var(--qm-gold-text); font-size: 1.05rem; }
 .dq-modal-close { position: absolute; top: 10px; right: 12px; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--qm-input-border); background: var(--qm-input-bg); color: var(--qm-text); font-size: 1.3rem; line-height: 1; cursor: pointer; }
+
+/* Economic Engine, Member UI Task 1 (2026-11-25): the Contact Agent modal's own form. */
+.ca-label { display: block; font: 600 0.82rem "Inter", system-ui, sans-serif; color: var(--qm-text); margin-bottom: 6px; }
+.ca-textarea { width: 100%; resize: vertical; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--qm-input-border); background: var(--qm-panel-bg); color: var(--qm-text); font: inherit; box-sizing: border-box; }
+.ca-type-choice { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
+.ca-type-option { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--qm-input-border); cursor: pointer; }
+.ca-type-option:has(input:checked) { border-color: var(--qm-saffron, #ff9933); background: rgba(255, 153, 51, 0.08); }
+.ca-type-option input { flex: 0 0 auto; margin: 0; }
+.ca-type-option-title { font: 700 0.85rem "Inter", system-ui, sans-serif; color: var(--qm-text); }
+.ca-type-option small { color: var(--qm-text-dim); font-size: 0.76rem; }
+.ca-error { color: #c0392b; font-size: 0.82rem; margin: 0 0 10px; }
 .kd-body { display: grid; grid-template-columns: minmax(280px, 400px) 1fr; gap: 18px; align-items: start; }
 .kd-chart svg { width: 100%; height: auto; display: block; }
 .kd-tablewrap { overflow-x: auto; }
@@ -806,6 +817,11 @@ span.qm-help-trigger { display: inline-flex; flex: 0 0 auto; align-items: center
 .bd-sub { color: rgba(255, 255, 255, 0.7); font-size: 0.74rem; }
 .bd-qp { flex: 0 0 auto; padding: 6px 12px; border-radius: 999px; cursor: pointer; border: 1.5px solid #B8860B; background: rgba(255, 210, 74, 0.18); color: var(--qm-gold-text); font: 700 0.78rem "Inter", system-ui, sans-serif; }
 .bd-qp:hover { background: rgba(255, 210, 74, 0.32); }
+/* Economic Engine, Member UI Task 1 (2026-11-25): solid-fill, not outlined like .bd-qp or ghost
+   like .bd-groups/.bd-stats -- "prominent" per the brief, so it reads as the one actionable CTA
+   on this dark header band rather than another informational toggle. */
+.bd-contact-agent { flex: 0 0 auto; padding: 6px 12px; border-radius: 999px; cursor: pointer; border: none; background: var(--qm-saffron, #ff9933); color: #1a1205; font: 700 0.78rem "Inter", system-ui, sans-serif; }
+.bd-contact-agent:hover { background: #ffab52; }
 .bd-feed { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: #FBF9F4; }
 .bd-empty { margin: auto; text-align: center; color: var(--qm-text-dim); font-size: 0.9rem; }
 /* 2026-10-28 ("first impression" upgrade): replaces .bd-empty's bare string when board_core.py's
@@ -984,16 +1000,10 @@ span.qm-help-trigger { display: inline-flex; flex: 0 0 auto; align-items: center
 .pt-sub-wrap { margin-bottom: 10px; }
 .pt-main .bd { height: calc(100vh - 380px); min-height: 340px; margin-top: 10px; }
 
-/* 2026-10-28 ("living map" upgrade): the Family Tree's node chat, slid into .pt-side instead of a
-   centered dq-modal that used to cover the whole D3 graph (family_tree.js's openFamilyChat()/
-   closeFamilyChat()) -- is-chat-mode hides this column's other two cards (Find & connect,
-   Requests) while it's showing a group's chat instead. */
-.pt-side.is-chat-mode > .qm-dash-card { display: none; }
-.ft-chat-panel { display: flex; flex-direction: column; gap: 10px; opacity: 0; transform: translateX(16px); transition: opacity 0.22s ease, transform 0.22s ease; }
-.ft-chat-panel.is-open { opacity: 1; transform: translateX(0); }
-.ft-chat-panel[hidden] { display: none; }
-.ft-chat-panel-close { align-self: flex-start; }
-.ft-chat-panel .bd { height: calc(100vh - 460px); min-height: 300px; }
+/* The Family Tree's own slide-in node chat (2026-10-28 "living map" upgrade, .ft-chat-panel/
+   .pt-side.is-chat-mode) is retired as of 2026-11-25 -- a node's chat now opens on the dashboard's
+   Home tab instead (see family_tree.js's goToFamilyChat()), so .pt-side here is always just
+   Find & connect + Requests, and .pt-layout--full always applies to the Family Tree tab. */
 .pt-search-row { display: flex; gap: 8px; margin: 8px 0; }
 .pt-search-row input { flex: 1; min-width: 0; }
 .pt-person { padding: 10px 12px; border-radius: 12px; background: var(--qm-input-bg); }
@@ -1031,8 +1041,22 @@ span.qm-help-trigger { display: inline-flex; flex: 0 0 auto; align-items: center
 /* ---- Personal timeline v2: Private/Family/Friends/Business/Create New, group lists ---- */
 .pt-panel[hidden] { display: none; }
 .pt-grouplist { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.pt-group-row .qm-member-row { padding: 10px 12px; border-radius: 10px; background: var(--qm-input-bg); }
+/* 2026-11-25 (Universal Inbox pass): a row now holds the title button PLUS small management icon
+   buttons (Members, and Rename/Business details for the owner) beside it, instead of being the
+   row's only control -- see social.js's renderGroupList(). */
+.pt-group-row { display: flex; align-items: stretch; gap: 6px; }
+.pt-group-row .qm-member-row { flex: 1; min-width: 0; padding: 10px 12px; border-radius: 10px; background: var(--qm-input-bg); }
 .pt-group-row .qm-member-row:hover { background: rgba(255, 153, 51, 0.1); }
+.pt-group-row-icon-btn {
+  flex: 0 0 auto;
+  width: 36px;
+  border: none;
+  border-radius: 10px;
+  background: var(--qm-input-bg);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.pt-group-row-icon-btn:hover { background: rgba(255, 153, 51, 0.1); }
 .pt-empty-row { color: var(--qm-text-dim); font-size: 0.85rem; padding: 8px 0; }
 .pt-new-group-inline { display: flex; gap: 8px; margin-top: 12px; }
 .pt-new-group-inline input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--qm-input-border); background: var(--qm-panel-bg); color: var(--qm-text); font: inherit; }
@@ -1443,22 +1467,11 @@ span.qm-help-trigger { display: inline-flex; flex: 0 0 auto; align-items: center
 .qm-dash-rail-btn small { font-size: 0.6rem; font-weight: 600; letter-spacing: 0.02em; }
 .qm-dash-rail-btn:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
 .qm-dash-rail-btn.is-active { background: rgba(255, 210, 74, 0.16); color: var(--qm-gold); }
-.qm-dash-rail-spacer { margin-top: auto; }
-/* dq-dot/dq-pop (language, notifications) were designed for a horizontal header bar -- their
-   flyout menus default to opening below/left of the button, which overflows a 72px rail. Pinned
-   to the rail's own right edge instead. */
-.qm-dash-rail-pop { position: relative; }
-/* bottom: 0 (not top: 0) -- every .qm-dash-rail-pop lives in the rail's BOTTOM cluster, so
-   anchoring from the bottom keeps the flyout growing upward into visible space instead of
-   downward off the bottom of the viewport (found live, 2026-11-24, testing the Approver View's
-   own "Access Requests" dropdown section). max-height + scroll is this cluster's own safety net
-   for a long list on a short viewport, same idea .qm-chat-list already uses. */
-/* right: auto / top: auto override .dq-menu's own base "right: 0" / "top: calc(100% + 8px)" --
-   leaving either of those in effect alongside this rule's own left/bottom pinned BOTH edges on
-   an axis (top+bottom, or left+right) at once, which forces the browser to compute a near-zero
-   box from the gap between them instead of sizing to content (found live, 2026-11-24, debugging
-   why the Approver View's dropdown rendered as a 14px sliver). */
-.qm-dash-rail-pop .dq-menu { position: absolute; left: 100%; right: auto; top: auto; bottom: 0; margin-left: 8px; z-index: 50; max-height: 80vh; overflow-y: auto; }
+/* .qm-dash-rail-spacer and .qm-dash-rail-pop (the bottom icon cluster's own flyout-positioning
+   rules) were removed 2026-11-25 along with the markup they styled -- Language/Notifications/
+   Timebox/Logout moved back to the header's .qm-header-actions (its own long-standing dq-dot/
+   dq-pop/.dq-menu rules, elsewhere in this file, cover them unchanged), and Settings was dropped
+   outright. The rail is now ONLY the 5 nav buttons above. */
 
 /* ---- The Home tab: Unified Chat (list pane + feed; the rail above replaces chat.html's own) --- */
 .qm-chat-dash-shell {
@@ -1487,7 +1500,10 @@ span.qm-help-trigger { display: inline-flex; flex: 0 0 auto; align-items: center
   border-radius: 10px;
   padding: 3px;
 }
-.qm-chat-filter-tab {
+/* Chat-type filter row (2026-11-25): a second .qm-chat-filter-tabs row right under the read-status
+   one -- margin-top gives it breathing room instead of the two rows touching. */
+.qm-chat-type-filter-tabs { margin-top: 6px; }
+.qm-chat-filter-tab, .qm-chat-type-filter-tab {
   flex: 1;
   border: none;
   background: transparent;
@@ -1497,7 +1513,7 @@ span.qm-help-trigger { display: inline-flex; flex: 0 0 auto; align-items: center
   color: var(--qm-text-dim);
   cursor: pointer;
 }
-.qm-chat-filter-tab.is-active { background: var(--qm-panel-bg); color: var(--qm-gold-text); box-shadow: 0 1px 3px rgba(10, 25, 41, 0.12); }
+.qm-chat-filter-tab.is-active, .qm-chat-type-filter-tab.is-active { background: var(--qm-panel-bg); color: var(--qm-gold-text); box-shadow: 0 1px 3px rgba(10, 25, 41, 0.12); }
 
 .qm-chat-list { flex: 1; overflow-y: auto; padding: 8px; }
 .qm-chat-empty { color: var(--qm-text-dim); font-size: 0.85rem; text-align: center; padding: 24px 12px; margin: 0; }
@@ -1541,6 +1557,9 @@ span.qm-help-trigger { display: inline-flex; flex: 0 0 auto; align-items: center
   align-items: center;
   justify-content: center;
 }
+/* Economic Engine (2026-11-25): a Case row gets a fixed icon, never a first-letter avatar --
+   its title is always "CASE-VIL-<id>", whose first letter ("C") would be meaningless here. */
+.qm-chat-row-avatar--case { background: linear-gradient(135deg, #5b8def, #3a6fd8); color: #fff; font-size: 1.1rem; }
 .qm-chat-row-body { flex: 1; min-width: 0; }
 .qm-chat-row-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
 .qm-chat-row-title { font: 600 0.88rem "Inter", system-ui, sans-serif; color: var(--qm-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1559,6 +1578,44 @@ span.qm-help-trigger { display: inline-flex; flex: 0 0 auto; align-items: center
   align-items: center;
   justify-content: center;
 }
+
+/* Hide/Restore (2026-11-25): the ✕ only appears on hover (or when already open, so it's reachable
+   on a touch device with no hover) -- the hidden view's ↺ Restore is always visible instead, since
+   there's no accidental-click risk to guard against once a chat is already out of the way. */
+.qm-chat-row-hide-btn {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  color: var(--qm-text-dim);
+  opacity: 0;
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+.qm-chat-row:hover .qm-chat-row-hide-btn,
+.qm-chat-row.is-active .qm-chat-row-hide-btn,
+.qm-chat-row-hide-btn.is-restore {
+  opacity: 1;
+}
+.qm-chat-row-hide-btn:hover { background: rgba(10, 25, 41, 0.12); color: var(--qm-text); }
+
+.qm-chat-list-hidden-toggle {
+  flex: 0 0 auto;
+  width: 100%;
+  padding: 10px 8px;
+  border: none;
+  border-top: 1px solid var(--qm-border);
+  background: transparent;
+  color: var(--qm-text-dim);
+  font: 600 0.78rem "Inter", system-ui, sans-serif;
+  cursor: pointer;
+  text-align: center;
+}
+.qm-chat-list-hidden-toggle:hover { color: var(--qm-gold-text); }
+.qm-chat-list-hidden-toggle.is-active { color: var(--qm-saffron); }
 
 /* ---- Presence dots: Green/Yellow/Grey/Red, a small ring on the avatar's own corner ---- */
 .qm-presence-dot {
@@ -1600,7 +1657,36 @@ span.qm-help-trigger { display: inline-flex; flex: 0 0 auto; align-items: center
 }
 .qm-chat-members-btn:hover { background: rgba(255, 153, 51, 0.08); }
 
+/* Economic Engine, Member UI Task 2 (2026-11-25): the Case Chat's own status bar, shown only for
+   kind:'case' (dashboard.js's renderCaseStatusBar()) -- sits between the generic feed header and
+   the message list, never present for any other kind. */
+.qm-case-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 20px;
+  background: rgba(91, 141, 239, 0.1);
+  border-bottom: 1px solid var(--qm-border);
+  font: 700 0.82rem "Inter", system-ui, sans-serif;
+  color: var(--qm-text);
+}
+#qm-case-pay-btn { padding: 6px 14px; font-size: 0.8rem; flex: 0 0 auto; }
+
 .qm-chat-messages { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+/* Automated/system TID Comments entries (2026-11-25) -- centered, no bubble, no "mine"/"theirs"
+   side -- never a chat participant's own message (case_core.py's LOG_TYPES, everything but
+   'comment'). */
+.qm-chat-system-log {
+  align-self: center;
+  max-width: 85%;
+  text-align: center;
+  font-size: 0.76rem;
+  color: var(--qm-text-dim);
+  background: rgba(10, 25, 41, 0.04);
+  border-radius: 10px;
+  padding: 5px 12px;
+}
 .qm-chat-message { max-width: 70%; align-self: flex-start; }
 .qm-chat-message--mine { align-self: flex-end; }
 .qm-chat-message-who { font-size: 0.72rem; font-weight: 700; color: var(--qm-gold-text); margin-bottom: 2px; }

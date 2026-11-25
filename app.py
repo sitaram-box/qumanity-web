@@ -1276,6 +1276,25 @@ def api_case_message(case_id):
     return jsonify(comment)
 
 
+@app.route("/api/cases/<int:case_id>/pay", methods=["POST"])
+@login_required
+@_case_error
+def api_case_pay(case_id):
+    """The Member UI's "Pay to Escrow" button (2026-11-25): locks `amount` Qoins into this
+    Case's escrow. Only the Case's own Member may call this, and only while it's in
+    'pending_payment' -- both enforced by case_core.update_status() itself (the narrow
+    'is_member_paying' exception added alongside this route), not re-checked here."""
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    case = case_core.update_status(
+        conn, case_id, "in_progress", session["user_id"], "member", _is_admin(),
+        escrow_amount=data.get("amount"),
+    )
+    conn.close()
+    return jsonify(case)
+
+
 @app.route("/api/agent/cases")
 @login_required
 @_case_error
@@ -1567,6 +1586,30 @@ def api_chat_conversations():
     finally:
         conn.close()
     return jsonify({"conversations": conversations})
+
+
+@app.route("/api/chat/conversations/<kind>/<int:conv_id>/hide", methods=["POST"])
+@login_required
+def api_chat_conversation_hide(kind, conv_id):
+    """Home tab dashboard refinement (2026-11-25): hides one row from the Home list for THIS user
+    only -- never touches the underlying membership, see chat_core.set_conversation_hidden()."""
+    conn = get_db()
+    try:
+        chat_core.set_conversation_hidden(conn, session["user_id"], kind, conv_id, True)
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/chat/conversations/<kind>/<int:conv_id>/unhide", methods=["POST"])
+@login_required
+def api_chat_conversation_unhide(kind, conv_id):
+    conn = get_db()
+    try:
+        chat_core.set_conversation_hidden(conn, session["user_id"], kind, conv_id, False)
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
 
 
 @app.route("/api/presence/ping", methods=["POST"])

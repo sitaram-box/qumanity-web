@@ -190,14 +190,17 @@
     // 2026-10-27: the SELF card's own click opens its chat directly (see the click-wiring below)
     // -- but a neighbor unit card's click still NAVIGATES (re-centers the tree there), since
     // losing that would make a multi-generation tree unusable. This icon is the explicit
-    // "open this neighbor's chat without navigating away" escape hatch.
+    // "open this neighbor's chat without navigating away" escape hatch. 2026-11-25: it no longer
+    // opens a chat panel INSIDE this tab -- see goToFamilyChat()'s own comment -- so the <title>
+    // tooltip now says where it's actually taking you.
     if (!isSelf) {
       var chatIcon = group.append("g").attr("class", "ft-chat-icon")
         .attr("transform", "translate(" + (width / 2 - 18) + "," + (topY + 18) + ")")
         .on("click", function (event) {
           event.stopPropagation();
-          openFamilyChat(unit.group_id);
+          goToFamilyChat(unit.group_id);
         });
+      chatIcon.append("title").text("Join Chat");
       chatIcon.append("circle").attr("r", 13);
       chatIcon.append("text").attr("class", "ft-chat-icon-glyph").attr("y", 5).text("💬");
     }
@@ -334,7 +337,7 @@
     // button anywhere in the toolbar (2026-10-27).
     cardGroups.filter(function (d) { return d === selfCard; })
       .style("cursor", "pointer")
-      .on("click", function () { openFamilyChat(nbh.group_id); });
+      .on("click", function () { goToFamilyChat(nbh.group_id); });
 
     // Click-to-grow: the dashed "+ Add Father's/Mother's Family" button still opens ft-add-modal
     // (parents mode) -- "+ Add Sibling"/"+ Add Child" moved to the Profile Card, see above.
@@ -393,81 +396,14 @@
     });
   }
 
-  // ---- Group chat (2026-10-27): GET/POST /api/family-groups/<id>/messages already existed as a
-  // backend route with no frontend screen to open it from at all -- clicking a unit node is now
-  // that screen. Built standalone here (not a shared helper with social.js's personal-group
-  // renderChatShell()/renderMessages(), which are module-private to that file) -- reuses the same
-  // .bd-*/QMAvatar markup conventions for visual consistency, at the cost of a little duplication. ----
-  // 2026-10-28 ("living map" upgrade): slides in over .pt-side (the same column social.js's
-  // showTab() hides for the Family Tree tab, since the D3 view wants the full panel width when
-  // no chat is open) instead of a centered dq-modal that used to cover the whole tree.
-  var chatPanel = document.getElementById("ft-chat-panel");
-  var chatBody = document.getElementById("ft-chat-body");
-  var ptSide = document.querySelector(".pt-side");
-  var ptLayout = document.querySelector(".pt-layout");
-  document.getElementById("ft-chat-panel-close").addEventListener("click", closeFamilyChat);
-
-  function closeFamilyChat() {
-    chatPanel.classList.remove("is-open");
-    chatPanel.hidden = true;
-    if (ptSide) { ptSide.hidden = true; ptSide.classList.remove("is-chat-mode"); }
-    if (ptLayout) ptLayout.classList.add("pt-layout--full");
-  }
-
-  function openFamilyChat(groupId) {
-    if (ptSide) { ptSide.hidden = false; ptSide.classList.add("is-chat-mode"); }
-    if (ptLayout) ptLayout.classList.remove("pt-layout--full");
-    chatPanel.hidden = false;
-    // Slide-in: unhidden at opacity 0/translateX first, then .is-open added a frame later so the
-    // CSS transition actually has something to animate from (adding the class in the same tick
-    // hidden was cleared would just jump straight to the end state).
-    chatPanel.classList.remove("is-open");
-    requestAnimationFrame(function () { requestAnimationFrame(function () { chatPanel.classList.add("is-open"); }); });
-    chatBody.innerHTML = "";
-    chatBody.appendChild(el("p", "qm-dash-empty", "Loading…"));
-    api("/api/family-groups/" + groupId + "/messages").then(function (d) {
-      chatBody.innerHTML = "";
-      var head = el("div", "bd-head");
-      var ht = el("div", "bd-headtext");
-      ht.appendChild(el("b", "bd-title", d.name));
-      var memberCount = (d.members || []).length;
-      ht.appendChild(el("small", "bd-sub", memberCount + " member" + (memberCount === 1 ? "" : "s")));
-      head.appendChild(ht);
-      chatBody.appendChild(head);
-
-      var feed = el("div", "bd-feed"); feed.setAttribute("aria-live", "polite"); chatBody.appendChild(feed);
-      if (!d.messages.length) {
-        feed.appendChild(el("p", "bd-empty", "No messages yet — say hello."));
-      } else {
-        d.messages.forEach(function (m) {
-          var row = el("div", "bd-msg" + (m.mine ? " is-mine" : ""));
-          if (!m.mine) {
-            var msgHead = el("div", "bd-msg-head");
-            if (window.QMAvatar) msgHead.appendChild(QMAvatar.render({ name: m.who, gender: m.gender, profile_picture_url: m.profile_picture_url }, 24));
-            msgHead.appendChild(el("b", "", m.who));
-            row.appendChild(msgHead);
-          }
-          row.appendChild(document.createTextNode(m.text));
-          feed.appendChild(row);
-        });
-        feed.scrollTop = feed.scrollHeight;
-      }
-
-      var form = el("form", "bd-compose"), ta = document.createElement("textarea");
-      ta.rows = 2; ta.maxLength = 1000; ta.placeholder = "Message " + d.name + "…"; ta.required = true;
-      var send = el("button", "", "Send"); send.type = "submit";
-      form.appendChild(ta); form.appendChild(send);
-      chatBody.appendChild(form);
-      form.addEventListener("submit", function (e) {
-        e.preventDefault();
-        api("/api/family-groups/" + groupId + "/messages", { text: ta.value }).then(function () {
-          ta.value = ""; openFamilyChat(groupId);
-        }).catch(function (er) { alert(er.message); });
-      });
-    }).catch(function (e) {
-      chatBody.innerHTML = "";
-      chatBody.appendChild(el("p", "bd-empty", e.message));
-    });
+  // ---- Group chat: the Family Tree's own 💬 icon / self-card click no longer opens a chat
+  // surface INSIDE this tab (2026-10-27's slide-in .pt-side panel, retired 2026-11-25) -- it now
+  // hands off to the one real Unified Chat feed on the dashboard's Home tab instead, via the
+  // global bridge dashboard.js exposes (window.QMOpenHomeChat) for exactly this: switch rail tabs,
+  // then open this exact family-unit conversation (kind "family", chat_core.list_my_conversations()'s
+  // own identity for a family_groups row) once the Home tab's own list has it. ----
+  function goToFamilyChat(groupId) {
+    if (window.QMOpenHomeChat) window.QMOpenHomeChat("family", groupId);
   }
 
   // ---- Shared auto-search (2026-10-27): types a 12-digit Public ID, debounced search fires on
@@ -887,8 +823,8 @@
     });
   });
 
-  // closeChat (2026-10-28): social.js's showTab() calls this when navigating away from the
-  // Family Tree tab, so the slide-in chat panel never stays open (and .pt-side's is-chat-mode
-  // never stays set) under a different tab's own content.
-  window.QMFamilyTree = { showTree: showTree, closeChat: closeFamilyChat };
+  // closeChat (2026-10-28) is gone along with the slide-in panel it used to close (2026-11-25) --
+  // social.js's showTab() guards every call with `&& window.QMFamilyTree.closeChat`, so leaving
+  // the property off entirely (rather than a no-op stub) is enough; that guard just goes false now.
+  window.QMFamilyTree = { showTree: showTree };
 })();

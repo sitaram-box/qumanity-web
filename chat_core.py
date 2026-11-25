@@ -114,6 +114,19 @@ CREATE TABLE IF NOT EXISTS temporary_access_strikes (
     FOREIGN KEY (request_id) REFERENCES temporary_location_access(id)
 );
 CREATE INDEX IF NOT EXISTS idx_temp_access_strikes_request ON temporary_access_strikes(request_id);
+-- Hidden chats (Home tab dashboard refinement, 2026-11-25): hiding a chat from the Home list is a
+-- per-user DISPLAY preference, never membership -- it must not touch private_chats/personal_groups/
+-- family_group_members/subgroup_members/local_area_members/temporary_location_access at all, which
+-- is why this is one small generic table keyed on (kind, conversation_id) instead of a column
+-- added to each of those five differently-shaped tables. (kind, conversation_id) together are
+-- list_my_conversations()'s own existing row identity -- see this module's docstring.
+CREATE TABLE IF NOT EXISTS chat_hidden_conversations (
+    user_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    conversation_id INTEGER NOT NULL,
+    hidden_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, kind, conversation_id)
+);
 """
 
 
@@ -535,6 +548,26 @@ def _last_message_at(conn, table: str, id_column: str, group_id: int) -> str | N
     return row["created_at"] if row else None
 
 
+def set_conversation_hidden(conn, user_id: int, kind: str, conversation_id: int, hidden: bool) -> None:
+    """Hides or restores one row of the Home tab's chat list for this user only (2026-11-25).
+    Deliberately does NOT touch the underlying membership (private_chats/personal_groups/
+    family_group_members/subgroup_members/local_area_members/temporary_location_access) -- the
+    chat/group/contact itself, and everyone else's view of it, is completely unaffected. See
+    chat_hidden_conversations' own schema comment."""
+    ensure_tables(conn)
+    if hidden:
+        conn.execute(
+            "INSERT OR IGNORE INTO chat_hidden_conversations (user_id, kind, conversation_id, hidden_at) VALUES (?, ?, ?, ?)",
+            (user_id, kind, conversation_id, _now()),
+        )
+    else:
+        conn.execute(
+            "DELETE FROM chat_hidden_conversations WHERE user_id = ? AND kind = ? AND conversation_id = ?",
+            (user_id, kind, conversation_id),
+        )
+    conn.commit()
+
+
 def list_my_conversations(conn, user_id: int) -> list[dict]:
     """Every conversation this user belongs to, across all six existing messaging systems,
     normalized to {kind, id, title, pane, location_id, location_level, last_message_at,
@@ -552,7 +585,18 @@ def list_my_conversations(conn, user_id: int) -> list[dict]:
     temporary_location_access grant, not an approved subgroup_members/local_area_members row --
     the UI's cue for the gold "Temporary Member" badge and for hiding citizen-only controls
     (voting/posting/rating are already refused server-side regardless, by residency -- see
-    chat_core.py's own module docstring; this flag is the UI-level signal on top of that)."""
+    chat_core.py's own module docstring; this flag is the UI-level signal on top of that).
+
+    `hidden` (2026-11-25): True once set_conversation_hidden() has hidden this exact (kind, id) for
+    this user -- present on every row, both panes alike. Never filters a row OUT of this list;
+    the Home tab's own list is what decides whether to show it, based on its "Show Hidden Chats"
+    toggle state.
+
+    `member_count` (2026-11-25, Universal Inbox pass): how many approved/active members this
+    conversation has, by whichever counting convention that kind's own detail view already uses
+    elsewhere (+1 for an owner/creator with no membership row of their own -- 'group' and 'sub';
+    none for a kind whose creator already gets one -- 'family' and 'local') -- see each loop's own
+    comment. Always None for 'private': a 1:1 chat is always exactly 2, not useful to show."""
     ensure_tables(conn)  # see request_temporary_access()'s own comment on why this is called defensively here too
     out = []
 
@@ -570,6 +614,7 @@ def list_my_conversations(conn, user_id: int) -> list[dict]:
             # equivalent of (see chat.js's own presence-dot logic, Private pane only).
             "other_user_id": r["other_id"],
             "last_message_at": _last_message_at(conn, "private_messages", "chat_id", r["id"]), "unread_count": 0,
+            "member_count": None,  # a 1:1 chat is always exactly 2 -- not useful information to show
         })
 
     for r in conn.execute(
@@ -578,42 +623,64 @@ def list_my_conversations(conn, user_id: int) -> list[dict]:
            SELECT pg.id, pg.name FROM personal_group_members pm JOIN personal_groups pg ON pg.id = pm.group_id
            WHERE pm.user_id = ? AND pm.status = 'approved'""", (user_id, user_id)
     ):
+        # +1 for the owner -- personal_groups has no owner row of its own in personal_group_members,
+        # same convention social_core.my_groups()'s own member counts already use.
+        member_count = conn.execute(
+            "SELECT COUNT(*) FROM personal_group_members WHERE group_id = ? AND status = 'approved'", (r["id"],)
+        ).fetchone()[0] + 1
         out.append({
             "kind": "group", "id": r["id"], "title": r["name"], "pane": "private",
             "location_id": None, "location_level": None,
             "last_message_at": _last_message_at(conn, "personal_messages", "group_id", r["id"]), "unread_count": 0,
+            "member_count": member_count,
         })
 
     for r in conn.execute(
         """SELECT fg.id, fg.name FROM family_group_members m JOIN family_groups fg ON fg.id = m.group_id
            WHERE m.user_id = ? AND m.status = 'approved'""", (user_id,)
     ):
+        # No +1 here -- a family unit's two founders ARE their own family_group_members rows (see
+        # family_core.py's own schema comment), unlike a personal group's owner.
+        member_count = conn.execute(
+            "SELECT COUNT(*) FROM family_group_members WHERE group_id = ? AND status = 'approved'", (r["id"],)
+        ).fetchone()[0]
         out.append({
             "kind": "family", "id": r["id"], "title": r["name"], "pane": "private",
             "location_id": None, "location_level": None,
             "last_message_at": _last_message_at(conn, "family_group_messages", "group_id", r["id"]), "unread_count": 0,
+            "member_count": member_count,
         })
 
     for r in conn.execute(
         """SELECT g.id, g.name, g.location_id, g.location_level FROM subgroup_members m
            JOIN subgroups g ON g.id = m.subgroup_id WHERE m.user_id = ? AND m.status = 'approved'""", (user_id,)
     ):
+        # +1 for the channel's own creator -- never their own subgroup_members row, same convention
+        # board_core.chat_messages()/members_of() already use for this exact channel.
+        member_count = conn.execute(
+            "SELECT COUNT(*) FROM subgroup_members WHERE subgroup_id = ? AND status = 'approved'", (r["id"],)
+        ).fetchone()[0] + 1
         out.append({
             "kind": "sub", "id": r["id"], "title": r["name"], "pane": "channel",
             "location_id": r["location_id"], "location_level": r["location_level"],
             "last_message_at": _last_message_at(conn, "board_messages", "subgroup_id", r["id"]), "unread_count": 0,
-            "membership": "active",
+            "membership": "active", "member_count": member_count,
         })
 
     for r in conn.execute(
         """SELECT la.id, la.name, la.village_id FROM local_area_members m
            JOIN local_areas la ON la.id = m.local_area_id WHERE m.user_id = ? AND m.status = 'active'""", (user_id,)
     ):
+        # No +1 here -- local_area_core.create_local_area() gives its own creator a real
+        # local_area_members row, unlike a Governance Channel's creator.
+        member_count = conn.execute(
+            "SELECT COUNT(*) FROM local_area_members WHERE local_area_id = ? AND status = 'active'", (r["id"],)
+        ).fetchone()[0]
         out.append({
             "kind": "local", "id": r["id"], "title": r["name"], "pane": "channel",
             "location_id": r["village_id"], "location_level": "village",
             "last_message_at": _last_message_at(conn, "local_area_messages", "local_area_id", r["id"]), "unread_count": 0,
-            "membership": "active",
+            "membership": "active", "member_count": member_count,
         })
 
     # Temporary Member channels (Chat-as-Dashboard Phase 2 Step 3, 2026-11-24): an ACTIVE
@@ -630,12 +697,29 @@ def list_my_conversations(conn, user_id: int) -> list[dict]:
         for g in board_core.list_subgroups(conn, user_id, grant["location_id"], grant["location_level"], is_admin=False):
             if g["my_status"] == "approved":
                 continue
+            # +1 here too, NOT g["members"] -- list_subgroups() counts approved subgroup_members
+            # rows alone, with no +1 for the creator, so it differs by one from every other 'sub'
+            # row's own member_count above; recomputed the same way so the same kind never shows
+            # two different counting conventions on the Home list.
+            member_count = conn.execute(
+                "SELECT COUNT(*) FROM subgroup_members WHERE subgroup_id = ? AND status = 'approved'", (g["id"],)
+            ).fetchone()[0] + 1
             out.append({
                 "kind": "sub", "id": g["id"], "title": g["name"], "pane": "channel",
                 "location_id": grant["location_id"], "location_level": grant["location_level"],
                 "last_message_at": _last_message_at(conn, "board_messages", "subgroup_id", g["id"]), "unread_count": 0,
-                "membership": "temporary",
+                "membership": "temporary", "member_count": member_count,
             })
+
+    # Hidden chats (2026-11-25): a per-user DISPLAY flag, computed here rather than filtered out of
+    # `out` entirely -- the Home tab's own "Show Hidden Chats" toggle needs to list a hidden row on
+    # demand (to restore it), so the aggregator always returns every row and lets the UI decide
+    # what to show, the same way `membership` is a flag rather than a second filtered query.
+    hidden_pairs = {(r["kind"], r["conversation_id"]) for r in conn.execute(
+        "SELECT kind, conversation_id FROM chat_hidden_conversations WHERE user_id = ?", (user_id,)
+    )}
+    for c in out:
+        c["hidden"] = (c["kind"], c["id"]) in hidden_pairs
 
     out.sort(key=lambda c: c["last_message_at"] or "", reverse=True)
     return out

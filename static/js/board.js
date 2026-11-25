@@ -40,20 +40,9 @@
     return box;
   }
 
-  var REACTION_ICON = { agree: "\uD83D\uDC4D", disagree: "\uD83D\uDC4E", read: "\uD83D\uDC41\uFE0F" };
-  function reactionBar(m, scope, memberCount, onChange) {
-    var bar = el("div", "bd-reactions");
-    ["agree", "disagree", "read"].forEach(function (kind) {
-      var mine = m.reactions.mine === kind;
-      var btn = el("button", "bd-react" + (mine ? " is-on" : ""), REACTION_ICON[kind] + " " + m.reactions[kind]); btn.type = "button";
-      btn.addEventListener("click", function () {
-        api("/api/reactions/" + scope + "/" + m.id, { reaction: mine ? null : kind }).then(onChange).catch(function (e) { alert(e.message); });
-      });
-      bar.appendChild(btn);
-    });
-    bar.appendChild(el("small", "bd-react-total", "out of " + memberCount + " member" + (memberCount === 1 ? "" : "s")));
-    return bar;
-  }
+  // REACTION_ICON/reactionBar() (agree/disagree/read reactions on a subgroup chat message) are
+  // removed along with their only caller, the in-board subgroupBubble()/renderChat() chat view
+  // retired by 2026-11-25's Universal Inbox pass -- see loadSubgroups()'s own comment below.
 
   // ---- Q-Punch popup ----
   var qpModal = document.getElementById("qp-modal"), qpBody = document.getElementById("qp-body");
@@ -156,6 +145,53 @@
         }).catch(function (e) { cascadeHolder.innerHTML = ""; cascadeHolder.appendChild(el("p", "qm-dash-empty", e.message)); });
       }
     }).catch(function (e) { qpBody.innerHTML = ""; qpBody.appendChild(el("p", "qm-dash-empty", e.message)); });
+  }
+
+  // ---- Economic Engine, Member UI Task 1 (2026-11-25): the "Contact Agent" modal ----
+  // One shared modal (like qp-modal above), opened from any village-level board's own
+  // .bd-contact-agent button (wired per-board inside Board(), below). Always opens a Case against
+  // the MEMBER'S OWN present Village -- POST /api/cases/create ignores any location the client
+  // might send and reads the caller's own present_location_json server-side (app.py's
+  // api_cases_create()), so this never needs to know which village's board is actually on screen.
+  var contactAgentModal = document.getElementById("contact-agent-modal");
+  var contactAgentForm = document.getElementById("contact-agent-form");
+  var contactAgentError = document.getElementById("contact-agent-error");
+
+  function openContactAgentModal() {
+    if (!contactAgentModal) return;
+    contactAgentError.hidden = true;
+    contactAgentForm.reset();
+    contactAgentModal.hidden = false;
+    contactAgentForm.querySelector("textarea").focus();
+  }
+
+  if (contactAgentForm) {
+    contactAgentForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var subject = contactAgentForm.querySelector("textarea").value.trim();
+      var typeInput = contactAgentForm.querySelector('input[name="contact-agent-type"]:checked');
+      contactAgentError.hidden = true;
+      if (!subject) {
+        contactAgentError.hidden = false;
+        contactAgentError.textContent = "Please describe your demand or issue.";
+        return;
+      }
+      var submitBtn = contactAgentForm.querySelector("button[type=submit]");
+      submitBtn.disabled = true;
+      api("/api/cases/create", { case_type: typeInput ? typeInput.value : "commerce", subject: subject })
+        .then(function (c) {
+          submitBtn.disabled = false;
+          contactAgentModal.hidden = true;
+          // Hands straight to the Home tab's Case Chat (dashboard.js) -- same bridge pattern
+          // every other "open this chat" entry point in the app already uses.
+          if (window.QMOpenHomeChat) window.QMOpenHomeChat("case", c.id);
+        })
+        .catch(function (err) {
+          submitBtn.disabled = false;
+          contactAgentError.hidden = false;
+          contactAgentError.textContent = err.message;
+        });
+    });
   }
 
   // The monthly sign election (election_core.py) -- same card as the phone app's Q-Punch:
@@ -481,10 +517,9 @@
     // that markup has landed yet.
     var testToggleBox = form.querySelector(".bd-test-toggle");
     var testToggle = testToggleBox ? testToggleBox.querySelector("input") : null;
-    var chat = null;                       // {id, name} while a village sub-group chat is open
     var view = "live";                     // "live" (default) or "frozen" — each fills the whole board
     var toggle = root.querySelector(".bd-toggle"), foot = root.querySelector(".bd-foot"), lastView = null;
-    var self = { setChat: null };
+    var self = {};
     var announceBanner = root.querySelector(".bd-announce-banner");
     var announceBannerText = announceBanner.querySelector(".bd-announce-banner-text");
     var announceBannerFull = announceBanner.querySelector(".bd-announce-banner-full");
@@ -497,6 +532,17 @@
     });
     var qpBtn = root.querySelector(".bd-qp");
     if (pinnedLocation) qpBtn.hidden = true; else qpBtn.addEventListener("click", function () { openQp(level); });
+    // Economic Engine, Member UI Task 1 (2026-11-25): shown/hidden by render() below, by the
+    // CURRENT level (v.level, not this closure's own `level` var -- the Public board's level can
+    // change under the user via self.setLevel() as they drill the map down/up; see this file's
+    // own module comment on that). Never shown at all on a pinned/remote multi-view board --
+    // same reasoning as qpBtn/groupsBtn just above (it would act on the viewer's OWN village, not
+    // whichever one is pinned here).
+    var contactAgentBtn = root.querySelector(".bd-contact-agent");
+    if (contactAgentBtn) {
+      if (pinnedLocation) contactAgentBtn.hidden = true;
+      else contactAgentBtn.addEventListener("click", function () { openContactAgentModal(); });
+    }
     var groupsBtn = root.querySelector(".bd-groups");
     if (pinnedLocation && groupsBtn) groupsBtn.hidden = true;
     var reportBtn = root.querySelector(".bd-report-btn");
@@ -526,6 +572,7 @@
       subEl.appendChild(el("span", "bd-count", "\uD83D\uDC65 " + v.members.toLocaleString() + " member" + (v.members === 1 ? "" : "s")));
       subEl.appendChild(el("span", "bd-count", "\uD83D\uDD37 " + v.qoins.toLocaleString() + " Qoins"));
       if (level === "country" || level === "state") loadSentiment(level, v.group_id); else if (sentimentBox) sentimentBox.hidden = true;
+      if (contactAgentBtn && !pinnedLocation) contactAgentBtn.hidden = v.level !== "village";
       form.hidden = !(v.can_post || v.can_pay_post);
       reportBtn.hidden = !v.can_post;
       if (testToggleBox) testToggleBox.hidden = !v.is_admin;
@@ -778,33 +825,13 @@
       return b;
     }
 
-    function renderChat(d) {
-      titleEl.textContent = d.name;
-      subEl.innerHTML = "";
-      subEl.appendChild(el("span", "bd-count", "👥 " + d.members + " member" + (d.members === 1 ? "" : "s")));
-      subEl.appendChild(el("span", "bd-count", "Admin: " + d.admin_label));
-      var back = el("button", "bd-back", "← Village board"); back.type = "button"; back.addEventListener("click", function () { self.setChat(null); });
-      subEl.appendChild(back);
-      form.hidden = false; note.hidden = true; foot.hidden = true; ta.placeholder = "Message " + d.name + "…";
-      feed.innerHTML = "";
-      if (!d.messages.length) feed.appendChild(el("p", "bd-empty", "No messages yet — say hello."));
-      d.messages.forEach(function (m) { feed.appendChild(subgroupBubble(m, d.members)); });
-      feed.scrollTop = feed.scrollHeight;
-    }
-
-    function subgroupBubble(m, memberCount) {
-      var b = el("div", "bd-msg bd-msg-full" + (m.mine ? " is-mine" : ""));
-      var head = el("div", "bd-msg-head");
-      if (window.QMAvatar) head.appendChild(window.QMAvatar.render({ name: m.who, gender: m.gender, profile_picture_url: m.profile_picture_url }, 28));
-      head.appendChild(el("b", "", m.who)); head.appendChild(el("small", "", m.account_id || "")); b.appendChild(head);
-      b.appendChild(el("p", "bd-msg-text", m.text));
-      b.appendChild(el("small", "bd-msg-time", ago(m.at)));
-      b.appendChild(reactionBar(m, "subgroup", memberCount, function () { load(); }));
-      return b;
-    }
+    // renderChat()/subgroupBubble() (the in-board village-group chat view this panel used to
+    // switch into, via self.setChat()) are removed as of 2026-11-25's Universal Inbox pass -- a
+    // Governance Channel's conversation now opens on the dashboard's Home tab instead (see
+    // loadSubgroups()'s own "Open chat" button, below in this file), so this board() instance
+    // only ever renders the location's own Collective Board now, never a subgroup's chat.
 
     function load() {
-      if (chat) return api("/api/chat/" + chat.id).then(renderChat).catch(function (e) { feed.innerHTML = ""; feed.appendChild(el("p", "bd-empty", e.message)); });
       var req = pinnedLocation ? api("/api/admin/board/" + level, { present_location: pinnedLocation }) : api("/api/board/" + level);
       return req.then(render).catch(function (e) {
         titleEl.textContent = "Collective Board"; subEl.textContent = ""; feed.innerHTML = ""; feed.appendChild(el("p", "bd-empty", e.message)); form.hidden = true;
@@ -812,15 +839,13 @@
     }
     form.addEventListener("submit", function (e) {
       e.preventDefault();
-      if (!chat && lastView && lastView.can_pay_post && !window.confirm(priceLine(lastView) + " — from your wallet. Continue?")) return;
+      if (lastView && lastView.can_pay_post && !window.confirm(priceLine(lastView) + " — from your wallet. Continue?")) return;
       var postBody = { content: ta.value, level: level };
-      if (!chat && testToggle && testToggle.checked) postBody.is_test = true;
-      var req = chat ? api("/api/chat/" + chat.id, { text: ta.value }) : api("/api/board/post", postBody);
-      req.then(function () { ta.value = ""; if (testToggle) testToggle.checked = false; load(); }).catch(function (er) { alert(er.message); });
+      if (testToggle && testToggle.checked) postBody.is_test = true;
+      api("/api/board/post", postBody).then(function () { ta.value = ""; if (testToggle) testToggle.checked = false; load(); }).catch(function (er) { alert(er.message); });
     });
     toggle.addEventListener("click", function () { view = view === "live" ? "frozen" : "live"; if (lastView) render(lastView); feed.scrollTop = 0; });
-    self.setChat = function (c) { chat = c; return load(); };
-    self.setLevel = function (l) { chat = null; view = "live"; level = l; root.setAttribute("data-level", l); return load(); };
+    self.setLevel = function (l) { view = "live"; level = l; root.setAttribute("data-level", l); return load(); };
     self.load = load;
     return self;
   }
@@ -1024,7 +1049,12 @@
           left_.appendChild(el("b", "", g.name)); left_.appendChild(el("small", "", g.members + " member" + (g.members === 1 ? "" : "s") + (g.description ? " · " + g.description : "")));
           row.appendChild(left_);
           var btn = el("button", "sg-btn"); btn.type = "button";
-          if (g.my_status === "approved" || d.is_admin) { btn.textContent = "Open chat"; btn.addEventListener("click", function () { setDrawer(false); b.setChat({ id: g.id, name: g.name }); }); }
+          // Universal Inbox pass (2026-11-25): "Open chat" now goes straight to the dashboard's
+          // Home tab instead of swapping this board's own feed for the channel's -- see board()'s
+          // own comment above. The name is passed through as a fallback title for the one real
+          // edge case that needs it: an admin opening a channel they hold no approved
+          // subgroup_members row in, which chat_core.list_my_conversations() won't have listed.
+          if (g.my_status === "approved" || d.is_admin) { btn.textContent = "Open chat"; btn.addEventListener("click", function () { setDrawer(false); window.QMOpenHomeChat("sub", g.id, g.name); }); }
           else if (g.my_status === "pending") { btn.textContent = "Requested"; btn.disabled = true; }
           else { btn.textContent = "Ask to join"; btn.addEventListener("click", function () { api("/api/subgroups/" + g.id + "/join", {}).then(loadSubgroups).catch(function (e) { alert(e.message); }); }); }
           row.appendChild(btn); li.appendChild(row);

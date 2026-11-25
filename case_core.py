@@ -276,13 +276,22 @@ def update_status(conn, case_id: int, new_status: str, actor_user_id: int, actor
     `is_admin` added in Phase 2 Step 3 (2026-11-25): Step 2 enforced the transition table but
     never checked WHO may trigger it -- fine while nothing called this over HTTP yet, not once
     `/api/agent/cases/<id>/status` is a real route. Same authority as resolve_case(): this Case's
-    assigned Agent, or this location's council/Founder."""
+    assigned Agent, or this location's council/Founder.
+
+    One deliberate exception, added for the Member UI's own "Pay to Escrow" button
+    (2026-11-25): the Case's own Member may ALSO trigger the one exact 'pending_payment' ->
+    'in_progress' transition -- it's their own Qoins being locked, so they must be able to do it
+    themselves; see app.py's /api/cases/<id>/pay. They still can't skip steps, assign an Agent, or
+    touch any other transition -- this is a narrow carve-out, not a broadened role."""
     if new_status == "resolved":
         raise ValueError("Use resolve_case() to resolve a Case, not update_status()")
     case = get_case(conn, case_id)
     if not case:
         raise LookupError("Case not found")
-    if actor_user_id != case["agent_user_id"] and not chat_core.can_manage_location(
+    is_member_paying = (
+        actor_user_id == case["member_user_id"] and case["status"] == "pending_payment" and new_status == "in_progress"
+    )
+    if actor_user_id != case["agent_user_id"] and not is_member_paying and not chat_core.can_manage_location(
         conn, actor_user_id, case["location_level"], case["location_id"], is_admin
     ):
         raise PermissionError("Only this Case's assigned Agent, or this location's council/Founder, may change its status")

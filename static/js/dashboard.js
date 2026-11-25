@@ -36,23 +36,6 @@
     });
   });
 
-  // Settings (2026-11-24): lives inside the Private panel's own pv-settings card (Language/PIN/
-  // sign-out) -- always has. Rather than build a second settings surface, the rail's gear just
-  // opens Private (by reusing the SAME click handler above, not a second copy of the panel-switch
-  // logic) and expands that card.
-  var settingsBtn = document.getElementById("qm-dash-settings-btn");
-  if (settingsBtn) {
-    settingsBtn.addEventListener("click", function () {
-      var privateTab = document.querySelector('.qm-dash-tab[data-tab="private"]');
-      if (privateTab) privateTab.click();
-      var settingsCard = document.querySelector(".pv-settings");
-      if (settingsCard) {
-        settingsCard.open = true;
-        settingsCard.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    });
-  }
-
   // ==================== Home tab: Unified Chat (Chat-as-Dashboard Phase 2 Step 2, 2026-11-24) ====================
   // Promoted verbatim from the standalone /chat page (templates/chat.html + static/js/chat.js,
   // now retired -- app.py's /chat redirects here). The ONLY thing dropped is that page's own
@@ -80,6 +63,43 @@
     return sameDay ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : d.toLocaleDateString();
   }
 
+  var CHAT_KIND_LABEL = { private: "Private chat", group: "Group chat", family: "Family group", sub: "Council Chat", local: "Local Area", case: "Case" };
+
+  // ---- Economic Engine, Member UI Task 2 (2026-11-25): Cases on the Home tab ----
+  // kind:'case' rows are NOT produced by chat_core.list_my_conversations() -- they're fetched
+  // separately (GET /api/cases/my-cases) and merged into chatState.conversations by
+  // loadConversations() below, each carrying case_type/status/agent_user_id/escrow_amount
+  // alongside the normal row shape every other kind already has.
+  var CASE_TYPE_LABEL = { commerce: "Commerce", service_request: "Service Request" };
+  var CASE_STATUS_LABEL = {
+    created: "Pending Agent", agent_assigned: "Agent Assigned", supplier_contacted: "Supplier Contacted",
+    pending_supplier: "Awaiting Supplier", pending_payment: "Pending Payment", in_progress: "In Progress",
+    resolved: "Resolved", disputed: "Disputed", escalated: "Escalated", cancelled: "Cancelled",
+  };
+  var CASE_ROLE_LABEL = { member: "You", agent: "Agent", supplier: "Supplier", system: "System", council: "Council" };
+  // "CASE-VIL-1042" (the brief's own example format) -- VIL today since every Case opens at
+  // Village level (case_core.py); the location_level prefix keeps this correct if that ever
+  // changes rather than hardcoding "VIL".
+  function caseDisplayId(c) {
+    return "CASE-" + (c.location_level || "village").slice(0, 3).toUpperCase() + "-" + c.id;
+  }
+  // Row subtitle (2026-11-25, Universal Inbox pass): kind-aware label (private chats never had a
+  // member count worth showing -- chat_core.list_my_conversations() leaves member_count null for
+  // them) plus "· N members" from the aggregator's own count, wherever it has one. 'sub' and
+  // 'local' are the two pane:'channel' kinds, now split into their own "Council"/"Local Area"
+  // wording (and their own filter + section, see matchesChatTypeFilter()/renderChatList() below) --
+  // they used to share one "Channel" label before Task 4 of this pass told them apart.
+  function chatRowSubtitle(c) {
+    if (c.kind === "case") {
+      return (CASE_TYPE_LABEL[c.case_type] || c.case_type) + " · " + (CASE_STATUS_LABEL[c.status] || c.status || "Pending Agent");
+    }
+    var base = c.pane === "channel" && c.location_level
+      ? c.location_level.charAt(0).toUpperCase() + c.location_level.slice(1) + (c.kind === "sub" ? " Council" : c.kind === "local" ? " Local Area" : " Channel")
+      : (CHAT_KIND_LABEL[c.kind] || "Chat");
+    if (c.member_count != null) base += " · " + c.member_count + " member" + (c.member_count === 1 ? "" : "s");
+    return base;
+  }
+
   // ---- Per-kind message routes -- mirrors Qumanity_App/mobile/src/api/qumanity.ts exactly ----
   var CHAT_ROUTE = {
     sub: function (id) { return "/api/chat/" + id; },
@@ -95,13 +115,33 @@
   var chatState = {
     conversations: [],
     filter: "all",
+    typeFilter: "all",  // 2026-11-25: "all" | "private" | "groups" | "councils" -- see
+                        // matchesChatTypeFilter() below. Independent of `filter` (read status).
+    showHidden: false,  // 2026-11-25: flips the list between the normal view and a review-only
+                         // view of just the hidden rows (see renderChatList()/the toggle below).
     active: null,       // the open conversation's own row from chatState.conversations
     activeMembers: [],  // [{user_id, name}], refreshed each time a conversation opens
   };
 
   function loadConversations() {
-    return chatApi("/api/chat/conversations").then(function (r) {
-      chatState.conversations = r.conversations;
+    // Cases are fetched from their own endpoint and merged in here (2026-11-25) rather than
+    // taught to chat_core.list_my_conversations() -- see this file's own Economic Engine comment
+    // above. `all=1` so a Case stays visible (resolved/cancelled, history included) once it's
+    // reached a terminal status, same as every other kind here never disappears on its own.
+    return Promise.all([
+      chatApi("/api/chat/conversations"),
+      chatApi("/api/cases/my-cases?all=1"),
+    ]).then(function (results) {
+      var cases = results[1].cases.map(function (c) {
+        return {
+          kind: "case", id: c.id, title: caseDisplayId(c), pane: "channel",
+          location_id: c.location_id, location_level: c.location_level,
+          last_message_at: c.updated_at, unread_count: 0, hidden: false, member_count: null,
+          case_type: c.case_type, status: c.status, agent_user_id: c.agent_user_id,
+          escrow_amount: c.escrow_amount,
+        };
+      });
+      chatState.conversations = results[0].conversations.concat(cases);
       renderChatList();
       refreshPrivatePresence();
     });
@@ -113,32 +153,92 @@
     return true;
   }
 
+  // Hidden chats (2026-11-25): hideConversation()/unhideConversation() both just flip the flag on
+  // the matching chatState.conversations row in place and re-render -- a full loadConversations()
+  // round trip isn't needed since the server-side change is a single, already-applied write.
+  function hideConversation(c) {
+    chatApi("/api/chat/conversations/" + c.kind + "/" + c.id + "/hide", {}).then(function () {
+      c.hidden = true;
+      renderChatList();
+    }).catch(function () { /* the row stays visible; the user can just try again */ });
+  }
+  function unhideConversation(c) {
+    chatApi("/api/chat/conversations/" + c.kind + "/" + c.id + "/unhide", {}).then(function () {
+      c.hidden = false;
+      renderChatList();
+    }).catch(function () { /* the row stays in the hidden view; the user can just try again */ });
+  }
+
+  var chatHiddenToggle = $("qm-chat-hidden-toggle");
+  if (chatHiddenToggle) {
+    chatHiddenToggle.addEventListener("click", function () {
+      chatState.showHidden = !chatState.showHidden;
+      chatHiddenToggle.textContent = chatState.showHidden ? "← Back to chats" : "Show Hidden Chats";
+      chatHiddenToggle.classList.toggle("is-active", chatState.showHidden);
+      renderChatList();
+    });
+  }
+
+  // Chat-type filter (2026-11-25, Universal Inbox pass): a SECOND, independent filter row
+  // alongside the existing read-status one (All/Unread/Mentions) -- the two combine with AND in
+  // renderChatList() below, not either/or. "groups" covers personal groups AND family units (both
+  // chat_core pane:'private', the opening brief's own "Family Groups, Friend Groups, Business
+  // Groups" bucketed together). "areas" and "councils" were one combined "councils" bucket until
+  // this pass split them -- both are still pane:'channel' rows, just different kinds now filtered
+  // (and sectioned, see renderChatList()) separately: kind:'local' (Local Areas) vs kind:'sub'
+  // (Governance Channels, administered by a village/cascade council).
+  function matchesChatTypeFilter(c) {
+    if (chatState.typeFilter === "private") return c.kind === "private";
+    if (chatState.typeFilter === "groups") return c.kind === "group" || c.kind === "family";
+    if (chatState.typeFilter === "areas") return c.kind === "local";
+    if (chatState.typeFilter === "councils") return c.kind === "sub";
+    if (chatState.typeFilter === "cases") return c.kind === "case";
+    return true;
+  }
+  document.querySelectorAll(".qm-chat-type-filter-tab").forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      document.querySelectorAll(".qm-chat-type-filter-tab").forEach(function (t) {
+        t.classList.toggle("is-active", t === tab);
+        t.setAttribute("aria-selected", t === tab ? "true" : "false");
+      });
+      chatState.typeFilter = tab.getAttribute("data-type-filter");
+      renderChatList();
+    });
+  });
+
   function renderChatList() {
     var list = $("qm-chat-list");
     if (!list) return;
     list.innerHTML = "";
-    var visible = chatState.conversations.filter(matchesChatFilter);
+    var visible = chatState.conversations
+      .filter(function (c) { return chatState.showHidden ? c.hidden : !c.hidden; })
+      .filter(matchesChatFilter)
+      .filter(matchesChatTypeFilter);
     if (!visible.length) {
-      var emptyText = chatState.filter === "unread" ? "No unread conversations."
+      var emptyText = chatState.showHidden ? "No hidden chats."
+        : chatState.filter === "unread" ? "No unread conversations."
         : chatState.filter === "mentions" ? "No mentions yet."
         : "Nothing here yet.";
       list.appendChild(el("p", "qm-chat-empty", emptyText));
       return;
     }
 
+    var caseItems = visible.filter(function (c) { return c.kind === "case"; });
     var privateItems = visible.filter(function (c) { return c.pane === "private"; });
-    var channelItems = visible.filter(function (c) { return c.pane === "channel"; });
+    var councilItems = visible.filter(function (c) { return c.kind === "sub"; });
+    var areaItems = visible.filter(function (c) { return c.kind === "local"; });
 
-    if (privateItems.length) {
-      list.appendChild(el("div", "qm-chat-list-section-title", "Private"));
-      privateItems.forEach(function (c) { list.appendChild(buildChatRow(c)); });
-    }
-
-    if (channelItems.length) {
-      list.appendChild(el("div", "qm-chat-list-section-title", "Channels"));
+    // Section order (2026-11-25): Council Chats, then Local Areas, then Private -- the opening
+    // brief asks specifically for council/channel chats at the TOP of the list. These were one
+    // merged "Council Chats" section grouped only by location until Task 4 of this pass split them
+    // by kind to match the filter bar's own Councils/Areas split -- renderChannelSection() is the
+    // shared location-grouping logic both sections still use underneath their own title.
+    function renderChannelSection(title, items) {
+      if (!items.length) return;
+      list.appendChild(el("div", "qm-chat-list-section-title", title));
       var groups = {};
       var order = [];
-      channelItems.forEach(function (c) {
+      items.forEach(function (c) {
         var key = (c.location_level || "") + ":" + (c.location_id || "");
         if (!groups[key]) { groups[key] = []; order.push(key); }
         groups[key].push(c);
@@ -151,6 +251,20 @@
         group.forEach(function (c) { list.appendChild(buildChatRow(c)); });
       });
     }
+    // My Cases (2026-11-25): listed flat, newest-updated first (no location sub-grouping -- a
+    // Member's own Cases are never shared with anyone else to group by), ahead of Council Chats
+    // for the same "most actionable first" reasoning that already put Councils/Areas above Private.
+    if (caseItems.length) {
+      list.appendChild(el("div", "qm-chat-list-section-title", "My Cases"));
+      caseItems.forEach(function (c) { list.appendChild(buildChatRow(c)); });
+    }
+    renderChannelSection("Council Chats", councilItems);
+    renderChannelSection("Local Areas", areaItems);
+
+    if (privateItems.length) {
+      list.appendChild(el("div", "qm-chat-list-section-title", "Private"));
+      privateItems.forEach(function (c) { list.appendChild(buildChatRow(c)); });
+    }
   }
 
   function buildChatRow(c) {
@@ -159,7 +273,9 @@
     row.setAttribute("data-kind", c.kind);
     row.setAttribute("data-id", c.id);
 
-    var avatar = el("span", "qm-chat-row-avatar", (c.title || "?").trim().charAt(0).toUpperCase());
+    var avatar = c.kind === "case"
+      ? el("span", "qm-chat-row-avatar qm-chat-row-avatar--case", "📋")
+      : el("span", "qm-chat-row-avatar", (c.title || "?").trim().charAt(0).toUpperCase());
     if (c.pane === "private") {
       var dot = el("span", "qm-presence-dot qm-presence-dot--grey");
       dot.setAttribute("data-presence-for", c.other_user_id);
@@ -172,11 +288,29 @@
     titleRow.appendChild(el("span", "qm-chat-row-title", c.title));
     titleRow.appendChild(el("span", "qm-chat-row-time", chatAgo(c.last_message_at)));
     body.appendChild(titleRow);
-    var sub = el("div", "qm-chat-row-sub", c.pane === "channel" ? (c.location_level ? c.location_level.charAt(0).toUpperCase() + c.location_level.slice(1) + " Channel" : "Channel") : "Private chat");
+    var sub = el("div", "qm-chat-row-sub", chatRowSubtitle(c));
     body.appendChild(sub);
     row.appendChild(body);
 
     if (c.unread_count > 0) row.appendChild(el("span", "qm-chat-row-badge", String(c.unread_count)));
+
+    // Hide/Restore (2026-11-25): ✕ only ever appears on hover (CSS) in the normal view, and never
+    // exits the group or deletes the contact -- see chat_core.set_conversation_hidden()'s own
+    // docstring. The hidden view shows a Restore (↺) action in its place instead. Not offered on a
+    // Case row at all (2026-11-25) -- chat_core.set_conversation_hidden() only backs the five kinds
+    // chat_core.list_my_conversations() itself produces; a Case lives outside that aggregator
+    // entirely (see loadConversations()), so there's nowhere for a per-user hide flag to persist.
+    if (c.kind !== "case") {
+      var hideBtn = el("span", "qm-chat-row-hide-btn" + (chatState.showHidden ? " is-restore" : ""), chatState.showHidden ? "↺" : "✕");
+      hideBtn.setAttribute("role", "button");
+      hideBtn.setAttribute("title", chatState.showHidden ? "Restore to chat list" : "Hide from chat list");
+      hideBtn.setAttribute("aria-label", chatState.showHidden ? "Restore chat" : "Hide chat");
+      hideBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (chatState.showHidden) unhideConversation(c); else hideConversation(c);
+      });
+      row.appendChild(hideBtn);
+    }
 
     row.addEventListener("click", function () { openConversation(c); });
     return row;
@@ -211,6 +345,16 @@
     renderChatList();
     $("qm-chat-feed-empty").hidden = true;
     $("qm-chat-feed-active").hidden = false;
+
+    // Case Chat (2026-11-25) has its own header/feed/composer wiring -- a Case is a status-driven
+    // object (TID Comments log, status bar, Pay to Escrow), not a flat chat -- see
+    // openCaseConversation() below. Everything from here down is unchanged for every other kind.
+    if (c.kind === "case") {
+      openCaseConversation(c);
+      return;
+    }
+    $("qm-case-status-bar").hidden = true;
+    $("qm-chat-members-btn").hidden = false;
     $("qm-chat-feed-name").textContent = c.title;
     $("qm-chat-feed-desc").textContent = c.pane === "channel"
       ? (c.location_level ? c.location_level.charAt(0).toUpperCase() + c.location_level.slice(1) + " · " + c.location_id : "")
@@ -229,6 +373,118 @@
       $("qm-chat-messages").appendChild(el("p", "qm-chat-empty", e.message));
     });
   }
+
+  // ---- Economic Engine, Member UI Task 2 (2026-11-25): the Case Chat ----
+  // The header shows the Case ID + Status (qm-chat-feed-name/-desc, reused); the Assigned Agent
+  // is shown as a yes/no ("Agent assigned" / "Waiting for an Agent") rather than a name -- no
+  // endpoint anywhere in this codebase resolves a user id to a display name for someone who isn't
+  // already a fellow chat/group member, and adding one is out of scope for this pass (flagged,
+  // not silently built around). The feed is GET /api/cases/<id>/logs (NOT chat_core's per-kind
+  // CHAT_ROUTE -- a Case's TID Comments log is a different shape and a different endpoint from
+  // every other kind's messages); the composer POSTs /api/cases/<id>/message.
+  function openCaseConversation(c) {
+    $("qm-chat-feed-temp-badge").hidden = true;
+    $("qm-chat-members-btn").hidden = true;
+    $("qm-chat-feed-name").textContent = c.title;
+    $("qm-chat-feed-desc").textContent = (CASE_TYPE_LABEL[c.case_type] || c.case_type || "");
+    renderCaseStatusBar(c);
+    $("qm-chat-messages").innerHTML = "<p class=\"qm-chat-empty\">Loading…</p>";
+    chatApi("/api/cases/" + c.id + "/logs").then(function (r) {
+      renderCaseLog(r.logs || []);
+    }).catch(function (e) {
+      $("qm-chat-messages").innerHTML = "";
+      $("qm-chat-messages").appendChild(el("p", "qm-chat-empty", e.message));
+    });
+  }
+
+  function renderCaseStatusBar(c) {
+    var bar = $("qm-case-status-bar");
+    bar.hidden = false;
+    $("qm-case-status-text").textContent =
+      (CASE_STATUS_LABEL[c.status] || c.status || "Pending Agent") + " · " +
+      (c.agent_user_id ? "Agent assigned" : "Waiting for an Agent");
+    // "Pay to Escrow" (brief's own wording) -- POST /api/cases/<id>/pay, a Member-facing route
+    // added alongside this UI (app.py) since the existing /api/agent/cases/<id>/status is
+    // Agent/council-only; case_core.update_status() now also accepts the Case's own Member, but
+    // ONLY for this exact pending_payment -> in_progress transition. See the app.py diff's own note.
+    $("qm-case-pay-btn").hidden = c.status !== "pending_payment";
+  }
+
+  function renderCaseLog(logs) {
+    var box = $("qm-chat-messages");
+    box.innerHTML = "";
+    if (!logs.length) { box.appendChild(el("p", "qm-chat-empty", "No activity yet.")); return; }
+    logs.forEach(function (l) {
+      // Automated/system entries (the brief's own examples: "[System] Agent assigned",
+      // "[System] Escrow locked: 500 Qoins") render as a single centered line, never a bubble --
+      // every log_type except 'comment' is one of these (case_core.py's LOG_TYPES).
+      if (l.log_type !== "comment") {
+        box.appendChild(el("div", "qm-chat-system-log", "⚙️ [System] " + (l.message || l.log_type)));
+        return;
+      }
+      var mine = l.author_user_id === QM_USER_ID;
+      var row = el("div", "qm-chat-message" + (mine ? " qm-chat-message--mine" : ""));
+      if (!mine) row.appendChild(el("div", "qm-chat-message-who", CASE_ROLE_LABEL[l.author_role] || l.author_role));
+      var bubble = el("div", "qm-chat-message-bubble");
+      bubble.appendChild(el("span", "qm-chat-message-text", l.message));
+      row.appendChild(bubble);
+      row.appendChild(el("div", "qm-chat-message-at", chatAgo(l.created_at)));
+      box.appendChild(row);
+    });
+    box.scrollTop = box.scrollHeight;
+  }
+
+  var casePayBtn = $("qm-case-pay-btn");
+  if (casePayBtn) {
+    casePayBtn.addEventListener("click", function () {
+      if (!chatState.active || chatState.active.kind !== "case") return;
+      var amountStr = window.prompt("How many Qoins should be locked in escrow for this Case? (Ask the Agent for the agreed price.)");
+      if (amountStr == null) return;
+      var amount = parseInt(amountStr, 10);
+      if (!amount || amount <= 0) { window.alert("Enter a whole number of Qoins greater than 0."); return; }
+      casePayBtn.disabled = true;
+      chatApi("/api/cases/" + chatState.active.id + "/pay", { amount: amount }).then(function (updated) {
+        casePayBtn.disabled = false;
+        chatState.active.status = updated.status;
+        chatState.active.escrow_amount = updated.escrow_amount;
+        openCaseConversation(chatState.active);
+        renderChatList();
+      }).catch(function (err) {
+        casePayBtn.disabled = false;
+        window.alert(err.message);
+      });
+    });
+  }
+
+  // Universal Inbox bridge (originally built 2026-11-25 for the Family Tree's own 💬 icon; this
+  // same pass generalizes it to every group/channel type -- social.js's Friend/Business/Custom
+  // group rows and 1:1 rows, board.js's subgroup "Open chat" button). Every one of these used to
+  // open a second, local chat surface of its own -- now all retired -- instead of the one real
+  // Unified Chat feed on the Home tab. Switches to Home (clicking the rail button, not a second
+  // copy of the panel-switch logic above) and opens that exact conversation once the list has it.
+  // chatState.conversations is almost always already populated (loadConversations() below runs on
+  // page load regardless of which rail tab is active) -- the re-fetch is only a fallback for the
+  // rare case a conversation's very first message was just sent and hasn't been aggregated yet.
+  //
+  // `title` (optional): used ONLY if chat_core.list_my_conversations() doesn't surface this
+  // conversation for THIS user at all -- e.g. the Founder/an admin opening a Governance Channel
+  // they're not an approved member of, which board_core's own chat routes allow but the
+  // aggregator's membership-based query doesn't list. Builds a minimal synthetic row so Open Chat
+  // still works for them, exactly as it did before this pass routed it through Home.
+  window.QMOpenHomeChat = function (kind, id, title) {
+    var homeTab = document.querySelector('.qm-dash-tab[data-tab="home"]');
+    if (homeTab) homeTab.click();
+    function tryOpen() {
+      var match = chatState.conversations.filter(function (x) { return x.kind === kind && x.id === id; })[0];
+      if (match) { openConversation(match); return true; }
+      return false;
+    }
+    if (tryOpen()) return;
+    loadConversations().then(function () {
+      if (tryOpen()) return;
+      if (kind && id != null) openConversation({ kind: kind, id: id, title: title || "Chat", pane: "channel" });
+    });
+  };
 
   function renderChatMessages(messages, isChannel) {
     var box = $("qm-chat-messages");
@@ -275,10 +531,16 @@
       var text = input.value.trim();
       if (!text) return;
       input.disabled = true;
-      chatApi(CHAT_ROUTE[chatState.active.kind](chatState.active.id), { text: text }).then(function () {
+      // Case Chat (2026-11-25): a different endpoint and a different body key (`message`, not
+      // `text`) -- POST /api/cases/<id>/message, not CHAT_ROUTE's per-kind table.
+      var isCase = chatState.active.kind === "case";
+      var send = isCase
+        ? chatApi("/api/cases/" + chatState.active.id + "/message", { message: text })
+        : chatApi(CHAT_ROUTE[chatState.active.kind](chatState.active.id), { text: text });
+      send.then(function () {
         input.value = "";
         input.disabled = false;
-        openConversation(chatState.active); // reload so the new message (and anyone else's since) shows
+        if (isCase) openCaseConversation(chatState.active); else openConversation(chatState.active); // reload so the new message (and anyone else's since) shows
       }).catch(function (err) {
         input.disabled = false;
         window.alert(err.message);

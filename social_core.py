@@ -21,7 +21,8 @@ GROUP_CATEGORIES = ("family", "friends", "business", "custom")
 # any category afterwards (move_group()). Spouse-Family dropped from the defaults for now (kept in
 # a comment, not deleted, since docs/personal_timeline_and_social.md ties it to a user's future
 # relationship-status field once that's wired up here too).
-DEFAULT_FAMILY_GROUPS = ("Paternal", "Maternal")  # was ("Paternal", "Maternal", "Spouse-Family")
+# Family's own two defaults (Paternal, Maternal) were dropped 2026-11-25 -- ensure_defaults() no
+# longer auto-creates any Family sub-group, matching Business's own "none unless admin" baseline.
 DEFAULT_FRIENDS_GROUP = "All Friends"  # was "Friends"
 ADMIN_BUSINESS_GROUP = "Qumanity Team"
 MAX_MESSAGE_CHARS = 1000
@@ -439,9 +440,10 @@ def find_person(conn, query, viewer_user_id=None):
 
 
 # ---- Personal groups: Private (1:1, no groups) / Family / Friends / Business / Custom ----
-# Family starts with 2 default groups (Paternal, Maternal), Friends with 1 ("All Friends"),
-# Business with none (except "Qumanity Team" for the Founder/admin). New groups are always Custom
-# (create_group()); move_group() re-files a Custom group into Family/Friends/Business afterwards.
+# Family starts with none (2026-11-25 -- the old Paternal/Maternal defaults were dropped), Friends
+# with 1 ("All Friends"), Business with none (except "Qumanity Team" for the Founder/admin). New
+# groups are always Custom (create_group()); move_group() re-files a Custom group into
+# Family/Friends/Business afterwards.
 
 def migrate_group_defaults(conn):
     """One-time, conservative cleanup for accounts created before the 2026-09-28 default change:
@@ -461,11 +463,9 @@ def migrate_group_defaults(conn):
 
 def ensure_defaults(conn, owner_user_id, is_admin=False):
     """Creates the standard starter groups the first time this user's Personal tab is opened. Safe to
-    call every time -- does nothing once they already exist."""
+    call every time -- does nothing once they already exist. Family gets no default sub-groups
+    (2026-11-25) -- a user adds their own Custom groups and moves them into Family if they want."""
     have = {r["category"] for r in conn.execute("SELECT DISTINCT category FROM personal_groups WHERE owner_user_id=?", (owner_user_id,))}
-    if "family" not in have:
-        for name in DEFAULT_FAMILY_GROUPS:
-            _insert_group(conn, owner_user_id, "family", name)
     if "friends" not in have:
         _insert_group(conn, owner_user_id, "friends", DEFAULT_FRIENDS_GROUP)
     if is_admin and "business" not in have:

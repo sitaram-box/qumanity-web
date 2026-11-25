@@ -22,65 +22,10 @@
     if (s < 86400) return Math.floor(s / 3600) + " h ago"; return Math.floor(s / 86400) + " d ago";
   }
 
-  var REACTION_ICON = { agree: "👍", disagree: "👎", read: "👁️" };
-  function reactionBar(m, memberCount, onChange) {
-    var bar = el("div", "bd-reactions");
-    ["agree", "disagree", "read"].forEach(function (kind) {
-      var mine = m.reactions.mine === kind;
-      var btn = el("button", "bd-react" + (mine ? " is-on" : ""), REACTION_ICON[kind] + " " + m.reactions[kind]); btn.type = "button";
-      btn.addEventListener("click", function () {
-        api("/api/reactions/personal/" + m.id, { reaction: mine ? null : kind }).then(onChange).catch(function (e) { alert(e.message); });
-      });
-      bar.appendChild(btn);
-    });
-    bar.appendChild(el("small", "bd-react-total", "out of " + memberCount + " member" + (memberCount === 1 ? "" : "s")));
-    return bar;
-  }
-
-  function renderChatShell(root, opts) {
-    root.innerHTML = "";
-    var head = el("div", "bd-head");
-    var ht = el("div", "bd-headtext"); ht.appendChild(el("b", "bd-title", opts.title)); ht.appendChild(el("small", "bd-sub", opts.sub || ""));
-    head.appendChild(ht);
-    if (opts.headExtra) head.appendChild(opts.headExtra);
-    root.appendChild(head);
-    var feed = el("div", "bd-feed"); feed.setAttribute("aria-live", "polite"); root.appendChild(feed);
-    var form = el("form", "bd-compose"), ta = document.createElement("textarea"); ta.rows = 2; ta.maxLength = 1000; ta.placeholder = opts.placeholder || "Message…"; ta.required = true;
-    var send = el("button", "", "Send"); send.type = "submit"; form.appendChild(ta); form.appendChild(send);
-    root.appendChild(form);
-    return { feed: feed, form: form, ta: ta };
-  }
-
-  // `other` (optional): the single other party's {name, gender, profile_picture_url} for a
-  // private 1:1 chat, whose per-message rows (unlike group chat) don't each carry identity --
-  // there's only ever one "other" person, so every non-mine bubble is them.
-  function renderMessages(feed, messages, emptyText, memberCount, onReact, other) {
-    feed.innerHTML = "";
-    if (!messages.length) { feed.appendChild(el("p", "bd-empty", emptyText)); return; }
-    messages.forEach(function (m) {
-      if (m.reactions && memberCount) {
-        var b = el("div", "bd-msg bd-msg-full" + (m.mine ? " is-mine" : ""));
-        var head = el("div", "bd-msg-head");
-        if (window.QMAvatar) head.appendChild(window.QMAvatar.render({ name: m.who, gender: m.gender, profile_picture_url: m.profile_picture_url }, 28));
-        head.appendChild(el("b", "", m.who)); head.appendChild(el("small", "", m.account_id || "")); b.appendChild(head);
-        b.appendChild(el("p", "bd-msg-text", m.text));
-        b.appendChild(el("small", "bd-msg-time", ago(m.at)));
-        b.appendChild(reactionBar(m, memberCount, onReact));
-        feed.appendChild(b);
-      } else {
-        var plain = el("div", "bd-msg" + (m.mine ? " is-mine" : ""));
-        if (!m.mine && (other || m.who)) {
-          var plainHead = el("div", "bd-msg-head");
-          if (other && window.QMAvatar) plainHead.appendChild(window.QMAvatar.render(other, 24));
-          if (m.who) plainHead.appendChild(el("b", "", m.who));
-          plain.appendChild(plainHead);
-        }
-        plain.appendChild(document.createTextNode(m.text));
-        feed.appendChild(plain);
-      }
-    });
-    feed.scrollTop = feed.scrollHeight;
-  }
+  // reactionBar()/renderChatShell()/renderMessages() (the local chat-feed renderers this panel
+  // used before the Universal Inbox pass, 2026-11-25) are removed along with their only two
+  // callers, openGroupChat() and openChat() -- this panel no longer renders any chat feed of its
+  // own, see renderGroupList()'s own comment.
 
   // ---- top tabs ----
   var topTabs = document.getElementById("personal-top-tabs");
@@ -93,20 +38,15 @@
   var layoutEl = document.querySelector(".pt-layout");
   function showTab(tab) {
     Object.keys(panels).forEach(function (k) { panels[k].hidden = k !== tab; });
-    // 2026-10-28: navigating away from Family Tree always closes its slide-in chat panel first
-    // (family_tree.js's closeFamilyChat(), which itself re-hides .pt-side) -- otherwise .pt-side
-    // would reappear under Friends/Business/Custom still showing the LAST group's chat instead of
-    // Find & connect / Requests.
-    if (tab !== "family" && window.QMFamilyTree && window.QMFamilyTree.closeChat) window.QMFamilyTree.closeChat();
-    // Find & connect / Requests are shared across Friends/Business/Custom (and Self) -- hidden
-    // for Family Tree, which has its own dedicated search (family.js) and whose D3 view wants the
-    // full panel width -- UNLESS its own slide-in chat panel is open (is-chat-mode, set by
-    // family_tree.js's openFamilyChat()), which reuses this same column instead of a modal. The
-    // grid's second column track doesn't collapse just because its content is `hidden` --
-    // .pt-layout--full (CSS) drops it to one column.
-    var chatOpen = sideEl && sideEl.classList.contains("is-chat-mode");
-    if (sideEl) sideEl.hidden = tab === "family" && !chatOpen;
-    if (layoutEl) layoutEl.classList.toggle("pt-layout--full", tab === "family" && !chatOpen);
+    // Family Tree's own slide-in chat panel (2026-10-28) is retired as of 2026-11-25 -- a node's
+    // chat now opens on the dashboard's Home tab instead (family_tree.js's goToFamilyChat()), so
+    // .pt-side is simply hidden for Family Tree now, no is-chat-mode exception left to check.
+    // Find & connect / Requests are shared across Friends/Business/Custom (and Self) -- hidden for
+    // Family Tree, which has its own dedicated search (family.js) and whose D3 view wants the full
+    // panel width. The grid's second column track doesn't collapse just because its content is
+    // `hidden` -- .pt-layout--full (CSS) drops it to one column.
+    if (sideEl) sideEl.hidden = tab === "family";
+    if (layoutEl) layoutEl.classList.toggle("pt-layout--full", tab === "family");
     if (tab === "private") loadChats(); else if (tab !== "custom" || true) loadGroups();
   }
   topTabs.addEventListener("click", function (e) {
@@ -129,6 +69,12 @@
     }).catch(function () {});
   }
 
+  // Universal Inbox pass (2026-11-25): a row's own click now goes straight to the dashboard's
+  // Home tab and opens this exact group's REAL conversation there (window.QMOpenHomeChat,
+  // dashboard.js) -- this panel no longer renders a chat feed of its own at all (the old
+  // openGroupChat()/renderChatShell()-based modal is gone, not just rerouted). Members/Rename/
+  // Business details are MANAGEMENT actions, not the conversation itself, so they stay here as
+  // small per-row icon buttons instead of moving with the chat.
   function renderGroupList(cat, data) {
     var list = LIST_EL[cat]; list.innerHTML = "";
     var rows = data.owned.concat(data.joined);
@@ -137,8 +83,36 @@
       var li = el("li", "pt-group-row");
       var btn = el("button", "qm-member-row", g.name + " · " + g.members + " member" + (g.members === 1 ? "" : "s") + (g.mine ? "" : " · " + g.owner_name + "'s group"));
       btn.type = "button";
-      btn.addEventListener("click", function () { openGroupChat(g.id, cat); });
+      btn.addEventListener("click", function () { window.QMOpenHomeChat("group", g.id); });
       li.appendChild(btn);
+
+      var membersBtn = el("button", "pt-group-row-icon-btn", "👥"); membersBtn.type = "button";
+      membersBtn.title = "Members"; membersBtn.setAttribute("aria-label", "Members");
+      membersBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        currentGroup = { id: g.id, cat: cat, isOwner: g.mine };
+        openMembersModal();
+      });
+      li.appendChild(membersBtn);
+
+      // Rename/Business details are owner-only server-side (social_core.rename_group()/
+      // set_business_profile()) -- g.mine (this list's own "is this my group" flag) matches
+      // that exactly, so the button is simply never shown otherwise rather than shown-then-403'd.
+      if (g.mine) {
+        var manageLabel = cat === "business" ? "Business details" : "Rename";
+        var manageBtn = el("button", "pt-group-row-icon-btn", "✏️"); manageBtn.type = "button";
+        manageBtn.title = manageLabel; manageBtn.setAttribute("aria-label", manageLabel);
+        manageBtn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          if (cat === "business") {
+            openBusinessEditor(g.id, { name: g.business_name, sector: g.business_sector, services: g.business_services });
+          } else {
+            var name = window.prompt("Rename this group", g.name); if (!name) return;
+            api("/api/people/groups/" + g.id + "/rename", { name: name }).then(loadGroups).catch(function (e2) { alert(e2.message); });
+          }
+        });
+        li.appendChild(manageBtn);
+      }
       list.appendChild(li);
     });
   }
@@ -157,39 +131,7 @@
     });
   });
 
-  var groupModal = document.getElementById("pt-group-modal"), groupRoot = document.getElementById("pt-group-chat");
-  groupModal.addEventListener("click", function (e) { if (e.target === groupModal || e.target.hasAttribute("data-close")) groupModal.hidden = true; });
-
   var currentGroup = { id: null, cat: null, isOwner: false };
-
-  function openGroupChat(groupId, cat) {
-    groupModal.hidden = false;
-    api("/api/people/groups/" + groupId + "/messages").then(function (d) {
-      currentGroup = { id: groupId, cat: cat, isOwner: d.is_owner };
-      var extra = null;
-      if (cat === "business") {
-        extra = el("button", "sg-btn", "✏️ Business details"); extra.type = "button";
-        extra.addEventListener("click", function () { openBusinessEditor(groupId, d.business); });
-      } else if (d.is_owner) {
-        extra = el("button", "sg-btn", "✏️ Rename"); extra.type = "button";
-        extra.addEventListener("click", function () {
-          var name = window.prompt("Rename this group", d.name); if (!name) return;
-          api("/api/people/groups/" + groupId + "/rename", { name: name }).then(function () { openGroupChat(groupId, cat); loadGroups(); }).catch(function (e) { alert(e.message); });
-        });
-      }
-      var membersBtn = el("button", "sg-btn", "👥 Members"); membersBtn.type = "button";
-      membersBtn.addEventListener("click", openMembersModal);
-      var wrap = el("span"); wrap.appendChild(membersBtn); if (extra) wrap.appendChild(extra); extra = wrap;
-      var sub = d.members.length + " member" + (d.members.length === 1 ? "" : "s");
-      var bizNote = d.business && d.business.name ? d.business.name + (d.business.sector ? " · " + d.business.sector : "") : "";
-      var ui = renderChatShell(groupRoot, { title: d.name, sub: bizNote ? sub + " · " + bizNote : sub, headExtra: extra, placeholder: "Message " + d.name + "…" });
-      renderMessages(ui.feed, d.messages, "No messages yet — say hello.", d.members.length, function () { openGroupChat(groupId, cat); });
-      ui.form.addEventListener("submit", function (e) {
-        e.preventDefault();
-        api("/api/people/groups/" + groupId + "/messages", { text: ui.ta.value }).then(function () { ui.ta.value = ""; openGroupChat(groupId, cat); }).catch(function (er) { alert(er.message); });
-      });
-    }).catch(function (e) { groupRoot.innerHTML = ""; groupRoot.appendChild(el("p", "bd-empty", e.message)); });
-  }
 
   // ---- Members modal (2026-10-25): avatar + name + role for every approved member, plus an
   // "Add Member by Public ID" box (owner only) -- replaces the old window.prompt()-based
@@ -260,7 +202,7 @@
     var name = window.prompt("Business name", (biz && biz.name) || ""); if (name === null) return;
     var sector = window.prompt("Work sector (e.g. Retail, Services, Manufacturing)", (biz && biz.sector) || "");
     var services = window.prompt("Services you provide", (biz && biz.services) || "");
-    api("/api/people/groups/" + groupId + "/business", { name: name, sector: sector, services: services }).then(function () { openGroupChat(groupId, "business"); loadGroups(); }).catch(function (e) { alert(e.message); });
+    api("/api/people/groups/" + groupId + "/business", { name: name, sector: sector, services: services }).then(loadGroups).catch(function (e) { alert(e.message); });
   }
 
   // ---- search ----
@@ -274,11 +216,12 @@
       card.appendChild(el("b", "", p.name)); card.appendChild(el("small", "", " " + p.gender + " · " + (p.place || "")));
       var actions = el("div", "pt-person-actions");
       // 2026-10-27: already mutually connected (shares an approved group) -> skip the
-      // message-request-and-wait step entirely and open a real chat immediately.
+      // message-request-and-wait step entirely and open a real chat immediately. 2026-11-25:
+      // "immediately" now means the Home tab's own Unified Chat feed, not a panel in here.
       if (p.can_open_chat) {
         var openBtn = el("button", "sg-btn", "💬 Open Chat"); openBtn.type = "button";
         openBtn.addEventListener("click", function () {
-          api("/api/people/open-chat", { user_id: p.user_id }).then(function (d) { openChat(d.chat_id); loadChats(); }).catch(function (e) { alert(e.message); });
+          api("/api/people/open-chat", { user_id: p.user_id }).then(function (d) { window.QMOpenHomeChat("private", d.chat_id); loadChats(); }).catch(function (e) { alert(e.message); });
         });
         actions.appendChild(openBtn);
       } else {
@@ -324,9 +267,11 @@
   loadInbox();
 
   // ---- private chats ----
+  // Universal Inbox pass (2026-11-25): a row's click now goes straight to the dashboard's Home
+  // tab and opens this exact 1:1 conversation there -- a private chat has no management action of
+  // its own (no Rename/Business details/Members to keep here), so the old pt-chat-modal and its
+  // openChat() are removed outright, not just rerouted.
   var chatList = document.getElementById("pt-chat-list"), chatEmpty = document.getElementById("pt-chat-empty");
-  var chatModal = document.getElementById("pt-chat-modal"), chatRoot = document.getElementById("pt-private-chat");
-  chatModal.addEventListener("click", function (e) { if (e.target === chatModal || e.target.hasAttribute("data-close")) chatModal.hidden = true; });
 
   function loadChats() {
     api("/api/people/chats").then(function (d) {
@@ -335,29 +280,12 @@
         var li = el("li", "pt-inbox-item"); var b = el("button", "qm-member-row"); b.type = "button";
         if (window.QMAvatar) b.appendChild(window.QMAvatar.render({ name: c.with, gender: c.with_gender, profile_picture_url: c.with_profile_picture_url }, 28));
         b.appendChild(document.createTextNode(c.with + (c.last ? " — " + c.last : "")));
-        b.addEventListener("click", function () { openChat(c.chat_id); });
+        b.addEventListener("click", function () { window.QMOpenHomeChat("private", c.chat_id); });
         li.appendChild(b); chatList.appendChild(li);
       });
     }).catch(function () {});
   }
-  function openChat(chatId) {
-    chatModal.hidden = false;
-    api("/api/people/chats/" + chatId).then(function (d) {
-      var ui = renderChatShell(chatRoot, { title: d.with, sub: "Private chat", placeholder: "Message " + d.with + "…" });
-      renderMessages(ui.feed, d.messages, "No messages yet.", null, null,
-        { name: d.with, gender: d.with_gender, profile_picture_url: d.with_profile_picture_url });
-      ui.form.addEventListener("submit", function (e) {
-        e.preventDefault();
-        api("/api/people/chats/" + chatId, { text: ui.ta.value }).then(function () { ui.ta.value = ""; openChat(chatId); }).catch(function (er) { alert(er.message); });
-      });
-    }).catch(function (e) { chatRoot.innerHTML = ""; chatRoot.appendChild(el("p", "bd-empty", e.message)); });
-  }
   loadChats();
 
   document.querySelector('.qm-dash-tab[data-tab="personal"]').addEventListener("click", function () { loadInbox(); loadChats(); });
-
-  // Exposed for family.js's "Legacy Family Groups" bridge (2026-10-20): the old Paternal/Maternal
-  // personal_groups chats still need a way in, even though this panel no longer renders them in
-  // its own list -- reuses this exact, already-tested chat modal rather than duplicating it.
-  window.QMSocial = { openGroupChat: openGroupChat };
 })();
