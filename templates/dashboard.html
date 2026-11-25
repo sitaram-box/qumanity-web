@@ -1122,30 +1122,19 @@
             <button type="button" class="ap-filter" data-filter="account_recovery">Account Recovery</button>
             <button type="button" class="qm-btn qm-btn-ghost ap-refresh-btn" title="Refresh">🔄</button>
           </div>
-          <!-- DOB-ID migration notification (2026-11-25): a one-off bulk action, not a filter, so
-               it sits below the filter row rather than inside it. See api_admin_notify_id_change()
-               for why this is email-only and why re-clicking it is safe (notified_at gating). -->
-          <div class="ap-notify-row">
-            <button type="button" class="qm-btn qm-btn-ghost" id="ap-notify-migrated-btn">📧 Notify Migrated Users of New ID</button>
-            <span class="qm-dash-empty" id="ap-notify-migrated-status" hidden></span>
-          </div>
           {% if is_admin %}
             <!-- Database Viewer (2026-11-26): a plain link, not a sub-tab -- it's a whole separate
                  page (templates/admin_database.html), not another panel inside this modal. Gated
                  on is_admin specifically (the Founder), stricter than this pane's own
                  is_admin_panel_user gate, since raw table contents are far more sensitive than the
-                 Admin Queue items the pane otherwise shows. -->
+                 Admin Queue items the pane otherwise shows.
+                 The "Notify Migrated Users of New ID" and "Run DOB-ID Migration" buttons that used
+                 to sit here (2026-11-25/26) were removed once the one-shot migration actually ran
+                 -- their routes (api_admin_notify_id_change/api_admin_run_dob_migration) are still
+                 live in app.py for direct/manual use, only the UI entry points are gone. -->
             <div class="ap-notify-row">
               <a class="qm-btn qm-btn-ghost" href="{{ url_for('admin_database') }}" target="_blank" rel="noopener">🗄️ Database Viewer</a>
-            </div>
-            <!-- Run DOB-ID Migration (2026-11-26): the production one-shot, triggerable without
-                 the Railway Console -- see api_admin_run_dob_migration(). Same is_admin gate as
-                 the Database Viewer link above; the real "are you sure" is the JS confirm()
-                 dashboard.js shows before this ever calls the route, since the route itself has
-                 no way to distinguish a deliberate click from an accidental one. -->
-            <div class="ap-notify-row">
-              <button type="button" class="qm-btn qm-btn-ghost" id="ap-run-dob-migration-btn">🧬 Run DOB-ID Migration</button>
-              <span class="qm-dash-empty" id="ap-run-dob-migration-status" hidden></span>
+              <a class="qm-btn qm-btn-ghost" href="{{ url_for('admin_q_cards') }}" target="_blank" rel="noopener">🪪 Q-Cards</a>
             </div>
           {% endif %}
           <div class="ap-body">

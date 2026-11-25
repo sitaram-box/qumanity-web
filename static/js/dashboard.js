@@ -2218,54 +2218,6 @@
     });
     if (apRefreshBtn) apRefreshBtn.addEventListener("click", apLoadFeed);
 
-    // DOB-ID migration notification (2026-11-25): a one-off bulk action, not part of the
-    // report/query feed above -- see api_admin_notify_id_change() for why re-clicking this is
-    // safe (notified_at gating means it only ever reaches users not yet successfully notified).
-    var apNotifyBtn = document.getElementById("ap-notify-migrated-btn");
-    var apNotifyStatus = document.getElementById("ap-notify-migrated-status");
-    if (apNotifyBtn) {
-      apNotifyBtn.addEventListener("click", function () {
-        apNotifyBtn.disabled = true;
-        apNotifyStatus.hidden = false;
-        apNotifyStatus.textContent = "Sending…";
-        chatApi("/api/admin/notify-id-change", { send_to_all_migrated: true })
-          .then(function (res) {
-            var parts = ["Sent to " + res.emailed + " user(s)."];
-            if (res.failed) parts.push(res.failed + " failed.");
-            if (res.no_channel) parts.push(res.no_channel + " have no email on file -- follow up manually.");
-            apNotifyStatus.textContent = parts.join(" ");
-          })
-          .catch(function (err) { apNotifyStatus.textContent = err.message; })
-          .finally(function () { apNotifyBtn.disabled = false; });
-      });
-    }
-
-    // Run DOB-ID Migration (2026-11-26): the production one-shot, from inside the panel instead
-    // of the Railway Console. api_admin_run_dob_migration() itself refuses a second run (every
-    // real user already has a dob_id_country_digit), but that check happens server-side on
-    // whatever the CURRENT click reaches -- this confirm() is the only thing stopping an
-    // accidental first click from firing at all.
-    var apRunMigrationBtn = document.getElementById("ap-run-dob-migration-btn");
-    var apRunMigrationStatus = document.getElementById("ap-run-dob-migration-status");
-    if (apRunMigrationBtn) {
-      apRunMigrationBtn.addEventListener("click", function () {
-        if (!window.confirm("This will change the Private IDs of all real users. This cannot be undone. Are you sure?")) return;
-        apRunMigrationBtn.disabled = true;
-        apRunMigrationStatus.hidden = false;
-        apRunMigrationStatus.textContent = "Running…";
-        chatApi("/api/admin/run-dob-migration", {})
-          .then(function (res) {
-            var parts = ["Migrated " + res.migrated + " user(s)."];
-            parts.push(res.skipped_admin + " Admin ID(s) skipped.");
-            parts.push(res.skipped_demo + " demo user(s) skipped.");
-            if (res.skipped_bad_data) parts.push(res.skipped_bad_data + " skipped for missing/unparseable data.");
-            apRunMigrationStatus.textContent = parts.join(" ");
-          })
-          .catch(function (err) { apRunMigrationStatus.textContent = err.message; })
-          .finally(function () { apRunMigrationBtn.disabled = false; });
-      });
-    }
-
     function apOpenDetail(item) {
       apDetail.innerHTML = "";
       apDetail.appendChild(apEl("p", "qm-dash-empty", "Loading…"));

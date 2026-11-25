@@ -7118,6 +7118,122 @@ def admin_database():
     )
 
 
+_ADMIN_Q_CARDS_SELECT = """
+    SELECT u.id AS user_id, u.name, u.birth_location_json, u.private_id_9digit AS current_private_id,
+           z.sun_element, im.old_private_id_9digit,
+           qc.card_display_id, qc.status, qc.payment_status, qc.delivered_at
+    FROM users u
+    LEFT JOIN user_zodiac z ON z.user_id = u.id
+    LEFT JOIN id_migrations im ON im.user_id = u.id
+    LEFT JOIN q_cards qc ON qc.user_id = u.id
+"""
+
+
+def _admin_q_card_pdf_path(row) -> Path | None:
+    """Where THIS user's q_card.pdf would be on disk, if one was ever issued -- never a
+    regeneration, since issue_card() only ever persists the token's HASH (see q_card_core.py's own
+    docstring): the file saved at issuance, if any, is the only copy that will ever exist.
+
+    Resolved by the OLD private_id_9digit (id_migrations.old_private_id_9digit) when this user was
+    migrated to a DOB-based ID, falling back to their CURRENT private_id_9digit otherwise. This
+    matters because folder_connector.create_user_folder() bakes the Private ID into the BORN_HERE
+    directory name at registration time and never renames it -- the 2026-11-26 DOB-ID migration
+    changed users.private_id_9digit in the database but never touched the filesystem, so every
+    migrated user's actual folder on disk is still named after their PRE-migration id. Resolving
+    by the current id alone would silently miss every migrated user's existing card."""
+    folder_id = row["old_private_id_9digit"] or row["current_private_id"]
+    if not folder_id or not row["sun_element"]:
+        return None
+    try:
+        birth_location = json.loads(row["birth_location_json"] or "{}")
+    except (TypeError, ValueError):
+        return None
+    location_dir = folder_connector.resolve_location_dir(birth_location)
+    if location_dir is None:
+        return None
+    return location_dir / "BORN_HERE" / row["sun_element"] / folder_id / "private_account" / "q_card.pdf"
+
+
+@app.route("/admin/q-cards")
+@login_required
+def admin_q_cards():
+    """Lists every real (non-demo) user's Q-Card status and, where a PDF actually exists on disk,
+    a download link -- see _admin_q_card_pdf_path()'s docstring for why "exists on disk" is the
+    only thing that can ever be true here; there is no regenerate path. Admin-only, same gate as
+    the Database Viewer."""
+    if not _is_admin():
+        return redirect(url_for("dashboard"))
+    conn = get_db()
+    try:
+        q_card_core.ensure_tables(conn)
+        rows = conn.execute(_ADMIN_Q_CARDS_SELECT + " WHERE u.is_demo = 0 ORDER BY u.id").fetchall()
+        cards = []
+        for row in rows:
+            pdf_path = _admin_q_card_pdf_path(row)
+            cards.append({
+                "user_id": row["user_id"], "name": row["name"],
+                "current_private_id": row["current_private_id"],
+                "card_display_id": row["card_display_id"], "status": row["status"],
+                "payment_status": row["payment_status"], "delivered_at": row["delivered_at"],
+                "has_pdf": bool(pdf_path and pdf_path.exists()),
+            })
+    finally:
+        conn.close()
+    return render_template("admin_q_cards.html", cards=cards)
+
+
+@app.route("/admin/q-cards/<int:user_id>/download")
+@login_required
+def admin_q_card_download(user_id):
+    if not _is_admin():
+        return redirect(url_for("dashboard"))
+    conn = get_db()
+    try:
+        row = conn.execute(
+            _ADMIN_Q_CARDS_SELECT + " WHERE u.id = ?", (user_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return jsonify({"error": "User not found"}), 404
+    pdf_path = _admin_q_card_pdf_path(row)
+    if not pdf_path or not pdf_path.exists():
+        return jsonify({"error": "No Q-Card PDF found on disk for this user"}), 404
+    return send_file(pdf_path, mimetype="application/pdf", as_attachment=True,
+                      download_name=f"q_card_{row['user_id']}.pdf")
+
+
+@app.route("/admin/q-cards/combined.pdf")
+@login_required
+def admin_q_cards_combined():
+    """Concatenates every Q-Card PDF actually found on disk into one file for batch printing.
+    Never regenerates a card -- see _admin_q_card_pdf_path()'s docstring."""
+    if not _is_admin():
+        return redirect(url_for("dashboard"))
+    conn = get_db()
+    try:
+        rows = conn.execute(_ADMIN_Q_CARDS_SELECT + " WHERE u.is_demo = 0 ORDER BY u.id").fetchall()
+    finally:
+        conn.close()
+
+    from pypdf import PdfWriter
+    writer = PdfWriter()
+    included = 0
+    for row in rows:
+        pdf_path = _admin_q_card_pdf_path(row)
+        if pdf_path and pdf_path.exists():
+            writer.append(str(pdf_path))
+            included += 1
+
+    if included == 0:
+        return jsonify({"error": "No Q-Card PDFs found on disk to combine"}), 404
+
+    buf = io.BytesIO()
+    writer.write(buf)
+    buf.seek(0)
+    return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name="q_cards_combined.pdf")
+
+
 @app.route("/api/admin/run-dob-migration", methods=["POST"])
 @login_required
 def api_admin_run_dob_migration():
