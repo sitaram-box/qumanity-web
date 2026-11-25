@@ -353,6 +353,21 @@ def list_compass_tasks(conn, agent_user_id: int, open_only: bool = True) -> list
     return [dict(r) for r in conn.execute(q, params)]
 
 
+def complete_compass_task(conn, task_id: int, agent_user_id: int) -> dict:
+    """"Mark as Done" (2026-11-25, Agent Dashboard). Only the Agent who created the task may
+    complete it -- Compass tasks are a personal follow-up queue, not a shared one."""
+    row = conn.execute("SELECT * FROM compass_tasks WHERE id = ?", (task_id,)).fetchone()
+    if not row:
+        raise LookupError("Compass task not found")
+    if row["agent_user_id"] != agent_user_id:
+        raise PermissionError("Only the Agent who created this task may complete it")
+    conn.execute(
+        "UPDATE compass_tasks SET status = 'done', completed_at = ? WHERE id = ?", (_now(), task_id)
+    )
+    conn.commit()
+    return dict(conn.execute("SELECT * FROM compass_tasks WHERE id = ?", (task_id,)).fetchone())
+
+
 def _fee_location_ids(conn, case: dict) -> dict[str, str]:
     """village/state/country ids to credit COMMERCE_FEE_SPLIT into, resolved via
     reports_core.get_ancestor_at_level() (the Member's own present_location_json ancestry --
@@ -437,16 +452,59 @@ def get_agent(conn, user_id: int) -> dict | None:
 def list_for_agent(conn, agent_user_id: int) -> list[dict]:
     """This Agent's own queue: every Case already assigned to them (any status), plus every
     still-'created' (unassigned) Case at their own registered location -- an Agent sees fresh
-    Cases opened at their location even before anyone has claimed one."""
+    Cases opened at their location even before anyone has claimed one. Each row carries
+    `member_name` (2026-11-25, Agent Dashboard) -- the Agent Dashboard's Queue list needs it and
+    there's no separate name-lookup endpoint; joined here rather than requiring a second round
+    trip per row."""
     agent = get_agent(conn, agent_user_id)
     if not agent:
         raise PermissionError("Not a registered, active Agent")
     rows = conn.execute(
-        """SELECT * FROM qumanity_cases
-           WHERE agent_user_id = ?
-              OR (status = 'created' AND location_id = ? AND location_level = ?)
-           ORDER BY created_at DESC""",
+        """SELECT c.*, u.name AS member_name FROM qumanity_cases c
+           JOIN users u ON u.id = c.member_user_id
+           WHERE c.agent_user_id = ?
+              OR (c.status = 'created' AND c.location_id = ? AND c.location_level = ?)
+           ORDER BY c.created_at DESC""",
         (agent_user_id, agent["location_id"], agent["location_level"]),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def case_detail_for_agent(conn, case_id: int, viewer_user_id: int, is_admin: bool) -> dict:
+    """The Agent Dashboard's own Case workspace (2026-11-25): the plain get_case() dict plus
+    `member_name` -- an authorized reveal, same shape as reports_core.mask_identity() giving a
+    holding council the reporter's real name. Only this Case's assigned Agent, or this location's
+    council/Founder, may see it (same authority as resolve_case()/update_status())."""
+    case = get_case(conn, case_id)
+    if not case:
+        raise LookupError("Case not found")
+    if viewer_user_id != case["agent_user_id"] and not chat_core.can_manage_location(
+        conn, viewer_user_id, case["location_level"], case["location_id"], is_admin
+    ):
+        raise PermissionError("Only this Case's assigned Agent, or this location's council/Founder, may view it")
+    member = conn.execute("SELECT name FROM users WHERE id = ?", (case["member_user_id"],)).fetchone()
+    case["member_name"] = member["name"] if member else None
+    return case
+
+
+def list_other_cases_for_member(conn, case_id: int, viewer_user_id: int, is_admin: bool) -> list[dict]:
+    """The Agent Dashboard's "Member Profile" panel (2026-11-25): this Case's own Member's OTHER
+    active Cases, but only the ones at the SAME location as this Case -- never every Case this
+    Member has anywhere, which would leak their activity in villages this Agent has no authority
+    over. Same authority gate as case_detail_for_agent()."""
+    case = get_case(conn, case_id)
+    if not case:
+        raise LookupError("Case not found")
+    if viewer_user_id != case["agent_user_id"] and not chat_core.can_manage_location(
+        conn, viewer_user_id, case["location_level"], case["location_id"], is_admin
+    ):
+        raise PermissionError("Only this Case's assigned Agent, or this location's council/Founder, may view it")
+    rows = conn.execute(
+        """SELECT * FROM qumanity_cases
+           WHERE member_user_id = ? AND location_id = ? AND location_level = ? AND id != ?
+             AND status NOT IN ('resolved', 'cancelled')
+           ORDER BY created_at DESC""",
+        (case["member_user_id"], case["location_id"], case["location_level"], case_id),
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -480,25 +538,43 @@ def logs_for(conn, case_id: int, viewer_user_id: int, is_admin: bool) -> list[di
     return [dict(r) for r in conn.execute(q, (case_id,))]
 
 
-def add_comment(conn, case_id: int, author_user_id: int, message: str, is_admin: bool = False) -> dict:
+def add_comment(conn, case_id: int, author_user_id: int, message: str, is_admin: bool = False,
+                 prefer_role: str | None = None) -> dict:
     """Posts to the Case Chat -- Decision 3/4 (2026-11-25): the TID Comments log IS the chat, and
     it's the only channel (no telephony). The author's role is derived from the Case itself
     (never trusted from the caller), so there's no way to post AS a role you don't actually hold
     on this Case; an admin override posts as 'system'. Only the Member, the assigned Agent, the
-    attached Supplier, or an admin may post -- everyone else gets PermissionError."""
+    attached Supplier, or an admin may post -- everyone else gets PermissionError.
+
+    `prefer_role` (2026-11-25, Agent Dashboard): which role to resolve to FIRST if author_user_id
+    actually holds it -- without this, a user who happens to be their OWN Case's Member AND its
+    assigned Agent (nothing stops a village's one Agent from also being a resident -- found live,
+    testing the Agent Dashboard with a single test account playing both parts) always resolved to
+    'member', even when posting from the Agent Dashboard's own composer. Callers that know which
+    surface they're posting from (the Agent Dashboard's /api/agent/cases/<id>/message passes
+    'agent') get the right role; the Member-facing /api/cases/<id>/message passes nothing,
+    unchanged from before this parameter existed."""
     case = get_case(conn, case_id)
     if not case:
         raise LookupError("Case not found")
-    if author_user_id == case["member_user_id"]:
-        role = "member"
-    elif author_user_id == case["agent_user_id"]:
+    role = None
+    if prefer_role == "agent" and author_user_id == case["agent_user_id"]:
         role = "agent"
-    elif author_user_id == case["supplier_user_id"]:
+    elif prefer_role == "supplier" and author_user_id == case["supplier_user_id"]:
         role = "supplier"
-    elif is_admin:
-        role = "system"
-    else:
-        raise PermissionError("Only this Case's Member, Agent, or Supplier may post to its chat")
+    elif prefer_role == "member" and author_user_id == case["member_user_id"]:
+        role = "member"
+    if role is None:
+        if author_user_id == case["member_user_id"]:
+            role = "member"
+        elif author_user_id == case["agent_user_id"]:
+            role = "agent"
+        elif author_user_id == case["supplier_user_id"]:
+            role = "supplier"
+        elif is_admin:
+            role = "system"
+        else:
+            raise PermissionError("Only this Case's Member, Agent, or Supplier may post to its chat")
     message = (message or "").strip()
     if not message:
         raise ValueError("A message is required")
@@ -561,13 +637,16 @@ def get_supplier(conn, user_id: int) -> dict | None:
 def list_suppliers(conn, location_level: str, location_id: str, service_category: str | None = None) -> list[dict]:
     """The Agent's own directory search (Decision 2): every active Supplier registered at this
     exact location, optionally narrowed to one service_category, each with their Karma score
-    attached so the Agent can present price list + Karma together, per the brief."""
-    q = "SELECT * FROM suppliers WHERE location_level = ? AND location_id = ? AND is_active = 1"
+    attached so the Agent can present price list + Karma together, per the brief. `name` is
+    joined in too (2026-11-25, Agent Dashboard) -- being named in this directory at all is the
+    whole point of Decision 2, not a privacy-sensitive reveal the way a Case's Member's name is."""
+    q = """SELECT s.*, u.name AS name FROM suppliers s JOIN users u ON u.id = s.user_id
+           WHERE s.location_level = ? AND s.location_id = ? AND s.is_active = 1"""
     params: list = [location_level, location_id]
     if service_category:
-        q += " AND service_category = ?"
+        q += " AND s.service_category = ?"
         params.append(service_category)
-    q += " ORDER BY service_category, created_at"
+    q += " ORDER BY s.service_category, s.created_at"
     rows = [dict(r) for r in conn.execute(q, params)]
     for r in rows:
         r["karma"] = karma_core.individual_karma_score(conn, r["user_id"])

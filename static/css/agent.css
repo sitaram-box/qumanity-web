@@ -1,0 +1,193 @@
+/* agent.css (2026-11-25) -- the standalone /agent page. style.css + register.css carry the shared
+   header/button/variable tokens (same three-stylesheet pattern templates/qmail.html already
+   uses); this file is everything specific to the Agent Dashboard's 3-column layout. No new CSS
+   variables -- every color below is one of style.css's existing --qm-* tokens (--qm-navy is
+   #0A1929, --qm-gold is #FFD700, per the brief). */
+
+body { background: var(--qm-bg); }
+
+.ag-empty { margin: 0; font-size: 0.85rem; color: var(--qm-text-dim); padding: 16px; text-align: center; }
+.ag-muted { color: var(--qm-text-dim); font-size: 0.85rem; margin: 4px 0 10px; }
+
+/* ---- The three-column shell ---- */
+.ag-shell {
+  display: grid;
+  grid-template-columns: 160px minmax(280px, 360px) 1fr;
+  gap: 14px;
+  height: calc(100vh - 110px);
+  padding: 16px 20px;
+  box-sizing: border-box;
+}
+
+/* ---- Far-left rail ---- */
+.ag-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--qm-border);
+  border-radius: 14px;
+  background: var(--qm-panel-bg);
+  padding: 10px;
+}
+.ag-rail-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: var(--qm-text-dim);
+  font: 600 0.85rem "Inter", system-ui, sans-serif;
+  cursor: pointer;
+  text-decoration: none;
+}
+.ag-rail-btn:hover { background: rgba(201, 150, 12, 0.08); color: var(--qm-text); }
+.ag-rail-btn.is-active { background: var(--qm-navy); color: var(--qm-gold); }
+.ag-rail-spacer { flex: 1; }
+.ag-rail-btn-back { border-top: 1px solid var(--qm-border); margin-top: 6px; padding-top: 12px; border-radius: 0; }
+
+/* ---- Middle column: the list ---- */
+.ag-list-pane { min-width: 0; display: flex; flex-direction: column; }
+.ag-list-header { display: flex; align-items: baseline; justify-content: space-between; padding: 2px 4px 10px; }
+.ag-list-header h2 { margin: 0; font-size: 1rem; color: var(--qm-gold-text); }
+.ag-list-count { font-size: 0.78rem; color: var(--qm-text-dim); }
+.ag-list {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--qm-border);
+  border-radius: 14px;
+  background: var(--qm-panel-bg);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ag-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: transparent;
+  font: inherit;
+}
+.ag-row:hover { background: rgba(201, 150, 12, 0.08); border-color: rgba(201, 150, 12, 0.22); }
+.ag-row.is-active { background: rgba(255, 153, 51, 0.14); border-color: rgba(255, 153, 51, 0.35); }
+.ag-row-title { flex: 1; min-width: 0; font-size: 0.85rem; font-weight: 700; color: var(--qm-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-row-sub { flex: 0 0 auto; font-size: 0.76rem; color: var(--qm-text-dim); max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-row-badge {
+  flex: 0 0 auto;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--qm-input-bg);
+  color: var(--qm-gold-text);
+  font: 700 0.68rem "Inter", system-ui, sans-serif;
+  white-space: nowrap;
+}
+/* ag-row stacks its own title/sub/badge as a column at narrower list widths -- same spirit as
+   the grid-to-column collapse qmail.css uses for its own row at mobile widths. */
+@media (max-width: 1000px) {
+  .ag-row { flex-wrap: wrap; }
+  .ag-row-sub { max-width: 100%; }
+}
+
+/* ---- Right pane: the workspace ---- */
+.ag-workspace {
+  min-width: 0;
+  border: 1px solid var(--qm-border);
+  border-radius: 14px;
+  background: var(--qm-panel-bg);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.ag-workspace-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--qm-text-dim); text-align: center; padding: 20px; }
+.ag-case-workspace, .ag-supplier-workspace, .ag-compass-workspace { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+/* [hidden] ties in specificity with the class rule just above (both 0,1,0) and loses to it by
+   source order alone -- without this, showWorkspace()'s `hidden = true` stops doing anything and
+   every workspace panel renders stacked on top of each other (found live, 2026-11-25). */
+.ag-workspace-empty[hidden], .ag-case-workspace[hidden], .ag-supplier-workspace[hidden], .ag-compass-workspace[hidden] { display: none; }
+
+.ag-workspace-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--qm-border);
+}
+.ag-workspace-header-text h2 { margin: 0; font-size: 1.05rem; color: var(--qm-gold-text); }
+.ag-workspace-header-text p { margin: 2px 0 0; font-size: 0.8rem; color: var(--qm-text-dim); }
+.ag-case-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ag-case-header-actions select {
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--qm-input-border);
+  background: var(--qm-input-bg);
+  color: var(--qm-text);
+  font: inherit;
+  font-size: 0.82rem;
+}
+.ag-case-header-actions .qm-btn { padding: 7px 14px; font-size: 0.8rem; }
+
+.ag-case-body { flex: 1; display: flex; min-height: 0; }
+.ag-case-main { flex: 1; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--qm-border); }
+.ag-case-logs { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+.ag-system-log {
+  align-self: center;
+  max-width: 90%;
+  text-align: center;
+  font-size: 0.76rem;
+  color: var(--qm-text-dim);
+  background: rgba(10, 25, 41, 0.04);
+  border-radius: 10px;
+  padding: 5px 12px;
+}
+.ag-message { max-width: 75%; align-self: flex-start; background: rgba(10, 25, 41, 0.05); border-radius: 14px; padding: 8px 12px; }
+.ag-message--mine { align-self: flex-end; background: rgba(255, 153, 51, 0.16); }
+.ag-message-who { font-size: 0.7rem; font-weight: 700; color: var(--qm-gold-text); margin-bottom: 2px; }
+.ag-message-text { font-size: 0.88rem; color: var(--qm-text); white-space: pre-wrap; word-break: break-word; }
+.ag-message-at { font-size: 0.66rem; color: var(--qm-text-dim); margin-top: 4px; }
+
+.ag-case-composer { display: flex; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--qm-border); }
+.ag-case-composer input { flex: 1; min-width: 0; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--qm-input-border); background: var(--qm-input-bg); color: var(--qm-text); font: inherit; }
+
+.ag-case-toolbar { display: flex; gap: 8px; padding: 0 20px 12px; }
+.ag-case-toolbar .qm-btn { padding: 6px 12px; font-size: 0.8rem; }
+
+.ag-inline-panel { margin: 0 20px 14px; padding: 12px 14px; border: 1px solid var(--qm-input-border); border-radius: 12px; background: var(--qm-input-bg); }
+.ag-inline-panel h3 { margin: 0 0 8px; font-size: 0.85rem; color: var(--qm-text); }
+.ag-inline-panel textarea { width: 100%; box-sizing: border-box; resize: vertical; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--qm-input-border); background: var(--qm-panel-bg); color: var(--qm-text); font: inherit; }
+.ag-inline-panel input[type="date"] { margin-top: 8px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--qm-input-border); background: var(--qm-panel-bg); color: var(--qm-text); font: inherit; }
+.ag-inline-panel .qm-btn { margin-top: 8px; padding: 7px 14px; font-size: 0.82rem; }
+.ag-inline-panel-row { display: flex; gap: 8px; }
+.ag-inline-panel-row input { flex: 1; min-width: 0; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--qm-input-border); background: var(--qm-panel-bg); color: var(--qm-text); font: inherit; font-size: 0.82rem; }
+.ag-inline-panel-row .qm-btn { margin-top: 0; }
+.ag-inline-panel-results { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
+.ag-inline-result-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--qm-panel-bg); font-size: 0.82rem; color: var(--qm-text); }
+.ag-inline-result-row .qm-btn { padding: 4px 10px; font-size: 0.74rem; }
+
+.ag-member-panel { width: 260px; flex: 0 0 auto; padding: 16px 18px; overflow-y: auto; }
+.ag-member-panel h3 { margin: 0 0 6px; font-size: 0.82rem; color: var(--qm-gold-text); text-transform: uppercase; letter-spacing: 0.04em; }
+.ag-member-panel h4 { margin: 16px 0 4px; font-size: 0.76rem; color: var(--qm-text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.ag-member-info { font-size: 0.88rem; font-weight: 700; color: var(--qm-text); margin: 0; }
+.ag-link-btn { display: block; width: 100%; text-align: left; padding: 7px 10px; border-radius: 8px; border: none; background: var(--qm-input-bg); color: var(--qm-gold-text); font: 600 0.8rem "Inter", system-ui, sans-serif; cursor: pointer; margin-bottom: 4px; }
+.ag-link-btn:hover { background: rgba(255, 153, 51, 0.14); }
+
+.ag-supplier-body, .ag-compass-body { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+.ag-supplier-body .qm-btn, .ag-compass-body .qm-btn { align-self: flex-start; }
+
+@media (max-width: 960px) {
+  .ag-shell { grid-template-columns: 80px minmax(220px, 300px) 1fr; }
+  .ag-rail-btn span { display: none; }
+  .ag-case-body { flex-direction: column; }
+  .ag-case-main { border-right: none; border-bottom: 1px solid var(--qm-border); }
+  .ag-member-panel { width: auto; }
+}

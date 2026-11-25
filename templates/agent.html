@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qumanity — Agent Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/agent.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+</head>
+<body>
+  <header class="qm-header">
+    <a href="{{ url_for('dashboard') }}" style="display:contents" title="Back to Dashboard">
+      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+    </a>
+    <div class="qm-header-text">
+      <h1>📋 Agent Dashboard</h1>
+      <p>Case management console</p>
+    </div>
+    <nav class="qm-header-actions">
+      <a href="{{ url_for('dashboard') }}" class="qm-btn qm-btn-ghost">← Back to Dashboard</a>
+      <a href="{{ url_for('logout') }}" class="qm-btn qm-btn-ghost">Logout</a>
+    </nav>
+  </header>
+
+  <main class="ag-shell">
+    <!-- Far-Left Rail -->
+    <aside class="ag-rail">
+      <button type="button" class="ag-rail-btn is-active" data-view="queue">📥 <span>Queue</span></button>
+      <button type="button" class="ag-rail-btn" data-view="compass">🧭 <span>Compass</span></button>
+      <button type="button" class="ag-rail-btn" data-view="directory">📒 <span>Directory</span></button>
+      <button type="button" class="ag-rail-btn" data-view="history">📜 <span>History</span></button>
+      <div class="ag-rail-spacer"></div>
+      <a href="{{ url_for('dashboard') }}" class="ag-rail-btn ag-rail-btn-back">← <span>Dashboard</span></a>
+    </aside>
+
+    <!-- Middle Column: the list -->
+    <section class="ag-list-pane">
+      <div class="ag-list-header">
+        <h2 id="ag-list-title">Queue</h2>
+        <span class="ag-list-count" id="ag-list-count"></span>
+      </div>
+      <div class="ag-list" id="ag-list">
+        <p class="ag-empty">Loading…</p>
+      </div>
+    </section>
+
+    <!-- Right Pane: the workspace -->
+    <section class="ag-workspace">
+      <div class="ag-workspace-empty" id="ag-workspace-empty">
+        <p>Select a Case, Compass task, or Supplier from the list.</p>
+      </div>
+
+      <!-- Case workspace -->
+      <div class="ag-case-workspace" id="ag-case-workspace" hidden>
+        <header class="ag-workspace-header">
+          <div class="ag-workspace-header-text">
+            <h2 id="ag-case-title"></h2>
+            <p id="ag-case-sub"></p>
+          </div>
+          <div class="ag-case-header-actions">
+            <select id="ag-case-status-select" aria-label="Change status"></select>
+            <button type="button" class="qm-btn qm-btn-ghost" id="ag-case-status-apply">Update</button>
+            <button type="button" class="qm-btn qm-btn-primary" id="ag-case-resolve-btn">✅ Resolve</button>
+          </div>
+        </header>
+
+        <div class="ag-case-body">
+          <div class="ag-case-main">
+            <div class="ag-case-logs" id="ag-case-logs"></div>
+            <form class="ag-case-composer" id="ag-case-composer">
+              <input type="text" id="ag-case-input" placeholder="Write a note or message…" maxlength="1000" autocomplete="off" />
+              <button type="submit" class="qm-btn qm-btn-primary">Send</button>
+            </form>
+            <div class="ag-case-toolbar">
+              <button type="button" class="qm-btn qm-btn-ghost" id="ag-case-add-supplier-btn">➕ Add Supplier</button>
+              <button type="button" class="qm-btn qm-btn-ghost" id="ag-case-add-compass-btn">🧭 Add Compass Task</button>
+            </div>
+            <div class="ag-inline-panel" id="ag-add-supplier-panel" hidden>
+              <h3>Add Supplier</h3>
+              <div class="ag-inline-panel-row">
+                <input type="text" id="ag-add-supplier-category" placeholder="Filter by category (optional)" />
+                <button type="button" class="qm-btn qm-btn-ghost" id="ag-add-supplier-search">Search</button>
+              </div>
+              <div class="ag-inline-panel-results" id="ag-add-supplier-results"></div>
+            </div>
+            <form class="ag-inline-panel" id="ag-add-compass-form" hidden>
+              <h3>Add Compass Task</h3>
+              <textarea id="ag-add-compass-note" rows="2" maxlength="500" placeholder="What do you need to follow up on?" required></textarea>
+              <input type="date" id="ag-add-compass-due" />
+              <button type="submit" class="qm-btn qm-btn-primary">Add Task</button>
+            </form>
+          </div>
+
+          <aside class="ag-member-panel">
+            <h3>Member</h3>
+            <p id="ag-member-info" class="ag-member-info"></p>
+            <h4>Karma</h4>
+            <p id="ag-member-karma" class="ag-muted">Loading…</p>
+            <h4>Family Tree</h4>
+            <p class="ag-muted">Not viewable for other members — no cross-member Family Tree view exists in this app.</p>
+            <h4>Other Active Cases</h4>
+            <div id="ag-member-cases"></div>
+          </aside>
+        </div>
+      </div>
+
+      <!-- Supplier workspace -->
+      <div class="ag-supplier-workspace" id="ag-supplier-workspace" hidden>
+        <header class="ag-workspace-header">
+          <div class="ag-workspace-header-text">
+            <h2 id="ag-supplier-name"></h2>
+            <p id="ag-supplier-sub"></p>
+          </div>
+        </header>
+        <div class="ag-supplier-body">
+          <p id="ag-supplier-description"></p>
+          <p id="ag-supplier-pricelist"></p>
+          <button type="button" class="qm-btn qm-btn-primary" id="ag-supplier-message-btn">💬 Message Supplier</button>
+        </div>
+      </div>
+
+      <!-- Compass task workspace -->
+      <div class="ag-compass-workspace" id="ag-compass-workspace" hidden>
+        <header class="ag-workspace-header">
+          <div class="ag-workspace-header-text">
+            <h2>🧭 Compass Task</h2>
+            <button type="button" class="ag-link-btn" id="ag-compass-case-link"></button>
+          </div>
+        </header>
+        <div class="ag-compass-body">
+          <p id="ag-compass-note"></p>
+          <p id="ag-compass-due" class="ag-muted"></p>
+          <button type="button" class="qm-btn qm-btn-primary" id="ag-compass-done-btn">✓ Mark as Done</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/agent.js') }}"></script>
+</body>
+</html>

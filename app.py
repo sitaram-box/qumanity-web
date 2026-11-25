@@ -1336,6 +1336,22 @@ def api_agent_case_status(case_id):
     return jsonify(case)
 
 
+@app.route("/api/agent/cases/<int:case_id>/message", methods=["POST"])
+@login_required
+@_case_error
+def api_agent_case_message(case_id):
+    """The Agent Dashboard's own composer (2026-11-25) -- posts to the same Case Chat
+    /api/cases/<id>/message does, but passes prefer_role='agent' so a user who happens to be
+    both this Case's Member and its assigned Agent (found live, testing with one account playing
+    both parts) is correctly logged as 'agent' when posting from here, not 'member'."""
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    comment = case_core.add_comment(conn, case_id, session["user_id"], data.get("message"), _is_admin(), prefer_role="agent")
+    conn.close()
+    return jsonify(comment)
+
+
 @app.route("/api/agent/cases/<int:case_id>/compass", methods=["POST"])
 @login_required
 @_case_error
@@ -1411,6 +1427,83 @@ def api_supplier_list():
     suppliers = case_core.list_suppliers(conn, location_level, location_id, request.args.get("service_category"))
     conn.close()
     return jsonify({"suppliers": suppliers})
+
+
+# ---- Agent Dashboard (2026-11-25) ----
+# A separate page (/agent), not a dashboard tab -- same reasoning as /qmail just above: its own
+# scroll/focus context and a real, bookmarkable URL. Gated by having a real `agents` row, not by
+# _is_admin() -- an Agent is salaried Qumanity staff (Decision 1), a distinct thing from the
+# Founder/Admin. No link to it was added to the Member dashboard (dashboard.html/app.py's own
+# dashboard() route) -- out of scope for this pass per the brief's own "do not touch the Member
+# dashboard" rule; reachable by URL only for now.
+
+@app.route("/agent")
+@login_required
+def agent_page():
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    agent = case_core.get_agent(conn, session["user_id"])
+    conn.close()
+    if not agent:
+        return redirect(url_for("dashboard"))
+    return render_template("agent.html")
+
+
+@app.route("/api/agent/me")
+@login_required
+@_case_error
+def api_agent_me():
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    agent = case_core.get_agent(conn, session["user_id"])
+    conn.close()
+    if not agent:
+        return jsonify({"error": "Not a registered, active Agent"}), 403
+    return jsonify(agent)
+
+
+@app.route("/api/agent/cases/<int:case_id>")
+@login_required
+@_case_error
+def api_agent_case_detail(case_id):
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    case = case_core.case_detail_for_agent(conn, case_id, session["user_id"], _is_admin())
+    conn.close()
+    return jsonify(case)
+
+
+@app.route("/api/agent/cases/<int:case_id>/member-cases")
+@login_required
+@_case_error
+def api_agent_case_member_cases(case_id):
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    cases = case_core.list_other_cases_for_member(conn, case_id, session["user_id"], _is_admin())
+    conn.close()
+    return jsonify({"cases": cases})
+
+
+@app.route("/api/agent/compass")
+@login_required
+@_case_error
+def api_agent_compass_list():
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    tasks = case_core.list_compass_tasks(conn, session["user_id"], open_only=request.args.get("all") != "1")
+    conn.close()
+    return jsonify({"tasks": tasks})
+
+
+@app.route("/api/agent/compass/<int:task_id>/done", methods=["POST"])
+@login_required
+@_case_error
+def api_agent_compass_done(task_id):
+    conn = get_db()
+    case_core.ensure_tables(conn)
+    task = case_core.complete_compass_task(conn, task_id, session["user_id"])
+    conn.close()
+    return jsonify(task)
 
 
 @app.route("/api/board/post", methods=["POST"])
