@@ -5837,16 +5837,21 @@ def api_auth_register():
     account_id = id_generator.generate_account_id(
         conn, data["name"], data["gender"], dob, tob, tropical["element"], present_location
     )
-    private_code = id_generator.generate_private_code(conn)
+    # DOB-based Private ID (2026-11-25): country_digit is derived from birth_location (never
+    # present_location -- the Private ID is fixed to where a user was born, same as private_id
+    # above), via id_generator.country_digit_for()'s 1-9 subcontinent / 0 rest-of-world mapping.
+    birth_country_id = (birth_location.get("country") or {}).get("id")
+    country_digit = id_generator.country_digit_for(birth_country_id)
+    private_code = id_generator.generate_dob_id(conn, dob, country_digit)
     cur = conn.execute(
         """INSERT INTO users (name, middle_name, gender, dob, tob, language, birth_location_json,
                                present_location_json, private_id, account_id,
-                               email, phone, pin_hash, private_id_9digit, birth_time_known,
-                               religion_belief, religion_locked_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                               email, phone, pin_hash, private_id_9digit, dob_id_country_digit,
+                               birth_time_known, religion_belief, religion_locked_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (data["name"], (data.get("middle_name") or "").strip() or None, data["gender"], data["dob"], data["tob"], data.get("language"),
          json.dumps(birth_location), json.dumps(present_location), private_id, account_id,
-         email or None, phone or None, generate_password_hash(str(data["pin"])), private_code,
+         email or None, phone or None, generate_password_hash(str(data["pin"])), private_code, country_digit,
          int(birth_time_known), religion_belief,
          (dt.datetime.utcnow().isoformat() + "Z") if religion_belief else None),
     )
