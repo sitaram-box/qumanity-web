@@ -29,6 +29,23 @@ import string
 
 ELEMENT_CODE = {"Fire": "ZFL", "Earth": "ZEA", "Air": "ZAI", "Water": "ZWA"}
 
+# DOB-ID country digit (2026-11-25, the Founder's own decision): 1-9 for nine of the ten
+# Indian Sub-continent countries (account_core.SUBCONTINENT_COUNTRY_IDS), 0 for everyone else on
+# Earth -- Maldives included, despite being one of the ten Public-Account-Activation countries,
+# since only nine digits were available alongside "0 = Rest of World".
+_COUNTRY_DIGIT = {
+    "O_AS_IND": "1",  # India
+    "O_AS_NPL": "2",  # Nepal
+    "O_AS_BTN": "3",  # Bhutan
+    "O_AS_BGD": "4",  # Bangladesh
+    "O_AS_MMR": "5",  # Myanmar
+    "O_AS_LKA": "6",  # Sri Lanka
+    "O_AS_PAK": "7",  # Pakistan
+    "O_AS_BLC": "8",  # Balochistan
+    "O_AS_AFG": "9",  # Afghanistan
+    # O_AS_MDV (Maldives) and every other country id -> "0" (Rest of World), via the .get() default.
+}
+
 _GENDER_CODE = {"male": "GM", "female": "GF"}  # "both" (and anything else) -> GB
 
 
@@ -112,10 +129,63 @@ def generate_account_id(conn, name, gender, dob, tob, element, present_location)
 
 
 def generate_private_code(conn, max_attempts=200) -> str:
-    """The 9-digit Private ID used to sign in: random, unique across all users, kept secret by its owner."""
+    """The 9-digit Private ID used to sign in: random, unique across all users, kept secret by its owner.
+
+    Superseded by generate_dob_id() for new registrations (2026-11-25) -- kept here because
+    identity_core.regenerate_private_code() (an admin-approved ID-correction path, unrelated to
+    registration) still calls this, and migrating that path to DOB-IDs wasn't asked for and isn't
+    done here."""
     import secrets
     for _ in range(max_attempts):
         code = f"{secrets.randbelow(10**9):09d}"
         if not conn.execute("SELECT 1 FROM users WHERE private_id_9digit = ?", (code,)).fetchone():
             return code
     raise RuntimeError("Could not generate a unique 9-digit Private ID")
+
+
+def country_digit_for(country_id: str) -> str:
+    """The single digit (0-9) generate_dob_id() prepends for a given birth_location country id.
+    1-9 for nine of the ten Indian Sub-continent countries (account_core.SUBCONTINENT_COUNTRY_IDS);
+    0 for every other country on Earth -- Maldives included, and birth_location has never been
+    restricted to the Sub-continent list, see account_core.py's own docstring."""
+    return _COUNTRY_DIGIT.get(country_id, "0")
+
+
+def generate_dob_id(conn, dob: dt.date, country_digit: str, max_attempts: int = 10_000) -> str:
+    """The new 9-digit Private ID (2026-11-25): country_digit + reversed(DDMMYYYY), decreasing by
+    how many users already share this (dob, country_digit) pair until a free one is found.
+
+    Deliberately string-based end to end until the final int() subtraction: DDMMYYYY is built with
+    explicit zero-padding (not str(int)) and reversed as a string, so a year ending in 0 (one in
+    ten of them) keeps its leading zero when the country digit is prepended -- casting the
+    reversed date to int first, before prepending, would silently eat it (e.g. DOB 2000-01-01
+    reverses to "00021010", not "21010").
+
+    Counts against users.dob_id_country_digit (set alongside private_id_9digit by every caller),
+    not a live re-derivation from birth_location_json, so the count query stays a plain indexed
+    WHERE clause -- see migrations/047_dob_id_country_digit.py."""
+    if country_digit not in "0123456789" or len(country_digit) != 1:
+        raise ValueError("country_digit must be a single digit 0-9")
+
+    ddmmyyyy = f"{dob.day:02d}{dob.month:02d}{dob.year:04d}"
+    base_id_str = country_digit + ddmmyyyy[::-1]
+    base_id = int(base_id_str)
+
+    count = conn.execute(
+        "SELECT COUNT(*) FROM users WHERE dob = ? AND dob_id_country_digit = ?",
+        (dob.isoformat(), country_digit),
+    ).fetchone()[0]
+
+    for offset in range(count, count + max_attempts):
+        candidate_str = f"{base_id - offset:09d}"
+        if candidate_str[0] != country_digit:
+            # Underflowed past this country's 9-digit range. Cannot happen at realistic per-day
+            # volumes (base_id is always 100,000,000+), but must not silently mint a wrong-country
+            # or short ID rather than fail loudly.
+            raise RuntimeError(f"DOB-ID space exhausted for dob={dob} country_digit={country_digit}")
+        if not conn.execute(
+            "SELECT 1 FROM users WHERE private_id_9digit = ?", (candidate_str,)
+        ).fetchone():
+            return candidate_str
+
+    raise RuntimeError(f"Could not find a unique DOB-ID for dob={dob} country_digit={country_digit}")

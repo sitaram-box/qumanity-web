@@ -141,9 +141,35 @@ def submit_request(conn, user_id: int, request_type: str, fields: dict, reason: 
 def regenerate_private_code(conn, user_id: int) -> str:
     """Re-rolls the 9-digit login credential. Does not touch account_id, Qmail, or any other
     column -- see this module's docstring for why that's safe. Returns the new code; the caller
-    is responsible for getting it to the user out of band (it is never logged here)."""
-    new_code = id_generator.generate_private_code(conn)
-    conn.execute("UPDATE users SET private_id_9digit = ? WHERE id = ?", (new_code, user_id))
+    is responsible for getting it to the user out of band (it is never logged here).
+
+    2026-11-25: re-derives a DOB-based code (id_generator.generate_dob_id), not a random one, so
+    an admin-approved ID correction still produces an ID consistent with the DOB-ID scheme every
+    new registration now uses. Reads the user's CURRENT dob/birth_location_json, so an id_change_a
+    ticket (birth location corrected) picks up the corrected location -- api_admin_profile_decide()
+    applies the location UPDATE before calling here, see its own comment on ordering. Falls back to
+    the old random code (and clears dob_id_country_digit, since that code is then no longer
+    DOB-derived) only if dob is missing or unparseable -- a safety net for a legacy row without a
+    usable dob, not the normal path."""
+    row = conn.execute("SELECT dob, birth_location_json FROM users WHERE id = ?", (user_id,)).fetchone()
+    new_code = None
+    country_digit = None
+    if row and row["dob"]:
+        try:
+            dob = dt.date.fromisoformat(row["dob"])
+        except ValueError:
+            dob = None
+        if dob is not None:
+            country_id = (json.loads(row["birth_location_json"] or "{}").get("country") or {}).get("id")
+            country_digit = id_generator.country_digit_for(country_id)
+            new_code = id_generator.generate_dob_id(conn, dob, country_digit)
+    if new_code is None:
+        new_code = id_generator.generate_private_code(conn)
+        country_digit = None
+    conn.execute(
+        "UPDATE users SET private_id_9digit = ?, dob_id_country_digit = ? WHERE id = ?",
+        (new_code, country_digit, user_id),
+    )
     conn.commit()
     return new_code
 

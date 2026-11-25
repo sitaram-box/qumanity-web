@@ -148,6 +148,11 @@ def _ensure_user_columns():
         # Middle name (2026-10-20, migrations/029_middle_name.py): optional, feeds the Family
         # Group naming logic (family_core._name_code()) -- see that function's own docstring.
         ("middle_name", "TEXT"),
+        # DOB-ID country digit (2026-11-25, migrations/047_dob_id_country_digit.py): the single
+        # digit (0-9) id_generator.generate_dob_id() used to mint this user's private_id_9digit --
+        # see id_generator.country_digit_for(). Listed here too, as every other users-table column
+        # is, so a database that skipped migration 047 still boots with this column present.
+        ("dob_id_country_digit", "TEXT"),
     ):
         if col not in cols:
             conn.execute(f"ALTER TABLE users ADD COLUMN {col} {ddl}")
