@@ -201,3 +201,34 @@ def send_registration_notification(name: str, location_chain: str, private_id_9d
     # send_ticket_reply() rather than a second, undiagnosed copy of the same request.
     _send(config["to_addr"], f"Qumanity: new member registered — {name}", html_body, operation="registration")
     return True
+
+
+def send_id_change_notification(to_addr: str, name: str, new_private_id_9digit: str) -> bool:
+    """Sends a MEMBER their own new, real Private ID directly (2026-11-25, DOB-ID migration) --
+    a deliberate, one-time exception to this module's own "never a real, usable Private ID in an
+    email body" rule stated at the top of this file. That rule exists because a Private ID reveal
+    is normally rare, individually justified, and logged (see recovery_core.reveal_private_code);
+    this is a conscious, Founder-approved departure from it for the mass identity migration only --
+    every migrated user's OWN id, pushed once to their OWN address on file, on top of (not instead
+    of) the three self-service recovery paths (recover-id-by-pin/by-family-otp, and the manual
+    mail-a-letter path) that still work if this never arrives or the address has changed.
+
+    Unlike send_registration_notification() (always QM_ADMIN_EMAIL, the operator's own inbox),
+    this sends to an arbitrary member's own address -- same to_addr contract as
+    send_ticket_reply(), not the Admin-only _email_config(). Returns False if SendGrid isn't
+    configured; raises on a genuine send failure, same contract as every other sender here."""
+    if not os.environ.get("SENDGRID_API_KEY", "").strip():
+        print("[email_core] EMAIL_SEND_SKIPPED operation=id_change_notification reason=SENDGRID_API_KEY_missing")
+        return False
+    safe_name = html.escape(name or "")
+    safe_id = html.escape(new_private_id_9digit or "")
+    html_body = (
+        f"<p>Hi {safe_name},</p>"
+        "<p>Your Private ID has been updated as part of our new DOB-based identity system.</p>"
+        f"<p><b>Your new Private ID is: {safe_id}</b></p>"
+        "<p>You can now log in with this ID and your existing PIN.</p>"
+        '<p>If you have any issues, use the recovery flow at '
+        '<a href="https://qumanity.in/recover-id">qumanity.in/recover-id</a>.</p>'
+    )
+    _send(to_addr, "Your Qumanity Private ID has been updated", html_body, operation="id_change_notification")
+    return True

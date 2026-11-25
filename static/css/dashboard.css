@@ -965,6 +965,7 @@ span.qm-help-trigger { display: inline-flex; flex: 0 0 auto; align-items: center
 .ap-filter:hover { border-color: #B8860B; color: var(--qm-text); }
 .ap-filter.is-active { background: linear-gradient(120deg, #ff8a1f, #ffd24a); color: #1a1205; border-color: transparent; }
 .ap-refresh-btn { margin-left: auto; padding: 6px 10px; }
+.ap-notify-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .ap-body { display: grid; grid-template-columns: minmax(220px, 320px) 1fr; gap: 14px; min-height: 420px; flex: 1; }
 .ap-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; border: 1px solid var(--qm-border); border-radius: 12px; padding: 8px; background: var(--qm-panel-bg); }
 .ap-row { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; text-align: left; padding: 8px 10px; border-radius: 10px; border: 1px solid transparent; background: transparent; cursor: pointer; font: inherit; }

@@ -6987,6 +6987,66 @@ def api_admin_users_export_csv():
     )
 
 
+@app.route("/api/admin/notify-id-change", methods=["POST"])
+@login_required
+def api_admin_notify_id_change():
+    """Bulk-notifies migrated users of their new DOB-based Private ID (2026-11-25). Reads
+    id_migrations rows with notified_at IS NULL, so clicking the Admin Panel's "Notify Migrated
+    Users" button more than once never re-emails anyone already successfully notified -- only a
+    genuine failure or a no-channel user stays eligible for the next click.
+
+    Email only. There is no SMS/WhatsApp integration anywhere in this codebase (confirmed by
+    inspection), and Qmail cannot substitute for one here: qmail_core.py is explicitly
+    internal-only ("no inbound or outbound internet mail delivery anywhere in this system") and
+    only reachable by logging in -- exactly the thing a user who doesn't yet know their new ID
+    can't do. A phone-only user with no email on file is reported back as its own `no_channel`
+    count, not silently skipped nor sent a Qmail that would sit unread -- Admin can follow up with
+    those manually (e.g. WhatsApp), the same way the original temple-event onboarding worked."""
+    if not _is_admin():
+        return jsonify({"error": "Admin only"}), 403
+    data = request.get_json(silent=True) or {}
+    user_ids = data.get("user_ids")
+    send_to_all = bool(data.get("send_to_all_migrated"))
+    if not send_to_all and not user_ids:
+        return jsonify({"error": "Provide user_ids or send_to_all_migrated"}), 400
+
+    conn = get_db()
+    try:
+        query = """SELECT im.id AS migration_id, im.user_id, im.new_private_id_9digit, u.name, u.email
+                   FROM id_migrations im JOIN users u ON u.id = im.user_id
+                   WHERE im.notified_at IS NULL"""
+        args: tuple = ()
+        if not send_to_all:
+            placeholders = ",".join("?" for _ in user_ids)
+            query += f" AND im.user_id IN ({placeholders})"
+            args = tuple(user_ids)
+        rows = conn.execute(query, args).fetchall()
+
+        emailed = failed = no_channel = 0
+        for row in rows:
+            if not row["email"]:
+                no_channel += 1
+                continue
+            try:
+                sent = email_core.send_id_change_notification(row["email"], row["name"], row["new_private_id_9digit"])
+            except Exception as e:
+                print(f"[notify_id_change] EMAIL_SEND_FAILED user_id={row['user_id']} error={e}")
+                failed += 1
+                continue
+            if not sent:
+                failed += 1  # SendGrid not configured -- counts as failed, never silently dropped
+                continue
+            conn.execute(
+                "UPDATE id_migrations SET notified_at = ? WHERE id = ?",
+                (dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), row["migration_id"]),
+            )
+            conn.commit()
+            emailed += 1
+    finally:
+        conn.close()
+    return jsonify({"emailed": emailed, "failed": failed, "no_channel": no_channel, "total": len(rows)})
+
+
 # ---- Karma Qoins wallet API ----
 # Visibility rule (2026-10-17): the NUMBER of Qoins a wallet holds is public. The rupee VALUE
 # (balance_qoins, 1 Qoin = ₹1 today) is private -- visible only to the wallet's own owner, a

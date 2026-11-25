@@ -1122,6 +1122,13 @@
             <button type="button" class="ap-filter" data-filter="account_recovery">Account Recovery</button>
             <button type="button" class="qm-btn qm-btn-ghost ap-refresh-btn" title="Refresh">🔄</button>
           </div>
+          <!-- DOB-ID migration notification (2026-11-25): a one-off bulk action, not a filter, so
+               it sits below the filter row rather than inside it. See api_admin_notify_id_change()
+               for why this is email-only and why re-clicking it is safe (notified_at gating). -->
+          <div class="ap-notify-row">
+            <button type="button" class="qm-btn qm-btn-ghost" id="ap-notify-migrated-btn">📧 Notify Migrated Users of New ID</button>
+            <span class="qm-dash-empty" id="ap-notify-migrated-status" hidden></span>
+          </div>
           <div class="ap-body">
             <div class="ap-list" id="ap-list"></div>
             <div class="ap-detail" id="ap-detail">
