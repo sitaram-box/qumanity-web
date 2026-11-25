@@ -2126,6 +2126,168 @@ local server via the Browser pane before being committed — the CSS flyout-coll
 in §20.2 was found this way, not by code review alone. Not yet reflected in
 `docs/MASTER_STATUS.md` (same standing note as §17–§19).
 
+## 21. The DOB-Based Identity Rework, the Economic Engine, and the Universal Inbox — November 2026
+
+Covers ten commits: `b6846e4`, `b02eca2`, `0b94683`, `15526e8`, `069fd5a` (the Economic Engine,
+built first), then `2e75aec`, `bf0c5f3`, `1c94d77`, `23304f3`, `beea88d` (the Identity Rework,
+built after it). **Verification method, stated plainly because it differs from every prior
+section's "full suite re-run" closing note:** none of this arc's work added a permanent file to
+`tests/`. Every claim below was live-tested during development against a throwaway scratch SQLite
+DB via Flask's own `test_client()` (registering real users, building real Family Tree fixtures,
+hitting the real routes), then the scratch DB was deleted — not committed as a reusable regression
+test. This is a real gap, not an oversight to paper over: the routes in §21.1 and the Agent
+Dashboard in §21.2 currently have **zero** automated regression coverage, unlike `chat_core.py`'s
+32 checks in `tests/test_chat_core.py` (§20) or `family_recovery_core.py`'s coverage in
+`tests/test_family_recovery.py`. Writing that coverage is listed as unfinished work in §13's
+successor (whichever next pass updates it).
+
+### 21.1 The DOB-Based Identity Rework
+
+**The new 9-digit `private_id_9digit` format** (`id_generator.generate_dob_id()`, `2e75aec`):
+`country_digit + reversed(DDMMYYYY)`, decreasing by how many users already share the exact same
+`(dob, country_digit)` pair, so the common case (a unique birthday) gets the "base" id and the
+Nth person sharing one gets `base - (N-1)`, self-healing on a collision by decrementing further.
+`country_digit_for()` maps 9 of the 10 Indian Sub-continent countries to digits `1`–`9` (India=`1`
+per the Founder's own decision) and **every other country on Earth — Maldives included — to
+`0`**, since only 9 digits were available alongside a "Rest of World" bucket and birth location
+has never been restricted to the Sub-continent. The whole function is deliberately string-based
+until the final `int()` subtraction: `DDMMYYYY` is built with explicit zero-padding, never
+`str(int(...))`, and the reversed string is never cast to `int` before the country digit is
+prepended — a year ending in `0` (one in ten of them) would otherwise silently lose its leading
+zero (verified live: DOB `2000-01-01`, India → `100021010`, not `121010`). The new
+`users.dob_id_country_digit` column (`migrations/047_dob_id_country_digit.py`) stores the digit
+actually used, so the "how many users share this pair" count stays a plain indexed `WHERE` clause
+rather than re-deriving it from `birth_location_json` on every call.
+
+This supersedes `id_generator.generate_private_code()` (pure `secrets.randbelow`) for every new
+registration (`bf0c5f3`, `api_auth_register()`) and for `identity_core.regenerate_private_code()`
+(the admin-approved ID-correction ticket flow) — the old random function is kept only as that
+function's own fallback for a legacy row with no usable `dob`, never the normal path.
+
+**Three self-service recovery paths plus the pre-existing manual one**, all on a rebuilt
+`/recover-id` (3-tab `templates/recover_id.html`, `23304f3`):
+1. **PIN lookup** (`POST /api/auth/recover-id-by-pin`) — Name + DOB + Birth Country + PIN reveals
+   `private_id_9digit` straight from the live `users` row (never recomputed — `generate_dob_id()`
+   is a one-shot minting function with a live, mutating counter, not a decode function). Never
+   mutates any candidate's `pin_fails`/`pin_locked_until`: more than one account can share a
+   name+dob+country, and ticking a *wrong* candidate's lockout counter on every attempt would let
+   one person's legitimate recovery silently lock out an unrelated stranger. Protected by IP rate
+   limiting instead (`_rate_limited`, 5/hour).
+2. **Family-member OTP** (`POST /api/auth/recover-id-by-family-otp` then `/verify-family-otp`) —
+   for someone who has forgotten both their ID and PIN. Verifies the submitted phone number
+   against a real *nuclear* relative (parent/child/sibling/spouse) via a new
+   `family_recovery_core.nuclear_family_members_with_phone()`, built from the same
+   `_related_claimed_nodes()`/`NUCLEAR_RELATIONSHIPS` the existing Family-Tree recovery path
+   already uses — `family_core.get_cascade()`, which an earlier draft of this task assumed
+   existed, does not exist anywhere in this codebase. The OTP itself reuses `recovery_core.py`'s
+   existing `otp_requests` table under a new `purpose='family_id_recovery'`
+   (`request_family_id_recovery_otp()`/`verify_family_id_recovery_otp()`), sent to the *relative's*
+   phone, never the requester's own. Anti-enumeration: a real vs. fake family phone number produces
+   the byte-identical response shape (live-verified). The verify step re-submits all four original
+   fields rather than trusting a bare `otp` — this is a public, sessionless, multi-user endpoint,
+   so a code alone can't say which pending request it belongs to.
+3. **The pre-existing mail-a-letter path** (`recovery_core.submit_id_recovery()`, Admin-mediated
+   reveal) — entirely unchanged, kept as the page's second tab.
+4. **Registration duplicate-identity intercept** (`api_auth_register()`) — a Name+DOB match against
+   an existing account returns `409 duplicate_identity` with a prompt to recover instead of
+   registering again; a `confirm_new_account_despite_duplicate` flag lets a genuinely different
+   person with the same name and birth date proceed anyway.
+
+**The migration** (`scripts/migrate_to_dob_ids.py`, `1c94d77`): `--confirm`-gated, one-off (not
+safe to re-run — a second pass would re-assign different ids, since the "how many share this pair"
+count changes). Reads `QM_ADMIN_PRIVATE_IDS` fresh and skips those, skips every `is_demo = 1` row
+(the Rohini Sector 24 election pilot's 500 demo voters), skips and warns on any row with no
+usable `dob`/`birth_location.country.id` rather than crashing, processes oldest-`id`-first, commits
+per row, and logs every change to a new `id_migrations` audit table
+(`migrations/048_id_migrations_table.py`: `user_id`, `old_private_id_9digit`,
+`new_private_id_9digit`, `migrated_at`). Live-tested against a disposable copy of the real
+production database (536 users: 500 demo + 36 real) before being approved to run for real — the
+Admin row and all 500 demo rows came out untouched, no duplicate ids resulted, and the leading-zero
+math held on real data.
+
+**Notification** (`beea88d`): a new `email_core.send_id_change_notification()` emails a migrated
+user their own real new id directly — a deliberate, logged exception to this module's own "never a
+real, usable Private ID in an email body" rule (stated at the top of `email_core.py`), made
+consciously for this one-time migration only. `POST /api/admin/notify-id-change` (admin-only)
+reads `id_migrations WHERE notified_at IS NULL` (the column migration 049 added), so the Admin
+Panel's new "📧 Notify Migrated Users of New ID" button is safe to click more than once — it only
+ever reaches users not yet successfully notified. A phone-only user with no email on file is
+reported back as its own `no_channel` count, never silently dropped and never routed through
+Qmail — Qmail is explicitly internal-only (its own docstring: "no inbound or outbound internet
+mail delivery anywhere in this system"), unreachable by someone who can't yet log in.
+
+**Explicitly not built: Q-Card regeneration.** `q_card_core.render_card_pdf()`'s own docstring
+states the QR encodes an opaque `raw_token`, "never the Private ID, the Account ID, or any other
+identifier" — existing Q-Cards are unaffected by this migration. Regenerating them would also be
+impossible for any existing card: only the token's *hash* is ever persisted, so there is no later
+"regenerate the PDF" path, and the only way to produce a new card (`replace()`) revokes the old
+one. Decision taken: do nothing — existing cards keep working exactly as before.
+
+### 21.2 The Economic Engine (Cases)
+
+A new member-to-member commerce/service-request system, built in three backend steps then two UI
+passes, all gated behind a real `agents` row rather than a new role flag.
+
+**Schema and escrow** (`b6846e4`): `case_core.py` owns `agents`, `suppliers`,
+`supplier_ratings`, `qumanity_cases`, `case_logs`, `compass_tasks`. `wallet_core.py` gained
+`lock_escrow()`/`refund_escrow()`/`release_escrow()`, reusing the existing generic `wallets` table
+(one wallet per Case, `owner_type='case'`) rather than a new schema. `COMMERCE_FEE_SPLIT =
+(("village", 2), ("state", 2), ("country", 1))` — a 2%/2%/1% split on resolution, floor-divided,
+remainder absorbed by the Supplier's own share (the codebase's existing convention).
+
+**State machine and authority** (`b02eca2`): `create_case()`/`assign_agent()`/`update_status()`/
+`add_compass_task()`/`resolve_case()`, `CASE_TYPES = ("commerce", "service_request")`, a
+`TRANSITIONS` table per type, `TERMINAL_STATUSES = {"resolved", "cancelled"}`. A new
+`chat_core.can_manage_location()` — Founder/Admin, a seated village/cascade council member, or an
+assigned Agent — is the one shared authority checker every Case-authority decision calls.
+Deliberately **not** retrofitted into `local_area_core._is_village_admin()`, `can_administer_
+channel()`, or `reports_core.is_holder_council()` — doing so would silently grant Agents authority
+over Local Areas, channel admin, or citizen Reports, which was never asked for. Only
+`_can_approve_temporary_access()` (§20.2) was extended to call it, as one flagged, deliberate
+behavior addition: Agents can now also approve temporary-access requests for their own location.
+
+**API surface** (`0b94683`): the Member (`/api/cases/create`, `/my-cases`, `/<id>/logs`,
+`/<id>/message`, `/<id>/pay`), Agent (`/api/agent/cases`, `/<id>/assign`, `/status`, `/compass`,
+`/add-supplier`, `/resolve`, `/me`, `/<id>`, `/<id>/member-cases`, `/<id>/message`), and Supplier
+(`/api/supplier/profile`, `/list`) routes, behind a shared `_case_error` decorator
+(`ValueError`→400, `PermissionError`→403, `LookupError`→404).
+
+**Member UI** (`15526e8`): a "Contact Agent" button on the Village page opens a modal
+(case type + description) posting to `/api/cases/create`; the resulting Case appears as a new
+`kind:'case'` row on the Home tab's Universal Inbox (fetched separately via `/api/cases/my-cases`,
+merged client-side — Cases are a status-driven object, not one of `chat_core`'s six existing
+chat kinds) with its own status bar, TID Comments log, composer, and a "Pay to Escrow" button for
+`pending_payment` Cases. That button requires a narrow exception inside `update_status()`: the
+Case's own Member, but only for the exact `pending_payment → in_progress` transition, since that's
+the Member locking their own Qoins into escrow.
+
+**Agent Dashboard** (`069fd5a`, a separate page, `/agent`, gated on a real `agents` row — the
+Member dashboard is untouched): a 3-column, OAP-style layout — a far-left rail (Queue, Compass,
+Directory, History), a middle list, and a right workspace for the open Case, Supplier profile, or
+Compass task. Reuses `style.css`'s existing `--qm-navy`/`--qm-gold` tokens, no new ones invented.
+**Three real bugs found and fixed during live verification**, not introduced by code review alone:
+a CSS `[hidden]` specificity collision (a class rule's `display: flex` tied with and won against
+the UA `[hidden] { display: none }` rule by source order, so every workspace panel rendered
+stacked simultaneously); the Queue/History list showing a stale status badge after Update Status
+or Resolve (the list's own cached array was never refreshed, only the open Case's own detail);
+and `case_core.add_comment()` misattributing an Agent's own composer message as `"member"` when
+one test account held both roles on the same Case (fixed with a new `prefer_role` parameter and a
+dedicated `/api/agent/cases/<id>/message` route, leaving the Member-facing route's behavior
+unchanged).
+
+### 21.3 The Universal Inbox's Type Filter — the 6th Tab
+
+§20.1 already describes the Home tab's promotion from the old standalone `/chat` page. What it
+predates: the type-filter row above the chat list (`qm-chat-type-filter-tabs`,
+`templates/dashboard.html`) already had five buttons — **All, Private, Groups, Areas, Councils** —
+mapping onto `chat_core.list_my_conversations()`'s existing kinds (`private`/`family`+`group`→
+Groups, `sub`→Areas, `local`→Councils). The Economic Engine's Member UI pass (`15526e8`) added a
+**sixth**, `Cases`, deliberately kept separate from `Councils` rather than folded in: a Case is a
+status-driven object (its own TID Comments log, its own status bar and action buttons), not a
+Governance Channel, even though both are technically "location-scoped." Cases are fetched via
+their own `GET /api/cases/my-cases` call (`chat_core.list_my_conversations()` itself is untouched)
+and merged into the client-side conversation list by `dashboard.js`'s `loadConversations()`.
+
 ---
 
 *This document supersedes all prior versions of `docs/HANDOVER.md`. For the concise, frequently
