@@ -1136,6 +1136,16 @@
               <a class="qm-btn qm-btn-ghost" href="{{ url_for('admin_database') }}" target="_blank" rel="noopener">🗄️ Database Viewer</a>
               <a class="qm-btn qm-btn-ghost" href="{{ url_for('admin_q_cards') }}" target="_blank" rel="noopener">🪪 Q-Cards</a>
             </div>
+            <!-- Rename Migrated Folders (2026-11-26): the one-shot folder-rename script
+                 (scripts/rename_migrated_folders.py), runnable from here since the Railway
+                 Console has no python3 on this deployment -- see
+                 api_admin_rename_migrated_folders(). Same is_admin gate as the links above; the
+                 "are you sure" is the JS confirm() dashboard.js shows before this ever calls the
+                 route. -->
+            <div class="ap-notify-row">
+              <button type="button" class="qm-btn qm-btn-ghost" id="ap-rename-folders-btn">📁 Rename Migrated Folders</button>
+              <span class="qm-dash-empty" id="ap-rename-folders-status" hidden></span>
+            </div>
           {% endif %}
           <div class="ap-body">
             <div class="ap-list" id="ap-list"></div>

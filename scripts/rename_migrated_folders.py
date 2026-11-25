@@ -29,6 +29,13 @@ here) for audit -- visible afterward in the Admin Panel's Database Viewer.
 
 Usage:
     python3 scripts/rename_migrated_folders.py --confirm
+
+Also importable as a library (2026-11-26): app.py's api_admin_rename_migrated_folders() imports
+run_rename()/pending_rename_count()/_ensure_folder_renames_table() directly to back the Admin
+Panel's "Rename Migrated Folders" button -- added after the Railway Console turned out to have no
+python3 on this deployment. Same reasoning as migrate_to_dob_ids.py's own refactor: everything
+CLI-ONLY (the --confirm gate and `import app`, which would be circular when the importer IS
+app.py) lives inside main() below, never at module level.
 """
 from __future__ import annotations
 
@@ -37,17 +44,11 @@ import json
 import sys
 from pathlib import Path
 
-if "--confirm" not in sys.argv:
-    print(__doc__)
-    print("Refusing to run without --confirm.", file=sys.stderr)
-    sys.exit(1)
-
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-import app  # noqa: F401,E402  (runs ensure_database_ready() at import time)
-import folder_connector  # noqa: E402
-from db import get_db  # noqa: E402
+import folder_connector  # no dependency on app.py -- safe to import unconditionally
 
 
 def _ensure_folder_renames_table(conn) -> None:
@@ -87,15 +88,36 @@ def _resolve_born_here_paths(conn, user_id: int, old_id: str, new_id: str) -> tu
     return born_here / old_id, born_here / new_id
 
 
-def main() -> None:
-    conn = get_db()
-    _ensure_folder_renames_table(conn)
+def pending_rename_count(conn) -> int:
+    """How many id_migrations rows are currently in the one ACTIONABLE state (old folder exists,
+    new one doesn't) -- the idempotency check for the Admin Panel button: if this is 0, there is
+    nothing for run_rename() to do (everything is already renamed, conflicted, or unresolvable),
+    so the button's route refuses outright rather than re-running for no effect."""
+    rows = conn.execute(
+        "SELECT user_id, old_private_id_9digit, new_private_id_9digit FROM id_migrations"
+    ).fetchall()
+    pending = 0
+    for row in rows:
+        paths = _resolve_born_here_paths(conn, row["user_id"], row["old_private_id_9digit"], row["new_private_id_9digit"])
+        if paths is None:
+            continue
+        old_path, new_path = paths
+        if old_path.exists() and not new_path.exists():
+            pending += 1
+    return pending
 
+
+def run_rename(conn) -> dict:
+    """The core rename loop, shared by this script's own main() below and the Admin Panel's
+    "Rename Migrated Folders" button (app.py's api_admin_rename_migrated_folders()) -- extracted
+    (2026-11-26) so the panel can never drift from the one already proven safe from the CLI.
+    Expects _ensure_folder_renames_table(conn) to have already been called by the caller."""
     rows = conn.execute(
         "SELECT user_id, old_private_id_9digit, new_private_id_9digit FROM id_migrations ORDER BY user_id"
     ).fetchall()
 
     renamed = already_done = skipped_conflict = skipped_missing = 0
+    outcomes = []
     for row in rows:
         user_id = row["user_id"]
         old_id = row["old_private_id_9digit"]
@@ -113,6 +135,7 @@ def main() -> None:
             )
             conn.commit()
             skipped_missing += 1
+            outcomes.append({"user_id": user_id, "outcome": "skipped_unresolvable"})
             continue
 
         old_path, new_path = paths
@@ -144,11 +167,34 @@ def main() -> None:
             (user_id, old_id, new_id, str(old_path), str(new_path), outcome, detail, now),
         )
         conn.commit()
+        outcomes.append({"user_id": user_id, "outcome": outcome})
 
+    return {
+        "renamed": renamed,
+        "already_done": already_done,
+        "skipped_conflict": skipped_conflict,
+        "skipped_missing": skipped_missing,
+        "outcomes": outcomes,
+    }
+
+
+def main() -> None:
+    if "--confirm" not in sys.argv:
+        print(__doc__)
+        print("Refusing to run without --confirm.", file=sys.stderr)
+        sys.exit(1)
+
+    import app  # noqa: F401  (runs ensure_database_ready() at import time)
+    from db import get_db
+
+    conn = get_db()
+    _ensure_folder_renames_table(conn)
+    result = run_rename(conn)
     conn.close()
     print(
-        f"Renamed {renamed} folder(s). Already done: {already_done}. "
-        f"Skipped (conflict): {skipped_conflict}. Skipped (missing/unresolvable): {skipped_missing}."
+        f"Renamed {result['renamed']} folder(s). Already done: {result['already_done']}. "
+        f"Skipped (conflict): {result['skipped_conflict']}. "
+        f"Skipped (missing/unresolvable): {result['skipped_missing']}."
     )
 
 

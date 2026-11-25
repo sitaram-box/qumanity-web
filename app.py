@@ -47,6 +47,7 @@ import folder_sync
 import founder_core
 import id_generator
 import scripts.migrate_to_dob_ids as migrate_to_dob_ids  # reused by api_admin_run_dob_migration() below
+import scripts.rename_migrated_folders as rename_migrated_folders  # reused by api_admin_rename_migrated_folders() below
 import identity_core
 import kundali_analyser
 import local_area_core
@@ -7283,6 +7284,49 @@ def api_admin_run_dob_migration():
         "skipped_admin": result["skipped_admin"],
         "skipped_demo": result["skipped_demo"],
         "skipped_bad_data": result["skipped_bad_data"],
+    })
+
+
+@app.route("/api/admin/rename-migrated-folders", methods=["POST"])
+@login_required
+def api_admin_rename_migrated_folders():
+    """Runs scripts/rename_migrated_folders.py's exact rename logic from inside the Admin Panel
+    (2026-11-26) -- added after the Railway Console turned out to have no python3 on this
+    deployment. Calls rename_migrated_folders.run_rename() directly, the same function the CLI's
+    own main() calls, so this can never drift from the already-verified script.
+
+    Idempotency: checks pending_rename_count() first -- the number of id_migrations rows
+    currently in the one actionable state (old folder exists, new one doesn't). If that's 0,
+    there is nothing for run_rename() to do (everything is already renamed, conflicted, or
+    unresolvable), so this refuses outright rather than re-running for no effect."""
+    if not _is_admin():
+        return jsonify({"error": "Admin only"}), 403
+
+    conn = get_db()
+    try:
+        rename_migrated_folders._ensure_folder_renames_table(conn)
+
+        pending = rename_migrated_folders.pending_rename_count(conn)
+        if pending == 0:
+            return jsonify({
+                "error": "Nothing to rename — every migrated user's folder is already renamed, conflicted, or unresolvable.",
+            }), 409
+
+        result = rename_migrated_folders.run_rename(conn)
+    finally:
+        conn.close()
+
+    skipped = result["skipped_conflict"] + result["skipped_missing"]
+    print(
+        f"[admin_rename_migrated_folders] triggered by user_id={session['user_id']} at "
+        f"{dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds')}: "
+        f"renamed={result['renamed']} already_done={result['already_done']} skipped={skipped}"
+    )
+
+    return jsonify({
+        "renamed": result["renamed"],
+        "already_done": result["already_done"],
+        "skipped": skipped,
     })
 
 

@@ -2218,6 +2218,28 @@
     });
     if (apRefreshBtn) apRefreshBtn.addEventListener("click", apLoadFeed);
 
+    // Rename Migrated Folders (2026-11-26): the one-shot BORN_HERE rename, from inside the panel
+    // since the Railway Console has no python3 on this deployment.
+    // api_admin_rename_migrated_folders() itself refuses when there's nothing pending, but that
+    // check happens server-side on whatever the CURRENT click reaches -- this confirm() is the
+    // only thing stopping an accidental first click from firing at all.
+    var apRenameFoldersBtn = document.getElementById("ap-rename-folders-btn");
+    var apRenameFoldersStatus = document.getElementById("ap-rename-folders-status");
+    if (apRenameFoldersBtn) {
+      apRenameFoldersBtn.addEventListener("click", function () {
+        if (!window.confirm("This will rename the BORN_HERE folders of all migrated users. This cannot be undone. Are you sure?")) return;
+        apRenameFoldersBtn.disabled = true;
+        apRenameFoldersStatus.hidden = false;
+        apRenameFoldersStatus.textContent = "Running…";
+        chatApi("/api/admin/rename-migrated-folders", {})
+          .then(function (res) {
+            apRenameFoldersStatus.textContent = "Renamed " + res.renamed + " folders. " + res.already_done + " already done. " + res.skipped + " skipped.";
+          })
+          .catch(function (err) { apRenameFoldersStatus.textContent = err.message; })
+          .finally(function () { apRenameFoldersBtn.disabled = false; });
+      });
+    }
+
     function apOpenDetail(item) {
       apDetail.innerHTML = "";
       apDetail.appendChild(apEl("p", "qm-dash-empty", "Loading…"));
