@@ -50,11 +50,12 @@ _CARD_H = 2.125 * inch
 _GOLD = HexColor("#B8860B")
 _NAVY = HexColor("#0A1929")
 _CREAM = HexColor("#FAF7F1")
+_HEADER_BG = HexColor("#F3E2A8")
 _TEXT = HexColor("#1D2733")
 _TEXT_DIM = HexColor("#5B6B7A")
 _PHOTO_BG = HexColor("#E0DCCF")
 _SILHOUETTE = HexColor("#A8A398")
-_SILHOUETTE_HAIR = HexColor("#8A8578")
+_SILHOUETTE_HAIR = HexColor("#6B6658")
 
 
 def ensure_tables(conn) -> None:
@@ -373,16 +374,19 @@ def _draw_silhouette(c, x: float, y: float, size: float, gender: str | None = No
     head_r = size * 0.17
     head_cy = cy + head_r * 0.9
     if (gender or "").strip().lower() == "female":
-        # A single flat silhouette color can't show hair AND a face as separate shapes if both
-        # are drawn the SAME color (the first two attempts did exactly that and just produced one
-        # bigger blob, since overlapping same-color shapes have no visible boundary between them).
-        # Fixed with the standard two-tone technique instead: draw a wider, slightly darker hair
-        # shape BEHIND the head first, then draw the normal face circle ON TOP in the lighter
-        # silhouette color -- the darker tone only remains visible as a fringe where the face
-        # circle doesn't cover it, which reads cleanly as hair framing a face.
+        # Second revision (2026-11-28): the first attempt's thin side-fringe read as a vague
+        # gray blob at real card scale, even though it looked fine zoomed in during review --
+        # not a false perception, a genuinely too-subtle shape for small/print scale. This
+        # version draws a much bigger, unmistakable rounded "bob" hair mass behind the head (not
+        # a thin fringe), outlined in gold for a crisp boundary regardless of fill-color
+        # contrast, so it reads clearly even at the card's actual small printed size.
+        hair_w, hair_h = head_r * 2.3, head_r * 2.7
+        hair_x, hair_y = cx - hair_w / 2, head_cy - head_r * 1.6
         c.setFillColor(_SILHOUETTE_HAIR)
-        c.ellipse(cx - head_r * 1.25, head_cy - head_r * 1.2, cx + head_r * 1.25, head_cy + head_r * 0.5,
-                  fill=1, stroke=0)
+        c.roundRect(hair_x, hair_y, hair_w, hair_h, head_r * 0.9, fill=1, stroke=0)
+        c.setStrokeColor(_GOLD)
+        c.setLineWidth(0.75)
+        c.roundRect(hair_x, hair_y, hair_w, hair_h, head_r * 0.9, fill=0, stroke=1)
         c.setFillColor(_SILHOUETTE)
     c.circle(cx, head_cy, head_r, fill=1, stroke=0)
     p = c.beginPath()
@@ -433,21 +437,27 @@ def render_card_pdf(
     c.setLineWidth(1.5)
     c.rect(1.5, 1.5, _CARD_W - 3, _CARD_H - 3, fill=0, stroke=1)
 
-    # Header band
+    # Header band (2026-11-28: lightened from solid navy -- the gold "QUMANITY" wordmark and the
+    # logo's own warm colors both blended into a dark band; a light gold tint plus dark navy text
+    # gives the same accent without the contrast problem. Distinct from the body's own _CREAM so
+    # the band still reads as its own header, separated further by the divider line below it.)
     header_h = 26
     header_y = _CARD_H - 2 - header_h
-    c.setFillColor(_NAVY)
+    c.setFillColor(_HEADER_BG)
     c.rect(2, header_y, _CARD_W - 4, header_h, fill=1, stroke=0)
+    c.setStrokeColor(_GOLD)
+    c.setLineWidth(1)
+    c.line(2, header_y, _CARD_W - 2, header_y)
     logo_size = header_h - 8
     text_left = 8
     if LOGO_PATH.exists():
         c.drawImage(str(LOGO_PATH), 6, header_y + 4, width=logo_size, height=logo_size,
                     mask="auto", preserveAspectRatio=True)
         text_left = 6 + logo_size + 4
-    c.setFillColor(HexColor("#FFD700"))
+    c.setFillColor(_NAVY)
     c.setFont("Helvetica-Bold", 11)
     c.drawString(text_left, header_y + header_h / 2 - 2, "QUMANITY")
-    c.setFillColor(HexColor("#FFFFFF"))
+    c.setFillColor(_TEXT_DIM)
     c.setFont("Helvetica", 7)
     c.drawRightString(_CARD_W - 8, header_y + header_h / 2 - 2, "Q-CARD")
 
@@ -495,14 +505,17 @@ def render_card_pdf(
     c.setFont("Helvetica-Bold", 8.5)
     c.drawString(text_x, text_top - 75, public_id or "—")
 
-    # QR code, small, bottom-right corner (never the page-dominating size the old layout used)
+    # QR code, small, middle-right (2026-11-28: was pinned to the bottom-right corner, which read
+    # as disconnected from the rest of the card -- now vertically centered in the content area
+    # below the header, in line with the photo and text block, never the page-dominating size the
+    # original A4 layout used).
     card_url = f"{CARD_LOGIN_URL}{public_id}"
     qr_buf = io.BytesIO()
     qrcode.make(card_url).save(qr_buf, format="PNG")
     qr_buf.seek(0)
     qr_size = 42
     qr_x = _CARD_W - qr_size - 8
-    qr_y = 10
+    qr_y = (header_y - 2 - qr_size) / 2 + 2
     c.drawImage(ImageReader(qr_buf), qr_x, qr_y, width=qr_size, height=qr_size)
     c.setStrokeColor(_GOLD)
     c.setLineWidth(1)

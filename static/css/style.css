@@ -30,8 +30,13 @@ html, body {
   align-items: center;
   gap: 16px;
   padding: 16px 24px;
-  background: var(--qm-navy);
-  border-bottom: 1px solid rgba(255, 215, 0, 0.25);
+  /* 2026-11-28: lightened sitewide (was var(--qm-navy)) per explicit Admin instruction -- the
+     dark header made the gold "QUMANITY" wordmark and the logo blend into the background on
+     every page, not just the admin tools this was first reported on. Deliberately reverses the
+     earlier "header is dark on every page, matches the homepage" decision below .qm-header-text
+     p's own comment -- a lighter header is intentionally now the platform-wide look. */
+  background: var(--qm-panel-bg);
+  border-bottom: 1px solid var(--qm-border);
 }
 
 .qm-header-actions {
@@ -42,21 +47,23 @@ html, body {
 }
 .qm-header-actions a.qm-btn { text-decoration: none; display: inline-block; }
 
-/* Item 11 (rework): header is now dark on every page (matches the homepage), so its own
-   buttons/chips get the same dark-glass treatment already used for controls that float over
-   the dark Earth/globe stage (.qm-earth-stage .qm-btn etc, same file) -- not a new pattern. */
+/* Item 11's old "dark-glass" treatment (translucent white on navy, white text) assumed the dark
+   header this block's own comment described -- 2026-11-28, now that the header is light
+   (var(--qm-panel-bg)), that combination would have been invisible: near-white-on-white controls
+   with white text. Switched to the same gold-ghost-button look already used throughout the
+   light-themed admin pages (--qm-input-bg/--qm-border/--qm-text), not a new pattern either. */
 .qm-header .qm-btn-ghost {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 215, 0, 0.4);
-  color: #FFFFFF;
+  background: var(--qm-input-bg);
+  border-color: var(--qm-border);
+  color: var(--qm-text);
 }
-.qm-header .qm-btn-ghost:hover { background: rgba(255, 255, 255, 0.16); border-color: var(--qm-gold); }
+.qm-header .qm-btn-ghost:hover { background: var(--qm-bg); border-color: var(--qm-gold); }
 .qm-header .dq-dot {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 215, 0, 0.4);
-  color: var(--qm-gold);
+  background: var(--qm-input-bg);
+  border-color: var(--qm-border);
+  color: var(--qm-gold-text);
 }
-.qm-header .dq-dot:hover, .qm-header .dq-dot[aria-expanded="true"] { background: rgba(255, 255, 255, 0.16); }
+.qm-header .dq-dot:hover, .qm-header .dq-dot[aria-expanded="true"] { background: var(--qm-bg); }
 
 .qm-logo { height: 60px; width: 60px; flex: 0 0 auto; filter: drop-shadow(0 4px 14px rgba(255, 153, 51, 0.3)); }
 
@@ -73,7 +80,9 @@ html, body {
 .qm-header-text p {
   margin: 2px 0 0;
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.72);
+  /* was rgba(255, 255, 255, 0.72) -- semi-transparent white, readable against the old dark
+     header, nearly invisible against the new light one (2026-11-28). */
+  color: var(--qm-text-dim);
 }
 
 .qm-main {
