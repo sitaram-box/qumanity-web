@@ -28,7 +28,9 @@
       <div class="qcr-badge">✅</div>
       <h1 class="qcr-title valid">Valid Qumanity Card</h1>
       <p class="qcr-row">This is a valid Qumanity Card belonging to <strong>{{ name }}</strong>.</p>
-      {% if account_id %}<p class="qcr-row">Account ID: <strong>{{ account_id }}</strong></p>{% endif %}
+      <p class="qcr-row">Public ID: <strong>{{ public_id }}</strong></p>
+      {% if gender %}<p class="qcr-row">Gender: <strong>{{ gender | capitalize }}</strong></p>{% endif %}
+      {% if sun_sign %}<p class="qcr-row">Zodiac Sign: <strong>{{ sun_sign }}</strong></p>{% endif %}
       <p class="qcr-sub">If you found this card, please return it or hand it to a Qumanity member for safekeeping.</p>
     {% else %}
       <div class="qcr-badge">⚠️</div>

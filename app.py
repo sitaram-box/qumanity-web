@@ -6020,6 +6020,12 @@ def api_auth_register():
     account_id = id_generator.generate_account_id(
         conn, data["name"], data["gender"], dob, tob, tropical["element"], present_location
     )
+    # Permanent Public ID (2026-11-28, migrations/050): generated exactly once, here, and never
+    # regenerated -- unlike account_id above (and account_ids.search_code), which both change
+    # every time this user's present location changes. "The root identity for the human being,"
+    # in the Admin's own words -- the whole world can search it; it never depends on where they
+    # currently live.
+    public_id_12 = id_generator.generate_public_id_12(conn)
     # DOB-based Private ID (2026-11-25): country_digit is derived from birth_location (never
     # present_location -- the Private ID is fixed to where a user was born, same as private_id
     # above), via id_generator.country_digit_for()'s 1-9 subcontinent / 0 rest-of-world mapping.
@@ -6028,12 +6034,12 @@ def api_auth_register():
     private_code = id_generator.generate_dob_id(conn, dob, country_digit)
     cur = conn.execute(
         """INSERT INTO users (name, middle_name, gender, dob, tob, language, birth_location_json,
-                               present_location_json, private_id, account_id,
+                               present_location_json, private_id, account_id, public_id_12,
                                email, phone, pin_hash, private_id_9digit, dob_id_country_digit,
                                birth_time_known, religion_belief, religion_locked_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (data["name"], (data.get("middle_name") or "").strip() or None, data["gender"], data["dob"], data["tob"], data.get("language"),
-         json.dumps(birth_location), json.dumps(present_location), private_id, account_id,
+         json.dumps(birth_location), json.dumps(present_location), private_id, account_id, public_id_12,
          email or None, phone or None, generate_password_hash(str(data["pin"])), private_code, country_digit,
          int(birth_time_known), religion_belief,
          (dt.datetime.utcnow().isoformat() + "Z") if religion_belief else None),
@@ -6111,8 +6117,8 @@ def api_auth_register():
         card = q_card_core.issue_card(conn, user_id, free_reason=q_card_core.free_eligibility(conn, user_id))
         if folders.get("born_here"):
             pdf_bytes = q_card_core.render_card_pdf(
-                card["card_display_id"], card["raw_token"], data["name"],
-                private_id=private_id, location_text=_flatten_location_chain(present_location),
+                card["card_display_id"], public_id_12, data["name"],
+                private_id=private_id, gender=data["gender"], sun_sign=tropical["sign"],
             )
             q_card_core.save_card_pdf(folders["born_here"], pdf_bytes)
     except Exception as e:
@@ -7070,33 +7076,50 @@ ADMIN_DB_VIEWER_COLUMNS = {
 }
 
 
-@app.route("/card/<token>")
-def public_card_resolve(token):
+@app.route("/card/<public_id>")
+def public_card_resolve(public_id):
     """What a scanned Q-Card's QR code actually opens -- PUBLIC, no login required (it has to be:
-    the person scanning a found/lost card isn't signed in). This route itself was simply missing
-    (2026-11-28 finding) even though q_card_core.render_card_pdf() has encoded
-    f"{CARD_LOGIN_URL}{raw_token}" since Stage 4 -- the URL format was never wrong, there was just
-    nothing behind it, hence the live 404.
+    the person scanning a found/lost card isn't signed in).
 
-    Confirms the card is genuine without ever revealing the Private ID (the actual login
-    credential, and the whole reason the QR encodes an opaque token instead of it in the first
-    place) -- only the Account ID, already a public-facing identifier used elsewhere in this app.
+    Rewritten 2026-11-28 (second revision, same day as the route's own first version) per the
+    Admin's explicit architecture decision: the QR now encodes users.public_id_12 (the PERMANENT,
+    location-independent 12-digit Public ID, migrations/050) directly, not an opaque, revocable
+    q_cards token -- "a user must have ONE permanent identity the whole world can search." This
+    route's lookup changed to match: a plain `WHERE public_id_12 = ?`, not
+    q_card_core.resolve_token()'s hash/status lookup (q_card_core.resolve_token() and the whole
+    q_cards issuance/payment lifecycle are UNCHANGED and still used elsewhere -- only what the
+    printed QR encodes, and what this route resolves it against, changed).
 
-    Uses q_card_core.resolve_token()'s own enumeration-safe contract: an unknown token, a
-    malformed one, and an inactive/revoked/replaced card all render the exact same "not valid"
-    response below, never distinguishing which to whoever is scanning."""
+    The tradeoff this carries (flagged before building it, not glossed over): a permanent public
+    identifier can never be revoked the way the old opaque token could if a card were lost. The
+    actual login credential (private_id_9digit) still never appears here or anywhere
+    scannable -- that boundary is unchanged and is the one that actually matters.
+
+    No enumeration-safety distinction between "not found" and "found but removed" is needed here
+    the way the old token lookup needed one: a Public ID is deliberately meant to be publicly
+    searchable by design (unlike a bearer token, which needed to resist guessing), so the only
+    real distinction left is valid-and-current vs. not."""
     conn = get_db()
     try:
-        result = q_card_core.resolve_token(conn, token)
-        account_id = None
-        if result:
-            row = conn.execute("SELECT account_id FROM users WHERE id = ?", (result["user_id"],)).fetchone()
-            account_id = row["account_id"] if row else None
+        row = conn.execute(
+            """SELECT u.name, u.gender, z.sun_sign FROM users u
+               LEFT JOIN user_zodiac z ON z.user_id = u.id
+               WHERE u.public_id_12 = ? AND u.is_removed = 0""",
+            (public_id,),
+        ).fetchone()
     finally:
         conn.close()
+    # Shows ONLY Name, Public ID (echoed back -- it's already the URL the person scanned, not a
+    # new disclosure), Gender, Zodiac Sign, and valid/invalid status (2026-11-28, the Admin's own
+    # explicit field list). Account ID was dropped from this page -- it was shown in an earlier
+    # revision but isn't on the approved list. private_id_9digit is never selected above in the
+    # first place, so there is no value for this route to accidentally pass through even if the
+    # template were changed carelessly later.
     return render_template(
-        "card_resolve.html", valid=bool(result),
-        name=result["name"] if result else None, account_id=account_id,
+        "card_resolve.html", valid=bool(row), public_id=public_id,
+        name=row["name"] if row else None,
+        gender=row["gender"] if row else None,
+        sun_sign=row["sun_sign"] if row else None,
     )
 
 
@@ -7153,7 +7176,7 @@ def admin_database():
 
 
 _ADMIN_Q_CARDS_SELECT = """
-    SELECT u.id AS user_id, u.name, u.gender, u.dob, u.tob, u.account_id,
+    SELECT u.id AS user_id, u.name, u.gender, u.dob, u.tob, u.account_id, u.public_id_12,
            u.birth_location_json, u.present_location_json,
            u.private_id_9digit AS current_private_id,
            z.sun_element, z.sun_sign, im.old_private_id_9digit,
@@ -7429,12 +7452,13 @@ def admin_q_card_view(user_id):
     return send_file(pdf_path, mimetype="application/pdf", as_attachment=False)
 
 
-@app.route("/admin/q-cards/<int:user_id>/issue", methods=["POST"])
-@login_required
-def admin_q_card_issue(user_id):
-    """Issues or REGENERATES a Q-Card for user_id and ALWAYS returns a rendered PDF -- rewritten
-    2026-11-28 (same day as the first version) after live production testing hit both blockers it
-    previously had, with the Admin's explicit authorization to remove them:
+def _admin_issue_or_regenerate_card_pdf(conn, row) -> tuple[bytes, str]:
+    """Issues or REGENERATES a Q-Card for row["user_id"] and returns (pdf_bytes, saved_to) --
+    the one shared implementation behind both admin_q_card_issue() (one user) and
+    admin_q_cards_bulk_issue_and_combine() (every real user still missing a card), so the two can
+    never drift apart. Rewritten 2026-11-28 (same day as the first version) after live production
+    testing hit both blockers it previously had, with the Admin's explicit authorization to
+    remove them:
 
     1. Folder resolution can fail HARDER than "doesn't exist yet" -- resolve_location_dir() can
        return None outright (e.g. User 24/Rohit Mudgal's own account: a non-standard
@@ -7446,66 +7470,75 @@ def admin_q_card_issue(user_id):
        deliberately OUTSIDE the 0_Earth tree, so this fallback needs no folder-creation
        authorization of its own -- when (a) isn't possible at all.
 
-    2. A second click used to refuse with 409 ("already exists"). It no longer does: re-issuing
+    2. A second call used to refuse with 409 ("already exists"). It no longer does: re-issuing
        now calls q_card_core.replace() rather than issue_card() again -- replace() retires the
        OLD row (status -> 'replaced', revoked_at set) before minting a new one, so there is still
        only ever ONE live, scannable token per person. A bare second issue_card() call would
        instead leave two simultaneously-valid tokens able to authenticate as the same person,
        which is not what "regenerate" should mean."""
-    if not _is_admin():
-        return jsonify({"error": "Admin only"}), 403
-    conn = get_db()
-    try:
-        q_card_core.ensure_tables(conn)
-        row = conn.execute(_ADMIN_Q_CARDS_SELECT + " WHERE u.id = ?", (user_id,)).fetchone()
-        if not row:
-            return jsonify({"error": "User not found"}), 404
+    user_id = row["user_id"]
+    q_card_core.ensure_tables(conn)
 
-        # Targets the user's CURRENT card specifically (MAX(id), same reasoning as
-        # _ADMIN_Q_CARDS_SELECT's own join above) -- after a first regenerate, user_id now has
-        # TWO rows ('replaced' + the live one); grabbing an arbitrary one here could hand an
-        # already-'replaced' id to q_card_core.replace(), which refuses it outright.
-        existing = conn.execute(
-            "SELECT id FROM q_cards WHERE user_id = ? ORDER BY id DESC LIMIT 1", (user_id,)
-        ).fetchone()
-        if existing:
-            card = q_card_core.replace(conn, existing["id"])
-        else:
-            card = q_card_core.issue_card(conn, user_id, free_reason=q_card_core.free_eligibility(conn, user_id))
+    # Safety net, not the normal path: migrations/050 backfills every existing user and
+    # api_auth_register() generates one for every new registration, so public_id_12 should never
+    # actually be NULL here -- but a row inserted outside that path (a seed/test-fixture script,
+    # same way this was actually discovered) would otherwise make the QR below encode the literal
+    # string "None". Mint and persist one now rather than issue a broken card.
+    public_id = row["public_id_12"]
+    if not public_id:
+        public_id = id_generator.generate_public_id_12(conn)
+        conn.execute("UPDATE users SET public_id_12 = ? WHERE id = ?", (public_id, user_id))
+        conn.commit()
+        print(f"[admin_q_card_issue] user_id={user_id} had no public_id_12 -- generated {public_id} on the fly")
 
-        try:
-            present_location = json.loads(row["present_location_json"] or "{}")
-        except (TypeError, ValueError):
-            present_location = {}
-        location_text = _flatten_location_chain(present_location)
-        if not location_text:
-            try:
-                birth_location = json.loads(row["birth_location_json"] or "{}")
-            except (TypeError, ValueError):
-                birth_location = {}
-            location_text = _flatten_location_chain(birth_location)
-        photo_bytes = profile_picture_core.get_profile_picture(conn, user_id, user_id)
+    # Targets the user's CURRENT card specifically (MAX(id)/ORDER BY id DESC, same reasoning as
+    # _ADMIN_Q_CARDS_SELECT's own join) -- after a first regenerate, user_id now has TWO rows
+    # ('replaced' + the live one); grabbing an arbitrary one here could hand an already-'replaced'
+    # id to q_card_core.replace(), which refuses it outright.
+    existing = conn.execute(
+        "SELECT id FROM q_cards WHERE user_id = ? ORDER BY id DESC LIMIT 1", (user_id,)
+    ).fetchone()
+    if existing:
+        card = q_card_core.replace(conn, existing["id"])
+    else:
+        card = q_card_core.issue_card(conn, user_id, free_reason=q_card_core.free_eligibility(conn, user_id))
 
-        pdf_bytes = q_card_core.render_card_pdf(
-            card["card_display_id"], card["raw_token"], row["name"],
-            private_id=row["current_private_id"], location_text=location_text, photo_bytes=photo_bytes,
-        )
+    photo_bytes = profile_picture_core.get_profile_picture(conn, user_id, user_id)
+    pdf_bytes = q_card_core.render_card_pdf(
+        card["card_display_id"], public_id, row["name"],
+        private_id=row["current_private_id"], gender=row["gender"], sun_sign=row["sun_sign"],
+        photo_bytes=photo_bytes,
+    )
 
-        target_dir, _created = _admin_q_card_ensure_save_dir(row)
-        if target_dir is not None:
-            q_card_core.save_card_pdf(target_dir, pdf_bytes)
-            saved_to = str(target_dir)
-        else:
-            QM_Q_CARDS_PENDING_DIR.mkdir(parents=True, exist_ok=True)
-            _admin_q_card_pending_path(row).write_bytes(pdf_bytes)
-            saved_to = str(_admin_q_card_pending_path(row)) + " (fallback -- real BORN_HERE folder unresolvable)"
-    finally:
-        conn.close()
+    target_dir, _created = _admin_q_card_ensure_save_dir(row)
+    if target_dir is not None:
+        q_card_core.save_card_pdf(target_dir, pdf_bytes)
+        saved_to = str(target_dir)
+    else:
+        QM_Q_CARDS_PENDING_DIR.mkdir(parents=True, exist_ok=True)
+        _admin_q_card_pending_path(row).write_bytes(pdf_bytes)
+        saved_to = str(_admin_q_card_pending_path(row)) + " (fallback -- real BORN_HERE folder unresolvable)"
 
     print(
         f"[admin_q_card_issue] triggered by user_id={session['user_id']} for target user_id={user_id} "
         f"card_display_id={card['card_display_id']} saved_to={saved_to}"
     )
+    return pdf_bytes, saved_to
+
+
+@app.route("/admin/q-cards/<int:user_id>/issue", methods=["POST"])
+@login_required
+def admin_q_card_issue(user_id):
+    if not _is_admin():
+        return jsonify({"error": "Admin only"}), 403
+    conn = get_db()
+    try:
+        row = conn.execute(_ADMIN_Q_CARDS_SELECT + " WHERE u.id = ?", (user_id,)).fetchone()
+        if not row:
+            return jsonify({"error": "User not found"}), 404
+        pdf_bytes, _saved_to = _admin_issue_or_regenerate_card_pdf(conn, row)
+    finally:
+        conn.close()
     return send_file(io.BytesIO(pdf_bytes), mimetype="application/pdf", as_attachment=True,
                       download_name=f"q_card_{user_id}.pdf")
 
@@ -7539,6 +7572,52 @@ def admin_q_cards_combined():
     if included == 0:
         return jsonify({"error": "No Q-Card PDFs found on disk to combine"}), 404
 
+    buf = io.BytesIO()
+    writer.write(buf)
+    buf.seek(0)
+    return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name="q_cards_combined.pdf")
+
+
+@app.route("/admin/q-cards/combined/issue-missing", methods=["POST"])
+@login_required
+def admin_q_cards_bulk_issue_and_combine():
+    """"Download All Q-Cards" (2026-11-28 rewrite): unlike admin_q_cards_combined() above (GET,
+    read-only, combines only what already has a saved PDF), this MUTATES -- for every real user
+    who doesn't have one yet, it mints a Q-Card right now (via the same
+    _admin_issue_or_regenerate_card_pdf() admin_q_card_issue() uses) before adding them to the
+    combined file. POST, not GET, specifically because this is no longer a safe, repeatable,
+    side-effect-free action -- the Admin Panel's own confirm() dialog is the only thing standing
+    between a click and bulk-issuing real cards for however many users are still missing one."""
+    if not _is_admin():
+        return jsonify({"error": "Admin only"}), 403
+    conn = get_db()
+    try:
+        rows = conn.execute(_ADMIN_Q_CARDS_SELECT + " WHERE u.is_demo = 0 ORDER BY u.id").fetchall()
+        from pypdf import PdfWriter
+        writer = PdfWriter()
+        included = issued = 0
+        for row in rows:
+            if _admin_q_card_is_test_named(row["name"]):
+                continue
+            pdf_path = _admin_q_card_pdf_path(row)
+            if pdf_path and pdf_path.exists():
+                writer.append(str(pdf_path))
+                included += 1
+                continue
+            pdf_bytes, _saved_to = _admin_issue_or_regenerate_card_pdf(conn, row)
+            writer.append(io.BytesIO(pdf_bytes))
+            included += 1
+            issued += 1
+    finally:
+        conn.close()
+
+    if included == 0:
+        return jsonify({"error": "No real users to include"}), 404
+
+    print(
+        f"[admin_q_cards_bulk_issue_and_combine] triggered by user_id={session['user_id']}: "
+        f"{included} total included, {issued} newly issued"
+    )
     buf = io.BytesIO()
     writer.write(buf)
     buf.seek(0)

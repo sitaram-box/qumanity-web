@@ -71,7 +71,7 @@
       var DOWNLOAD_URL = {{ (url_for('admin_q_card_download', user_id=0)) | tojson }};
       var VIEW_URL = {{ (url_for('admin_q_card_view', user_id=0)) | tojson }};
       var ISSUE_URL = {{ (url_for('admin_q_card_issue', user_id=0)) | tojson }};
-      var COMBINED_URL = {{ url_for('admin_q_cards_combined') | tojson }};
+      var BULK_ISSUE_URL = {{ url_for('admin_q_cards_bulk_issue_and_combine') | tojson }};
       var DATA_URL = {{ url_for('admin_q_cards_data') | tojson }};
       var tbody = document.getElementById("qcv-tbody");
       var metaEl = document.getElementById("qcv-meta");
@@ -142,13 +142,29 @@
             href: VIEW_URL.replace("/0/", "/" + c.user_id + "/"), target: "_blank", rel: "noopener", textContent: "View PDF",
           }));
           pdfTd.appendChild(document.createTextNode(" "));
-          pdfTd.appendChild(el("a", { href: DOWNLOAD_URL.replace("/0/", "/" + c.user_id + "/"), textContent: "Download PDF" }));
+          var downloadLink = el("a", { href: DOWNLOAD_URL.replace("/0/", "/" + c.user_id + "/"), textContent: "Download PDF" });
+          // Nothing changes server-side on a plain download (the file already exists), so there's
+          // no need to re-fetch -- just re-apply the CURRENT filter against the data already in
+          // hand. The native download (this is still a real <a href>, not preventDefault()'d)
+          // proceeds in parallel; this only affects what's rendered in the table underneath it.
+          downloadLink.addEventListener("click", function () { setTimeout(applyFilterAndRender, 0); });
+          pdfTd.appendChild(downloadLink);
           pdfTd.appendChild(document.createTextNode(" "));
           var regenBtn = el("button", { type: "button", className: "qm-btn qm-btn-ghost", textContent: "Regenerate" });
           regenBtn.addEventListener("click", function () { issueCard(c, regenBtn, true); });
           pdfTd.appendChild(regenBtn);
         } else if (c.card_issued) {
+          // A q_cards row exists but its PDF is missing from disk -- the Admin must always be
+          // able to get a usable card, so this is just another regenerate (the ORIGINAL token can
+          // never be recovered -- issue_card() only ever stored its hash -- so "generate on the
+          // fly from the database" can only mean "mint a fresh one", exactly like Regenerate
+          // above). Labeled "Generate PDF" rather than "Regenerate" here since, from the Admin's
+          // perspective, there was never a working PDF to regenerate FROM in the first place.
           pdfTd.appendChild(el("span", { className: "qcv-pill issued-no-pdf", textContent: "Issued, file missing" }));
+          pdfTd.appendChild(document.createTextNode(" "));
+          var genBtn = el("button", { type: "button", className: "qm-btn qm-btn-ghost", textContent: "Generate PDF" });
+          genBtn.addEventListener("click", function () { issueCard(c, genBtn, true); });
+          pdfTd.appendChild(genBtn);
         } else {
           pdfTd.appendChild(el("span", { className: "qcv-pill no-pdf", textContent: "None on disk" }));
           pdfTd.appendChild(document.createTextNode(" "));
@@ -181,16 +197,48 @@
         // rather than hidden, so the Admin always knows the option exists.
         combinedWrap.innerHTML = "";
         if (lastData.user_type === "real") {
-          var label2 = "⬇️ Download All Q-Cards (" + lastData.found + " found)";
-          if (lastData.found > 0) {
-            combinedWrap.appendChild(el("a", { className: "qm-btn qm-btn-primary", href: COMBINED_URL, textContent: label2 }));
-          } else {
-            combinedWrap.appendChild(el("span", {
-              className: "qm-btn qm-btn-ghost qcv-btn-disabled", textContent: label2,
-              title: "No Q-Card PDFs exist yet for real users.",
-            }));
-          }
+          var missing = lastData.count - lastData.found;
+          var label2 = "⬇️ Download All Q-Cards (" + lastData.found + " found" +
+            (missing > 0 ? ", " + missing + " to generate" : "") + ")";
+          var allBtn = el("button", { type: "button", className: "qm-btn qm-btn-primary", textContent: label2 });
+          allBtn.addEventListener("click", function () { bulkDownloadAll(missing, allBtn); });
+          combinedWrap.appendChild(allBtn);
         }
+      }
+
+      // "Download All Q-Cards" (2026-11-28 rewrite): always hits the bulk POST route now, which
+      // mints a fresh card for anyone still missing one before combining everything -- a strict
+      // superset of the old read-only GET /combined.pdf (that route is untouched and still exists
+      // for any direct/manual use, just no longer linked from this button). Only confirms when it
+      // would actually mint something new; combining an already-complete set needs no warning.
+      function bulkDownloadAll(missingCount, btn) {
+        if (missingCount > 0) {
+          var msg = "This will generate " + missingCount + " new Q-Card" + (missingCount === 1 ? "" : "s") +
+            " for real users who don't have one yet, then combine everything into one PDF. Continue?";
+          if (!window.confirm(msg)) return;
+        }
+        btn.disabled = true;
+        var originalLabel = btn.textContent;
+        btn.textContent = "Generating…";
+        fetch(BULK_ISSUE_URL, { method: "POST" })
+          .then(function (r) {
+            if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || "Failed to generate combined PDF"); });
+            return r.blob();
+          })
+          .then(function (blob) {
+            var url = URL.createObjectURL(blob);
+            var a = el("a", { href: url, download: "q_cards_combined.pdf" });
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            load(current); // refresh -- every previously-missing user now has a PDF
+          })
+          .catch(function (err) {
+            alert(err.message);
+            btn.disabled = false;
+            btn.textContent = originalLabel;
+          });
       }
 
       function load(type) {

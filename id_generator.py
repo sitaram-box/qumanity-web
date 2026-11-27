@@ -128,6 +128,21 @@ def generate_account_id(conn, name, gender, dob, tob, element, present_location)
     return _generate_unique(conn, "account_id", name, gender, dob, tob, element, present_location)
 
 
+def generate_public_id_12(conn, max_attempts: int = 200) -> str:
+    """The permanent, location-independent 12-digit Public ID (2026-11-28, migrations/050) --
+    unlike generate_account_id() above, this is pure random (no name/gender/dob/location
+    components to encode), since nothing about it should ever need to be derived or recomputed --
+    it is generated exactly ONCE per person, at registration, and never regenerated. Shared by
+    migrations/050_permanent_public_id.py's own backfill and api_auth_register() in app.py, so the
+    two can never drift into two different generation schemes for the same column."""
+    import secrets
+    for _ in range(max_attempts):
+        code = f"{secrets.randbelow(10**12):012d}"
+        if not conn.execute("SELECT 1 FROM users WHERE public_id_12 = ?", (code,)).fetchone():
+            return code
+    raise RuntimeError("Could not generate a unique 12-digit Public ID")
+
+
 def generate_private_code(conn, max_attempts=200) -> str:
     """The 9-digit Private ID used to sign in: random, unique across all users, kept secret by its owner.
 

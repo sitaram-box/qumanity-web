@@ -54,6 +54,7 @@ _TEXT = HexColor("#1D2733")
 _TEXT_DIM = HexColor("#5B6B7A")
 _PHOTO_BG = HexColor("#E0DCCF")
 _SILHOUETTE = HexColor("#A8A398")
+_SILHOUETTE_HAIR = HexColor("#8A8578")
 
 
 def ensure_tables(conn) -> None:
@@ -358,45 +359,32 @@ def _draw_photo_cover(c, photo_bytes: bytes, x: float, y: float, size: float) ->
     c.restoreState()
 
 
-def _wrap_to_lines(text: str, max_chars: int, max_lines: int) -> list[str]:
-    """Word-wraps text into at most max_lines lines of at most max_chars characters each,
-    breaking on spaces (never mid-word) and ellipsizing the final line if the text still doesn't
-    fit -- used for the card's Location line, which can otherwise be an arbitrarily long chain
-    ("Village, Tehsil, District, State, Country") on a card with very limited width."""
-    words = (text or "").split()
-    lines: list[str] = []
-    current = ""
-    for word in words:
-        candidate = (current + " " + word).strip()
-        if len(candidate) <= max_chars:
-            current = candidate
-        else:
-            if current:
-                lines.append(current)
-            current = word
-        if len(lines) == max_lines:
-            break
-    if current and len(lines) < max_lines:
-        lines.append(current)
-    if len(lines) == max_lines and words:
-        consumed = len(" ".join(lines))
-        if consumed < len(" ".join(words)):
-            last = lines[-1]
-            if len(last) > max_chars - 1:
-                last = last[: max_chars - 1]
-            lines[-1] = last.rstrip() + "…"
-    return lines or ["—"]
-
-
-def _draw_silhouette(c, x: float, y: float, size: float) -> None:
+def _draw_silhouette(c, x: float, y: float, size: float, gender: str | None = None) -> None:
     """A generic person-silhouette placeholder when the member has no profile picture -- simple
-    vector shapes (no external icon font/image dependency), legible at card scale."""
+    vector shapes (no external icon font/image dependency), legible at card scale.
+
+    2026-11-28: differentiated by gender -- same lowercase "male"/"female" match
+    id_generator.gender_code() already uses elsewhere in this codebase (anything else, including
+    unset, falls back to the original neutral shape, same as that function's own "GB" default)."""
     c.setFillColor(_PHOTO_BG)
     c.roundRect(x, y, size, size, 4, fill=1, stroke=0)
     c.setFillColor(_SILHOUETTE)
     cx, cy = x + size / 2, y + size * 0.60
     head_r = size * 0.17
-    c.circle(cx, cy + head_r * 0.9, head_r, fill=1, stroke=0)
+    head_cy = cy + head_r * 0.9
+    if (gender or "").strip().lower() == "female":
+        # A single flat silhouette color can't show hair AND a face as separate shapes if both
+        # are drawn the SAME color (the first two attempts did exactly that and just produced one
+        # bigger blob, since overlapping same-color shapes have no visible boundary between them).
+        # Fixed with the standard two-tone technique instead: draw a wider, slightly darker hair
+        # shape BEHIND the head first, then draw the normal face circle ON TOP in the lighter
+        # silhouette color -- the darker tone only remains visible as a fringe where the face
+        # circle doesn't cover it, which reads cleanly as hair framing a face.
+        c.setFillColor(_SILHOUETTE_HAIR)
+        c.ellipse(cx - head_r * 1.25, head_cy - head_r * 1.2, cx + head_r * 1.25, head_cy + head_r * 0.5,
+                  fill=1, stroke=0)
+        c.setFillColor(_SILHOUETTE)
+    c.circle(cx, head_cy, head_r, fill=1, stroke=0)
     p = c.beginPath()
     shoulder_y = y + size * 0.14
     p.moveTo(x + size * 0.18, shoulder_y)
@@ -407,28 +395,33 @@ def _draw_silhouette(c, x: float, y: float, size: float) -> None:
 
 
 def render_card_pdf(
-    card_display_id: str, raw_token: str, name: str,
-    private_id: str | None = None, location_text: str | None = None, photo_bytes: bytes | None = None,
+    card_display_id: str, public_id: str, name: str,
+    private_id: str | None = None, gender: str | None = None, sun_sign: str | None = None,
+    photo_bytes: bytes | None = None,
 ) -> bytes:
     """Renders ONE Q-Card as a single CR80-sized card (3.370in x 2.125in, the standard
     credit-card/ID-card format, landscape) -- redesigned 2026-11-28 from the original A4-page
     layout, which rendered as a plain letter-sized document dominated by one giant QR code and
-    looked nothing like a physical card. private_id/location_text/photo_bytes are all optional so
-    existing callers that don't have them yet (or a user with no profile picture) still render a
-    complete, correctly-laid-out card -- just with a "—" placeholder or a generic silhouette.
+    looked nothing like a physical card. private_id/gender/sun_sign/photo_bytes are all optional
+    so existing callers that don't have them yet (or a user with no profile picture) still render
+    a complete, correctly-laid-out card -- just with a "—" placeholder or a generic silhouette.
 
-    Takes raw_token directly from the caller -- it is NEVER re-derived from the database, because
-    it can't be: issue_card() stores only its hash (see that function's own docstring), so this
-    must run in the same request, using the same in-memory value, as the issue_card() call that
-    produced it. There is no later "regenerate the PDF" path that can ever recover a lost
-    raw_token; the caller is responsible for persisting the rendered bytes themselves (see
-    save_card_pdf()) the one time they have it.
+    Fields shown: Name, Gender, Zodiac Sign, Private ID, Public ID, QR -- Location was deliberately
+    removed (2026-11-28, Admin's own instruction: "does NOT belong on the card").
 
-    The QR encodes qumanity.in/card/<raw_token> -- never the Private ID, the Account ID, or any
-    other identifier (the explicit security decision from the Phase 1 design doc's own opening
-    section) -- so a photographed or lost card reveals nothing but an opaque, independently
-    revocable bearer token, never the member's real identity. Kept SMALL and in a corner here
-    (44pt square) -- the original design let it dominate 60% of the page, which both looked
+    public_id is users.public_id_12 (migrations/050) -- the PERMANENT, location-independent
+    12-digit identifier, generated exactly once at registration and never rotated. This replaced
+    an earlier design (the QR encoding a one-off opaque bearer token from issue_card(), revocable
+    via q_card_core.replace()) per the Admin's own explicit architecture decision: "a user must
+    have ONE permanent identity the whole world can search, regardless of how many times they
+    travel." The tradeoff is real and was flagged before this change, not glossed over: a
+    permanent public identifier can never be revoked the way the old opaque token could if a card
+    were lost -- but this is exactly how a physical ID card is supposed to work (the printed ID
+    NUMBER is the point), and the actual login credential (private_id_9digit) still never appears
+    on a QR or anywhere scannable, which is the boundary that actually matters.
+
+    The QR encodes qumanity.in/card/<public_id_12> -- kept SMALL and in a corner here (42pt
+    square) -- the original design let it dominate 60% of the page, which both looked
     unprofessional and is unnecessary: a corner-sized QR scans exactly as reliably."""
     buf = io.BytesIO()
     c = pdfcanvas.Canvas(buf, pagesize=(_CARD_W, _CARD_H))
@@ -464,35 +457,46 @@ def render_card_pdf(
     if photo_bytes:
         _draw_photo_cover(c, photo_bytes, photo_x, photo_y, photo_size)
     else:
-        _draw_silhouette(c, photo_x, photo_y, photo_size)
+        _draw_silhouette(c, photo_x, photo_y, photo_size, gender)
     c.setStrokeColor(_GOLD)
     c.setLineWidth(1)
     c.roundRect(photo_x, photo_y, photo_size, photo_size, 4, fill=0, stroke=1)
 
-    # Name / Private ID / Location, middle column
+    # Name / Gender + Zodiac Sign / Private ID, middle column
     text_x = photo_x + photo_size + 10
     text_top = header_y - 12
     c.setFillColor(_TEXT)
     c.setFont("Helvetica-Bold", 10)
     c.drawString(text_x, text_top, (name or "")[:26])
 
+    # Gender and Zodiac Sign share one row (two mini-columns) -- both are short single words, so
+    # stacking them separately would waste vertical space this small card doesn't have to spare.
+    col2_x = text_x + 62
     c.setFillColor(_TEXT_DIM)
     c.setFont("Helvetica", 6)
-    c.drawString(text_x, text_top - 15, "PRIVATE ID")
+    c.drawString(text_x, text_top - 15, "GENDER")
+    c.drawString(col2_x, text_top - 15, "ZODIAC SIGN")
+    c.setFillColor(_TEXT)
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(text_x, text_top - 25, gender or "—")
+    c.drawString(col2_x, text_top - 25, sun_sign or "—")
+
+    c.setFillColor(_TEXT_DIM)
+    c.setFont("Helvetica", 6)
+    c.drawString(text_x, text_top - 40, "PRIVATE ID")
     c.setFillColor(_TEXT)
     c.setFont("Helvetica-Bold", 8.5)
-    c.drawString(text_x, text_top - 25, private_id or "—")
+    c.drawString(text_x, text_top - 50, private_id or "—")
 
     c.setFillColor(_TEXT_DIM)
     c.setFont("Helvetica", 6)
-    c.drawString(text_x, text_top - 40, "LOCATION")
+    c.drawString(text_x, text_top - 65, "PUBLIC ID")
     c.setFillColor(_TEXT)
-    c.setFont("Helvetica", 7)
-    for i, line in enumerate(_wrap_to_lines(location_text, max_chars=34, max_lines=2)):
-        c.drawString(text_x, text_top - 50 - i * 9, line)
+    c.setFont("Helvetica-Bold", 8.5)
+    c.drawString(text_x, text_top - 75, public_id or "—")
 
     # QR code, small, bottom-right corner (never the page-dominating size the old layout used)
-    card_url = f"{CARD_LOGIN_URL}{raw_token}"
+    card_url = f"{CARD_LOGIN_URL}{public_id}"
     qr_buf = io.BytesIO()
     qrcode.make(card_url).save(qr_buf, format="PNG")
     qr_buf.seek(0)
