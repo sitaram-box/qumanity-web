@@ -7128,33 +7128,70 @@ _ADMIN_Q_CARDS_SELECT = """
     FROM users u
     LEFT JOIN user_zodiac z ON z.user_id = u.id
     LEFT JOIN id_migrations im ON im.user_id = u.id
-    LEFT JOIN q_cards qc ON qc.user_id = u.id
+    -- 2026-11-28: constrained to MAX(id), not a plain "ON qc.user_id = u.id" -- a user can now
+    -- carry more than one q_cards row once admin_q_card_issue() regenerates via
+    -- q_card_core.replace() (the OLD row stays, status -> 'replaced'; a NEW row is inserted). An
+    -- unconstrained join would multiply this user's result row once per q_cards match, silently
+    -- double-counting them in the table listing AND in admin_q_cards_combined()'s batch PDF
+    -- (confirmed by a 3-page combined PDF for 2 real users in testing before this fix).
+    LEFT JOIN q_cards qc ON qc.id = (SELECT MAX(id) FROM q_cards q2 WHERE q2.user_id = u.id)
 """
 
 
-def _admin_q_card_pdf_path(row) -> Path | None:
-    """Where THIS user's q_card.pdf would be on disk, if one was ever issued -- never a
-    regeneration, since issue_card() only ever persists the token's HASH (see q_card_core.py's own
-    docstring): the file saved at issuance, if any, is the only copy that will ever exist.
+# QM_Q_CARDS_PENDING_DIR overrides this, same convention as folder_connector.QM_EARTH_ROOT --
+# useful for testing (never writes into a real checkout's own directory by accident) and lets a
+# real deployment point this at a persistent volume instead of the app container's own ephemeral
+# filesystem, which the default below is NOT guaranteed to survive across a Railway redeploy. The
+# Admin's own framing of this directory as "temporary" is accurate under the default: it is a
+# best-effort fallback for printing NOW, not a durable archive -- the durable fix for a user whose
+# card keeps landing here is still getting their real BORN_HERE folder resolvable (fixing
+# birth_location_json, or confirming QM_EARTH_ROOT itself points at the real persistent volume).
+QM_Q_CARDS_PENDING_DIR = Path(os.environ.get("QM_Q_CARDS_PENDING_DIR") or (Path(__file__).resolve().parent / "q_cards_pending"))
 
-    Resolved by the OLD private_id_9digit (id_migrations.old_private_id_9digit) when this user was
-    migrated to a DOB-based ID, falling back to their CURRENT private_id_9digit otherwise. This
-    matters because folder_connector.create_user_folder() bakes the Private ID into the BORN_HERE
-    directory name at registration time and never renames it -- the 2026-11-26 DOB-ID migration
-    changed users.private_id_9digit in the database but never touched the filesystem, so every
-    migrated user's actual folder on disk is still named after their PRE-migration id. Resolving
-    by the current id alone would silently miss every migrated user's existing card."""
+
+def _admin_q_card_pending_path(row) -> Path:
+    """Fallback save location (2026-11-28) for a user whose real BORN_HERE folder can't be
+    resolved or created at all -- see admin_q_card_issue()'s own docstring. Deliberately a plain
+    project-root directory, entirely separate from the 0_Earth geographic tree (never touches
+    folder_connector's resolution logic), so it needs no permission beyond this feature's own."""
+    return QM_Q_CARDS_PENDING_DIR / f"user_{row['user_id']}.pdf"
+
+
+def _admin_q_card_pdf_path(row) -> Path | None:
+    """Where THIS user's q_card.pdf actually is on disk right now, if one was ever issued and
+    saved -- never a regeneration of the PDF ITSELF from the stored row (issue_card() only ever
+    persists the token's HASH, see q_card_core.py's own docstring), though admin_q_card_issue()
+    can mint a fresh card (and fresh PDF) to replace it.
+
+    Checks two locations, in order, and -- unlike most path-helpers in this module -- verifies
+    existence itself before returning, since there are now two candidates to choose between:
+      1. The real BORN_HERE folder, resolved by the OLD private_id_9digit
+         (id_migrations.old_private_id_9digit) when this user was migrated to a DOB-based ID,
+         falling back to their CURRENT private_id_9digit otherwise (see the 2026-11-26 DOB-ID
+         migration note below for why).
+      2. The q_cards_pending/ fallback (_admin_q_card_pending_path()), used when #1 couldn't be
+         resolved or created at issuance time.
+
+    folder_connector.create_user_folder() bakes the Private ID into the BORN_HERE directory name
+    at registration time and never renames it -- the 2026-11-26 DOB-ID migration changed
+    users.private_id_9digit in the database but never touched the filesystem, so every migrated
+    user's actual folder on disk is still named after their PRE-migration id. Resolving by the
+    current id alone would silently miss every migrated user's existing card."""
     folder_id = row["old_private_id_9digit"] or row["current_private_id"]
-    if not folder_id or not row["sun_element"]:
-        return None
-    try:
-        birth_location = json.loads(row["birth_location_json"] or "{}")
-    except (TypeError, ValueError):
-        return None
-    location_dir = folder_connector.resolve_location_dir(birth_location)
-    if location_dir is None:
-        return None
-    return location_dir / "BORN_HERE" / row["sun_element"] / folder_id / "private_account" / "q_card.pdf"
+    if folder_id and row["sun_element"]:
+        try:
+            birth_location = json.loads(row["birth_location_json"] or "{}")
+        except (TypeError, ValueError):
+            birth_location = {}
+        location_dir = folder_connector.resolve_location_dir(birth_location)
+        if location_dir is not None:
+            born_here_path = location_dir / "BORN_HERE" / row["sun_element"] / folder_id / "private_account" / "q_card.pdf"
+            if born_here_path.exists():
+                return born_here_path
+    pending_path = _admin_q_card_pending_path(row)
+    if pending_path.exists():
+        return pending_path
+    return None
 
 
 def _admin_q_card_save_dir(row) -> Path | None:
@@ -7319,18 +7356,20 @@ def admin_q_cards_data():
     })
 
 
+def _admin_q_card_lookup(user_id):
+    conn = get_db()
+    try:
+        return conn.execute(_ADMIN_Q_CARDS_SELECT + " WHERE u.id = ?", (user_id,)).fetchone()
+    finally:
+        conn.close()
+
+
 @app.route("/admin/q-cards/<int:user_id>/download")
 @login_required
 def admin_q_card_download(user_id):
     if not _is_admin():
         return redirect(url_for("dashboard"))
-    conn = get_db()
-    try:
-        row = conn.execute(
-            _ADMIN_Q_CARDS_SELECT + " WHERE u.id = ?", (user_id,)
-        ).fetchone()
-    finally:
-        conn.close()
+    row = _admin_q_card_lookup(user_id)
     if not row:
         return jsonify({"error": "User not found"}), 404
     pdf_path = _admin_q_card_pdf_path(row)
@@ -7340,47 +7379,83 @@ def admin_q_card_download(user_id):
                       download_name=f"q_card_{row['user_id']}.pdf")
 
 
+@app.route("/admin/q-cards/<int:user_id>/view")
+@login_required
+def admin_q_card_view(user_id):
+    """Same file as admin_q_card_download(), served inline (no Content-Disposition: attachment)
+    so a browser opens it in the tab/new-tab it was linked from instead of forcing a save
+    dialog -- the "View PDF" link (2026-11-28), distinct from "Download PDF"."""
+    if not _is_admin():
+        return redirect(url_for("dashboard"))
+    row = _admin_q_card_lookup(user_id)
+    if not row:
+        return jsonify({"error": "User not found"}), 404
+    pdf_path = _admin_q_card_pdf_path(row)
+    if not pdf_path or not pdf_path.exists():
+        return jsonify({"error": "No Q-Card PDF found on disk for this user"}), 404
+    return send_file(pdf_path, mimetype="application/pdf", as_attachment=False)
+
+
 @app.route("/admin/q-cards/<int:user_id>/issue", methods=["POST"])
 @login_required
 def admin_q_card_issue(user_id):
-    """Issues a FIRST Q-Card for a user who never got one (e.g. registered before the 2026-11-19
-    Q-Card feature existed) and immediately returns the rendered PDF -- there is no later moment
-    this PDF can be recovered (issue_card() only ever stores the token's HASH), so this request IS
-    the one chance to save and hand it over. Reuses the exact same issue_card()/render_card_pdf()/
-    save_card_pdf() sequence app.py's own registration flow already uses, never a reimplementation.
+    """Issues or REGENERATES a Q-Card for user_id and ALWAYS returns a rendered PDF -- rewritten
+    2026-11-28 (same day as the first version) after live production testing hit both blockers it
+    previously had, with the Admin's explicit authorization to remove them:
 
-    Refuses if a q_cards row already exists for this user (never double-issue a second live
-    token for the same person). Otherwise auto-creates a BORN_HERE folder when none exists yet --
-    see _admin_q_card_ensure_save_dir()'s own docstring for the explicit 2026-11-28 authorization
-    behind that and the one case it still can't route around."""
+    1. Folder resolution can fail HARDER than "doesn't exist yet" -- resolve_location_dir() can
+       return None outright (e.g. User 24/Rohit Mudgal's own account: a non-standard
+       birth_location_json shape meant even the continent-level folder couldn't be resolved).
+       That used to refuse with 409. It no longer does: the PDF is always rendered in memory and
+       always returned regardless of what happens on disk. Saving is now best-effort, tried in
+       this order: (a) the real BORN_HERE folder, existing or auto-created (see
+       _admin_q_card_ensure_save_dir()), (b) q_cards_pending/user_<id>.pdf at the project root --
+       deliberately OUTSIDE the 0_Earth tree, so this fallback needs no folder-creation
+       authorization of its own -- when (a) isn't possible at all.
+
+    2. A second click used to refuse with 409 ("already exists"). It no longer does: re-issuing
+       now calls q_card_core.replace() rather than issue_card() again -- replace() retires the
+       OLD row (status -> 'replaced', revoked_at set) before minting a new one, so there is still
+       only ever ONE live, scannable token per person. A bare second issue_card() call would
+       instead leave two simultaneously-valid tokens able to authenticate as the same person,
+       which is not what "regenerate" should mean."""
     if not _is_admin():
         return jsonify({"error": "Admin only"}), 403
     conn = get_db()
     try:
         q_card_core.ensure_tables(conn)
-        existing = conn.execute("SELECT 1 FROM q_cards WHERE user_id = ?", (user_id,)).fetchone()
-        if existing:
-            return jsonify({"error": "A Q-Card already exists for this user — refusing to issue a second one."}), 409
-
         row = conn.execute(_ADMIN_Q_CARDS_SELECT + " WHERE u.id = ?", (user_id,)).fetchone()
         if not row:
             return jsonify({"error": "User not found"}), 404
 
-        target_dir, _created = _admin_q_card_ensure_save_dir(row)
-        if target_dir is None:
-            return jsonify({
-                "error": "Cannot resolve even a continent-level folder for this user's birth location — the birth_location_json data itself needs fixing before a Q-Card can be saved.",
-            }), 409
+        # Targets the user's CURRENT card specifically (MAX(id), same reasoning as
+        # _ADMIN_Q_CARDS_SELECT's own join above) -- after a first regenerate, user_id now has
+        # TWO rows ('replaced' + the live one); grabbing an arbitrary one here could hand an
+        # already-'replaced' id to q_card_core.replace(), which refuses it outright.
+        existing = conn.execute(
+            "SELECT id FROM q_cards WHERE user_id = ? ORDER BY id DESC LIMIT 1", (user_id,)
+        ).fetchone()
+        if existing:
+            card = q_card_core.replace(conn, existing["id"])
+        else:
+            card = q_card_core.issue_card(conn, user_id, free_reason=q_card_core.free_eligibility(conn, user_id))
 
-        card = q_card_core.issue_card(conn, user_id, free_reason=q_card_core.free_eligibility(conn, user_id))
         pdf_bytes = q_card_core.render_card_pdf(card["card_display_id"], card["raw_token"], row["name"])
-        q_card_core.save_card_pdf(target_dir, pdf_bytes)
+
+        target_dir, _created = _admin_q_card_ensure_save_dir(row)
+        if target_dir is not None:
+            q_card_core.save_card_pdf(target_dir, pdf_bytes)
+            saved_to = str(target_dir)
+        else:
+            QM_Q_CARDS_PENDING_DIR.mkdir(parents=True, exist_ok=True)
+            _admin_q_card_pending_path(row).write_bytes(pdf_bytes)
+            saved_to = str(_admin_q_card_pending_path(row)) + " (fallback -- real BORN_HERE folder unresolvable)"
     finally:
         conn.close()
 
     print(
         f"[admin_q_card_issue] triggered by user_id={session['user_id']} for target user_id={user_id} "
-        f"card_display_id={card['card_display_id']}"
+        f"card_display_id={card['card_display_id']} saved_to={saved_to}"
     )
     return send_file(io.BytesIO(pdf_bytes), mimetype="application/pdf", as_attachment=True,
                       download_name=f"q_card_{user_id}.pdf")

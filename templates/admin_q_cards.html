@@ -69,6 +69,7 @@
   <script>
     (function () {
       var DOWNLOAD_URL = {{ (url_for('admin_q_card_download', user_id=0)) | tojson }};
+      var VIEW_URL = {{ (url_for('admin_q_card_view', user_id=0)) | tojson }};
       var ISSUE_URL = {{ (url_for('admin_q_card_issue', user_id=0)) | tojson }};
       var COMBINED_URL = {{ url_for('admin_q_cards_combined') | tojson }};
       var DATA_URL = {{ url_for('admin_q_cards_data') | tojson }};
@@ -91,10 +92,20 @@
       // tab but left THIS tab's table stale -- the Admin had to manually reload to see "Issue
       // Q-Card" turn into "Download PDF". Using fetch() + a Blob download instead lets this same
       // tab trigger the save AND immediately re-fetch fresh data once it succeeds.
-      function issueCard(c, btn) {
-        if (!window.confirm("Issue a new Q-Card for " + c.name + "? This creates a real, permanent card token for this user.")) return;
+      //
+      // isRegenerate (2026-11-28) only changes the confirm wording and the button's reset label
+      // on failure -- the backend route is identical either way (admin_q_card_issue() itself
+      // decides issue vs. regenerate by whether a q_cards row already exists). The distinct
+      // wording matters because regenerating silently invalidates the PREVIOUS card's token
+      // (q_card_core.replace()), which "Issue a new Q-Card" doesn't convey for a user who
+      // already has one.
+      function issueCard(c, btn, isRegenerate) {
+        var msg = isRegenerate
+          ? "Regenerate the Q-Card for " + c.name + "? The previous card's token will stop working immediately and a new one will be created."
+          : "Issue a new Q-Card for " + c.name + "? This creates a real, permanent card token for this user.";
+        if (!window.confirm(msg)) return;
         btn.disabled = true;
-        btn.textContent = "Issuing…";
+        btn.textContent = isRegenerate ? "Regenerating…" : "Issuing…";
         fetch(ISSUE_URL.replace("/0/", "/" + c.user_id + "/"), { method: "POST" })
           .then(function (r) {
             if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || "Failed to issue card"); });
@@ -107,12 +118,12 @@
             a.click();
             a.remove();
             URL.revokeObjectURL(url);
-            load(current); // refresh so this row flips to "Download PDF" (or drops out under the filter)
+            load(current); // refresh so this row reflects the new PDF (or drops out under the filter)
           })
           .catch(function (err) {
             alert(err.message);
             btn.disabled = false;
-            btn.textContent = "Issue Q-Card";
+            btn.textContent = isRegenerate ? "Regenerate" : "Issue Q-Card";
           });
       }
 
@@ -127,7 +138,15 @@
         if (c.has_pdf) {
           pdfTd.appendChild(el("span", { className: "qcv-pill has-pdf", textContent: "Found" }));
           pdfTd.appendChild(document.createTextNode(" "));
+          pdfTd.appendChild(el("a", {
+            href: VIEW_URL.replace("/0/", "/" + c.user_id + "/"), target: "_blank", rel: "noopener", textContent: "View PDF",
+          }));
+          pdfTd.appendChild(document.createTextNode(" "));
           pdfTd.appendChild(el("a", { href: DOWNLOAD_URL.replace("/0/", "/" + c.user_id + "/"), textContent: "Download PDF" }));
+          pdfTd.appendChild(document.createTextNode(" "));
+          var regenBtn = el("button", { type: "button", className: "qm-btn qm-btn-ghost", textContent: "Regenerate" });
+          regenBtn.addEventListener("click", function () { issueCard(c, regenBtn, true); });
+          pdfTd.appendChild(regenBtn);
         } else if (c.card_issued) {
           pdfTd.appendChild(el("span", { className: "qcv-pill issued-no-pdf", textContent: "Issued, file missing" }));
         } else {

@@ -18,6 +18,10 @@ instance/
 *.sqlite
 *.sqlite3
 
+# Q-Cards best-effort fallback save location (2026-11-28) -- these PDFs encode a live,
+# scannable Q-Card login token in their QR code; never commit them, same reasoning as *.db above.
+/q_cards_pending/
+
 # Environment variables
 .env
 .env.local
