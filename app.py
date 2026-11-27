@@ -7155,32 +7155,104 @@ def _admin_q_card_pdf_path(row) -> Path | None:
     return location_dir / "BORN_HERE" / row["sun_element"] / folder_id / "private_account" / "q_card.pdf"
 
 
+def _admin_q_card_save_dir(row) -> Path | None:
+    """Where to SAVE a newly-issued Q-Card PDF for a user who has never had one: whichever of
+    their CURRENT or OLD BORN_HERE folder actually already exists on disk right now (current
+    tried first, since scripts/rename_migrated_folders.py's Admin Panel button may already have
+    moved it there). Returns None -- never create_user_folder()/mkdir() -- if neither exists, so
+    this can never fabricate a new folder on its own (see the project's own folder rule: no new
+    folders without asking)."""
+    for candidate_id in (row["current_private_id"], row["old_private_id_9digit"]):
+        if not candidate_id or not row["sun_element"]:
+            continue
+        try:
+            birth_location = json.loads(row["birth_location_json"] or "{}")
+        except (TypeError, ValueError):
+            continue
+        location_dir = folder_connector.resolve_location_dir(birth_location)
+        if location_dir is None:
+            continue
+        user_dir = location_dir / "BORN_HERE" / row["sun_element"] / candidate_id
+        if (user_dir / "private_account").exists():
+            return user_dir
+    return None
+
+
+# Real vs. Test/Demo classification (2026-11-28): users.is_demo only flags the Rohini Sector 24
+# election pilot's 500 demo voters -- it was never meant to, and does not, cover the various
+# QA/test fixture accounts (ClaudeQA*, Voter*, UITest*, etc.) created directly against is_demo=0
+# during this engagement's own testing. Same name-marker list already approved for exactly this
+# purpose in scripts/preview_dob_ids_production.py's TEST_NAME_MARKERS -- reused here by value
+# (not imported) since that script is a standalone CLI tool, not a library this app depends on.
+_ADMIN_Q_CARDS_TEST_MARKERS = ("ClaudeQA", "Voter", "UITest", "TutorialTest", "Demo", "Linked", "UIFamily")
+
+
+def _admin_q_card_is_test_named(name: str) -> bool:
+    name_lower = (name or "").lower()
+    return any(marker.lower() in name_lower for marker in _ADMIN_Q_CARDS_TEST_MARKERS)
+
+
+def _admin_q_cards_rows(conn, user_type: str) -> list[dict]:
+    """Every is_demo=0 user's Q-Card status, filtered to user_type ('real' or 'test'). The 500
+    is_demo=1 election-pilot voters are deliberately EXCLUDED from both tabs -- they use synthetic
+    V-prefixed ids, never get a real Q-Card, and would be 500 unpaginated rows of noise on a page
+    about printing physical cards for citizens. 'test' here means only the is_demo=0 QA/test-named
+    accounts (see _admin_q_card_is_test_named)."""
+    q_card_core.ensure_tables(conn)
+    rows = conn.execute(_ADMIN_Q_CARDS_SELECT + " WHERE u.is_demo = 0 ORDER BY u.id").fetchall()
+    cards = []
+    for row in rows:
+        is_test_named = _admin_q_card_is_test_named(row["name"])
+        if user_type == "test" and not is_test_named:
+            continue
+        if user_type == "real" and is_test_named:
+            continue
+        pdf_path = _admin_q_card_pdf_path(row)
+        cards.append({
+            "user_id": row["user_id"], "name": row["name"],
+            "current_private_id": row["current_private_id"],
+            "card_display_id": row["card_display_id"], "status": row["status"],
+            "payment_status": row["payment_status"], "delivered_at": row["delivered_at"],
+            "has_pdf": bool(pdf_path and pdf_path.exists()),
+            "card_issued": bool(row["card_display_id"]),
+        })
+    return cards
+
+
 @app.route("/admin/q-cards")
 @login_required
 def admin_q_cards():
-    """Lists every real (non-demo) user's Q-Card status and, where a PDF actually exists on disk,
-    a download link -- see _admin_q_card_pdf_path()'s docstring for why "exists on disk" is the
-    only thing that can ever be true here; there is no regenerate path. Admin-only, same gate as
-    the Database Viewer."""
+    """Renders the Q-Cards page shell only -- its own inline JS immediately calls
+    admin_q_cards_data() on load (and again on every tab click) via fetch(), so there is no
+    server-rendered table here to keep in sync with that JSON response. Split into "Real Users" /
+    "Test & Demo Users" tabs (default: real) -- see _admin_q_cards_rows()'s docstring for exactly
+    what each tab means. Admin-only, same gate as the Database Viewer."""
     if not _is_admin():
         return redirect(url_for("dashboard"))
+    user_type = request.args.get("type", "real")
+    if user_type not in ("real", "test"):
+        user_type = "real"
+    return render_template("admin_q_cards.html", user_type=user_type)
+
+
+@app.route("/admin/q-cards/data")
+@login_required
+def admin_q_cards_data():
+    """JSON twin of admin_q_cards(), for the page's own tab-switching fetch() -- no page reload."""
+    if not _is_admin():
+        return jsonify({"error": "Admin only"}), 403
+    user_type = request.args.get("type", "real")
+    if user_type not in ("real", "test"):
+        user_type = "real"
     conn = get_db()
     try:
-        q_card_core.ensure_tables(conn)
-        rows = conn.execute(_ADMIN_Q_CARDS_SELECT + " WHERE u.is_demo = 0 ORDER BY u.id").fetchall()
-        cards = []
-        for row in rows:
-            pdf_path = _admin_q_card_pdf_path(row)
-            cards.append({
-                "user_id": row["user_id"], "name": row["name"],
-                "current_private_id": row["current_private_id"],
-                "card_display_id": row["card_display_id"], "status": row["status"],
-                "payment_status": row["payment_status"], "delivered_at": row["delivered_at"],
-                "has_pdf": bool(pdf_path and pdf_path.exists()),
-            })
+        cards = _admin_q_cards_rows(conn, user_type)
     finally:
         conn.close()
-    return render_template("admin_q_cards.html", cards=cards)
+    return jsonify({
+        "user_type": user_type, "cards": cards, "count": len(cards),
+        "found": sum(1 for c in cards if c["has_pdf"]),
+    })
 
 
 @app.route("/admin/q-cards/<int:user_id>/download")
@@ -7204,11 +7276,58 @@ def admin_q_card_download(user_id):
                       download_name=f"q_card_{row['user_id']}.pdf")
 
 
+@app.route("/admin/q-cards/<int:user_id>/issue", methods=["POST"])
+@login_required
+def admin_q_card_issue(user_id):
+    """Issues a FIRST Q-Card for a user who never got one (e.g. registered before the 2026-11-19
+    Q-Card feature existed) and immediately returns the rendered PDF -- there is no later moment
+    this PDF can be recovered (issue_card() only ever stores the token's HASH), so this request IS
+    the one chance to save and hand it over. Reuses the exact same issue_card()/render_card_pdf()/
+    save_card_pdf() sequence app.py's own registration flow already uses, never a reimplementation.
+
+    Refuses if a q_cards row already exists for this user (never double-issue a second live
+    token for the same person), and refuses if no existing BORN_HERE folder can be found to save
+    into, rather than creating one itself -- see _admin_q_card_save_dir()'s own docstring."""
+    if not _is_admin():
+        return jsonify({"error": "Admin only"}), 403
+    conn = get_db()
+    try:
+        q_card_core.ensure_tables(conn)
+        existing = conn.execute("SELECT 1 FROM q_cards WHERE user_id = ?", (user_id,)).fetchone()
+        if existing:
+            return jsonify({"error": "A Q-Card already exists for this user — refusing to issue a second one."}), 409
+
+        row = conn.execute(_ADMIN_Q_CARDS_SELECT + " WHERE u.id = ?", (user_id,)).fetchone()
+        if not row:
+            return jsonify({"error": "User not found"}), 404
+
+        target_dir = _admin_q_card_save_dir(row)
+        if target_dir is None:
+            return jsonify({
+                "error": "No existing BORN_HERE folder found for this user — cannot save a Q-Card PDF without creating a new folder, which needs separate confirmation.",
+            }), 409
+
+        card = q_card_core.issue_card(conn, user_id, free_reason=q_card_core.free_eligibility(conn, user_id))
+        pdf_bytes = q_card_core.render_card_pdf(card["card_display_id"], card["raw_token"], row["name"])
+        q_card_core.save_card_pdf(target_dir, pdf_bytes)
+    finally:
+        conn.close()
+
+    print(
+        f"[admin_q_card_issue] triggered by user_id={session['user_id']} for target user_id={user_id} "
+        f"card_display_id={card['card_display_id']}"
+    )
+    return send_file(io.BytesIO(pdf_bytes), mimetype="application/pdf", as_attachment=True,
+                      download_name=f"q_card_{user_id}.pdf")
+
+
 @app.route("/admin/q-cards/combined.pdf")
 @login_required
 def admin_q_cards_combined():
-    """Concatenates every Q-Card PDF actually found on disk into one file for batch printing.
-    Never regenerates a card -- see _admin_q_card_pdf_path()'s docstring."""
+    """Concatenates every REAL user's Q-Card PDF actually found on disk into one file for batch
+    printing -- always 'real', regardless of which tab is open, since batch-printing a QA/test
+    fixture's card would never make sense. Never regenerates a card -- see
+    _admin_q_card_pdf_path()'s docstring."""
     if not _is_admin():
         return redirect(url_for("dashboard"))
     conn = get_db()
@@ -7221,6 +7340,8 @@ def admin_q_cards_combined():
     writer = PdfWriter()
     included = 0
     for row in rows:
+        if _admin_q_card_is_test_named(row["name"]):
+            continue
         pdf_path = _admin_q_card_pdf_path(row)
         if pdf_path and pdf_path.exists():
             writer.append(str(pdf_path))

@@ -7,16 +7,21 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
   <style>
-    .qcv-main { padding: 24px; max-width: 1000px; margin: 0 auto; }
-    .qcv-meta { opacity: 0.75; font-size: 14px; margin-bottom: 16px; }
-    .qcv-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
-    table.qcv-table { border-collapse: collapse; width: 100%; font-size: 14px; }
-    table.qcv-table th, table.qcv-table td { padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left; }
-    table.qcv-table th { background: var(--qm-panel, #1b1b22); }
+    .qcv-main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+    .qcv-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .qcv-tab { padding: 6px 14px; border-radius: 999px; border: 1px solid var(--qm-border); background: var(--qm-panel-bg); color: var(--qm-text); font: inherit; cursor: pointer; }
+    .qcv-tab.is-active { background: var(--qm-gold); border-color: var(--qm-gold); color: #3a2d00; font-weight: 600; }
+    .qcv-meta { color: var(--qm-text-dim); font-size: 14px; margin-bottom: 16px; }
+    .qcv-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--qm-border); }
+    table.qcv-table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--qm-panel-bg); }
+    table.qcv-table th, table.qcv-table td { padding: 8px 12px; border-bottom: 1px solid var(--qm-border); text-align: left; color: var(--qm-text); }
+    table.qcv-table th { background: var(--qm-input-bg); font-weight: 600; }
     .qcv-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
-    .qcv-pill.has-pdf { background: rgba(80, 200, 120, 0.2); color: #4fd37a; }
-    .qcv-pill.no-pdf { background: rgba(255, 255, 255, 0.08); opacity: 0.7; }
-    .qcv-empty { opacity: 0.7; padding: 20px; }
+    .qcv-pill.has-pdf { background: rgba(19, 136, 8, 0.15); color: var(--qm-green); }
+    .qcv-pill.no-pdf { background: var(--qm-input-bg); color: var(--qm-text-dim); }
+    .qcv-pill.issued-no-pdf { background: rgba(255, 153, 51, 0.18); color: var(--qm-gold-text); }
+    .qcv-issue-form { display: inline; }
+    .qcv-empty { color: var(--qm-text-dim); padding: 20px; }
   </style>
 </head>
 <body>
@@ -31,49 +36,109 @@
   </header>
 
   <main class="qcv-main">
-    {% set found = cards | selectattr("has_pdf") | list %}
-    <p class="qcv-meta">
-      {{ cards | length }} real user(s) · {{ found | length }} Q-Card PDF{{ '' if found | length == 1 else 's' }} found on disk.
-      A card only exists here if it was actually issued (at registration, or by an Admin action) <em>and</em> its PDF was
-      successfully saved at that time — there is no way to regenerate a card's PDF after the fact.
-    </p>
+    <div class="qcv-tabs">
+      <button type="button" class="qcv-tab {{ 'is-active' if user_type == 'real' else '' }}" id="qcv-tab-real" data-type="real">Real Users</button>
+      <button type="button" class="qcv-tab {{ 'is-active' if user_type == 'test' else '' }}" id="qcv-tab-test" data-type="test">Test / Demo Users</button>
+    </div>
 
-    {% if found %}
-      <p><a class="qm-btn qm-btn-primary" href="{{ url_for('admin_q_cards_combined') }}">⬇️ Download Combined PDF ({{ found | length }} card{{ '' if found | length == 1 else 's' }}, for batch printing)</a></p>
-    {% endif %}
+    <p class="qcv-meta" id="qcv-meta"></p>
+    <p id="qcv-combined-wrap"></p>
 
-    {% if cards %}
-      <div class="qcv-table-wrap">
-        <table class="qcv-table">
-          <thead>
-            <tr>
-              <th>User ID</th><th>Name</th><th>Current Private ID</th><th>Card Status</th><th>Payment</th><th>PDF</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for c in cards %}
-              <tr>
-                <td>{{ c.user_id }}</td>
-                <td>{{ c.name }}</td>
-                <td>{{ c.current_private_id }}</td>
-                <td>{{ c.status or '—' }}</td>
-                <td>{{ c.payment_status or '—' }}</td>
-                <td>
-                  {% if c.has_pdf %}
-                    <span class="qcv-pill has-pdf">Found</span>
-                    <a href="{{ url_for('admin_q_card_download', user_id=c.user_id) }}">Download</a>
-                  {% else %}
-                    <span class="qcv-pill no-pdf">None on disk</span>
-                  {% endif %}
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <p class="qcv-empty">No real (non-demo) users found.</p>
-    {% endif %}
+    <div class="qcv-table-wrap">
+      <table class="qcv-table">
+        <thead>
+          <tr>
+            <th>User ID</th><th>Name</th><th>Current Private ID</th><th>Card Status</th><th>Payment</th><th>PDF</th>
+          </tr>
+        </thead>
+        <tbody id="qcv-tbody"></tbody>
+      </table>
+    </div>
+    <p class="qcv-empty" id="qcv-empty" hidden>No users found in this view.</p>
   </main>
+
+  <script>
+    (function () {
+      var DOWNLOAD_URL = {{ (url_for('admin_q_card_download', user_id=0)) | tojson }};
+      var ISSUE_URL = {{ (url_for('admin_q_card_issue', user_id=0)) | tojson }};
+      var COMBINED_URL = {{ url_for('admin_q_cards_combined') | tojson }};
+      var tbody = document.getElementById("qcv-tbody");
+      var metaEl = document.getElementById("qcv-meta");
+      var emptyEl = document.getElementById("qcv-empty");
+      var combinedWrap = document.getElementById("qcv-combined-wrap");
+      var tabs = document.querySelectorAll(".qcv-tab");
+      var current = {{ user_type | tojson }};
+
+      function el(tag, props) {
+        var e = document.createElement(tag);
+        if (props) Object.keys(props).forEach(function (k) { e[k] = props[k]; });
+        return e;
+      }
+
+      function renderRow(c) {
+        var tr = document.createElement("tr");
+        [c.user_id, c.name, c.current_private_id, c.status || "—", c.payment_status || "—"].forEach(function (val) {
+          var td = document.createElement("td");
+          td.textContent = val;
+          tr.appendChild(td);
+        });
+        var pdfTd = document.createElement("td");
+        if (c.has_pdf) {
+          pdfTd.appendChild(el("span", { className: "qcv-pill has-pdf", textContent: "Found" }));
+          pdfTd.appendChild(document.createTextNode(" "));
+          pdfTd.appendChild(el("a", { href: DOWNLOAD_URL.replace("/0/", "/" + c.user_id + "/"), textContent: "Download" }));
+        } else if (c.card_issued) {
+          pdfTd.appendChild(el("span", { className: "qcv-pill issued-no-pdf", textContent: "Issued, file missing" }));
+        } else {
+          pdfTd.appendChild(el("span", { className: "qcv-pill no-pdf", textContent: "None on disk" }));
+          pdfTd.appendChild(document.createTextNode(" "));
+          var form = el("form", {
+            className: "qcv-issue-form",
+            method: "post",
+            action: ISSUE_URL.replace("/0/", "/" + c.user_id + "/"),
+            target: "_blank",
+          });
+          form.onsubmit = function () {
+            return window.confirm("Issue a new Q-Card for " + c.name + "? This creates a real, permanent card token for this user.");
+          };
+          form.appendChild(el("button", { type: "submit", className: "qm-btn qm-btn-ghost", textContent: "Issue Q-Card" }));
+          pdfTd.appendChild(form);
+        }
+        tr.appendChild(pdfTd);
+        return tr;
+      }
+
+      function render(data) {
+        tbody.innerHTML = "";
+        data.cards.forEach(function (c) { tbody.appendChild(renderRow(c)); });
+        emptyEl.hidden = data.cards.length > 0;
+        var label = data.user_type === "real" ? "real user(s)" : "test/demo user(s)";
+        metaEl.textContent = data.count + " " + label + " · " + data.found + " Q-Card PDF" + (data.found === 1 ? "" : "s") +
+          " found on disk. A card only exists here if it was actually issued and its PDF successfully saved — there is no way to regenerate a lost PDF.";
+        combinedWrap.innerHTML = "";
+        if (data.user_type === "real" && data.found > 0) {
+          combinedWrap.appendChild(el("a", {
+            className: "qm-btn qm-btn-primary", href: COMBINED_URL,
+            textContent: "⬇️ Download Combined PDF (" + data.found + " card" + (data.found === 1 ? "" : "s") + ", for batch printing)",
+          }));
+        }
+      }
+
+      function load(type) {
+        current = type;
+        tabs.forEach(function (t) { t.classList.toggle("is-active", t.dataset.type === type); });
+        fetch("{{ url_for('admin_q_cards_data') }}?type=" + encodeURIComponent(type))
+          .then(function (r) { return r.json(); })
+          .then(render)
+          .catch(function (err) { metaEl.textContent = "Failed to load: " + err.message; });
+      }
+
+      tabs.forEach(function (t) {
+        t.addEventListener("click", function () { load(t.dataset.type); });
+      });
+
+      load(current);
+    })();
+  </script>
 </body>
 </html>

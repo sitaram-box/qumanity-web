@@ -8,23 +8,23 @@
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
   <style>
     .dbv-main { display: flex; gap: 24px; align-items: flex-start; padding: 24px; max-width: 1400px; margin: 0 auto; }
-    .dbv-tables { flex: 0 0 220px; background: var(--qm-panel, #1b1b22); border-radius: 10px; padding: 8px; }
-    .dbv-tables a { display: block; padding: 8px 10px; border-radius: 6px; text-decoration: none; color: inherit; font-size: 14px; word-break: break-all; }
-    .dbv-tables a.is-active { background: var(--qm-gold, #c9a227); color: #111; font-weight: 600; }
-    .dbv-tables a:hover:not(.is-active) { background: rgba(255,255,255,0.08); }
+    .dbv-tables { flex: 0 0 220px; background: var(--qm-panel-bg); border: 1px solid var(--qm-border); border-radius: 10px; padding: 8px; }
+    .dbv-tables a { display: block; padding: 8px 10px; border-radius: 6px; text-decoration: none; color: var(--qm-text); font-size: 14px; word-break: break-all; }
+    .dbv-tables a.is-active { background: var(--qm-gold); color: #3a2d00; font-weight: 600; }
+    .dbv-tables a:hover:not(.is-active) { background: var(--qm-input-bg); }
     .dbv-view { flex: 1; min-width: 0; }
-    .dbv-view h2 { margin-top: 0; }
-    .dbv-meta { opacity: 0.7; font-size: 13px; margin-bottom: 12px; }
-    .dbv-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
-    table.dbv-table { border-collapse: collapse; width: 100%; font-size: 13px; }
-    table.dbv-table th, table.dbv-table td { padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left; white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
-    table.dbv-table th { position: sticky; top: 0; background: var(--qm-panel, #1b1b22); }
-    table.dbv-table tr:hover td { background: rgba(255,255,255,0.04); }
+    .dbv-view h2 { margin-top: 0; color: var(--qm-text); }
+    .dbv-meta { color: var(--qm-text-dim); font-size: 13px; margin-bottom: 12px; }
+    .dbv-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--qm-border); }
+    table.dbv-table { border-collapse: collapse; width: 100%; font-size: 13px; background: var(--qm-panel-bg); }
+    table.dbv-table th, table.dbv-table td { padding: 6px 10px; border-bottom: 1px solid var(--qm-border); text-align: left; white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; color: var(--qm-text); }
+    table.dbv-table th { position: sticky; top: 0; background: var(--qm-input-bg); font-weight: 600; }
+    table.dbv-table tr:hover td { background: var(--qm-input-bg); }
     .dbv-pagination { display: flex; gap: 10px; align-items: center; margin-top: 14px; }
-    .dbv-pagination a, .dbv-pagination span { padding: 6px 12px; border-radius: 6px; text-decoration: none; }
-    .dbv-pagination a { background: rgba(255,255,255,0.08); color: inherit; }
+    .dbv-pagination a, .dbv-pagination span { padding: 6px 12px; border-radius: 6px; text-decoration: none; color: var(--qm-text); }
+    .dbv-pagination a { background: var(--qm-input-bg); }
     .dbv-pagination .is-disabled { opacity: 0.35; pointer-events: none; }
-    .dbv-empty { opacity: 0.7; padding: 20px; }
+    .dbv-empty { color: var(--qm-text-dim); padding: 20px; }
     @media (max-width: 720px) { .dbv-main { flex-direction: column; } .dbv-tables { flex: none; width: 100%; } }
   </style>
 </head>

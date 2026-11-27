@@ -1131,20 +1131,14 @@
                  The "Notify Migrated Users of New ID" and "Run DOB-ID Migration" buttons that used
                  to sit here (2026-11-25/26) were removed once the one-shot migration actually ran
                  -- their routes (api_admin_notify_id_change/api_admin_run_dob_migration) are still
-                 live in app.py for direct/manual use, only the UI entry points are gone. -->
+                 live in app.py for direct/manual use, only the UI entry points are gone. The
+                 "Rename Migrated Folders" button that used to sit here (2026-11-26) was removed
+                 the same way (2026-11-28) once the one-shot rename actually ran --
+                 api_admin_rename_migrated_folders() is still live in app.py, only the UI entry
+                 point is gone. -->
             <div class="ap-notify-row">
               <a class="qm-btn qm-btn-ghost" href="{{ url_for('admin_database') }}" target="_blank" rel="noopener">🗄️ Database Viewer</a>
               <a class="qm-btn qm-btn-ghost" href="{{ url_for('admin_q_cards') }}" target="_blank" rel="noopener">🪪 Q-Cards</a>
-            </div>
-            <!-- Rename Migrated Folders (2026-11-26): the one-shot folder-rename script
-                 (scripts/rename_migrated_folders.py), runnable from here since the Railway
-                 Console has no python3 on this deployment -- see
-                 api_admin_rename_migrated_folders(). Same is_admin gate as the links above; the
-                 "are you sure" is the JS confirm() dashboard.js shows before this ever calls the
-                 route. -->
-            <div class="ap-notify-row">
-              <button type="button" class="qm-btn qm-btn-ghost" id="ap-rename-folders-btn">📁 Rename Migrated Folders</button>
-              <span class="qm-dash-empty" id="ap-rename-folders-status" hidden></span>
             </div>
           {% endif %}
           <div class="ap-body">
