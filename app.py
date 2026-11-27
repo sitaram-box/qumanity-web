@@ -7120,8 +7120,10 @@ def admin_database():
 
 
 _ADMIN_Q_CARDS_SELECT = """
-    SELECT u.id AS user_id, u.name, u.birth_location_json, u.private_id_9digit AS current_private_id,
-           z.sun_element, im.old_private_id_9digit,
+    SELECT u.id AS user_id, u.name, u.gender, u.dob, u.tob, u.account_id,
+           u.birth_location_json, u.present_location_json,
+           u.private_id_9digit AS current_private_id,
+           z.sun_element, z.sun_sign, im.old_private_id_9digit,
            qc.card_display_id, qc.status, qc.payment_status, qc.delivered_at
     FROM users u
     LEFT JOIN user_zodiac z ON z.user_id = u.id
@@ -7159,9 +7161,8 @@ def _admin_q_card_save_dir(row) -> Path | None:
     """Where to SAVE a newly-issued Q-Card PDF for a user who has never had one: whichever of
     their CURRENT or OLD BORN_HERE folder actually already exists on disk right now (current
     tried first, since scripts/rename_migrated_folders.py's Admin Panel button may already have
-    moved it there). Returns None -- never create_user_folder()/mkdir() -- if neither exists, so
-    this can never fabricate a new folder on its own (see the project's own folder rule: no new
-    folders without asking)."""
+    moved it there). Returns None if neither exists -- this function itself never creates
+    anything; see _admin_q_card_ensure_save_dir() for the auto-create fallback."""
     for candidate_id in (row["current_private_id"], row["old_private_id_9digit"]):
         if not candidate_id or not row["sun_element"]:
             continue
@@ -7178,13 +7179,76 @@ def _admin_q_card_save_dir(row) -> Path | None:
     return None
 
 
-# Real vs. Test/Demo classification (2026-11-28): users.is_demo only flags the Rohini Sector 24
-# election pilot's 500 demo voters -- it was never meant to, and does not, cover the various
-# QA/test fixture accounts (ClaudeQA*, Voter*, UITest*, etc.) created directly against is_demo=0
-# during this engagement's own testing. Same name-marker list already approved for exactly this
-# purpose in scripts/preview_dob_ids_production.py's TEST_NAME_MARKERS -- reused here by value
-# (not imported) since that script is a standalone CLI tool, not a library this app depends on.
-_ADMIN_Q_CARDS_TEST_MARKERS = ("ClaudeQA", "Voter", "UITest", "TutorialTest", "Demo", "Linked", "UIFamily")
+def _admin_q_card_ensure_save_dir(row) -> tuple[Path | None, bool]:
+    """(directory, created). Tries _admin_q_card_save_dir() (an existing folder) first; if
+    nothing exists, CREATES a fresh BORN_HERE folder at the user's CURRENT private_id_9digit.
+
+    2026-11-28, explicit Admin authorization after User 24 (Rohit Mudgal, the Founder's own
+    account) hit this exact wall in live production testing: "If the folder does not exist when
+    the Admin clicks Issue Q-Card, CREATE the BORN_HERE folder automatically... Do not block the
+    admin." This supersedes the earlier "never create, refuse instead" behavior for this one
+    route specifically -- every other folder-touching code path in this project is unaffected.
+
+    Mirrors folder_connector.register_user_folder()'s own BORN_HERE-half construction exactly
+    (create_user_folder + save_user_profile + save_account_ids), so a retroactively-created
+    folder looks the same as one built at real registration time, not a bare empty shell.
+
+    Returns (None, False) only when even the birth location's CONTINENT-level folder can't be
+    resolved at all (folder_connector.resolve_location_dir() returns None) -- e.g. no usable
+    continent.id in birth_location_json, or that continent isn't on disk. That is a genuine data
+    problem no amount of folder creation can route around, so it still refuses rather than
+    inventing geography resolve_location_dir() itself would never fabricate."""
+    existing = _admin_q_card_save_dir(row)
+    if existing is not None:
+        return existing, False
+
+    if not row["current_private_id"] or not row["sun_element"]:
+        return None, False
+    try:
+        birth_location = json.loads(row["birth_location_json"] or "{}")
+    except (TypeError, ValueError):
+        return None, False
+    location_dir = folder_connector.resolve_location_dir(birth_location)
+    if location_dir is None:
+        return None, False
+
+    user_dir = folder_connector.create_user_folder(
+        location_dir, "BORN_HERE", row["sun_element"], row["current_private_id"]
+    )
+    try:
+        present_location = json.loads(row["present_location_json"] or "{}")
+    except (TypeError, ValueError):
+        present_location = {}
+    folder_connector.save_user_profile(user_dir, {
+        "user_id": row["user_id"], "name": row["name"], "gender": row["gender"],
+        "dob": row["dob"], "tob": row["tob"],
+        "private_id": row["current_private_id"], "account_id": row["account_id"],
+        "birth_location_path": id_generator.location_path_for(birth_location),
+        "present_location_path": id_generator.location_path_for(present_location),
+        "sun_sign": row["sun_sign"], "sun_element": row["sun_element"],
+        "created_at": dt.datetime.utcnow().isoformat() + "Z",
+    })
+    if row["account_id"]:
+        folder_connector.save_account_ids(user_dir, row["account_id"])
+    print(
+        f"[admin_q_card_issue] auto-created BORN_HERE folder for user_id={row['user_id']} "
+        f"at {user_dir} (none existed under current or old private_id)"
+    )
+    return user_dir, True
+
+
+# Real vs. Test/Demo classification (2026-11-28, broadened same day after live production
+# testing): users.is_demo only flags the Rohini Sector 24 election pilot's 500 demo voters -- it
+# was never meant to, and does not, cover the various QA/test fixture accounts created directly
+# against is_demo=0 during this engagement's own testing. The FIRST version of this list
+# (ClaudeQA/Voter/UITest/TutorialTest/Demo/Linked/UIFamily) was built from the LOCAL dev
+# database's exact test-account names and missed production's actual QA accounts entirely
+# ("QA Verify 20261109", "QA Verify Email", "QA Verify SendGrid", etc. -- confirmed via the
+# Database Viewer against live production data). Broadened to generic substrings per the Admin's
+# own instruction: "QA", "Demo", "Test", "Verify" -- which already subsumes the old specific
+# markers (ClaudeQA contains "QA", UITest/TutorialTest contain "Test"), so those are dropped as
+# redundant rather than kept alongside the broader ones.
+_ADMIN_Q_CARDS_TEST_MARKERS = ("QA", "Verify", "Test", "Demo", "Voter", "Linked", "UIFamily")
 
 
 def _admin_q_card_is_test_named(name: str) -> bool:
@@ -7286,8 +7350,9 @@ def admin_q_card_issue(user_id):
     save_card_pdf() sequence app.py's own registration flow already uses, never a reimplementation.
 
     Refuses if a q_cards row already exists for this user (never double-issue a second live
-    token for the same person), and refuses if no existing BORN_HERE folder can be found to save
-    into, rather than creating one itself -- see _admin_q_card_save_dir()'s own docstring."""
+    token for the same person). Otherwise auto-creates a BORN_HERE folder when none exists yet --
+    see _admin_q_card_ensure_save_dir()'s own docstring for the explicit 2026-11-28 authorization
+    behind that and the one case it still can't route around."""
     if not _is_admin():
         return jsonify({"error": "Admin only"}), 403
     conn = get_db()
@@ -7301,10 +7366,10 @@ def admin_q_card_issue(user_id):
         if not row:
             return jsonify({"error": "User not found"}), 404
 
-        target_dir = _admin_q_card_save_dir(row)
+        target_dir, _created = _admin_q_card_ensure_save_dir(row)
         if target_dir is None:
             return jsonify({
-                "error": "No existing BORN_HERE folder found for this user — cannot save a Q-Card PDF without creating a new folder, which needs separate confirmation.",
+                "error": "Cannot resolve even a continent-level folder for this user's birth location — the birth_location_json data itself needs fixing before a Q-Card can be saved.",
             }), 409
 
         card = q_card_core.issue_card(conn, user_id, free_reason=q_card_core.free_eligibility(conn, user_id))

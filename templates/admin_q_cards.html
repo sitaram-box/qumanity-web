@@ -11,6 +11,8 @@
     .qcv-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
     .qcv-tab { padding: 6px 14px; border-radius: 999px; border: 1px solid var(--qm-border); background: var(--qm-panel-bg); color: var(--qm-text); font: inherit; cursor: pointer; }
     .qcv-tab.is-active { background: var(--qm-gold); border-color: var(--qm-gold); color: #3a2d00; font-weight: 600; }
+    .qcv-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .qcv-filter-label { display: flex; align-items: center; gap: 6px; color: var(--qm-text); font-size: 14px; cursor: pointer; }
     .qcv-meta { color: var(--qm-text-dim); font-size: 14px; margin-bottom: 16px; }
     .qcv-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--qm-border); }
     table.qcv-table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--qm-panel-bg); }
@@ -20,8 +22,8 @@
     .qcv-pill.has-pdf { background: rgba(19, 136, 8, 0.15); color: var(--qm-green); }
     .qcv-pill.no-pdf { background: var(--qm-input-bg); color: var(--qm-text-dim); }
     .qcv-pill.issued-no-pdf { background: rgba(255, 153, 51, 0.18); color: var(--qm-gold-text); }
-    .qcv-issue-form { display: inline; }
     .qcv-empty { color: var(--qm-text-dim); padding: 20px; }
+    .qcv-btn-disabled { opacity: 0.5; pointer-events: none; }
   </style>
 </head>
 <body>
@@ -41,8 +43,15 @@
       <button type="button" class="qcv-tab {{ 'is-active' if user_type == 'test' else '' }}" id="qcv-tab-test" data-type="test">Test / Demo Users</button>
     </div>
 
+    <div class="qcv-toolbar">
+      <label class="qcv-filter-label">
+        <input type="checkbox" id="qcv-filter-missing" />
+        Show Only Users Without Q-Cards
+      </label>
+      <span id="qcv-combined-wrap"></span>
+    </div>
+
     <p class="qcv-meta" id="qcv-meta"></p>
-    <p id="qcv-combined-wrap"></p>
 
     <div class="qcv-table-wrap">
       <table class="qcv-table">
@@ -62,17 +71,49 @@
       var DOWNLOAD_URL = {{ (url_for('admin_q_card_download', user_id=0)) | tojson }};
       var ISSUE_URL = {{ (url_for('admin_q_card_issue', user_id=0)) | tojson }};
       var COMBINED_URL = {{ url_for('admin_q_cards_combined') | tojson }};
+      var DATA_URL = {{ url_for('admin_q_cards_data') | tojson }};
       var tbody = document.getElementById("qcv-tbody");
       var metaEl = document.getElementById("qcv-meta");
       var emptyEl = document.getElementById("qcv-empty");
       var combinedWrap = document.getElementById("qcv-combined-wrap");
+      var filterMissing = document.getElementById("qcv-filter-missing");
       var tabs = document.querySelectorAll(".qcv-tab");
       var current = {{ user_type | tojson }};
+      var lastData = null;
 
       function el(tag, props) {
         var e = document.createElement(tag);
         if (props) Object.keys(props).forEach(function (k) { e[k] = props[k]; });
         return e;
+      }
+
+      // Issuing a card used to be a plain <form target="_blank">, which opened the PDF in a new
+      // tab but left THIS tab's table stale -- the Admin had to manually reload to see "Issue
+      // Q-Card" turn into "Download PDF". Using fetch() + a Blob download instead lets this same
+      // tab trigger the save AND immediately re-fetch fresh data once it succeeds.
+      function issueCard(c, btn) {
+        if (!window.confirm("Issue a new Q-Card for " + c.name + "? This creates a real, permanent card token for this user.")) return;
+        btn.disabled = true;
+        btn.textContent = "Issuing…";
+        fetch(ISSUE_URL.replace("/0/", "/" + c.user_id + "/"), { method: "POST" })
+          .then(function (r) {
+            if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || "Failed to issue card"); });
+            return r.blob();
+          })
+          .then(function (blob) {
+            var url = URL.createObjectURL(blob);
+            var a = el("a", { href: url, download: "q_card_" + c.user_id + ".pdf" });
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            load(current); // refresh so this row flips to "Download PDF" (or drops out under the filter)
+          })
+          .catch(function (err) {
+            alert(err.message);
+            btn.disabled = false;
+            btn.textContent = "Issue Q-Card";
+          });
       }
 
       function renderRow(c) {
@@ -86,56 +127,66 @@
         if (c.has_pdf) {
           pdfTd.appendChild(el("span", { className: "qcv-pill has-pdf", textContent: "Found" }));
           pdfTd.appendChild(document.createTextNode(" "));
-          pdfTd.appendChild(el("a", { href: DOWNLOAD_URL.replace("/0/", "/" + c.user_id + "/"), textContent: "Download" }));
+          pdfTd.appendChild(el("a", { href: DOWNLOAD_URL.replace("/0/", "/" + c.user_id + "/"), textContent: "Download PDF" }));
         } else if (c.card_issued) {
           pdfTd.appendChild(el("span", { className: "qcv-pill issued-no-pdf", textContent: "Issued, file missing" }));
         } else {
           pdfTd.appendChild(el("span", { className: "qcv-pill no-pdf", textContent: "None on disk" }));
           pdfTd.appendChild(document.createTextNode(" "));
-          var form = el("form", {
-            className: "qcv-issue-form",
-            method: "post",
-            action: ISSUE_URL.replace("/0/", "/" + c.user_id + "/"),
-            target: "_blank",
-          });
-          form.onsubmit = function () {
-            return window.confirm("Issue a new Q-Card for " + c.name + "? This creates a real, permanent card token for this user.");
-          };
-          form.appendChild(el("button", { type: "submit", className: "qm-btn qm-btn-ghost", textContent: "Issue Q-Card" }));
-          pdfTd.appendChild(form);
+          var btn = el("button", { type: "button", className: "qm-btn qm-btn-ghost", textContent: "Issue Q-Card" });
+          btn.addEventListener("click", function () { issueCard(c, btn); });
+          pdfTd.appendChild(btn);
         }
         tr.appendChild(pdfTd);
         return tr;
       }
 
-      function render(data) {
+      function applyFilterAndRender() {
+        if (!lastData) return;
+        var cards = lastData.cards;
+        if (filterMissing.checked) cards = cards.filter(function (c) { return !c.has_pdf; });
+
         tbody.innerHTML = "";
-        data.cards.forEach(function (c) { tbody.appendChild(renderRow(c)); });
-        emptyEl.hidden = data.cards.length > 0;
-        var label = data.user_type === "real" ? "real user(s)" : "test/demo user(s)";
-        metaEl.textContent = data.count + " " + label + " · " + data.found + " Q-Card PDF" + (data.found === 1 ? "" : "s") +
-          " found on disk. A card only exists here if it was actually issued and its PDF successfully saved — there is no way to regenerate a lost PDF.";
+        cards.forEach(function (c) { tbody.appendChild(renderRow(c)); });
+        emptyEl.hidden = cards.length > 0;
+
+        var label = lastData.user_type === "real" ? "real user(s)" : "test/demo user(s)";
+        var text = lastData.count + " " + label + " · " + lastData.found + " Q-Card PDF" +
+          (lastData.found === 1 ? "" : "s") + " found on disk.";
+        if (filterMissing.checked) text += " Showing " + cards.length + " without a Q-Card yet.";
+        text += " A card only exists here if it was actually issued and its PDF successfully saved — there is no way to regenerate a lost PDF.";
+        metaEl.textContent = text;
+
+        // Download All (Task 3): always visible on the Real Users tab, not conditional on
+        // found > 0 -- disabled-looking with no href when there is nothing to combine yet,
+        // rather than hidden, so the Admin always knows the option exists.
         combinedWrap.innerHTML = "";
-        if (data.user_type === "real" && data.found > 0) {
-          combinedWrap.appendChild(el("a", {
-            className: "qm-btn qm-btn-primary", href: COMBINED_URL,
-            textContent: "⬇️ Download Combined PDF (" + data.found + " card" + (data.found === 1 ? "" : "s") + ", for batch printing)",
-          }));
+        if (lastData.user_type === "real") {
+          var label2 = "⬇️ Download All Q-Cards (" + lastData.found + " found)";
+          if (lastData.found > 0) {
+            combinedWrap.appendChild(el("a", { className: "qm-btn qm-btn-primary", href: COMBINED_URL, textContent: label2 }));
+          } else {
+            combinedWrap.appendChild(el("span", {
+              className: "qm-btn qm-btn-ghost qcv-btn-disabled", textContent: label2,
+              title: "No Q-Card PDFs exist yet for real users.",
+            }));
+          }
         }
       }
 
       function load(type) {
         current = type;
         tabs.forEach(function (t) { t.classList.toggle("is-active", t.dataset.type === type); });
-        fetch("{{ url_for('admin_q_cards_data') }}?type=" + encodeURIComponent(type))
+        fetch(DATA_URL + "?type=" + encodeURIComponent(type))
           .then(function (r) { return r.json(); })
-          .then(render)
+          .then(function (data) { lastData = data; applyFilterAndRender(); })
           .catch(function (err) { metaEl.textContent = "Failed to load: " + err.message; });
       }
 
       tabs.forEach(function (t) {
         t.addEventListener("click", function () { load(t.dataset.type); });
       });
+      filterMissing.addEventListener("change", applyFilterAndRender);
 
       load(current);
     })();
