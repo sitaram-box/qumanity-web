@@ -6110,7 +6110,10 @@ def api_auth_register():
         q_card_core.ensure_tables(conn)
         card = q_card_core.issue_card(conn, user_id, free_reason=q_card_core.free_eligibility(conn, user_id))
         if folders.get("born_here"):
-            pdf_bytes = q_card_core.render_card_pdf(card["card_display_id"], card["raw_token"], data["name"])
+            pdf_bytes = q_card_core.render_card_pdf(
+                card["card_display_id"], card["raw_token"], data["name"],
+                private_id=private_id, location_text=_flatten_location_chain(present_location),
+            )
             q_card_core.save_card_pdf(folders["born_here"], pdf_bytes)
     except Exception as e:
         print(f"[q_card] could not issue/render Q-Card for user_id={user_id}: {e}")
@@ -7067,6 +7070,36 @@ ADMIN_DB_VIEWER_COLUMNS = {
 }
 
 
+@app.route("/card/<token>")
+def public_card_resolve(token):
+    """What a scanned Q-Card's QR code actually opens -- PUBLIC, no login required (it has to be:
+    the person scanning a found/lost card isn't signed in). This route itself was simply missing
+    (2026-11-28 finding) even though q_card_core.render_card_pdf() has encoded
+    f"{CARD_LOGIN_URL}{raw_token}" since Stage 4 -- the URL format was never wrong, there was just
+    nothing behind it, hence the live 404.
+
+    Confirms the card is genuine without ever revealing the Private ID (the actual login
+    credential, and the whole reason the QR encodes an opaque token instead of it in the first
+    place) -- only the Account ID, already a public-facing identifier used elsewhere in this app.
+
+    Uses q_card_core.resolve_token()'s own enumeration-safe contract: an unknown token, a
+    malformed one, and an inactive/revoked/replaced card all render the exact same "not valid"
+    response below, never distinguishing which to whoever is scanning."""
+    conn = get_db()
+    try:
+        result = q_card_core.resolve_token(conn, token)
+        account_id = None
+        if result:
+            row = conn.execute("SELECT account_id FROM users WHERE id = ?", (result["user_id"],)).fetchone()
+            account_id = row["account_id"] if row else None
+    finally:
+        conn.close()
+    return render_template(
+        "card_resolve.html", valid=bool(result),
+        name=result["name"] if result else None, account_id=account_id,
+    )
+
+
 @app.route("/admin/database")
 @login_required
 def admin_database():
@@ -7440,7 +7473,23 @@ def admin_q_card_issue(user_id):
         else:
             card = q_card_core.issue_card(conn, user_id, free_reason=q_card_core.free_eligibility(conn, user_id))
 
-        pdf_bytes = q_card_core.render_card_pdf(card["card_display_id"], card["raw_token"], row["name"])
+        try:
+            present_location = json.loads(row["present_location_json"] or "{}")
+        except (TypeError, ValueError):
+            present_location = {}
+        location_text = _flatten_location_chain(present_location)
+        if not location_text:
+            try:
+                birth_location = json.loads(row["birth_location_json"] or "{}")
+            except (TypeError, ValueError):
+                birth_location = {}
+            location_text = _flatten_location_chain(birth_location)
+        photo_bytes = profile_picture_core.get_profile_picture(conn, user_id, user_id)
+
+        pdf_bytes = q_card_core.render_card_pdf(
+            card["card_display_id"], card["raw_token"], row["name"],
+            private_id=row["current_private_id"], location_text=location_text, photo_bytes=photo_bytes,
+        )
 
         target_dir, _created = _admin_q_card_ensure_save_dir(row)
         if target_dir is not None:

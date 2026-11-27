@@ -25,11 +25,10 @@ import secrets
 from pathlib import Path
 
 import qrcode
-from reportlab.lib.enums import TA_CENTER
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import mm
-from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer
+from reportlab.lib.colors import HexColor
+from reportlab.lib.units import inch
+from reportlab.lib.utils import ImageReader
+from reportlab.pdfgen import canvas as pdfcanvas
 
 import announcements_core
 import election_core
@@ -42,6 +41,19 @@ _PAYMENT_METHODS = {"cash", "upi_static"}
 BASE_DIR = Path(__file__).resolve().parent
 LOGO_PATH = BASE_DIR / "static" / "images" / "qumanity-logo-dpga.png"
 CARD_LOGIN_URL = "https://qumanity.in/card/"
+
+# Standard CR80 card size (credit-card / ID-card format, landscape) -- 2026-11-28 redesign from
+# the original A4-page Platypus layout, which rendered as a plain letter-sized document with a
+# giant QR code rather than anything resembling a physical card.
+_CARD_W = 3.370 * inch
+_CARD_H = 2.125 * inch
+_GOLD = HexColor("#B8860B")
+_NAVY = HexColor("#0A1929")
+_CREAM = HexColor("#FAF7F1")
+_TEXT = HexColor("#1D2733")
+_TEXT_DIM = HexColor("#5B6B7A")
+_PHOTO_BG = HexColor("#E0DCCF")
+_SILHOUETTE = HexColor("#A8A398")
 
 
 def ensure_tables(conn) -> None:
@@ -327,47 +339,176 @@ def list_pending(conn) -> list[dict]:
 # docs/qcard_phase1_2026_11_15.md §4 can loop THIS SAME layout across many pages later, rather than
 # needing a second implementation. ----
 
-def render_card_pdf(card_display_id: str, raw_token: str, name: str) -> bytes:
-    """Renders ONE Q-Card as a single A4 PDF page. Takes raw_token directly from the caller -- it
-    is NEVER re-derived from the database, because it can't be: issue_card() stores only its hash
-    (see that function's own docstring), so this must run in the same request, using the same
-    in-memory value, as the issue_card() call that produced it. There is no later "regenerate the
-    PDF" path that can ever recover a lost raw_token; the caller is responsible for persisting the
-    rendered bytes themselves (see save_card_pdf()) the one time they have it.
+def _draw_photo_cover(c, photo_bytes: bytes, x: float, y: float, size: float) -> None:
+    """Draws photo_bytes scaled to COVER the x/y/size square (crops overflow, never
+    letterboxes/stretches) -- reportlab's own preserveAspectRatio="contain"-only sizing left
+    visible empty strips down both sides of any non-square (e.g. portrait 3:4) uploaded photo,
+    which looked broken rather than like a cropped ID photo."""
+    img = ImageReader(io.BytesIO(photo_bytes))
+    iw, ih = img.getSize()
+    scale = max(size / iw, size / ih)
+    draw_w, draw_h = iw * scale, ih * scale
+    offset_x = x + (size - draw_w) / 2
+    offset_y = y + (size - draw_h) / 2
+    c.saveState()
+    clip = c.beginPath()
+    clip.roundRect(x, y, size, size, 4)
+    c.clipPath(clip, stroke=0, fill=0)
+    c.drawImage(img, offset_x, offset_y, width=draw_w, height=draw_h, mask="auto")
+    c.restoreState()
+
+
+def _wrap_to_lines(text: str, max_chars: int, max_lines: int) -> list[str]:
+    """Word-wraps text into at most max_lines lines of at most max_chars characters each,
+    breaking on spaces (never mid-word) and ellipsizing the final line if the text still doesn't
+    fit -- used for the card's Location line, which can otherwise be an arbitrarily long chain
+    ("Village, Tehsil, District, State, Country") on a card with very limited width."""
+    words = (text or "").split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = (current + " " + word).strip()
+        if len(candidate) <= max_chars:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            current = word
+        if len(lines) == max_lines:
+            break
+    if current and len(lines) < max_lines:
+        lines.append(current)
+    if len(lines) == max_lines and words:
+        consumed = len(" ".join(lines))
+        if consumed < len(" ".join(words)):
+            last = lines[-1]
+            if len(last) > max_chars - 1:
+                last = last[: max_chars - 1]
+            lines[-1] = last.rstrip() + "…"
+    return lines or ["—"]
+
+
+def _draw_silhouette(c, x: float, y: float, size: float) -> None:
+    """A generic person-silhouette placeholder when the member has no profile picture -- simple
+    vector shapes (no external icon font/image dependency), legible at card scale."""
+    c.setFillColor(_PHOTO_BG)
+    c.roundRect(x, y, size, size, 4, fill=1, stroke=0)
+    c.setFillColor(_SILHOUETTE)
+    cx, cy = x + size / 2, y + size * 0.60
+    head_r = size * 0.17
+    c.circle(cx, cy + head_r * 0.9, head_r, fill=1, stroke=0)
+    p = c.beginPath()
+    shoulder_y = y + size * 0.14
+    p.moveTo(x + size * 0.18, shoulder_y)
+    p.curveTo(x + size * 0.22, y + size * 0.42, x + size * 0.78, y + size * 0.42, x + size * 0.82, shoulder_y)
+    p.lineTo(x + size * 0.18, shoulder_y)
+    p.close()
+    c.drawPath(p, fill=1, stroke=0)
+
+
+def render_card_pdf(
+    card_display_id: str, raw_token: str, name: str,
+    private_id: str | None = None, location_text: str | None = None, photo_bytes: bytes | None = None,
+) -> bytes:
+    """Renders ONE Q-Card as a single CR80-sized card (3.370in x 2.125in, the standard
+    credit-card/ID-card format, landscape) -- redesigned 2026-11-28 from the original A4-page
+    layout, which rendered as a plain letter-sized document dominated by one giant QR code and
+    looked nothing like a physical card. private_id/location_text/photo_bytes are all optional so
+    existing callers that don't have them yet (or a user with no profile picture) still render a
+    complete, correctly-laid-out card -- just with a "—" placeholder or a generic silhouette.
+
+    Takes raw_token directly from the caller -- it is NEVER re-derived from the database, because
+    it can't be: issue_card() stores only its hash (see that function's own docstring), so this
+    must run in the same request, using the same in-memory value, as the issue_card() call that
+    produced it. There is no later "regenerate the PDF" path that can ever recover a lost
+    raw_token; the caller is responsible for persisting the rendered bytes themselves (see
+    save_card_pdf()) the one time they have it.
 
     The QR encodes qumanity.in/card/<raw_token> -- never the Private ID, the Account ID, or any
     other identifier (the explicit security decision from the Phase 1 design doc's own opening
     section) -- so a photographed or lost card reveals nothing but an opaque, independently
-    revocable bearer token, never the member's real identity."""
+    revocable bearer token, never the member's real identity. Kept SMALL and in a corner here
+    (44pt square) -- the original design let it dominate 60% of the page, which both looked
+    unprofessional and is unnecessary: a corner-sized QR scans exactly as reliably."""
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf, pagesize=A4, topMargin=40 * mm, bottomMargin=40 * mm, leftMargin=30 * mm, rightMargin=30 * mm,
-    )
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle("QCardTitle", parent=styles["Title"], alignment=TA_CENTER)
-    name_style = ParagraphStyle("QCardName", parent=styles["Heading2"], alignment=TA_CENTER)
-    centered = ParagraphStyle("QCardCentered", parent=styles["Normal"], alignment=TA_CENTER)
+    c = pdfcanvas.Canvas(buf, pagesize=(_CARD_W, _CARD_H))
 
+    # Background + border
+    c.setFillColor(_CREAM)
+    c.rect(0, 0, _CARD_W, _CARD_H, fill=1, stroke=0)
+    c.setStrokeColor(_GOLD)
+    c.setLineWidth(1.5)
+    c.rect(1.5, 1.5, _CARD_W - 3, _CARD_H - 3, fill=0, stroke=1)
+
+    # Header band
+    header_h = 26
+    header_y = _CARD_H - 2 - header_h
+    c.setFillColor(_NAVY)
+    c.rect(2, header_y, _CARD_W - 4, header_h, fill=1, stroke=0)
+    logo_size = header_h - 8
+    text_left = 8
+    if LOGO_PATH.exists():
+        c.drawImage(str(LOGO_PATH), 6, header_y + 4, width=logo_size, height=logo_size,
+                    mask="auto", preserveAspectRatio=True)
+        text_left = 6 + logo_size + 4
+    c.setFillColor(HexColor("#FFD700"))
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(text_left, header_y + header_h / 2 - 2, "QUMANITY")
+    c.setFillColor(HexColor("#FFFFFF"))
+    c.setFont("Helvetica", 7)
+    c.drawRightString(_CARD_W - 8, header_y + header_h / 2 - 2, "Q-CARD")
+
+    # Photo (or silhouette placeholder), left column
+    photo_size = 58
+    photo_x, photo_y = 8, 10
+    if photo_bytes:
+        _draw_photo_cover(c, photo_bytes, photo_x, photo_y, photo_size)
+    else:
+        _draw_silhouette(c, photo_x, photo_y, photo_size)
+    c.setStrokeColor(_GOLD)
+    c.setLineWidth(1)
+    c.roundRect(photo_x, photo_y, photo_size, photo_size, 4, fill=0, stroke=1)
+
+    # Name / Private ID / Location, middle column
+    text_x = photo_x + photo_size + 10
+    text_top = header_y - 12
+    c.setFillColor(_TEXT)
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(text_x, text_top, (name or "")[:26])
+
+    c.setFillColor(_TEXT_DIM)
+    c.setFont("Helvetica", 6)
+    c.drawString(text_x, text_top - 15, "PRIVATE ID")
+    c.setFillColor(_TEXT)
+    c.setFont("Helvetica-Bold", 8.5)
+    c.drawString(text_x, text_top - 25, private_id or "—")
+
+    c.setFillColor(_TEXT_DIM)
+    c.setFont("Helvetica", 6)
+    c.drawString(text_x, text_top - 40, "LOCATION")
+    c.setFillColor(_TEXT)
+    c.setFont("Helvetica", 7)
+    for i, line in enumerate(_wrap_to_lines(location_text, max_chars=34, max_lines=2)):
+        c.drawString(text_x, text_top - 50 - i * 9, line)
+
+    # QR code, small, bottom-right corner (never the page-dominating size the old layout used)
     card_url = f"{CARD_LOGIN_URL}{raw_token}"
     qr_buf = io.BytesIO()
     qrcode.make(card_url).save(qr_buf, format="PNG")
     qr_buf.seek(0)
+    qr_size = 42
+    qr_x = _CARD_W - qr_size - 8
+    qr_y = 10
+    c.drawImage(ImageReader(qr_buf), qr_x, qr_y, width=qr_size, height=qr_size)
+    c.setStrokeColor(_GOLD)
+    c.setLineWidth(1)
+    c.rect(qr_x, qr_y, qr_size, qr_size, fill=0, stroke=1)
+    c.setFillColor(_TEXT_DIM)
+    c.setFont("Helvetica", 5)
+    c.drawCentredString(qr_x + qr_size / 2, qr_y - 7, card_display_id)
 
-    story = []
-    if LOGO_PATH.exists():
-        story.append(Image(str(LOGO_PATH), width=25 * mm, height=25 * mm, hAlign="CENTER"))
-        story.append(Spacer(1, 10 * mm))
-    story.append(Paragraph("Qumanity Q-Card", title_style))
-    story.append(Spacer(1, 6 * mm))
-    story.append(Paragraph(name, name_style))
-    story.append(Spacer(1, 10 * mm))
-    story.append(Image(qr_buf, width=70 * mm, height=70 * mm, hAlign="CENTER"))
-    story.append(Spacer(1, 6 * mm))
-    story.append(Paragraph(card_display_id, centered))
-    story.append(Spacer(1, 4 * mm))
-    story.append(Paragraph(card_url, centered))
-
-    doc.build(story)
+    c.showPage()
+    c.save()
     return buf.getvalue()
 
 

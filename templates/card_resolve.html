@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qumanity Card</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo-qumanity-icon.svg') }}" />
+  <style>
+    .qcr-main { max-width: 440px; margin: 48px auto; padding: 0 20px; text-align: center; }
+    .qcr-badge { font-size: 48px; margin-bottom: 8px; }
+    .qcr-title { font-size: 22px; margin: 0 0 12px; }
+    .qcr-title.valid { color: var(--qm-green); }
+    .qcr-title.invalid { color: var(--qm-text-dim); }
+    .qcr-row { margin: 6px 0; color: var(--qm-text); }
+    .qcr-sub { color: var(--qm-text-dim); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <header class="qm-header">
+    <a href="{{ url_for('index') }}" style="display:contents">
+      <img class="qm-logo" src="{{ url_for('static', filename='images/logo-qumanity-sm.svg') }}" alt="Qumanity" />
+    </a>
+  </header>
+
+  <main class="qcr-main">
+    {% if valid %}
+      <div class="qcr-badge">✅</div>
+      <h1 class="qcr-title valid">Valid Qumanity Card</h1>
+      <p class="qcr-row">This is a valid Qumanity Card belonging to <strong>{{ name }}</strong>.</p>
+      {% if account_id %}<p class="qcr-row">Account ID: <strong>{{ account_id }}</strong></p>{% endif %}
+      <p class="qcr-sub">If you found this card, please return it or hand it to a Qumanity member for safekeeping.</p>
+    {% else %}
+      <div class="qcr-badge">⚠️</div>
+      <h1 class="qcr-title invalid">This card could not be verified</h1>
+      <p class="qcr-sub">It may be inactive, replaced, or not a real Qumanity Card.</p>
+    {% endif %}
+  </main>
+</body>
+</html>
