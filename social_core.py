@@ -449,14 +449,27 @@ def migrate_group_defaults(conn):
     """One-time, conservative cleanup for accounts created before the 2026-09-28 default change:
     renames an untouched default "Friends" group to "All Friends", and drops an untouched, empty
     default "Spouse-Family" group. Never touches a group a user has renamed, added members to, or
-    exchanged messages in -- this only removes/renames rows nobody has actually used."""
+    exchanged messages in -- this only removes/renames rows nobody has actually used.
+
+    2026-11-28: extended with the same conservative drop for "Paternal"/"Maternal" (family) and
+    "All Friends" (friends) -- auto-creating these was already removed from ensure_defaults()
+    below (Paternal/Maternal on 2026-11-25, All Friends here), but that only stops NEW rows; every
+    account created before each respective fix still has the old row sitting in personal_groups,
+    which is exactly what kept showing up in the Personal tab's chat list. Runs automatically on
+    every app boot via ensure_database_ready() -- no separate script or Admin Panel button needed,
+    and (unlike a Railway-console script) takes effect on the very next deploy."""
     conn.execute("UPDATE personal_groups SET name = ? WHERE category = 'friends' AND name = 'Friends'", (DEFAULT_FRIENDS_GROUP,))
-    untouched_spouse = conn.execute(
-        """SELECT id FROM personal_groups WHERE category = 'family' AND name = 'Spouse-Family'
+    untouched = conn.execute(
+        """SELECT id FROM personal_groups
+           WHERE (
+               (category = 'family' AND name IN ('Spouse-Family', 'Paternal', 'Maternal'))
+               OR (category = 'friends' AND name = ?)
+           )
            AND id NOT IN (SELECT DISTINCT group_id FROM personal_messages)
-           AND id NOT IN (SELECT DISTINCT group_id FROM personal_group_members)"""
+           AND id NOT IN (SELECT DISTINCT group_id FROM personal_group_members)""",
+        (DEFAULT_FRIENDS_GROUP,),
     ).fetchall()
-    for row in untouched_spouse:
+    for row in untouched:
         conn.execute("DELETE FROM personal_groups WHERE id = ?", (row["id"],))
     conn.commit()
 
@@ -464,10 +477,10 @@ def migrate_group_defaults(conn):
 def ensure_defaults(conn, owner_user_id, is_admin=False):
     """Creates the standard starter groups the first time this user's Personal tab is opened. Safe to
     call every time -- does nothing once they already exist. Family gets no default sub-groups
-    (2026-11-25) -- a user adds their own Custom groups and moves them into Family if they want."""
+    (2026-11-25); Friends gets none either as of 2026-11-28 (same reasoning: a user adds their own
+    Custom groups and moves them into Family/Friends if they want, rather than starting with a
+    group nobody asked for)."""
     have = {r["category"] for r in conn.execute("SELECT DISTINCT category FROM personal_groups WHERE owner_user_id=?", (owner_user_id,))}
-    if "friends" not in have:
-        _insert_group(conn, owner_user_id, "friends", DEFAULT_FRIENDS_GROUP)
     if is_admin and "business" not in have:
         _insert_group(conn, owner_user_id, "business", ADMIN_BUSINESS_GROUP)
     conn.commit()

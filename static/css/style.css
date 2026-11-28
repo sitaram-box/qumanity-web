@@ -12,6 +12,21 @@
   --qm-border: rgba(184, 134, 11, 0.3);
   --qm-input-bg: #F6F3EC;
   --qm-input-border: rgba(10, 25, 41, 0.18);
+
+  /* Header-only tokens (2026-11-28) -- deliberately SEPARATE from --qm-panel-bg/--qm-border/
+     --qm-text-dim/--qm-input-bg/--qm-gold-text above. cosmic.css's own "SHARED SCOPED DARK-THEME
+     TOKEN OVERRIDE" redefines those exact names to dark equivalents for body.qm-about/
+     .qm-cosmic-dashboard/.qm-cosmic-register (a real, pre-existing design system, not a bug) --
+     the Dashboard header looking dark again after the earlier site-wide fix was that override
+     silently winning back the same token names. Naming the header's own tokens differently means
+     no future per-page dark theme can re-shadow them the same way without touching this file. */
+  --qm-header-bg: #FFFFFF;
+  --qm-header-border: rgba(184, 134, 11, 0.3);
+  --qm-header-text: #1D2733;
+  --qm-header-text-dim: #5B6B7A;
+  --qm-header-input-bg: #F6F3EC;
+  --qm-header-hover-bg: #FAF7F1;
+  --qm-header-gold-text: #8A6300;
 }
 
 * { box-sizing: border-box; }
@@ -34,9 +49,12 @@ html, body {
      dark header made the gold "QUMANITY" wordmark and the logo blend into the background on
      every page, not just the admin tools this was first reported on. Deliberately reverses the
      earlier "header is dark on every page, matches the homepage" decision below .qm-header-text
-     p's own comment -- a lighter header is intentionally now the platform-wide look. */
-  background: var(--qm-panel-bg);
-  border-bottom: 1px solid var(--qm-border);
+     p's own comment -- a lighter header is intentionally now the platform-wide look. Uses the
+     dedicated --qm-header-* tokens (see their own :root comment) specifically so this stays light
+     on the Dashboard/About/Register pages too, where cosmic.css's own dark theme override
+     reassigns --qm-panel-bg/--qm-border/--qm-text-dim themselves to dark equivalents. */
+  background: var(--qm-header-bg);
+  border-bottom: 1px solid var(--qm-header-border);
 }
 
 .qm-header-actions {
@@ -48,22 +66,22 @@ html, body {
 .qm-header-actions a.qm-btn { text-decoration: none; display: inline-block; }
 
 /* Item 11's old "dark-glass" treatment (translucent white on navy, white text) assumed the dark
-   header this block's own comment described -- 2026-11-28, now that the header is light
-   (var(--qm-panel-bg)), that combination would have been invisible: near-white-on-white controls
-   with white text. Switched to the same gold-ghost-button look already used throughout the
-   light-themed admin pages (--qm-input-bg/--qm-border/--qm-text), not a new pattern either. */
+   header this block's own comment described -- 2026-11-28, now that the header is light, that
+   combination would have been invisible: near-white-on-white controls with white text. Switched
+   to the same gold-ghost-button look already used throughout the light-themed admin pages, via
+   the same dedicated --qm-header-* tokens .qm-header itself uses above. */
 .qm-header .qm-btn-ghost {
-  background: var(--qm-input-bg);
-  border-color: var(--qm-border);
-  color: var(--qm-text);
+  background: var(--qm-header-input-bg);
+  border-color: var(--qm-header-border);
+  color: var(--qm-header-text);
 }
-.qm-header .qm-btn-ghost:hover { background: var(--qm-bg); border-color: var(--qm-gold); }
+.qm-header .qm-btn-ghost:hover { background: var(--qm-header-hover-bg); border-color: var(--qm-gold); }
 .qm-header .dq-dot {
-  background: var(--qm-input-bg);
-  border-color: var(--qm-border);
-  color: var(--qm-gold-text);
+  background: var(--qm-header-input-bg);
+  border-color: var(--qm-header-border);
+  color: var(--qm-header-gold-text);
 }
-.qm-header .dq-dot:hover, .qm-header .dq-dot[aria-expanded="true"] { background: var(--qm-bg); }
+.qm-header .dq-dot:hover, .qm-header .dq-dot[aria-expanded="true"] { background: var(--qm-header-hover-bg); }
 
 .qm-logo { height: 60px; width: 60px; flex: 0 0 auto; filter: drop-shadow(0 4px 14px rgba(255, 153, 51, 0.3)); }
 
@@ -81,8 +99,9 @@ html, body {
   margin: 2px 0 0;
   font-size: 0.85rem;
   /* was rgba(255, 255, 255, 0.72) -- semi-transparent white, readable against the old dark
-     header, nearly invisible against the new light one (2026-11-28). */
-  color: var(--qm-text-dim);
+     header, nearly invisible against the new light one (2026-11-28). --qm-header-text-dim, not
+     the shared --qm-text-dim: same reasoning as .qm-header's own background, above. */
+  color: var(--qm-header-text-dim);
 }
 
 .qm-main {
